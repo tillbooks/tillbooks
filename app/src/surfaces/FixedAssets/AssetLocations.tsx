@@ -19,10 +19,12 @@ import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { Select } from '../../components/Select';
+import { Field } from '../../components/Field';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { FilterBar } from '../../components/FilterBar';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
@@ -87,6 +89,11 @@ export function AssetLocations() {
   const { can } = useCapabilities();
 
   const [locations, setLocations] = useState<Location[]>([]);
+  const [search, setSearch] = useState('');
+  const shown = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return needle === '' ? locations : locations.filter((r) => `${r.code + ' ' + r.name}`.toLowerCase().includes(needle));
+  }, [locations, search]);
   const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -236,15 +243,28 @@ export function AssetLocations() {
         help={<SurfaceHelp surface="FixedAssets" />}
         actions={
           <>
-            <label className="fa-toggle">
-              <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
-              {t('assets.locations.showArchived')}
-            </label>
             <button type="button" className="btn btn--primary" onClick={openCreate} disabled={!canWrite}>
               {t('assets.locations.new')}
             </button>
           </>
         }
+        count={shown.length}
+      />
+
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel={t('assets.locations.search')}
+        searchPlaceholder={t('assets.locations.search')}
+        facets={[
+          {
+            key: 'archived',
+            label: t('assets.locations.showArchived'),
+            options: [{ value: '1', label: t('assets.locations.showArchived') }],
+            value: showArchived ? '1' : null,
+            onChange: (value) => setShowArchived(value !== null),
+          },
+        ]}
       />
 
       {failed ? (
@@ -252,7 +272,7 @@ export function AssetLocations() {
       ) : (
         <DataTable
           columns={columns}
-          rows={locations}
+          rows={shown}
           rowKey={(l) => l.id}
           caption={t('assets.locations.title')}
           loading={loading}
@@ -297,8 +317,7 @@ export function AssetLocations() {
         }
       >
         {writeError && <ErrorBanner error={writeError} />}
-        <div className="fa-field">
-          <label htmlFor="fa-loc-code">{t('assets.locations.field.code')}</label>
+        <Field label={t('assets.locations.field.code')} id="fa-loc-code">
           <input className="field"
             id="fa-loc-code"
             value={draft.code}
@@ -306,13 +325,11 @@ export function AssetLocations() {
             disabled={drawer !== 'create'}
             onChange={(e) => setDraft({ ...draft, code: e.target.value })}
           />
-        </div>
-        <div className="fa-field">
-          <label htmlFor="fa-loc-name">{t('assets.locations.field.name')}</label>
+        </Field>
+        <Field label={t('assets.locations.field.name')} id="fa-loc-name">
           <input className="field" id="fa-loc-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-        </div>
-        <div className="fa-field">
-          <label htmlFor="fa-loc-parent">{t('assets.locations.field.parent')}</label>
+        </Field>
+        <Field label={t('assets.locations.field.parent')} id="fa-loc-parent">
           <Select
             id="fa-loc-parent"
             value={draft.parentId}
@@ -323,15 +340,14 @@ export function AssetLocations() {
             ]}
             ariaLabel={t('assets.locations.field.parent')}
           />
-        </div>
-        <div className="fa-field">
-          <label htmlFor="fa-loc-desc">{t('assets.locations.field.description')}</label>
+        </Field>
+        <Field label={t('assets.locations.field.description')} id="fa-loc-desc">
           <input className="field"
             id="fa-loc-desc"
             value={draft.description}
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
           />
-        </div>
+        </Field>
       </DetailDrawer>
 
       <Modal

@@ -36,9 +36,8 @@
 /* Action row for the embedded match panel (BillMatchPanel), which is not hosted in a drawer. */
 .po-detail-actions { display: flex; gap: var(--t-space-1); flex-wrap: wrap; }
 
-/* Forms: the price quick-add card (inline, prices tab) and the create/receipt forms (drawer body).
+/* Forms: the create/receipt forms (drawer body).
    A panel is the elevated step, never a hairline box (K-09). */
-.po-editor,
 .po-receipt {
   display: flex;
   flex-direction: column;
@@ -142,3 +141,12 @@
   text-align: left;
   cursor: pointer;
 }
+
+/* D187: a create-line row sizes its fields to what they hold, and the price quick-add row and the
+   receipt quantities do the same, so nothing in the drawer or above the table spans the screen. */
+.po-line-row input.field[type='number'] { width: 5rem; }
+.po-line-row input.field[type='text'] { width: 7rem; }
+.po-receipt input.field { width: 6rem; }
+.form-line > input.field[type='number'] { width: 6rem; }
+.form-line > input.field[type='text'] { width: 7rem; }
+.form-line > input.field[type='date'] { width: 9.5rem; }

@@ -19,7 +19,6 @@
     "paymentTermsStandardImmediate": "Standard (immediate)",
     "paymentTermsStandardUnknown": "Standard",
     "paymentTermsImmediate": "immediate",
-    "paymentTermsInfo": "Where the payment terms come from",
     "paymentTermsHelp": "Leave empty: the standard payment terms from the company profile apply. 0 means due immediately, on the invoice date.",
     "description": "Note",
     "partyRole": "Role",
@@ -27,9 +26,6 @@
       "customer": "Customer",
       "vendor": "Vendor",
       "both": "Customer and vendor"
-    },
-    "roleFilter": {
-      "all": "All roles"
     },
     "archive": "Archive",
     "archived": "Archived",
@@ -62,14 +58,10 @@
       "company": "Company",
       "person": "Person"
     },
-    "kindFilter": {
-      "all": "Companies and people"
-    },
     "people": "People",
     "segmentsTitle": "Segments",
     "segments": {
       "empty": "No segments yet.",
-      "filter": "Filter by segment",
       "add": "Add a segment",
       "addAction": "Add",
       "addHint": "Enter a segment first, then you can add it."
@@ -89,6 +81,7 @@
     "action": {
       "merge": "Merge",
       "import": "Import",
+      "importContext": "Contacts from a CSV file",
       "anonymise": "Anonymise"
     },
     "field": {

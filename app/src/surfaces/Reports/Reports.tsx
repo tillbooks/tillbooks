@@ -59,6 +59,7 @@ import { useCan, CAP } from '../../lib/capabilities';
 import { useT, useI18n } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import { Tabs } from '../../components/Tabs';
 import { ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton } from '../../components/states';
@@ -354,6 +355,71 @@ export function Reports() {
     return request === null ? { kind: tab } : { workspaceId, kind: tab, ...request };
   })();
 
+  // D187 (the owner's pick "Berichte A"): the period and the comparison sit in the sticky header's
+  // second row, so they stay in view while the statement scrolls.
+  const toolbar = (
+    <>
+        {tab === 'balance' ? (
+          <Field label={t('reports.asOf')} id="rp-as-of">
+            <input
+              className="field"
+              type="date"
+              value={asOf.value}
+              onChange={(event) => setParam('asOf', event.target.value === '' ? null : event.target.value)}
+            />
+          </Field>
+        ) : (
+          <>
+            <Field label={t('reports.period.from')} id="rp-from">
+              <input
+                className="field"
+                type="date"
+                value={from.value}
+                max={to.value}
+                onChange={(event) => setParam('from', event.target.value === '' ? null : event.target.value)}
+              />
+            </Field>
+            {/* Prevented at the control: the end date cannot precede the start date (R15). */}
+            <Field label={t('reports.period.to')} id="rp-to">
+              <input
+                className="field"
+                type="date"
+                value={to.value}
+                min={from.value}
+                onChange={(event) => setParam('to', event.target.value === '' ? null : event.target.value)}
+              />
+            </Field>
+          </>
+        )}
+
+        {tab !== 'ledger' && (
+          <Field label={t('reports.compare.label')} id="rp-compare">
+            <Select
+              value={preset}
+              onChange={(val) => setParam('compare', val === 'none' ? null : val)}
+              options={COMPARE_PRESETS.map((value) => ({ value, label: t(COMPARE_LABEL[value]) }))}
+              ariaLabel={t('reports.compare.label')}
+            />
+          </Field>
+        )}
+
+        {tab === 'ledger' && (
+          <div className="form-row">
+            <span id="rp-account-label" className="rp-field-label">{t('reports.account')}</span>
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              aria-expanded={pickerOpen}
+              aria-labelledby="rp-account-label"
+              onClick={() => setParam('picker', pickerOpen ? null : '1')}
+            >
+              {chosen === null ? t('reports.picker.pick') : `${chosen.number} ${chosen.name}`}
+            </button>
+          </div>
+        )}
+    </>
+  );
+
   return (
     <section className="rp" aria-labelledby="rp-title">
       {/*
@@ -367,6 +433,7 @@ export function Reports() {
         title={t('reports.title')}
         titleId="rp-title"
         help={<SurfaceHelp surface="Reports" />}
+        toolbar={toolbar}
         actions={
           <ExportAction
             params={exportParams}
@@ -411,75 +478,6 @@ export function Reports() {
         onChange={(id) => setParam('report', id === 'trial' ? null : id)}
       >
       <div className="rp-panel">
-      <div className="rp-toolbar">
-        {tab === 'balance' ? (
-          <label className="rp-field" htmlFor="rp-as-of">
-            <span>{t('reports.asOf')}</span>
-            <input
-              id="rp-as-of"
-              className="field"
-              type="date"
-              value={asOf.value}
-              onChange={(event) => setParam('asOf', event.target.value === '' ? null : event.target.value)}
-            />
-          </label>
-        ) : (
-          <>
-            <label className="rp-field" htmlFor="rp-from">
-              <span>{t('reports.period.from')}</span>
-              <input
-                id="rp-from"
-                className="field"
-                type="date"
-                value={from.value}
-                max={to.value}
-                onChange={(event) => setParam('from', event.target.value === '' ? null : event.target.value)}
-              />
-            </label>
-            <label className="rp-field" htmlFor="rp-to">
-              <span>{t('reports.period.to')}</span>
-              {/* Prevented at the control: the end date cannot precede the start date (R15). */}
-              <input
-                id="rp-to"
-                className="field"
-                type="date"
-                value={to.value}
-                min={from.value}
-                onChange={(event) => setParam('to', event.target.value === '' ? null : event.target.value)}
-              />
-            </label>
-          </>
-        )}
-
-        {tab !== 'ledger' && (
-          <label className="rp-field" htmlFor="rp-compare">
-            <span>{t('reports.compare.label')}</span>
-            <Select
-              id="rp-compare"
-              value={preset}
-              onChange={(val) => setParam('compare', val === 'none' ? null : val)}
-              options={COMPARE_PRESETS.map((value) => ({ value, label: t(COMPARE_LABEL[value]) }))}
-              ariaLabel={t('reports.compare.label')}
-            />
-          </label>
-        )}
-
-        {tab === 'ledger' && (
-          <div className="rp-field">
-            <span id="rp-account-label">{t('reports.account')}</span>
-            <button
-              type="button"
-              className="btn btn--secondary btn--sm"
-              aria-expanded={pickerOpen}
-              aria-labelledby="rp-account-label"
-              onClick={() => setParam('picker', pickerOpen ? null : '1')}
-            >
-              {chosen === null ? t('reports.picker.pick') : `${chosen.number} ${chosen.name}`}
-            </button>
-          </div>
-        )}
-      </div>
-
       {(from.invalid || to.invalid || asOf.invalid) && <p className="rp-field-error">{t('reports.error.invalidDate')}</p>}
       {periodInverted && <p className="rp-field-error">{t('reports.error.invalidPeriod')}</p>}
       {accountMissing && <p className="rp-field-error">{t('reports.error.accountNotFound')}</p>}

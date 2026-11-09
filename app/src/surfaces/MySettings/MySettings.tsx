@@ -29,6 +29,8 @@ import { useWorkspaceId } from '../../app/workspace';
 import { usePrefsCatalog, usePrefsStore, type PrefValue, type PrefView } from '../../lib/prefs';
 import { EmptyState, ErrorBanner, NoWorkspaceState, Skeleton, refusalText } from '../../components/states';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { SettingGroup, SettingRow } from '../../components/SettingRow';
+import { IconButton } from '../../components/IconButton';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { Segmented } from '../../components/Segmented';
 import { Select } from '../../components/Select';
@@ -71,12 +73,26 @@ export function MySettings() {
 
   if (workspaceId === null) return <NoWorkspaceState />;
 
+  // D187 (the owner's pick "Einstellungen A"): one calm column; the search sits beside the title.
+  const search =
+    prefs !== null && prefs.length > 0 ? (
+      <input
+        id={searchId}
+        className="field my-settings-search"
+        type="search"
+        aria-label={t('mySettings.search.label')}
+        value={query}
+        placeholder={t('mySettings.search.placeholder')}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+    ) : undefined;
   const header = (
     <SurfaceHeader
       title={t('mySettings.title')}
       titleId="my-settings-title"
       subtitle={t('mySettings.subtitle')}
       help={<SurfaceHelp surface="MySettings" />}
+      actions={search}
     />
   );
 
@@ -98,17 +114,6 @@ export function MySettings() {
     body = (
       <>
         {status === 'error' && <ErrorBanner context="read" error={error ?? undefined} onRetry={() => void reload()} />}
-        <div className="my-settings-search">
-          <label htmlFor={searchId}>{t('mySettings.search.label')}</label>
-          <input
-            id={searchId}
-            className="field"
-            type="search"
-            value={query}
-            placeholder={t('mySettings.search.placeholder')}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
         {shown.length === 0 ? (
           <EmptyState
             title={t('mySettings.filtered.title', { query: query.trim() })}
@@ -121,25 +126,27 @@ export function MySettings() {
             const allInArea = (prefs ?? []).filter((p) => p.area.id === group.id);
             const anyStored = allInArea.some((p) => !p.isDefault || p.stale);
             return (
-              <section key={group.id} className="panel my-settings-group" aria-label={areaLabel} data-area={group.id}>
-                <div className="my-settings-group-head">
-                  <h2 className="my-settings-group-title">{areaLabel}</h2>
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    disabled={!anyStored || store === null}
-                    aria-label={t('mySettings.resetGroupContext', { area: areaLabel })}
-                    onClick={() => void store?.resetArea(group.id)}
-                  >
-                    {t('mySettings.resetGroup')}
-                  </button>
-                </div>
-                <ul className="my-settings-list">
-                  {group.prefs.map((p) => (
-                    <PrefRow key={p.key} pref={p} />
-                  ))}
-                </ul>
-              </section>
+              <SettingGroup
+                key={group.id}
+                title={areaLabel}
+                dataKey={group.id}
+                action={
+                  anyStored && store !== null ? (
+                    <button
+                      type="button"
+                      className="setting-row-reset"
+                      aria-label={t('mySettings.resetGroupContext', { area: areaLabel })}
+                      onClick={() => void store.resetArea(group.id)}
+                    >
+                      {t('mySettings.resetGroup')}
+                    </button>
+                  ) : undefined
+                }
+              >
+                {group.prefs.map((p) => (
+                  <PrefRow key={p.key} pref={p} />
+                ))}
+              </SettingGroup>
             );
           })
         )}
@@ -160,7 +167,7 @@ function PrefRow({ pref }: { pref: PrefView }) {
   const { t, locale } = useI18n();
   // The parent subscribes to the store and re-renders every row on a change, so a plain read is enough.
   const store = usePrefsStore();
-  const ids = { label: useId(), description: useId() };
+  const ids = { label: useId() };
   const label = textOf(pref.label, locale);
   const error = store?.error(pref.key) ?? null;
 
@@ -176,48 +183,43 @@ function PrefRow({ pref }: { pref: PrefView }) {
 
   const set = (next: PrefValue) => void store?.set(pref.key, next);
 
+  // D187 (Einstellungen A): the name, one short line that says what it does, the control on the right.
+  // "Standard" shows only while the value is not the default; its tooltip names the default. A setting
+  // that holds only in this workspace says so after its line (the page's own line says "only for you").
+  const description = (
+    <>
+      {textOf(pref.description, locale)}
+      {pref.scope !== 'person' && <> {t('mySettings.scope.workspace')}</>}
+    </>
+  );
   return (
-    <li className="my-settings-row" data-key={pref.key}>
-      <div className="my-settings-text">
-        <span className="my-settings-label" id={ids.label}>
-          {label}
-        </span>
-        <p className="my-settings-description" id={ids.description}>
-          {textOf(pref.description, locale)}
-        </p>
-        <p className="my-settings-meta">
-          <span>{t(pref.scope === 'person' ? 'mySettings.scope.person' : 'mySettings.scope.workspace')}</span>
-          {pref.schema.type !== 'json' && (
-            <span className="my-settings-default">
-              {pref.isDefault ? t('mySettings.isDefault') : t('mySettings.defaultIs', { value: format(pref.default) })}
-            </span>
+    <SettingRow
+      label={label}
+      labelId={ids.label}
+      description={description}
+      dataKey={pref.key}
+      reset={
+        !pref.isDefault || pref.stale
+          ? { defaultLabel: pref.schema.type === 'json' ? t('mySettings.json.default') : format(pref.default), onReset: () => void store?.reset(pref.key) }
+          : undefined
+      }
+      status={
+        <>
+          {pref.stale && (
+            <p className="status-line my-settings-stale" role="status">
+              {t('mySettings.stale')}
+            </p>
           )}
-        </p>
-        {pref.stale && (
-          <p className="status-line my-settings-stale" role="status">
-            {t('mySettings.stale')}
-          </p>
-        )}
-      </div>
-      <div className="my-settings-control">
-        <PrefControl pref={pref} labelId={ids.label} describedBy={ids.description} disabled={store === null} onChange={set} />
-        {(!pref.isDefault || pref.stale) && (
-          <button
-            type="button"
-            className="btn btn--ghost btn--sm"
-            aria-label={t('mySettings.resetKey', { setting: label })}
-            onClick={() => void store?.reset(pref.key)}
-          >
-            {t('mySettings.reset')}
-          </button>
-        )}
-      </div>
-      {error !== null && (
-        <p className="status-line status-error my-settings-error" role="alert">
-          {refusalText(t, error, { own: 'mySettings.refusal' })}
-        </p>
-      )}
-    </li>
+          {error !== null && (
+            <p className="status-line status-error my-settings-error" role="alert">
+              {refusalText(t, error, { own: 'mySettings.refusal' })}
+            </p>
+          )}
+        </>
+      }
+    >
+      <PrefControl pref={pref} labelId={ids.label} describedBy={`${ids.label}-desc`} disabled={store === null} onChange={set} />
+    </SettingRow>
   );
 }
 
@@ -275,10 +277,12 @@ function PrefControl({
 
   if (schema.type === 'json') {
     return (
-      <span className="my-settings-json" id={`${labelId}-json`}>
-        {pref.isDefault ? t('mySettings.json.default') : t('mySettings.json.custom')}
-        <span className="my-settings-json-hint">{t('mySettings.json.hint')}</span>
-      </span>
+      <>
+        <span className="my-settings-json" id={`${labelId}-json`}>
+          {pref.isDefault ? t('mySettings.json.default') : t('mySettings.json.custom')}
+        </span>
+        <IconButton icon="info" small context={t('mySettings.json.hint')} />
+      </>
     );
   }
 

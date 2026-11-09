@@ -20,8 +20,7 @@
 import { useId, useState } from 'react';
 
 import { useT, useTRich } from '../../i18n';
-import { Tooltip } from '../../components/Tooltip';
-import { InfoGlyph } from '../../components/states/glyphs';
+import { IconButton } from '../../components/IconButton';
 import { CheckGlyph, ChevronGlyph, ExternalGlyph } from './glyphs';
 import { JourneyStrip, type JourneyRun } from './JourneyStrip';
 import { journeyPosition } from './model';
@@ -85,11 +84,7 @@ export function JourneyLine({ computed, checked, exportedNow, marked, running, r
         )}
         {running && !marked && <span className="vr-steps-running">{t('vat.return.steps.running')}</span>}
         <span className="vr-steps-info">
-          <Tooltip placement="bottom" content={explain}>
-            <button type="button" className="btn btn--ghost btn--icon btn--sm" aria-label={t('vat.return.steps.info')}>
-              <InfoGlyph size={16} />
-            </button>
-          </Tooltip>
+          <IconButton icon="info" small placement="bottom" name={t('vat.return.steps.info')} context={explain} />
         </span>
         <button
           type="button"

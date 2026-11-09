@@ -61,19 +61,6 @@
   font-weight: 600;
 }
 
-/* Drawer form fields the DetailDrawer body hosts: a label over its `.field`. */
-.req-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-0-5);
-}
-
-.req-field label {
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  color: var(--t-text-dim);
-}
-
 /* The create form's per-line grid: item, description, qty, unit cost, supplier, remove. */
 .req-line-draft {
   display: grid;

@@ -22,6 +22,7 @@ import { Skeleton, ErrorBanner, refusalText } from '../../components/states';
 import { Select } from '../../components/Select';
 import { ActionFeedback } from '../../components/ActionFeedback';
 import { OverflowMenu } from '../../components/OverflowMenu';
+import { IconButton } from '../../components/IconButton';
 import { maskIban, type BankAccount } from './model';
 import { AutoSyncControl, type AutoSyncDto } from './AutoSyncControl';
 import { channelRefusal, jumpsOfSync, numberJumpText, type NumberJump } from './channelWording';
@@ -518,9 +519,10 @@ export function EbicsChannelPanel({ accounts, onRepairGap }: EbicsChannelPanelPr
   const showAddMenu = canPay && hasChannel && !connectOpen && !managedOpen;
 
   return (
-    <section className="bank-channel panel" aria-label={t('channel.title')}>
+    <section className="bank-channel" aria-label={t('channel.title')}>
       <div className="bank-channel-header">
         <h2 className="bank-channel-title">{t('channel.title')}</h2>
+        {!hasChannel && <IconButton icon="info" small context={t('channel.filePathNote')} />}
         {showAddMenu && (
           <OverflowMenu
             quiet
@@ -537,7 +539,6 @@ export function EbicsChannelPanel({ accounts, onRepairGap }: EbicsChannelPanelPr
       {loadError === null && channels.length === 0 && (
         <p className="bank-channel-empty">{t('channel.empty')}</p>
       )}
-      {!hasChannel && <p className="bank-channel-file-note">{t('channel.filePathNote')}</p>}
 
       {notice !== null && (
         <ActionFeedback tone="info" role="alert" className="bank-channel-notice" message={channelRefusal(t, notice)} />
@@ -886,8 +887,10 @@ export function EbicsChannelPanel({ accounts, onRepairGap }: EbicsChannelPanelPr
               void connectManaged();
             }}
           >
-            <p className="bank-channel-managed-explainer">{t('channel.managed.formIntro')}</p>
-            <label htmlFor="managed-bankref">{t('channel.managed.bankRef')}</label>
+            <span className="field-label-row">
+              <label htmlFor="managed-bankref">{t('channel.managed.bankRef')}</label>
+              <IconButton icon="info" small context={t('channel.managed.formIntro')} />
+            </span>
             <input
               className="field"
               id="managed-bankref"

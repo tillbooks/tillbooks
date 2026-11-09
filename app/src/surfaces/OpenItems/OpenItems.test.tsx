@@ -228,6 +228,16 @@ describe('OpenItems, five states', () => {
     expect(await screen.findByText('Alles bezahlt, keine offenen Posten.')).toBeInTheDocument();
   });
 
+  it('SEARCH with no match: Filter zurücksetzen clears the search and the rows come back', async () => {
+    const { container } = renderOpenItems(HAPPY);
+    await settled(container, 'R-2026-0006');
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Offene Posten suchen' }), 'zzzz-no-match');
+    await waitFor(() => expect(screen.queryByText('R-2026-0006')).not.toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Filter zurücksetzen' }));
+    expect(await screen.findByText('R-2026-0006')).toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: 'Offene Posten suchen' })).toHaveValue('');
+  });
+
   it('EMPTY (filtered): renders no zero tiles above the panel (gate F8.4)', async () => {
     // `bucketTotals` is computed over the FILTERED set, so with no rows every tile is zero. Four
     // `CHF 0.00` tiles stacked over "Keine offenen Posten für diese Auswahl" are noise, and the
@@ -524,7 +534,7 @@ describe('the reconciliation statement', () => {
 
     const tip = document.getElementById(info.getAttribute('aria-describedby') ?? '');
     expect(tip).not.toBeNull();
-    expect(tip).toHaveAttribute('role', 'tooltip');
+    expect(tip?.closest('[role="tooltip"]')).not.toBeNull();
     // List 407500, ledger 408750, difference -1250: all three off the recording, in the two sentences
     // the band used to print at rest.
     expect(tip).toHaveTextContent(
@@ -606,15 +616,14 @@ describe('a mixed-currency workspace', () => {
     expect(document.querySelector('.oi-total')?.textContent).toBe("CHF 4'972.44 offen");
   });
 
-  it('offers exactly the currencies the engine returned, plus an all-currencies option', async () => {
+  it('offers exactly the currencies the engine returned', async () => {
     renderOpenItems({ ...HAPPY, list_open_items: ok(mixedFixture) });
     await screen.findByRole('link', { name: 'R-2026-0007' });
 
-    const picker = screen.getByLabelText('Währung');
-    await userEvent.click(picker);
+    await userEvent.click(screen.getByRole('button', { name: 'Filter hinzufügen' }));
     expect(
-      screen.getAllByRole('option').map((option) => option.textContent?.replace('✓', '').trim()),
-    ).toEqual(['Alle Währungen', 'CHF', 'EUR']);
+      screen.getAllByRole('menuitem', { name: /^Währung: / }).map((item) => item.textContent?.replace('✓', '').trim()),
+    ).toEqual(['CHF', 'EUR']);
   });
 
   it('tiles in base currency even when the rows are not, so they tie to the header', async () => {
@@ -638,17 +647,15 @@ describe('the Kunde filter', () => {
   // it as one of the toolbar's five decisions. "Filter zurücksetzen" lived only inside the
   // filtered-empty panel, so the one way out appeared exactly when the filter had matched nothing.
 
-  it('offers exactly the customers the engine returned, plus an all-customers option', async () => {
+  it('offers exactly the customers the engine returned', async () => {
     renderOpenItems();
     await screen.findByText('R-2026-0006');
 
-    const picker = screen.getByLabelText('Kunde');
-    expect(picker).toHaveTextContent('Alle Kunden');
-    await userEvent.click(picker);
+    await userEvent.click(screen.getByRole('button', { name: 'Filter hinzufügen' }));
     // The recording holds two customers across seven rows: each is offered once.
     expect(
-      screen.getAllByRole('option').map((option) => option.textContent?.replace('✓', '').trim()),
-    ).toEqual(['Alle Kunden', 'Beispiel GmbH', 'Muster AG']);
+      screen.getAllByRole('menuitem', { name: /^Kunde: / }).map((item) => item.textContent?.replace('✓', '').trim()),
+    ).toEqual(['Beispiel GmbH', 'Muster AG']);
   });
 
   it('sends the chosen customer to the engine and puts it in the URL', async () => {
@@ -656,8 +663,8 @@ describe('the Kunde filter', () => {
     renderOpenItems({ ...HAPPY, list_open_items: listSpy });
     await screen.findByText('R-2026-0006');
 
-    await userEvent.click(screen.getByLabelText('Kunde'));
-    await userEvent.click(screen.getByRole('option', { name: 'Beispiel GmbH' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Filter hinzufügen' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Kunde: Beispiel GmbH' }));
     await waitFor(() => expect(listSpy).toHaveBeenCalledTimes(2));
     expect(listSpy.mock.calls[1][0]).toMatchObject({
       workspaceId: 'ws_test',
@@ -671,12 +678,9 @@ describe('the Kunde filter', () => {
     await screen.findByText('R-2026-0006');
 
     // The state is on screen as a NAME, not only as a reduced table and a reduced total.
-    const picker = screen.getByLabelText('Kunde');
-    expect(picker).toHaveTextContent('Muster AG');
-    await userEvent.click(picker);
-    expect(screen.getByRole('option', { selected: true })).toHaveTextContent('Muster AG');
+    expect(screen.getByRole('button', { name: 'Kunde ändern' })).toHaveTextContent('Muster AG');
 
-    await userEvent.click(screen.getByRole('option', { name: 'Alle Kunden' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Entfernen' }));
     await waitFor(() => expect(listSpy).toHaveBeenCalledTimes(2));
     expect(listSpy.mock.calls[1][0]).not.toHaveProperty('customerId');
   });
@@ -691,10 +695,7 @@ describe('the Kunde filter', () => {
     );
     await screen.findByText('Keine offenen Posten für diese Auswahl.');
 
-    const picker = screen.getByLabelText('Kunde');
-    expect(picker).toHaveTextContent('Kunde contact_9');
-    await userEvent.click(picker);
-    expect(screen.getByRole('option', { selected: true })).toHaveTextContent('Kunde contact_9');
+    expect(screen.getByText('Kunde contact_9')).toBeInTheDocument();
   });
 });
 
@@ -889,7 +890,8 @@ describe('the Fälligkeits-Aufteilung popover', () => {
     await openPopover();
     const dialog = await screen.findByRole('dialog', { name: 'Aufteilung nach Fälligkeit anpassen' });
     // The recording has `configured: false`.
-    expect(within(dialog).getByText('Du siehst die Standardgrenzen.')).toBeInTheDocument();
+    await userEvent.hover(within(dialog).getByRole('button', { name: 'Info' }));
+    expect(await screen.findByText(/Du siehst die Standardgrenzen\./)).toBeInTheDocument();
     expect(within(dialog).getByLabelText('Grenze 1')).toHaveValue(30);
     expect(within(dialog).getByLabelText('Grenze 3')).toHaveValue(90);
   });
@@ -902,9 +904,10 @@ describe('the Fälligkeits-Aufteilung popover', () => {
         'Ergibt: 0 bis 30 Tage, 31 bis 60 Tage, 61 bis 90 Tage, Über 90 Tage',
       ),
     ).toBeInTheDocument();
+    await userEvent.hover(within(dialog).getByRole('button', { name: 'Info' }));
     expect(
-      within(dialog).getByText(
-        'Das ist eine Darstellung, keine Frist. Die Summe und die Übereinstimmung mit 1100 ändern sich nicht.',
+      await screen.findByText(
+        /Das ist eine Darstellung, keine Frist\. Die Summe und die Übereinstimmung mit 1100 ändern sich nicht\./,
       ),
     ).toBeInTheDocument();
     // The forbidden vocabulary is absent in this state as well.
@@ -1212,7 +1215,7 @@ describe('the Fälligkeits-Aufteilung popover', () => {
 
   it('has no axe violations on a SETTLED popover', async () => {
     const { container } = await openPopover();
-    await settled(container, 'Du siehst die Standardgrenzen.');
+    await settled(container, 'Ergibt: 0 bis 30 Tage, 31 bis 60 Tage, 61 bis 90 Tage, Über 90 Tage');
     const results = await axe(container, {
       rules: { region: { enabled: false }, 'page-has-heading-one': { enabled: false } },
     });

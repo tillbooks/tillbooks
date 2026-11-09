@@ -61,7 +61,8 @@
         "out_of_tolerance": "The variance is out of tolerance. Override with a reason to proceed.",
         "match_already_exists": "This bill already has an active match.",
         "reason_required": "A reason of at least five characters is required."
-      }
+      },
+      "search": "Search suppliers"
     }
   },
   "help": {

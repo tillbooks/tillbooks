@@ -21,10 +21,12 @@ import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { Select } from '../../components/Select';
+import { Field } from '../../components/Field';
 import { useWorkspaceId } from '../../app/workspace';
 import { formatMoney, useT } from '../../i18n';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton } from '../../components/states';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { FilterBar } from '../../components/FilterBar';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
@@ -152,6 +154,11 @@ export function AssetMaintenance() {
   const [assets, setAssets] = useState<AssetOption[]>([]);
   const [assetId, setAssetId] = useState<string>('');
   const [logs, setLogs] = useState<MaintenanceLog[]>([]);
+  const [search, setSearch] = useState('');
+  const shownLogs = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return needle === '' ? logs : logs.filter((l) => `${l.title} ${l.externalParty ?? ''}`.toLowerCase().includes(needle));
+  }, [logs, search]);
   const [totalCostRappen, setTotalCostRappen] = useState(0);
 
   const [typeFilter, setTypeFilter] = useState<string>('');
@@ -380,6 +387,7 @@ export function AssetMaintenance() {
       <SurfaceHeader
         title={t('assets.maintenance.title')}
         help={<SurfaceHelp surface="FixedAssets" />}
+        count={assetId === '' ? undefined : shownLogs.length}
         actions={
           <button
             type="button"
@@ -400,37 +408,42 @@ export function AssetMaintenance() {
         <EmptyState title={t('assets.maintenance.noAssets.title')} hint={t('assets.maintenance.noAssets.hint')} />
       ) : (
         <>
-          <div className="fa-filters">
-            <div className="fa-field-inline">
-              <span>{t('assets.maintenance.asset')}</span>
-              <Select
-                value={assetId}
-                onChange={(value) => setAssetId(value)}
-                options={assets.map((a) => ({ value: a.id, label: `${a.number} ${a.name}` }))}
-                ariaLabel={t('assets.maintenance.asset')}
-              />
-            </div>
-            <div className="fa-field-inline">
-              <span>{t('assets.maintenance.filter.type')}</span>
-              <Select
-                value={typeFilter}
-                onChange={(value) => setTypeFilter(value)}
-                options={[
-                  { value: '', label: t('assets.maintenance.filter.allTypes') },
-                  ...MAINTENANCE_TYPES.map((ty) => ({ value: ty, label: t(`assets.maintenance.type.${ty}`) })),
-                ]}
-                ariaLabel={t('assets.maintenance.filter.type')}
-              />
-            </div>
-            <label className="fa-toggle">
-              <input type="checkbox" checked={hasCostOnly} onChange={(e) => setHasCostOnly(e.target.checked)} />
-              {t('assets.maintenance.filter.hasCost')}
-            </label>
-            <label className="fa-toggle">
-              <input type="checkbox" checked={includeCancelled} onChange={(e) => setIncludeCancelled(e.target.checked)} />
-              {t('assets.maintenance.filter.includeCancelled')}
-            </label>
-          </div>
+          <FilterBar
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchLabel={t('assets.maintenance.search')}
+            searchPlaceholder={t('assets.maintenance.search')}
+            facets={[
+              {
+                key: 'type',
+                label: t('assets.maintenance.filter.type'),
+                options: MAINTENANCE_TYPES.map((ty) => ({ value: ty, label: t(`assets.maintenance.type.${ty}`) })),
+                value: typeFilter === '' ? null : typeFilter,
+                onChange: (value) => setTypeFilter(value ?? ''),
+              },
+              {
+                key: 'hasCost',
+                label: t('assets.maintenance.filter.hasCost'),
+                options: [{ value: '1', label: t('assets.maintenance.filter.hasCost') }],
+                value: hasCostOnly ? '1' : null,
+                onChange: (value) => setHasCostOnly(value !== null),
+              },
+              {
+                key: 'cancelled',
+                label: t('assets.maintenance.filter.includeCancelled'),
+                options: [{ value: '1', label: t('assets.maintenance.filter.includeCancelled') }],
+                value: includeCancelled ? '1' : null,
+                onChange: (value) => setIncludeCancelled(value !== null),
+              },
+            ]}
+          >
+            <Select
+              value={assetId}
+              onChange={(value) => setAssetId(value)}
+              options={assets.map((a) => ({ value: a.id, label: `${a.number} ${a.name}` }))}
+              ariaLabel={t('assets.maintenance.asset')}
+            />
+          </FilterBar>
 
           {selectedAsset !== null && selectedAsset.status === 'archived' && (
             <p className="fa-note">{t('assets.maintenance.archivedNote')}</p>
@@ -438,7 +451,7 @@ export function AssetMaintenance() {
 
           <DataTable
             columns={logColumns}
-            rows={logs}
+            rows={shownLogs}
             rowKey={(l) => l.id}
             caption={t('assets.maintenance.title')}
             loading={loading}
@@ -454,7 +467,7 @@ export function AssetMaintenance() {
             rowActions={logActions}
             rowActionsLabel={(l) => t('assets.maintenance.rowActionsFor', { title: l.title })}
             footer={
-              logs.length > 0
+              logs.length > 0 && search.trim() === ''
                 ? [
                     { key: 'date', content: t('assets.maintenance.totalCost') },
                     { key: 'cost', content: <span className="fa-total">{rappenToChf(totalCostRappen)}</span> },
@@ -507,10 +520,9 @@ export function AssetMaintenance() {
         }
       >
         {cancelling !== null && <p>{t('assets.maintenance.confirmCancel', { title: cancelling.title })}</p>}
-        <div className="fa-field">
-          <label htmlFor="fa-mnt-cancel-reason">{t('assets.maintenance.field.cancelReason')}</label>
+        <Field label={t('assets.maintenance.field.cancelReason')} id="fa-mnt-cancel-reason">
           <input className="field" id="fa-mnt-cancel-reason" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
-        </div>
+        </Field>
         {writeError && <ErrorBanner error={writeError} />}
       </Modal>
     </div>

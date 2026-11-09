@@ -51,6 +51,9 @@ import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DetailDrawer } from '../../components/DetailDrawer';
+import { FilterBar } from '../../components/FilterBar';
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
 import { Select } from '../../components/Select';
 import { Provenance } from '../../components/Provenance';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeletonHold, refusalText } from '../../components/states';
@@ -282,6 +285,10 @@ export function GoodsReceipt() {
   const [failed, setFailed] = useState(false);
   const [denied, setDenied] = useState(false);
   const [writeError, setWriteError] = useState<Err | null>(null);
+
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [overOnly, setOverOnly] = useState<string | null>(null);
 
   const [createDrawer, setCreateDrawer] = useState(false);
   const [newPoId, setNewPoId] = useState('');
@@ -712,6 +719,22 @@ export function GoodsReceipt() {
   if (workspaceId === null) return <NoWorkspaceState body={t('goodsReceipt.noWorkspace')} />;
   if (denied) return <PermissionDenied title={t('goodsReceipt.title')} />;
 
+  const needle = search.trim().toLocaleLowerCase();
+  const shownReceipts = receipts.filter(
+    (r) =>
+      (needle === '' ||
+        r.number.toLocaleLowerCase().includes(needle) ||
+        r.poNumber.toLocaleLowerCase().includes(needle) ||
+        r.supplierName.toLocaleLowerCase().includes(needle)) &&
+      (statusFilter === null || r.status === statusFilter) &&
+      (overOnly === null || r.overReceiptQty > 0),
+  );
+  const clearFilters = () => {
+    setSearch('');
+    setStatusFilter(null);
+    setOverOnly(null);
+  };
+
   const isDraft = detail?.status === 'draft';
   const isPosted = detail?.status === 'posted';
 
@@ -823,6 +846,7 @@ export function GoodsReceipt() {
       <SurfaceHeader
         title={t('goodsReceipt.title')}
         help={<SurfaceHelp surface="GoodsReceipt" />}
+        count={showSkeleton ? undefined : shownReceipts.length}
         actions={headerActions}
       />
 
@@ -835,24 +859,51 @@ export function GoodsReceipt() {
       ) : receipts.length === 0 ? (
         <EmptyState title={t('goodsReceipt.empty.title')} hint={t('goodsReceipt.empty.hint')} />
       ) : (
-        <div className={selectedId === null ? 'gr-split gr-split--solo' : 'gr-split'}>
-          <section className="gr-pane" aria-label={t('goodsReceipt.listLabel')}>
-            <DataTable
-              columns={receiptColumns}
-              rows={receipts}
-              rowKey={(r) => r.id}
-              caption={t('goodsReceipt.listLabel')}
-              onRowClick={(r) => choose(selectedId === r.id ? null : r.id)}
-              rowLabel={(r) => `${r.number} ${t(`goodsReceipt.status.${r.status}`)} ${r.poNumber} ${r.supplierName}`}
-              // K-24: the open receipt wears the selection pill on every cell, no side bar. An
-              // over-delivery says so as a Status word in its row, never as an edge.
-              isRowCurrent={(r) => r.id === selectedId}
-            />
-          </section>
-
-          {selectedId !== null && (
-          <section className="gr-pane gr-detail" aria-label={t('goodsReceipt.detailLabel')}>
-            {detail === null ? null : (
+        <>
+          <FilterBar
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchLabel={t('goodsReceipt.search')}
+            searchPlaceholder={t('goodsReceipt.search')}
+            facets={[
+              {
+                key: 'status',
+                label: t('goodsReceipt.col.status'),
+                options: ['draft', 'posted', 'reversed', 'cancelled'].map((st) => ({ value: st, label: t(`goodsReceipt.status.${st}`) })),
+                value: statusFilter,
+                onChange: setStatusFilter,
+              },
+              {
+                key: 'over',
+                label: t('goodsReceipt.overReceipt.badge'),
+                options: [{ value: '1', label: t('goodsReceipt.overReceipt.badge') }],
+                value: overOnly,
+                onChange: setOverOnly,
+              },
+            ]}
+          />
+          <DataTable
+            columns={receiptColumns}
+            rows={shownReceipts}
+            rowKey={(r) => r.id}
+            caption={t('goodsReceipt.listLabel')}
+            isRowCurrent={(r) => r.id === selectedId}
+            rowLabel={(r) => `${r.number} ${t(`goodsReceipt.status.${r.status}`)} ${r.poNumber} ${r.supplierName}`}
+            emptyState={
+              <EmptyState
+                title={t('goodsReceipt.emptyFiltered')}
+                filtered={{ onClear: clearFilters, clearLabel: t('goodsReceipt.filter.clear') }}
+              />
+            }
+            // D187 Work through items B: the receipt opens in place under its row; a click on the row
+            // or its chevron toggles it, and a deep link (`?focus=`) opens it the same way.
+            expand={{
+              openKey: selectedId,
+              onOpenChange: (key) => choose(key),
+              label: (r) => t('goodsReceipt.expandLabel', { number: r.number }),
+              render: () =>
+                detail === null ? null : (
+                  <section className="gr-detail" aria-label={t('goodsReceipt.detailLabel')}>
               <>
                 <div className="gr-detail-head">
                   <div>
@@ -861,8 +912,8 @@ export function GoodsReceipt() {
                       {t('goodsReceipt.field.receivedAt')}: <strong>{formatCalendar(detail.receivedAt)}</strong>
                       {' · '}
                       <Status kind={STATUS_KIND[detail.status] ?? 'neutral'} label={t(`goodsReceipt.status.${detail.status}`)} />
+                      <IconButton icon="info" small context={t('goodsReceipt.dateIsFixed')} />
                     </p>
-                    <p className="gr-hint">{t('goodsReceipt.dateIsFixed')}</p>
                     {/* C3: the quiet provenance of the receipt, from its creation event (who + when),
                         at the point of judgement. Broad rollout to other detail views is Phase 2. */}
                     {detail.events.length > 0 && (
@@ -926,10 +977,9 @@ export function GoodsReceipt() {
                 </div>
 
                 {isPosted && (
-                  <div className="gr-field">
-                    <label htmlFor="gr-reverse-reason">{t('goodsReceipt.form.reverseReason')}</label>
+                  <Field label={t('goodsReceipt.form.reverseReason')} size="name">
                     <input id="gr-reverse-reason" className="field" value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} />
-                  </div>
+                  </Field>
                 )}
 
                 {/* WHY Post is unavailable, when the reason belongs to the document rather than to
@@ -966,16 +1016,17 @@ export function GoodsReceipt() {
                 {/* Say WHY an over-delivery is about to post rather than letting it look like a bug.
                     Shown on a draft that carries one and on a posted receipt that recorded one. */}
                 {(detail.hasOverReceipt || (preview?.lines ?? []).some((l) => l.overReceiptQty > 0)) && (
-                  <p className="gr-hint">{t('goodsReceipt.overReceiptHint')}</p>
+                  <p className="gr-muted">
+                    <IconButton icon="info" small context={t('goodsReceipt.overReceiptHint')} />
+                  </p>
                 )}
 
                 {isPosted && heldLines.length > 0 && (
                   <div className="gr-hold">
                     <h3 className="gr-subtitle">{t('goodsReceipt.holdTitle')}</h3>
-                    <div className="gr-field">
-                      <label htmlFor="gr-reject-reason">{t('goodsReceipt.form.rejectReason')}</label>
+                    <Field label={t('goodsReceipt.form.rejectReason')} size="name">
                       <input id="gr-reject-reason" className="field" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
-                    </div>
+                    </Field>
                     <div className="gr-actions">
                       <button
                         type="button"
@@ -1014,10 +1065,11 @@ export function GoodsReceipt() {
                   ))}
                 </ul>
               </>
-            )}
-          </section>
-          )}
-        </div>
+                  </section>
+                ),
+            }}
+          />
+        </>
       )}
 
       {createDrawer && (
@@ -1038,8 +1090,8 @@ export function GoodsReceipt() {
           }
         >
           {writeError && <ErrorBanner error={writeError} message={localError(writeError)} />}
-          <div className="gr-field">
-            <label htmlFor="gr-po">{t('goodsReceipt.form.po')}</label>
+          <div className="form-stack">
+          <Field label={t('goodsReceipt.form.po')} size="short">
             <Select
               id="gr-po"
               value={newPoId}
@@ -1047,15 +1099,13 @@ export function GoodsReceipt() {
               options={pos.map((p) => ({ value: p.id, label: p.number }))}
               ariaLabel={t('goodsReceipt.form.po')}
             />
-          </div>
-          <div className="gr-field">
-            <label htmlFor="gr-date">{t('goodsReceipt.form.receivedAt')}</label>
+          </Field>
+          <Field label={t('goodsReceipt.form.receivedAt')} info={t('goodsReceipt.dateIsFixed')} size="date">
             <input id="gr-date" className="field" type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
-            <p className="gr-hint">{t('goodsReceipt.dateIsFixed')}</p>
-          </div>
-          <div className="gr-field">
-            <label htmlFor="gr-note">{t('goodsReceipt.form.note')}</label>
+          </Field>
+          <Field label={t('goodsReceipt.form.note')} size="name">
             <input id="gr-note" className="field" value={newNote} onChange={(e) => setNewNote(e.target.value)} />
+          </Field>
           </div>
         </DetailDrawer>
       )}
@@ -1078,8 +1128,8 @@ export function GoodsReceipt() {
           }
         >
           {writeError && <ErrorBanner error={writeError} message={localError(writeError)} />}
-          <div className="gr-field">
-            <label htmlFor="gr-poline">{t('goodsReceipt.form.poLine')}</label>
+          <div className="form-stack">
+          <Field label={t('goodsReceipt.form.poLine')}>
             <Select
               id="gr-poline"
               value={linePoLineId}
@@ -1095,11 +1145,10 @@ export function GoodsReceipt() {
               }))}
               ariaLabel={t('goodsReceipt.form.poLine')}
             />
-          </div>
-          <div className="gr-field">
-            <label htmlFor="gr-qty">{t('goodsReceipt.form.qty')}</label>
+          </Field>
+          <Field label={t('goodsReceipt.form.qty')} size="code">
             <input id="gr-qty" className="field" type="number" min="1" value={lineQty} onChange={(e) => setLineQty(e.target.value)} />
-          </div>
+          </Field>
           {/* Shown only when the item actually HAS lots or serials, so an untracked item keeps the
               drawer short. Without these the surface shipped an error message ("choose a lot for the
               line") pointing at an affordance that did not exist, which is a lie rather than a
@@ -1108,8 +1157,7 @@ export function GoodsReceipt() {
           {lineIsStocked && (
             <>
               {lots.length > 0 && (
-                <div className="gr-field">
-                  <label htmlFor="gr-lot">{t('goodsReceipt.form.lot')}</label>
+                <Field label={t('goodsReceipt.form.lot')} size="short">
                   <Select
                     id="gr-lot"
                     value={lineLotId}
@@ -1120,10 +1168,9 @@ export function GoodsReceipt() {
                     ]}
                     ariaLabel={t('goodsReceipt.form.lot')}
                   />
-                </div>
+                </Field>
               )}
-              <div className="gr-field">
-                <label htmlFor="gr-new-lot">{t('goodsReceipt.form.newLot')}</label>
+              <Field label={t('goodsReceipt.form.newLot')} info={t('goodsReceipt.form.newLotHint')} size="short">
                 <input
                   id="gr-new-lot"
                   className="field"
@@ -1131,11 +1178,9 @@ export function GoodsReceipt() {
                   onChange={(e) => setNewLotNumber(e.target.value)}
                   placeholder={t('goodsReceipt.form.optional')}
                 />
-                <p className="gr-hint">{t('goodsReceipt.form.newLotHint')}</p>
-              </div>
+              </Field>
               {serials.length > 0 && (
-                <div className="gr-field">
-                  <label htmlFor="gr-serial">{t('goodsReceipt.form.serial')}</label>
+                <Field label={t('goodsReceipt.form.serial')} info={t('goodsReceipt.form.serialReturnHint')} size="short">
                   <Select
                     id="gr-serial"
                     value={lineSerialId}
@@ -1146,11 +1191,9 @@ export function GoodsReceipt() {
                     ]}
                     ariaLabel={t('goodsReceipt.form.serial')}
                   />
-                  <p className="gr-hint">{t('goodsReceipt.form.serialReturnHint')}</p>
-                </div>
+                </Field>
               )}
-              <div className="gr-field">
-                <label htmlFor="gr-new-serial">{t('goodsReceipt.form.newSerial')}</label>
+              <Field label={t('goodsReceipt.form.newSerial')} info={t('goodsReceipt.form.serialHint')} size="short">
                 <input
                   id="gr-new-serial"
                   className="field"
@@ -1158,14 +1201,14 @@ export function GoodsReceipt() {
                   onChange={(e) => setNewSerialNumber(e.target.value)}
                   placeholder={t('goodsReceipt.form.optional')}
                 />
-                <p className="gr-hint">{t('goodsReceipt.form.serialHint')}</p>
-              </div>
+              </Field>
             </>
           )}
           <label className="gr-check">
             <input type="checkbox" checked={lineHold} onChange={(e) => setLineHold(e.target.checked)} />
             <span>{t('goodsReceipt.form.hold')}</span>
           </label>
+          </div>
         </DetailDrawer>
       )}
     </div>

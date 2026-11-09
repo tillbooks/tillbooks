@@ -8,8 +8,9 @@
  * document) live one level down in the per-row overflow (D15/C2) behind a confirm.
  *
  * D118 B2: the hand-rolled `<table>` and its five states are the shared DataTable now, and the page
- * header is the shared SurfaceHeader. The type strip is the shared Tabs in its shared-panel mode
- * (K-11, D137): one URL-driven table as the one panel, labelled by the active type. The row opens the
+ * header is the shared SurfaceHeader. D187 Listen A: the type is a FilterBar facet (a chip while set,
+ * under "+ Filter" while not) that still drives the `?type=` URL, and the one destructive row verb is the
+ * DataTable's `rowActions`. The row opens the
  * document through `rowHref` (K-21), the number in the ink at 500 (K-12), and the status is the shared
  * Status word (K-22). Money renders VERBATIM from `list_documents`: the transaction total, and the
  * engine's own base-currency total where a posting stamped one. The client sums and rounds nothing.
@@ -25,9 +26,8 @@ import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
-import { OverflowMenu } from '../../components/OverflowMenu';
+import { FilterBar, type FilterFacet } from '../../components/FilterBar';
 import { Status } from '../../components/Status';
-import { Tabs } from '../../components/Tabs';
 import { useCan, CAP } from '../../lib/capabilities';
 import { ConfirmDialog } from '../Accounts/ConfirmDialog';
 import {
@@ -81,6 +81,7 @@ export function Documents() {
 
   const typeFilter = (params.get('type') as TypeFilter) ?? 'all';
 
+  const [search, setSearch] = useState('');
   const [documents, setDocuments] = useState<DocumentDto[]>([]);
   // D34: the engine caps the list at a documented ceiling and flags truncation; that flag must reach
   // the user (a capped list that looks complete is a silent lie).
@@ -194,15 +195,8 @@ export function Documents() {
         header: t('document.column.status'),
         render: (doc) => <StatusCell doc={doc} />,
       },
-      {
-        key: 'actions',
-        header: t('document.action.open'),
-        headerHidden: true,
-        align: 'end',
-        render: (doc) => <RowActions doc={doc} canIssue={canIssue} onCancelAction={(action) => setConfirm({ doc, action })} />,
-      },
     ],
-    [t, navigate, contactName, canIssue],
+    [t, contactName],
   );
 
   if (workspaceId === null) {
@@ -224,11 +218,31 @@ export function Documents() {
   }
 
   const hasType = typeFilter !== 'all';
-  const emptyState = hasType ? (
+  const needle = search.trim().toLowerCase();
+  const shown =
+    needle === ''
+      ? documents
+      : documents.filter((doc) =>
+          `${doc.number ?? ''} ${contactName(doc.contactId)}`.toLowerCase().includes(needle),
+        );
+  const facets: FilterFacet[] = [
+    {
+      key: 'type',
+      label: t('document.column.type'),
+      options: DOCUMENT_TYPES.map((type) => ({ value: type, label: t(typeKey(type)) })),
+      value: hasType ? typeFilter : null,
+      onChange: (value) => setType(value === null ? 'all' : (DOCUMENT_TYPES.find((type) => type === value) ?? 'all')),
+    },
+  ];
+  const clearFilters = () => {
+    setSearch('');
+    setType('all');
+  };
+  const emptyState = hasType || needle !== '' ? (
     <EmptyState
       title={t('document.noMatch')}
       hint={t('document.noMatchHint')}
-      action={{ label: t('document.clearFilters'), onClick: () => setType('all') }}
+      action={{ label: t('document.clearFilters'), onClick: clearFilters }}
     />
   ) : (
     <EmptyState
@@ -244,6 +258,7 @@ export function Documents() {
     <div className="documents">
       <SurfaceHeader
         title={t('document.title')}
+        count={loading || error !== null ? undefined : shown.length}
         help={<SurfaceHelp surface="Documents" />}
         actions={
           canIssue ? (
@@ -254,46 +269,54 @@ export function Documents() {
         }
       />
 
-      {/* K-11: the document types are views of one list, on the shared Tabs; the list is its panel. */}
-      <Tabs
-        label={t('document.column.type')}
-        tabs={[
-          { id: 'all', label: t('document.type.all') },
-          ...DOCUMENT_TYPES.map((type) => ({ id: type, label: t(typeKey(type)) })),
-        ]}
-        activeId={typeFilter}
-        onChange={(id) => setType(id === 'all' ? 'all' : (DOCUMENT_TYPES.find((type) => type === id) ?? 'all'))}
-      >
-        <div className="documents-panel">
-          {rowError !== null && <ErrorBanner error={rowError} />}
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel={t('document.search')}
+        searchPlaceholder={t('document.search')}
+        onClear={clearFilters}
+        clearLabel={t('document.clearFilters')}
+        facets={facets}
+      />
 
-          {truncation !== null && (
-            <p className="documents-truncated" role="status">
-              {t('document.truncatedNotice', { ceiling: truncation.ceiling, total: truncation.total })}{' '}
-              {t('document.truncatedHint')}
-            </p>
-          )}
+      <div className="documents-panel">
+        {rowError !== null && <ErrorBanner error={rowError} />}
 
-          <DataTable
-            columns={columns}
-            rows={documents}
-            rowKey={(doc) => doc.id}
-            caption={t('document.title')}
-            loading={loading}
-            {...(error !== null ? { error } : {})}
-            onRetry={() => void load()}
-            emptyState={emptyState}
-            rowHref={(doc) => `/documents/${doc.id}`}
-            rowClassName={(doc) =>
-              doc.status === 'draft'
-                ? 'documents-row--draft'
-                : VOID_STATES.has(doc.status)
-                  ? 'documents-row--void'
-                  : undefined
-            }
-          />
-        </div>
-      </Tabs>
+        {truncation !== null && (
+          <p className="documents-truncated" role="status">
+            {t('document.truncatedNotice', { ceiling: truncation.ceiling, total: truncation.total })}{' '}
+            {t('document.truncatedHint')}
+          </p>
+        )}
+
+        <DataTable
+          columns={columns}
+          rows={shown}
+          rowKey={(doc) => doc.id}
+          caption={t('document.title')}
+          loading={loading}
+          {...(error !== null ? { error } : {})}
+          onRetry={() => void load()}
+          emptyState={emptyState}
+          rowHref={(doc) => `/documents/${doc.id}`}
+          // Only the destructive row action (delete a draft / storno a posted document) belongs in the
+          // overflow (M25); the forward steps live on the document's own detail surface.
+          rowActions={(doc) => {
+            const danger = documentActions(doc).overflow.find((a) => a.danger === true);
+            return !canIssue || danger === undefined
+              ? []
+              : [{ key: 'danger', label: t(danger.labelKey), onSelect: () => setConfirm({ doc, action: danger }), danger: true }];
+          }}
+          rowActionsLabel={(doc) => t('document.rowActions', { name: doc.number ?? t('document.draftNumber') })}
+          rowClassName={(doc) =>
+            doc.status === 'draft'
+              ? 'documents-row--draft'
+              : VOID_STATES.has(doc.status)
+                ? 'documents-row--void'
+                : undefined
+          }
+        />
+      </div>
 
       {confirm !== null && (
         <ConfirmDialog
@@ -341,26 +364,5 @@ function StatusCell({ doc }: { doc: DocumentDto }) {
       <Status kind={documentStatusKind(doc.status, overdue)} label={t(statusKey(doc.status))} />
       {overdue && <span className="documents-overdue">{t('document.overdue')}</span>}
     </>
-  );
-}
-
-interface RowActionsProps {
-  doc: DocumentDto;
-  /** A24 `issue` (F5): the destructive row overflow is a document write and is absent without it. */
-  canIssue: boolean;
-  onCancelAction: (action: DocumentAction) => void;
-}
-
-function RowActions({ doc, canIssue, onCancelAction }: RowActionsProps) {
-  const t = useT();
-  // Only the destructive row action (delete a draft / storno a posted document) belongs in the list
-  // overflow (M25); the forward steps live on the document's own detail surface.
-  const danger = documentActions(doc).overflow.find((a) => a.danger === true);
-  if (!canIssue || danger === undefined) return null;
-  return (
-    <OverflowMenu
-      label={t('document.rowActions', { name: doc.number ?? t('document.draftNumber') })}
-      items={[{ key: 'danger', label: t(danger.labelKey), onSelect: () => onCancelAction(danger), danger: true }]}
-    />
   );
 }

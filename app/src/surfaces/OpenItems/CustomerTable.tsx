@@ -34,7 +34,7 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatMoney, formatDate } from '../../i18n';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { ErrorBanner, Skeleton } from '../../components/states';
-import { ChevronGlyph } from './glyphs';
+import { ChevronRightGlyph } from '../../components/icons';
 import {
   customerLabelKey,
   onAccountNoteKey,
@@ -119,7 +119,7 @@ function CustomerRow({ row, baseCurrency, asOf, expanded, onToggle }: CustomerRo
               aria-expanded={expanded}
               onClick={onToggle}
             >
-              <ChevronGlyph className="oi-expander-glyph" />
+              <ChevronRightGlyph size={14} className="oi-expander-glyph" />
               <span className="oi-customer-name">{name}</span>
             </button>
           )}

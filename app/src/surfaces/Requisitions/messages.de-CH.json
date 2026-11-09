@@ -6,7 +6,6 @@
     "title": "Anforderungen",
     "new": "Neue Anforderung",
     "noWorkspace": "Wähle einen Mandanten, um Anforderungen zu sehen.",
-    "showAll": "Alle Status zeigen",
     "empty": {
       "title": "Noch keine Anforderungen.",
       "hint": "Erfasse den internen Bedarf, bevor du einkaufst.",
@@ -97,7 +96,9 @@
       "title": "In Bestellung umwandeln",
       "help": "Wähle die zu bestellende Menge je Position und bestätige den Lieferanten."
     },
-    "moreActions": "Weitere Aktionen für {number}"
+    "moreActions": "Weitere Aktionen für {number}",
+    "search": "Anforderungen suchen",
+    "openOnly": "Nur offene"
   },
   "help": {
     "Requisitions": {

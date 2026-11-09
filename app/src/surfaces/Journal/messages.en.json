@@ -12,14 +12,12 @@
     "booked": "In the books",
     "reversalTag": "Reversal",
     "filters": {
-      "legend": "Filter the journal",
       "from": "From",
       "to": "To",
       "number": "Voucher no.",
       "account": "Account",
       "source": "Source",
       "status": "Status",
-      "all": "All",
       "apply": "Apply filters",
       "clear": "Clear filters"
     },

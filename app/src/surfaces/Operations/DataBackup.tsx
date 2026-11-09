@@ -33,6 +33,9 @@ import { ErrorBanner, PermissionDenied, refusalText } from '../../components/sta
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { HelpHint } from '../../components/HelpHint';
 import { Modal } from '../../components/Modal';
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
+import { OverflowMenu } from '../../components/OverflowMenu';
 import './DataBackup.css';
 
 /** The restore confirmation is a consequential dialog. Held as a value so the Modal role travels as
@@ -264,15 +267,19 @@ export function DataBackup({ headerSlot = null }: DataBackupProps = {}) {
       header: t('data.action.delete'),
       headerHidden: true,
       render: (b) => (
-        <button
-          type="button"
-          className="btn btn--ghost"
-          aria-label={t('data.action.delete')}
+        <OverflowMenu
+          label={t('dataBackup.rowActions', { kind: t(`data.kind.${b.kind}`), date: formatDate(b.createdAt) })}
           disabled={busy}
-          onClick={() => void run('delete_backup', { workspaceId, backupId: b.backupId, idempotencyKey: key() }, refresh)}
-        >
-          {t('data.action.delete')}
-        </button>
+          portal
+          items={[
+            {
+              key: 'delete',
+              label: t('data.action.delete'),
+              danger: true,
+              onSelect: () => void run('delete_backup', { workspaceId, backupId: b.backupId, idempotencyKey: key() }, refresh),
+            },
+          ]}
+        />
       ),
     },
   ];
@@ -303,7 +310,7 @@ export function DataBackup({ headerSlot = null }: DataBackupProps = {}) {
         <h2 id="data-title" className="diag-subtitle">
           {t('data.title')}
         </h2>
-        <p className="diag-prose diag-prose-dim">{t('data.intro')}</p>
+        <IconButton icon="info" small context={t('data.intro')} />
       </header>
 
       {actionError !== null && (
@@ -311,9 +318,13 @@ export function DataBackup({ headerSlot = null }: DataBackupProps = {}) {
       )}
 
       <div className="data-actions">
-        <button type="button" className="btn btn--secondary" disabled={busy} onClick={() => void run('export_workspace', { workspaceId, idempotencyKey: key() }, refresh)}>
-          {t('data.action.export')}
-        </button>
+        <IconButton
+          icon="download"
+          name={t('data.action.export')}
+          context={t('data.title')}
+          disabled={busy}
+          onClick={() => void run('export_workspace', { workspaceId, idempotencyKey: key() }, refresh)}
+        />
         {headerSlot === null && backupButton}
       </div>
 
@@ -329,12 +340,15 @@ export function DataBackup({ headerSlot = null }: DataBackupProps = {}) {
       />
 
       <div className="data-restore">
-        <h3 className="diag-subtitle">{t('data.restore.title')}</h3>
-        <p className="diag-prose diag-prose-dim">{t('data.restore.hint')}</p>
-        <label className="data-field">
-          <span>{t('data.restore.source')}</span>
-          <input className="field" type="text" value={source} onChange={(e) => setSource(e.target.value)} placeholder="~/.till/backups/…" />
-        </label>
+        <div className="data-head">
+          <h3 className="diag-subtitle">{t('data.restore.title')}</h3>
+          <IconButton icon="info" small context={t('data.restore.hint')} />
+        </div>
+        <div className="form-stack data-field">
+          <Field label={t('data.restore.source')}>
+            <input className="field" type="text" value={source} onChange={(e) => setSource(e.target.value)} placeholder="~/.till/backups/…" />
+          </Field>
+        </div>
         <div className="data-actions">
           <button
             type="button"
@@ -347,14 +361,13 @@ export function DataBackup({ headerSlot = null }: DataBackupProps = {}) {
           >
             {t('data.action.verify')}
           </button>
-          <button
-            type="button"
-            className="btn btn--secondary"
+          <IconButton
+            icon="restore"
+            name={t('data.action.restore')}
+            context={t('data.restore.title')}
             disabled={busy || source.trim() === ''}
             onClick={() => setConfirmingRestore(true)}
-          >
-            {t('data.action.restore')}
-          </button>
+          />
         </div>
         {verify !== null && (
           <p className="diag-prose data-verify" role="status">

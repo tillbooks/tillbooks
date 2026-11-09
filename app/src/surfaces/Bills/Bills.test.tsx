@@ -951,11 +951,13 @@ describe('D152: the capture drawer infers before it asks', () => {
     expect(dialog.querySelector('#bill-due-blank')).toBeNull();
     fireEvent.change(within(dialog).getByLabelText('Fällig'), { target: { value: '' } });
     const hint = dialog.querySelector('#bill-due-blank') as HTMLElement;
+    expect(hint).toBeVisible();
     expect(hint).toHaveTextContent('Leer lassen: fällig am 01.12.2026 aus der Zahlungsfrist.');
     expect(within(dialog).getByLabelText('Fällig')).toHaveAttribute('aria-describedby', 'bill-due-blank');
     expect(defaultDueDate('2026-11-01', 30)).toBe('2026-12-01');
     // A vendor due immediately: the empty field says the bill date. Then back to the vendor with terms.
     await pickVendor(dialog, 'Werkstoff AG');
+    expect(dialog.querySelector('#bill-due-blank')).toBeVisible();
     expect(dialog.querySelector('#bill-due-blank')).toHaveTextContent('Leer lassen: fällig am 01.11.2026, dem Rechnungsdatum.');
     await pickVendor(dialog, 'Lieferant GmbH');
     refuse = false;
@@ -993,12 +995,15 @@ describe('D152: the capture drawer infers before it asks', () => {
     expect(info()).toHaveTextContent('Standard-Zahlungsfrist aus dem Firmenprofil: 20 Tage');
     // Cleared, the hint names the date the ENGINE will store from the default.
     fireEvent.change(within(dialog).getByLabelText('Fällig'), { target: { value: '' } });
+    expect(dialog.querySelector('#bill-due-blank')).toBeVisible();
     expect(dialog.querySelector('#bill-due-blank')).toHaveTextContent('Leer lassen: fällig am 20.02.2026 aus der Standard-Zahlungsfrist.');
     // Its own terms win over the default.
     await pickVendor(dialog, 'Lieferant GmbH');
+    expect(dialog.querySelector('#bill-due-blank')).toBeVisible();
     expect(dialog.querySelector('#bill-due-blank')).toHaveTextContent('Leer lassen: fällig am 02.03.2026 aus der Zahlungsfrist.');
     // 0 is "due immediately": the default does NOT apply.
     await pickVendor(dialog, 'Werkstoff AG');
+    expect(dialog.querySelector('#bill-due-blank')).toBeVisible();
     expect(dialog.querySelector('#bill-due-blank')).toHaveTextContent('Leer lassen: fällig am 31.01.2026, dem Rechnungsdatum.');
     expect(info()).toHaveTextContent('Zahlung sofort');
     // A cleared field posts with no dueDate, so the engine applies the same rule the hint stated.

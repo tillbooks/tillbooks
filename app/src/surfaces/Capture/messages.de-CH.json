@@ -18,7 +18,6 @@
       "commit": "Übernehmen",
       "discard": "Verwerfen",
       "reextract": "Erneut auslesen",
-      "more": "Mehr",
       "back": "Zurück",
       "commitAndPost": "Übernehmen und buchen"
     },
@@ -178,7 +177,8 @@
       "one": "Passt zu Bankzeile vom {date}, {amount}",
       "open": "Bankzeile öffnen",
       "several": "Passt zu {count} Bankzeilen"
-    }
+    },
+    "rowActions": "Aktionen für Beleg vom {row}"
   },
   "help": {
     "Capture": {

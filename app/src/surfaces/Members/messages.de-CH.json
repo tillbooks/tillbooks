@@ -122,7 +122,15 @@
       },
       "done": "Neuer Schlüssel gesetzt. Alle anderen Browser sind abgemeldet.",
       "failed": "Das hat nicht geklappt. Der bisherige Schlüssel gilt weiter."
-    }
+    },
+    "hintTitle": {
+      "unclaimed": "Noch niemand ist Eigentümer",
+      "notAMember": "Nur lesen",
+      "agentIsOwner": "Der MCP-Agent ist Eigentümer",
+      "goOnline": "Einladungen brauchen eine Online-Instanz"
+    },
+    "roleEdit": "Rolle von {name}",
+    "actionsFor": "Aktionen für {name}"
   },
   "capability": {
     "read_books": "Bücher und Auswertungen lesen",

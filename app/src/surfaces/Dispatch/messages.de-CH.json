@@ -52,8 +52,6 @@
       "reason": "Grund",
       "empty": "Noch keine Sendungen.",
       "emptyHint": "Sobald eine Rechnung, Offerte oder Mahnung versendet wird, erscheint hier eine Zeile.",
-      "filterLabel": "Nach Ergebnis filtern",
-      "filterAll": "Alle Ergebnisse",
       "outcome": {
         "sent": "gesendet",
         "degraded": "nicht übermittelt",
@@ -73,7 +71,9 @@
         "smtp": "E-Mail",
         "cloud_relay": "Cloud-Versand",
         "artifact_only": "Artefakt (lokal)"
-      }
+      },
+      "search": "Empfänger suchen",
+      "filterClear": "Filter zurücksetzen"
     }
   },
   "nav": {

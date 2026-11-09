@@ -23,6 +23,8 @@ import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { Select } from '../../components/Select';
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
 import { useWorkspaceId } from '../../app/workspace';
 import { formatMoney, useT } from '../../i18n';
 import { useCalendarFormat } from '../../lib/format';
@@ -983,6 +985,7 @@ export function AssetRegister() {
       <SurfaceHeader
         title={t('assets.register.title')}
         help={<SurfaceHelp surface="FixedAssets" />}
+        count={visible.length}
         actions={
           <button type="button" className="btn btn--primary" onClick={openCreate} disabled={!canWrite || noCategories}>
             {t('assets.register.new')}
@@ -1002,26 +1005,23 @@ export function AssetRegister() {
           setStatusFilter('');
         }}
         clearLabel={t('assets.register.filter.clear')}
-      >
-        <Select
-          ariaLabel={t('assets.register.filter.category')}
-          value={categoryFilter}
-          onChange={(value) => setCategoryFilter(value)}
-          options={[
-            { value: '', label: t('assets.register.filter.allCategories') },
-            ...categories.map((c) => ({ value: c.id, label: `${c.code} ${c.name}` })),
-          ]}
-        />
-        <Select
-          ariaLabel={t('assets.register.filter.status')}
-          value={statusFilter}
-          onChange={(value) => setStatusFilter(value)}
-          options={[
-            { value: '', label: t('assets.register.filter.allStatuses') },
-            ...ASSET_STATUSES.map((s) => ({ value: s, label: t(`assets.status.${s}`) })),
-          ]}
-        />
-      </FilterBar>
+        facets={[
+          {
+            key: 'category',
+            label: t('assets.register.filter.category'),
+            options: categories.map((c) => ({ value: c.id, label: `${c.code} ${c.name}` })),
+            value: categoryFilter === '' ? null : categoryFilter,
+            onChange: (value) => setCategoryFilter(value ?? ''),
+          },
+          {
+            key: 'status',
+            label: t('assets.register.filter.status'),
+            options: ASSET_STATUSES.map((st) => ({ value: st, label: t(`assets.status.${st}`) })),
+            value: statusFilter === '' ? null : statusFilter,
+            onChange: (value) => setStatusFilter(value ?? ''),
+          },
+        ]}
+      />
 
       {failed ? (
         <ErrorBanner message={t('assets.register.error.transport')} onRetry={() => void load()} />
@@ -1078,8 +1078,7 @@ export function AssetRegister() {
         {writeError && <ErrorBanner error={writeError} />}
 
         {drawer === 'create' && (
-            <div className="fa-field">
-              <label htmlFor="fa-cat">{t('assets.register.field.category')}</label>
+            <Field label={t('assets.register.field.category')} id="fa-cat">
               <Select
                 id="fa-cat"
                 value={draft.categoryId}
@@ -1090,15 +1089,13 @@ export function AssetRegister() {
                 ]}
                 ariaLabel={t('assets.register.field.category')}
               />
-            </div>
+            </Field>
           )}
 
-          <div className="fa-field">
-            <label htmlFor="fa-name">{t('assets.register.field.name')}</label>
+          <Field label={t('assets.register.field.name')} id="fa-name">
             <input className="field" id="fa-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-date">{t('assets.register.field.acquired')}</label>
+          </Field>
+          <Field label={t('assets.register.field.acquired')} id="fa-date">
             <input className="field"
               id="fa-date"
               type="date"
@@ -1106,9 +1103,8 @@ export function AssetRegister() {
               disabled={financialLocked}
               onChange={(e) => setDraft({ ...draft, acquisitionDate: e.target.value })}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-cost">{t('assets.register.field.cost')}</label>
+          </Field>
+          <Field label={t('assets.register.field.cost')} id="fa-cost">
             <input className="field"
               id="fa-cost"
               type="number"
@@ -1118,9 +1114,8 @@ export function AssetRegister() {
               disabled={financialLocked}
               onChange={(e) => setDraft({ ...draft, costMajor: e.target.value })}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-method">{t('assets.register.field.method')}</label>
+          </Field>
+          <Field label={t('assets.register.field.method')} id="fa-method">
             <Select
               id="fa-method"
               value={draft.depreciationMethod}
@@ -1129,10 +1124,9 @@ export function AssetRegister() {
               options={DEPRECIATION_METHODS.map((m) => ({ value: m, label: t(`assets.method.${m}`) }))}
               ariaLabel={t('assets.register.field.method')}
             />
-          </div>
+          </Field>
           {draft.depreciationMethod !== 'none' && (
-            <div className="fa-field">
-              <label htmlFor="fa-life">{t('assets.register.field.life')}</label>
+            <Field label={t('assets.register.field.life')} id="fa-life">
               <input className="field"
                 id="fa-life"
                 type="number"
@@ -1141,20 +1135,18 @@ export function AssetRegister() {
                 disabled={financialLocked}
                 onChange={(e) => setDraft({ ...draft, usefulLifeMonths: e.target.value })}
               />
-            </div>
+            </Field>
           )}
-          <div className="fa-field">
-            <label htmlFor="fa-serial">{t('assets.register.field.serial')}</label>
+          <Field label={t('assets.register.field.serial')} id="fa-serial">
             <input className="field"
               id="fa-serial"
               value={draft.serialNumber}
               onChange={(e) => setDraft({ ...draft, serialNumber: e.target.value })}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-notes">{t('assets.register.field.notes')}</label>
+          </Field>
+          <Field label={t('assets.register.field.notes')} id="fa-notes">
             <input className="field" id="fa-notes" value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} />
-          </div>
+          </Field>
       </DetailDrawer>
 
       <Modal
@@ -1207,17 +1199,15 @@ export function AssetRegister() {
         )}
         {writeError && <ErrorBanner error={writeError} />}
 
-          <div className="fa-field">
-            <label htmlFor="fa-acq-date">{t('assets.acquisition.date')}</label>
+          <Field label={t('assets.acquisition.date')} id="fa-acq-date">
             <input className="field"
               id="fa-acq-date"
               type="date"
               value={acqDraft.date}
               onChange={(e) => setAcqDraft({ ...acqDraft, date: e.target.value })}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-acq-amount">{acqIsPrimary ? t('assets.acquisition.cost') : t('assets.acquisition.amount')}</label>
+          </Field>
+          <Field label={acqIsPrimary ? t('assets.acquisition.cost') : t('assets.acquisition.amount')} id="fa-acq-amount">
             <input className="field"
               id="fa-acq-amount"
               type="number"
@@ -1226,9 +1216,8 @@ export function AssetRegister() {
               value={acqDraft.amountMajor}
               onChange={(e) => setAcqDraft({ ...acqDraft, amountMajor: e.target.value })}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-acq-credit">{t('assets.acquisition.creditAccount')}</label>
+          </Field>
+          <Field label={t('assets.acquisition.creditAccount')} id="fa-acq-credit">
             <Select
               id="fa-acq-credit"
               value={acqDraft.creditAccountId}
@@ -1239,10 +1228,9 @@ export function AssetRegister() {
               ]}
               ariaLabel={t('assets.acquisition.creditAccount')}
             />
-          </div>
+          </Field>
           {acqIsPrimary && (
-            <div className="fa-field">
-              <label htmlFor="fa-acq-residual">{t('assets.acquisition.residual')}</label>
+            <Field label={t('assets.acquisition.residual')} id="fa-acq-residual">
               <input className="field"
                 id="fa-acq-residual"
                 type="number"
@@ -1251,16 +1239,15 @@ export function AssetRegister() {
                 value={acqDraft.residualMajor}
                 onChange={(e) => setAcqDraft({ ...acqDraft, residualMajor: e.target.value })}
               />
-            </div>
+            </Field>
           )}
-          <div className="fa-field">
-            <label htmlFor="fa-acq-desc">{t('assets.acquisition.description')}</label>
+          <Field label={t('assets.acquisition.description')} id="fa-acq-desc">
             <input className="field"
               id="fa-acq-desc"
               value={acqDraft.description}
               onChange={(e) => setAcqDraft({ ...acqDraft, description: e.target.value })}
             />
-          </div>
+          </Field>
 
           <div className="fa-preview" aria-label={t('assets.acquisition.preview')}>
             <span className="fa-preview-title">{t('assets.acquisition.preview')}</span>
@@ -1285,6 +1272,7 @@ export function AssetRegister() {
           open
           onClose={() => setViewing(null)}
           title={t('assets.acquisition.transactions')}
+          headerExtra={<IconButton icon="info" small context={t('assets.ledger.subtitle')} />}
           closeLabel={t('assets.common.close')}
           footer={
             <button type="button" className="btn btn--ghost" onClick={() => setViewing(null)}>
@@ -1295,7 +1283,6 @@ export function AssetRegister() {
           <p className="fa-hint">
             {t('assets.register.form.numberLabel')}: <strong>{viewing.number}</strong> · {viewing.name}
           </p>
-          <p className="fa-hint">{t('assets.ledger.subtitle')}</p>
           {txns === null ? (
             <Skeleton rows={3} />
           ) : (
@@ -1339,8 +1326,7 @@ export function AssetRegister() {
           <p>{t('assets.ledger.reverseBody')}</p>
           <ConsequenceLine verb={REVERSE_VERB} />
           {writeError && <ErrorBanner error={writeError} />}
-          <div className="fa-field">
-            <label htmlFor="fa-reverse-reason">{t('assets.ledger.reverseReason')}</label>
+          <Field label={t('assets.ledger.reverseReason')} id="fa-reverse-reason">
             <input className="field"
               id="fa-reverse-reason"
               type="text"
@@ -1348,7 +1334,7 @@ export function AssetRegister() {
               maxLength={200}
               onChange={(e) => setReverseReason(e.target.value)}
             />
-          </div>
+          </Field>
         </div>
       </Modal>
 
@@ -1380,8 +1366,7 @@ export function AssetRegister() {
           <p className="fa-hint">{t('assets.transfer.nonPosting')}</p>
           {writeError && <ErrorBanner error={writeError} />}
 
-          <div className="fa-field">
-            <label htmlFor="fa-trf-loc">{t('assets.transfer.toLocation')}</label>
+          <Field label={t('assets.transfer.toLocation')} id="fa-trf-loc">
             <Select
               id="fa-trf-loc"
               value={transferDraft.toLocationId}
@@ -1392,32 +1377,29 @@ export function AssetRegister() {
               ]}
               ariaLabel={t('assets.transfer.toLocation')}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-trf-resp">{t('assets.transfer.toResponsible')}</label>
+          </Field>
+          <Field label={t('assets.transfer.toResponsible')} id="fa-trf-resp">
             <input className="field"
               id="fa-trf-resp"
               value={transferDraft.toResponsibleUserId}
               onChange={(e) => setTransferDraft({ ...transferDraft, toResponsibleUserId: e.target.value })}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-trf-date">{t('assets.transfer.effectiveDate')}</label>
+          </Field>
+          <Field label={t('assets.transfer.effectiveDate')} id="fa-trf-date">
             <input className="field"
               id="fa-trf-date"
               type="date"
               value={transferDraft.effectiveDate}
               onChange={(e) => setTransferDraft({ ...transferDraft, effectiveDate: e.target.value })}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-trf-reason">{t('assets.transfer.reason')}</label>
+          </Field>
+          <Field label={t('assets.transfer.reason')} id="fa-trf-reason">
             <input className="field"
               id="fa-trf-reason"
               value={transferDraft.reason}
               onChange={(e) => setTransferDraft({ ...transferDraft, reason: e.target.value })}
             />
-          </div>
+          </Field>
 
           <h3 className="fa-drawer-subtitle">{t('assets.transfer.history')}</h3>
           {history === null ? (
@@ -1462,17 +1444,15 @@ export function AssetRegister() {
           <p className="fa-hint">{t('assets.disposal.explainer')}</p>
           {writeError && <ErrorBanner error={writeError} />}
 
-          <div className="fa-field">
-            <label htmlFor="fa-disp-date">{t('assets.disposal.date')}</label>
+          <Field label={t('assets.disposal.date')} id="fa-disp-date">
             <input className="field"
               id="fa-disp-date"
               type="date"
               value={dispDraft.disposalDate}
               onChange={(e) => setDispDraft({ ...dispDraft, disposalDate: e.target.value })}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-disp-proceeds">{t('assets.disposal.proceeds')}</label>
+          </Field>
+          <Field label={t('assets.disposal.proceeds')} id="fa-disp-proceeds">
             <input className="field"
               id="fa-disp-proceeds"
               type="number"
@@ -1481,10 +1461,9 @@ export function AssetRegister() {
               value={dispDraft.proceedsMajor}
               onChange={(e) => setDispDraft({ ...dispDraft, proceedsMajor: e.target.value })}
             />
-          </div>
+          </Field>
           {dispProceedsRappen > 0 && (
-            <div className="fa-field">
-              <label htmlFor="fa-disp-proceeds-acc">{t('assets.disposal.proceedsAccount')}</label>
+            <Field label={t('assets.disposal.proceedsAccount')} id="fa-disp-proceeds-acc">
               <Select
                 id="fa-disp-proceeds-acc"
                 value={dispDraft.proceedsAccountId}
@@ -1495,10 +1474,9 @@ export function AssetRegister() {
                 ]}
                 ariaLabel={t('assets.disposal.proceedsAccount')}
               />
-            </div>
+            </Field>
           )}
-          <div className="fa-field">
-            <label htmlFor="fa-disp-gl-acc">{t('assets.disposal.gainLossAccount')}</label>
+          <Field label={t('assets.disposal.gainLossAccount')} id="fa-disp-gl-acc">
             <Select
               id="fa-disp-gl-acc"
               value={dispDraft.gainLossAccountId}
@@ -1509,23 +1487,21 @@ export function AssetRegister() {
               ]}
               ariaLabel={t('assets.disposal.gainLossAccount')}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-disp-reason">{t('assets.disposal.reason')}</label>
+          </Field>
+          <Field label={t('assets.disposal.reason')} id="fa-disp-reason">
             <input className="field"
               id="fa-disp-reason"
               value={dispDraft.reason}
               onChange={(e) => setDispDraft({ ...dispDraft, reason: e.target.value })}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-disp-counterparty">{t('assets.disposal.counterparty')}</label>
+          </Field>
+          <Field label={t('assets.disposal.counterparty')} id="fa-disp-counterparty">
             <input className="field"
               id="fa-disp-counterparty"
               value={dispDraft.counterparty}
               onChange={(e) => setDispDraft({ ...dispDraft, counterparty: e.target.value })}
             />
-          </div>
+          </Field>
 
           {dispPreview !== null && (
             <div className="fa-preview" aria-label={t('assets.disposal.preview')}>
@@ -1600,17 +1576,15 @@ export function AssetRegister() {
           <p className="fa-hint">{t('assets.ledger.openingHint')}</p>
           {writeError && <ErrorBanner error={writeError} />}
 
-          <div className="fa-field">
-            <label htmlFor="fa-open-date">{t('assets.ledger.date')}</label>
+          <Field label={t('assets.ledger.date')} id="fa-open-date">
             <input className="field"
               id="fa-open-date"
               type="date"
               value={openDraft.date}
               onChange={(e) => setOpenDraft({ ...openDraft, date: e.target.value })}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-open-cost">{t('assets.ledger.cost')}</label>
+          </Field>
+          <Field label={t('assets.ledger.cost')} id="fa-open-cost">
             <input className="field"
               id="fa-open-cost"
               type="number"
@@ -1619,9 +1593,8 @@ export function AssetRegister() {
               value={openDraft.costMajor}
               onChange={(e) => setOpenDraft({ ...openDraft, costMajor: e.target.value })}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-open-accum">{t('assets.ledger.accumulated')}</label>
+          </Field>
+          <Field label={t('assets.ledger.accumulated')} id="fa-open-accum">
             <input className="field"
               id="fa-open-accum"
               type="number"
@@ -1630,10 +1603,9 @@ export function AssetRegister() {
               value={openDraft.accumulatedMajor}
               onChange={(e) => setOpenDraft({ ...openDraft, accumulatedMajor: e.target.value })}
             />
-          </div>
+          </Field>
           {openNbvRappen > 0 && (
-            <div className="fa-field">
-              <label htmlFor="fa-open-offset">{t('assets.ledger.offsetAccount')}</label>
+            <Field label={t('assets.ledger.offsetAccount')} id="fa-open-offset">
               <Select
                 id="fa-open-offset"
                 value={openDraft.offsetAccountId}
@@ -1644,16 +1616,15 @@ export function AssetRegister() {
                 ]}
                 ariaLabel={t('assets.ledger.offsetAccount')}
               />
-            </div>
+            </Field>
           )}
-          <div className="fa-field">
-            <label htmlFor="fa-open-desc">{t('assets.ledger.description')}</label>
+          <Field label={t('assets.ledger.description')} id="fa-open-desc">
             <input className="field"
               id="fa-open-desc"
               value={openDraft.description}
               onChange={(e) => setOpenDraft({ ...openDraft, description: e.target.value })}
             />
-          </div>
+          </Field>
 
           <div className="fa-preview" aria-label={t('assets.acquisition.preview')}>
             <div className="fa-preview-line">

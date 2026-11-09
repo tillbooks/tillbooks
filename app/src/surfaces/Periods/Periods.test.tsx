@@ -388,13 +388,13 @@ describe('Periods, one visible year-close door (D152)', () => {
   it('offers one enabled "Year-end close" link that starts the guided close, and no disabled twin at rest', async () => {
     const { calls } = renderPeriods({ list_period_locks: { status: 200, body: { ok: true, locks: [] } } });
     await screen.findByText(/No period closed yet/);
-    const actions = document.querySelector('.periods-actions') as HTMLElement;
+    const actions = document.querySelector('header') as HTMLElement;
     const door = within(actions).getByRole('link', { name: 'Year-end close' });
     // No run open: the checklist list with the year-close Start dialog preselected on the last ended year.
     expect(door).toHaveAttribute('href', `/checklisten?start=year_close&year=${LAST_YEAR}`);
     expect(within(actions).getAllByRole('link')).toHaveLength(1);
-    // The only button left in the actions panel is the month close, and it is live.
-    expect(within(actions).getAllByRole('button').map((b) => b.textContent)).toEqual(['Close month']);
+    // The only worded button in the header is the month close, and it is live (the overflow is an icon).
+    expect(within(actions).getAllByRole('button').map((b) => b.textContent).filter((x) => x !== '')).toEqual(['Close month']);
     for (const control of within(actions).getAllByRole('button')) expect(control).toBeEnabled();
     expect(screen.queryByRole('button', { name: /year-end close/i })).toBeNull();
     expect(screen.queryByRole('combobox', { name: 'Year' })).toBeNull();

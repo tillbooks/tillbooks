@@ -45,14 +45,14 @@ import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton } from '../../components/states';
 import { OverflowMenu, type OverflowMenuItem } from '../../components/OverflowMenu';
-import { Select } from '../../components/Select';
+import { FilterBar, type FilterFacet } from '../../components/FilterBar';
 import { Tabs } from '../../components/Tabs';
 import { useCan, CAP } from '../../lib/capabilities';
 import { HelpHint } from '../../components/HelpHint';
 import { AgingTiles } from './AgingTiles';
 import { BucketBoundaries } from './BucketBoundaries';
 import { CustomerTable } from './CustomerTable';
-import { CalendarGlyph } from './glyphs';
+import { CalendarGlyph } from '../../components/icons';
 import { ReconciledLine, ReconciliationBand } from './ReconciliationBand';
 import {
   customerLabelKey,
@@ -94,6 +94,7 @@ export function OpenItems() {
   const [view, setView] = useState<OpenItemsView | null>(null);
   const [aging, setAging] = useState<AgingView | null>(null);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
   const [failed, setFailed] = useState(false);
   const [denied, setDenied] = useState(false);
 
@@ -157,15 +158,20 @@ export function OpenItems() {
     const next = new URLSearchParams(params);
     for (const key of ['customer', 'currency', 'bucket']) next.delete(key);
     setParams(next, { replace: false });
+    setSearch('');
   }, [params, setParams]);
 
   /** Stable, so the popover's Escape and press-outside listeners are not re-registered per render. */
   const closeBoundaries = useCallback(() => setParam('boundaries', null), [setParam]);
 
-  const visibleItems = useMemo(
-    () => (view === null ? [] : itemsInBucket(view.items, bucketParam)),
-    [view, bucketParam],
-  );
+  const needle = search.trim().toLowerCase();
+  const visibleItems = useMemo(() => {
+    if (view === null) return [];
+    const inBucket = itemsInBucket(view.items, bucketParam);
+    return needle === ''
+      ? inBucket
+      : inBucket.filter((item) => `${item.number ?? ''} ${item.customerName ?? ''}`.toLowerCase().includes(needle));
+  }, [view, bucketParam, needle]);
 
   /** The currency codes offered by the filter, from the rows the engine actually returned. */
   const currencyOptions = useMemo(() => {
@@ -213,7 +219,29 @@ export function OpenItems() {
   const boundaries = view?.boundariesDays ?? aging?.boundariesDays ?? [];
   const filtered = view?.filtered ?? false;
   const settled = !loading && !failed && (view !== null || aging !== null);
-  const filterActive = customerParam !== null || currencyParam !== null || bucketParam !== null;
+  const filterActive = customerParam !== null || currencyParam !== null || bucketParam !== null || needle !== '';
+  // D187 Listen A: customer and currency are facets (the Kunde picker and Währung render on the
+  // Nach-Beleg tab only: `aging_report` takes neither, so on Nach-Kunde they would be controls the read
+  // cannot honour). The Stichtag stays a date input beside them.
+  const facets: FilterFacet[] =
+    tab === 'document'
+      ? [
+          {
+            key: 'customer',
+            label: t('openItems.column.customer'),
+            options: customerOptions.map((option) => ({ value: option.id, label: option.label })),
+            value: customerParam,
+            onChange: (value) => setParam('customer', value),
+          },
+          {
+            key: 'currency',
+            label: t('openItems.column.currency'),
+            options: currencyOptions.map((code) => ({ value: code, label: code })),
+            value: currencyParam,
+            onChange: (value) => setParam('currency', value),
+          },
+        ]
+      : [];
 
   /**
    * The OP-Liste columns for the shared DataTable (frame overflow, sticky header, density, `.t-num`).
@@ -373,6 +401,7 @@ export function OpenItems() {
       <SurfaceHeader
         title={t('openItems.title')}
         titleId="oi-title"
+        count={settled ? (tab === 'customer' ? aging?.byCustomer.length : visibleItems.length) : undefined}
         help={<SurfaceHelp surface="OpenItems" />}
         actions={headerActions}
       />
@@ -432,61 +461,27 @@ export function OpenItems() {
         onChange={(id) => setParam('by', id === 'customer' ? 'customer' : null)}
       >
       <div className="oi-panel">
-      <div className="oi-toolbar">
-        <div className="oi-filters">
-          <label className="oi-filter" htmlFor="oi-as-of">
-            <span>{t('openItems.asOf')}</span>
-            <input
-              id="oi-as-of"
-              className="field"
-              type="date"
-              value={asOfParam ?? asOf}
-              onChange={(event) => setParam('asOf', event.target.value === '' ? null : event.target.value)}
-            />
-          </label>
-
-          {/*
-            The Kunde picker, and it renders on the Nach-Beleg tab only, exactly as Währung does.
-            `aging_report` takes no `customerId`, so a picker on the Nach-Kunde tab would be a
-            control the read cannot honour, and that tab already answers the question per customer.
-          */}
-          {tab === 'document' && (
-            <div className="oi-filter">
-              <span>{t('openItems.column.customer')}</span>
-              <Select
-                id="oi-customer"
-                value={customerParam ?? ''}
-                onChange={(value) => setParam('customer', value === '' ? null : value)}
-                options={[
-                  { value: '', label: t('openItems.filter.allCustomers') },
-                  ...customerOptions.map((option) => ({ value: option.id, label: option.label })),
-                ]}
-                ariaLabel={t('openItems.column.customer')}
-              />
-            </div>
-          )}
-
-          {tab === 'document' && (
-            <div className="oi-filter">
-              <span>{t('openItems.column.currency')}</span>
-              <Select
-                id="oi-currency"
-                value={currencyParam ?? ''}
-                onChange={(value) => setParam('currency', value === '' ? null : value)}
-                options={[
-                  { value: '', label: t('openItems.filter.allCurrencies') },
-                  ...currencyOptions.map((code) => ({ value: code, label: code })),
-                ]}
-                ariaLabel={t('openItems.column.currency')}
-              />
-            </div>
-          )}
-        </div>
-      </div>
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel={t('openItems.search')}
+        searchPlaceholder={t('openItems.search')}
+        facets={facets}
+        onClear={resetFilters}
+      >
+        <input
+          id="oi-as-of"
+          className="field oi-asof-input"
+          type="date"
+          aria-label={t('openItems.asOf')}
+          value={asOfParam ?? asOf}
+          onChange={(event) => setParam('asOf', event.target.value === '' ? null : event.target.value)}
+        />
+      </FilterBar>
 
       {historical && (
         <div className="oi-asof-band" role="status">
-          <CalendarGlyph className="oi-asof-glyph" />
+          <CalendarGlyph size={14} className="oi-asof-glyph" />
           <span>{t('openItems.asOfBanner.text', { date: formatDate(asOf) })}</span>
           <button type="button" className="btn btn--ghost btn--sm" onClick={() => setParam('asOf', null)}>
             {t('openItems.asOfBanner.action')}
@@ -517,7 +512,11 @@ export function OpenItems() {
           />
         ) : (
           <CustomerTable
-            rows={aging.byCustomer}
+            rows={
+              needle === ''
+                ? aging.byCustomer
+                : aging.byCustomer.filter((row) => (row.customerName ?? '').toLowerCase().includes(needle))
+            }
             baseCurrency={aging.baseCurrency}
             asOf={aging.asOf}
             expandedId={expandedId}

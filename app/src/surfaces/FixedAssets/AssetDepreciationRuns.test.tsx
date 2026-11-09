@@ -104,6 +104,10 @@ describe('AssetDepreciationRuns', () => {
     expect(asked.some((a) => a.action === 'asset_depreciation_run_create' && typeof a.input.idempotencyKey === 'string')).toBe(true);
     // a Post button is offered in the review
     expect(screen.getAllByText(de.assets.depreciationRun.post).length).toBeGreaterThan(0);
+    // what posting does is said at rest beside it, and the review's Post button is described by it
+    const note = screen.getByText(de.assets.depreciationRun.subtitle);
+    expect(note).toBeVisible();
+    expect(screen.getAllByRole('button', { name: de.assets.depreciationRun.post }).some((b) => b.getAttribute('aria-describedby') === note.id)).toBe(true);
   });
 
   it('posts a draft through the Post action', async () => {

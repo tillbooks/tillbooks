@@ -34,6 +34,7 @@
  */
 import { useT, formatMoney, formatDate } from '../../i18n';
 import { HelpHint } from '../../components/HelpHint';
+import { IconButton } from '../../components/IconButton';
 import type { GeneralLedgerView } from './model';
 import { hasCloseEntry, sourceLabelKey } from './model';
 
@@ -50,13 +51,16 @@ export function GeneralLedger({ view, onOpenEntry }: GeneralLedgerProps) {
 
   return (
     <section className="rp-statement" aria-labelledby="rp-ledger-heading">
-      <h2 id="rp-ledger-heading" className="rp-statement-title">
-        {t('reports.heading.generalLedger', {
-          account: `${view.account.number} ${view.account.name}`,
-          from: formatDate(view.period.start),
-          to: formatDate(view.period.end),
-        })}
-      </h2>
+      <div className="rp-statement-head">
+        <h2 id="rp-ledger-heading" className="rp-statement-title">
+          {t('reports.heading.generalLedger', {
+            account: `${view.account.number} ${view.account.name}`,
+            from: formatDate(view.period.start),
+            to: formatDate(view.period.end),
+          })}
+        </h2>
+        {closed && <IconButton icon="info" small context={t('reports.generalLedger.closedYearNote')} />}
+      </div>
 
       <p className="rp-ledger-meta">
         <span>{t('reports.lineCount', { n: view.lines.length })}</span>
@@ -71,8 +75,6 @@ export function GeneralLedger({ view, onOpenEntry }: GeneralLedgerProps) {
           }
         />
       </p>
-
-      {closed && <p className="rp-note">{t('reports.generalLedger.closedYearNote')}</p>}
 
       <div className="rp-table-wrap">
         <table className="rp-table">

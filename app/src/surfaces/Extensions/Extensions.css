@@ -27,46 +27,16 @@
   border-color: var(--t-danger);
 }
 
-/* The plugin cards are a responsive card grid, not a table: DataTable does not fit this archetype,
-   so the grid and card treatment stay bespoke here. */
 .extensions__grid {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: var(--t-space-3);
-}
-
-.plugin-card {
-  background: var(--t-bg-elev);
-  border: 1px solid var(--t-border);
-  border-radius: var(--t-radius-md);
-  padding: var(--t-space-3);
   display: flex;
   flex-direction: column;
-  gap: var(--t-space-1);
-}
-
-.plugin-card__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
   gap: var(--t-space-2);
 }
 
-.plugin-card__name {
-  margin: 0;
-  font-size: var(--t-font-lg);
-  line-height: var(--t-lh-lg);
-}
-
-.plugin-card__meta {
-  margin: 0;
-  color: var(--t-text-dim);
-  font-size: var(--t-font-body);
-  line-height: var(--t-lh-body);
-  font-variant-numeric: tabular-nums;
+.plugin-card__caps {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
 }
 
 .plugin-card__reason {
@@ -74,13 +44,6 @@
   color: var(--t-text-dim);
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
-}
-
-.plugin-card__actions {
-  display: flex;
-  gap: var(--t-space-2);
-  margin-top: var(--t-space-2);
-  flex-wrap: wrap;
 }
 
 .extensions__browse {
@@ -94,12 +57,6 @@
   align-items: center;
   gap: var(--t-space-2);
   flex-wrap: wrap;
-}
-
-.extensions__search-label {
-  color: var(--t-text-dim);
-  font-size: var(--t-font-body);
-  line-height: var(--t-lh-body);
 }
 
 .extensions__stale {

@@ -28,6 +28,7 @@ import { useCalendarFormat } from '../../lib/format';
 import { Status } from '../../components/Status';
 import { assetStatusKind } from './AssetRegister';
 import { EmptyState, ErrorBanner, NoWorkspaceState } from '../../components/states';
+import { IconButton } from '../../components/IconButton';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { DataTable, type DataTableColumn, type DataTableFooterCell } from '../../components/DataTable';
@@ -594,8 +595,12 @@ export function AssetReports() {
     <div className="fa">
       <SurfaceHeader
         title={t('assets.reports.title')}
-        subtitle={t('assets.reports.explainer')}
-        help={<SurfaceHelp surface="FixedAssets" />}
+        help={
+          <>
+            <SurfaceHelp surface="FixedAssets" />
+            <IconButton icon="info" small context={t('assets.reports.explainer')} />
+          </>
+        }
       />
       <Tabs tabs={tabs} activeId={tab} onChange={(id) => setTab(id as ReportTab)} label={t('assets.reports.title')} />
     </div>

@@ -59,7 +59,8 @@
       "period_locked": "Diese Periode ist gesperrt. Wähle ein offenes wirksames Datum.",
       "already_reversed": "Diese Korrektur wurde bereits storniert."
     },
-    "rowActions": "Aktionen für die Korrektur von {item}"
+    "rowActions": "Aktionen für die Korrektur von {item}",
+    "noReasonsLink": "Korrekturgründe"
   },
   "help": {
     "Adjustments": {

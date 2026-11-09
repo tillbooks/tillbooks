@@ -31,13 +31,6 @@
   gap: var(--t-space-2);
 }
 
-.recurring__actions {
-  display: flex;
-  gap: var(--t-space-1);
-  flex-wrap: wrap;
-  align-items: center;
-}
-
 .recurring__skeletons {
   display: flex;
   flex-direction: column;
@@ -53,33 +46,11 @@
   color: var(--t-danger);
 }
 
-.recurring__hint {
-  margin: 0;
-  color: var(--t-text-dim);
-  font-size: 0.9rem;
-  max-width: 62ch;
-}
-
 /* --- The editor ------------------------------------------------------------------------------ */
 
 .recurring__form {
   display: flex;
   flex-direction: column;
-  gap: var(--t-space-2);
-  background: var(--t-bg-soft);
-  border-radius: var(--t-radius-md);
-  padding: var(--t-space-2);
-}
-
-.recurring__form label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-0-5);
-}
-
-.recurring__form label span {
-  color: var(--t-text-dim);
-  font-size: 0.9rem;
 }
 
 /* The controls themselves are the shared `.field` class (global.css); only the vertical resize is
@@ -177,12 +148,6 @@
   font-size: 0.8em;
 }
 
-.recurring__controls {
-  display: flex;
-  gap: var(--t-space-0-5);
-  flex-wrap: wrap;
-}
-
 .recurring__reason {
   color: var(--t-text-dim);
 }
@@ -209,4 +174,12 @@
 
 .recurring__detail .btn {
   align-self: flex-start;
+}
+
+.recurring__hint {
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  max-width: 62ch;
 }

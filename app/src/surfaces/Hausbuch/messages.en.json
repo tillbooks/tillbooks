@@ -80,6 +80,11 @@
       "invalid_input": "That entry does not fit. A house rule has 1 to 500 characters, a topic at most 40. Nothing was saved.",
       "not_found": "This house rule no longer exists. Reload the page. Nothing was changed.",
       "permission_denied": "You lack the right to manage settings for this. Nothing was changed."
+    },
+    "edit": "Edit",
+    "hintTitle": {
+      "readOnly": "Read only",
+      "withheld": "Hidden"
     }
   },
   "help": {

@@ -250,7 +250,7 @@ describe('ContactEditor', () => {
 
     // Typing clears the mark, and the save goes through.
     await userEvent.type(name, 'Neue AG');
-    expect(name).toHaveAttribute('aria-invalid', 'false');
+    expect(name).not.toHaveAttribute('aria-invalid', 'true');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Speichern' }));
     await waitFor(() => expect(createSpy).toHaveBeenCalledOnce());
   });

@@ -62,7 +62,10 @@
       "it-CH": "Italienisch"
     },
     "rowActions": "Aktionen für {name}",
-    "create": "Vorlage anlegen"
+    "create": "Vorlage anlegen",
+    "hintTitle": {
+      "permission": "Berechtigung"
+    }
   },
   "nav": {
     "documentTemplates": "Vorlagen"

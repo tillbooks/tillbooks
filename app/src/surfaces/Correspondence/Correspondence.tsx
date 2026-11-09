@@ -27,10 +27,13 @@ import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate, formatMoney } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { FilterBar, type FilterFacet } from '../../components/FilterBar';
 import { ActionFeedback } from '../../components/ActionFeedback';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { Status } from '../../components/Status';
@@ -203,6 +206,8 @@ export function Correspondence() {
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [bucketFilter, setBucketFilter] = useState<string | null>(null);
 
   const canWrite = can(CAP.mailWrite);
 
@@ -344,6 +349,7 @@ export function Correspondence() {
 
   const connectPanel = (
     <form
+      id="mail-connect-form"
       className="mail-connect"
       aria-label={t('mail.action.connect')}
       onSubmit={(e) => {
@@ -351,11 +357,8 @@ export function Correspondence() {
         void submitConnect();
       }}
     >
-      <p className="mail-connect-note">{t('mail.connect.no_password')}</p>
-      <p className="mail-connect-note">{t('mail.connect.supported')}</p>
-      <div className="mail-connect-fields">
-        <div className="mail-field">
-          <span>{t('mail.connect.adapter')}</span>
+      <div className="mail-connect-fields form-stack">
+        <Field label={t('mail.connect.adapter')} info={t('mail.connect.supported')} size="short">
           <Select
             value={connect.adapter}
             onChange={(val) => setConnect({ ...connect, adapter: val })}
@@ -365,25 +368,13 @@ export function Correspondence() {
             ]}
             ariaLabel={t('mail.connect.adapter')}
           />
-        </div>
-        <label className="mail-field">
-          <span>{t('mail.connect.storePath')}</span>
+        </Field>
+        <Field label={t('mail.connect.storePath')} size="full">
           <input className="field" id={storePathId} type="text" value={connect.storePath} onChange={(e) => setConnect({ ...connect, storePath: e.target.value })} required />
-        </label>
-        <label className="mail-field">
-          <span>{t('mail.connect.address')}</span>
+        </Field>
+        <Field label={t('mail.connect.address')} info={t('mail.connect.no_password')}>
           <input className="field" type="email" value={connect.address} onChange={(e) => setConnect({ ...connect, address: e.target.value })} required />
-        </label>
-      </div>
-      <div className="mail-connect-actions">
-        <button type="submit" className="btn btn--primary btn--sm">
-          {t('mail.action.connect')}
-        </button>
-        {connecting && (
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => setConnecting(false)}>
-            {t('mail.action.discard')}
-          </button>
-        )}
+        </Field>
       </div>
     </form>
   );
@@ -431,32 +422,72 @@ export function Correspondence() {
           formatDate(thread.lastMessageAt.slice(0, 10))
         ),
     },
-    ...(labelField !== null && canWrite
+    ...(labelField !== null
       ? [
           {
             key: 'label',
             header: t('mail.field.label'),
-            render: (thread: ThreadItem) => (
-              // A click on the label control is the control's, never the row's open (onRowClick).
-              <div className="mail-label-control" onClick={(event) => event.stopPropagation()}>
-                <Select
-                  ariaLabel={t('mail.field.label')}
-                  value={labels[thread.id] ?? ''}
-                  onChange={(val) => void setLabel(thread.id, val)}
-                  options={[
-                    { value: '', label: t('mail.field.none') },
-                    ...labelField.options.map((option) => ({ value: option, label: option })),
-                  ]}
-                />
-              </div>
-            ),
+            render: (thread: ThreadItem) => labels[thread.id] ?? <span className="mail-muted">&ndash;</span>,
           } satisfies DataTableColumn<ThreadItem>,
         ]
       : []),
   ];
 
+  // The label changes under the row's Mehr, one item per option (the current one checked), never a select in a cell.
+  const rowActions =
+    labelField !== null && canWrite
+      ? (thread: ThreadItem) => [
+          {
+            key: 'label-none',
+            group: t('mail.field.label'),
+            label: t('mail.field.none'),
+            checked: (labels[thread.id] ?? '') === '',
+            onSelect: () => void setLabel(thread.id, ''),
+          },
+          ...labelField.options.map((option) => ({
+            key: `label-${option}`,
+            group: t('mail.field.label'),
+            label: option,
+            checked: labels[thread.id] === option,
+            onSelect: () => void setLabel(thread.id, option),
+          })),
+        ]
+      : undefined;
+
+  const needle = search.trim().toLowerCase();
+  const shownThreads = threads.filter(
+    (thread) =>
+      (bucketFilter === null || thread.bucket === bucketFilter) &&
+      (needle === '' || (thread.subject ?? '').toLowerCase().includes(needle)),
+  );
+  const facets: FilterFacet[] = [
+    ...(views.length > 0
+      ? [
+          {
+            key: 'view',
+            label: t('mail.view.label'),
+            options: views.map((view) => ({ value: view.id, label: view.name })),
+            value: viewId === '' ? null : viewId,
+            onChange: (value: string | null) => setViewId(value ?? ''),
+          } satisfies FilterFacet,
+        ]
+      : []),
+    {
+      key: 'bucket',
+      label: t('mail.bucket.label'),
+      options: BUCKETS.map((bucket) => ({ value: bucket, label: t(`mail.bucket.${bucket}`) })),
+      value: bucketFilter,
+      onChange: setBucketFilter,
+    },
+  ];
+  const clearFilters = () => {
+    setSearch('');
+    setBucketFilter(null);
+    setViewId('');
+  };
+
   const section = (bucket: (typeof BUCKETS)[number]) => {
-    const rows = threads.filter((thread) => thread.bucket === bucket);
+    const rows = shownThreads.filter((thread) => thread.bucket === bucket);
     return (
       <section key={bucket} className="mail-section" aria-labelledby={`mail-h-${bucket}`}>
         <h2 id={`mail-h-${bucket}`} className="mail-section-title">
@@ -469,6 +500,13 @@ export function Correspondence() {
           rowKey={(thread) => thread.id}
           onRowClick={(thread) => void openThread(thread.id)}
           rowLabel={(thread) => `${t('mail.action.open')}: ${thread.subject ?? t('mail.thread.noSubject')}`}
+          {...(rowActions === undefined
+            ? {}
+            : {
+                rowActions,
+                rowActionsLabel: (thread: ThreadItem) =>
+                  t('mail.rowActions', { title: thread.subject ?? t('mail.thread.noSubject') }),
+              })}
           caption={t(`mail.bucket.${bucket}`)}
           emptyState={<p className="mail-section-empty">{t('mail.section.empty')}</p>}
         />
@@ -486,29 +524,14 @@ export function Correspondence() {
         title={t('mail.route.title')}
         titleId="mail-title"
         help={<SurfaceHelp surface="Correspondence" />}
+        count={loading || failed ? undefined : shownThreads.length}
         actions={
           <>
-            {views.length > 0 && (
-              <div className="mail-view-picker">
-                <span>{t('mail.view.label')}</span>
-                <Select
-                  value={viewId}
-                  onChange={(val) => setViewId(val)}
-                  options={[
-                    { value: '', label: t('mail.view.all') },
-                    ...views.map((view) => ({ value: view.id, label: view.name })),
-                  ]}
-                  ariaLabel={t('mail.view.label')}
-                />
-              </div>
-            )}
             {accounts.length > 0 && (
-              <button type="button" className="btn btn--primary" onClick={() => void reindexAll()}>
-                {t('mail.action.reindex')}
-              </button>
+              <IconButton icon="refresh" name={t('mail.action.reindex')} context={t('mail.action.reindexContext')} onClick={() => void reindexAll()} />
             )}
-            {accounts.length > 0 && canWrite && !connecting && (
-              <button type="button" className="btn btn--secondary" onClick={() => setConnecting(true)}>
+            {accounts.length > 0 && canWrite && (
+              <button type="button" className="btn btn--primary" onClick={() => setConnecting(true)}>
                 {t('mail.action.connect')}
               </button>
             )}
@@ -534,20 +557,37 @@ export function Correspondence() {
       {writeError !== null && <ErrorBanner message={errorMessage(writeError)} />}
       {failed && <ErrorBanner message={t('mail.error.transport')} context="read" onRetry={() => void load()} />}
 
-      {connecting && canWrite && connectPanel}
+      {connecting && canWrite && (
+        <DetailDrawer
+          open
+          onClose={() => setConnecting(false)}
+          title={t('mail.action.connect')}
+          closeLabel={t('mail.action.close')}
+          footer={
+            <>
+              <button type="button" className="btn btn--secondary" onClick={() => setConnecting(false)}>
+                {t('mail.action.discard')}
+              </button>
+              <button type="submit" form="mail-connect-form" className="btn btn--primary">
+                {t('mail.action.connect')}
+              </button>
+            </>
+          }
+        >
+          {connectPanel}
+        </DetailDrawer>
+      )}
 
       {loading ? (
         <Skeleton rows={4} height={36} labelKey="mail.loading" />
       ) : failed ? null : threads.length === 0 && accounts.length === 0 ? (
         // The honest empty state IS the connect affordance (US-E04.1): named clients, no password,
         // and nothing resembling a provider sign-in. Hidden without mail.write.
-        <div className="mail-empty">
-          {/* K-33: the title names what is missing and the hint says when threads appear. The one
-              action IS the connect form directly beneath (US-E04.1), so the state carries no second
-              button with the same words. */}
-          <EmptyState title={t('mail.empty')} hint={t('mail.emptyConnectHint')} />
-          {canWrite && connectPanel}
-        </div>
+        <EmptyState
+          title={t('mail.empty')}
+          hint={t('mail.emptyConnectHint')}
+          {...(canWrite ? { action: { label: t('mail.action.connect'), onClick: () => setConnecting(true) } } : {})}
+        />
       ) : threads.length === 0 ? (
         <EmptyState
           title={t('mail.empty')}
@@ -555,7 +595,18 @@ export function Correspondence() {
           action={{ label: t('mail.action.reindex'), onClick: () => void reindexAll() }}
         />
       ) : (
-        BUCKETS.map((bucket) => section(bucket))
+        <>
+          <FilterBar
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchLabel={t('mail.search')}
+            searchPlaceholder={t('mail.search')}
+            onClear={clearFilters}
+            clearLabel={t('mail.filter.clear')}
+            facets={facets}
+          />
+          {BUCKETS.filter((bucket) => bucketFilter === null || bucket === bucketFilter).map((bucket) => section(bucket))}
+        </>
       )}
 
       {/* The thread reading view in the shared DetailDrawer (D118 B2): the primitive owns the focus
@@ -742,7 +793,10 @@ function DraftPane({ workspaceId, thread }: { workspaceId: string; thread: Threa
 
   return (
     <section className="mail-draft-pane" aria-label={t('draft.pane.title')}>
-      <h3 className="mail-draft-title">{t('draft.pane.title')}</h3>
+      <div className="mail-draft-head">
+        <h3 className="mail-draft-title">{t('draft.pane.title')}</h3>
+        <IconButton icon="info" small context={t('draft.review.note')} />
+      </div>
       {error !== null && <p className="mail-draft-error" role="alert">{error}</p>}
       {edited !== null && (
         <div className="mail-draft-edited" role="status">
@@ -817,7 +871,6 @@ function DraftPane({ workspaceId, thread }: { workspaceId: string; thread: Threa
           )}
         </>
       )}
-      <p className="mail-draft-review-note">{t('draft.review.note')}</p>
     </section>
   );
 }

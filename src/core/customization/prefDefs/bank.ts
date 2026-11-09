@@ -25,8 +25,8 @@ export const BANK_PREFS: readonly PrefDef[] = [
     area: BANK,
     label: { en: 'Where the details sit', 'de-CH': 'Wo die Details stehen' },
     description: {
-      en: 'Automatic (default) decides when the page opens: at the bottom with few open lines, on the right with more. Right and bottom keep their place.',
-      'de-CH': 'Automatisch (Standard) entscheidet beim Öffnen der Seite: unten bei wenigen offenen Zeilen, rechts bei mehr. Rechts und unten bleiben, wo sie sind.',
+      en: 'Where a bank line\'s details open: automatically, on the right, or at the bottom.',
+      'de-CH': 'Wo die Details einer Bankzeile aufgehen: automatisch, rechts oder unten.',
     },
     valueLabels: {
       automatic: { en: 'Automatic', 'de-CH': 'Automatisch' },
@@ -42,8 +42,8 @@ export const BANK_PREFS: readonly PrefDef[] = [
     area: BANK,
     label: { en: 'Automatic: bottom up to this many open lines', 'de-CH': 'Automatisch: unten bis so viele offene Zeilen' },
     description: {
-      en: 'With this many open lines or fewer (default 8) the details open at the bottom, with more on the right.',
-      'de-CH': 'Bei so vielen offenen Zeilen oder weniger (Standard 8) öffnen die Details unten, bei mehr rechts.',
+      en: 'Up to this many open lines the details open at the bottom, with more on the right.',
+      'de-CH': 'Bis zu so vielen offenen Zeilen gehen die Details unten auf, bei mehr rechts.',
     },
   },
   {
@@ -54,8 +54,8 @@ export const BANK_PREFS: readonly PrefDef[] = [
     area: BANK,
     label: { en: 'Width of the details on the right (px)', 'de-CH': 'Breite der Details rechts (px)' },
     description: {
-      en: 'Set by dragging the divider beside the details. Default 360.',
-      'de-CH': 'Stellst du ein, indem du die Trennlinie neben den Details ziehst. Standard 360.',
+      en: 'The width of the details on the right. Dragging the divider changes it.',
+      'de-CH': 'Die Breite der Details rechts. Ziehst du an der Trennlinie, ändert sie sich.',
     },
   },
   {
@@ -66,8 +66,8 @@ export const BANK_PREFS: readonly PrefDef[] = [
     area: BANK,
     label: { en: 'Height of the details at the bottom (px)', 'de-CH': 'Höhe der Details unten (px)' },
     description: {
-      en: 'Set by dragging the divider above the details. Default 320.',
-      'de-CH': 'Stellst du ein, indem du die Trennlinie über den Details ziehst. Standard 320.',
+      en: 'The height of the details at the bottom. Dragging the divider changes it.',
+      'de-CH': 'Die Höhe der Details unten. Ziehst du an der Trennlinie, ändert sie sich.',
     },
   },
   // D178 point 9 (N3, A39 §20): how the selected line is booked. The owner's pick is the default.
@@ -79,8 +79,8 @@ export const BANK_PREFS: readonly PrefDef[] = [
     area: BANK,
     label: { en: 'How a line is booked', 'de-CH': 'Wie eine Zeile gebucht wird' },
     description: {
-      en: 'Focus (default): one line at a time, the bank facts beside the booking, then the next line. Tabs: the booking kinds as tabs in the details. One field: one search over accounts, open items, contacts and Spesen.',
-      'de-CH': 'Fokus (Standard): eine Zeile nach der anderen, die Bankdaten neben der Buchung, dann die nächste Zeile. Reiter: die Buchungsarten als Reiter in den Details. Ein Feld: eine Suche über Konten, offene Posten, Kontakte und Spesen.',
+      en: 'Focus shows one line after the other, Tabs the booking kinds as tabs, One field one search over everything.',
+      'de-CH': 'Fokus zeigt eine Zeile nach der anderen, Reiter die Buchungsarten als Reiter, Ein Feld eine Suche über alles.',
     },
     valueLabels: {
       focus: { en: 'Focus', 'de-CH': 'Fokus' },
@@ -96,8 +96,8 @@ export const BANK_PREFS: readonly PrefDef[] = [
     area: BANK,
     label: { en: 'Focus: hide the list', 'de-CH': 'Fokus: Liste ausblenden' },
     description: {
-      en: 'In the focus view, show only the line being booked, without the list beside it. Off by default.',
-      'de-CH': 'In der Fokus-Ansicht nur die Zeile zeigen, die du buchst, ohne die Liste daneben. Standard: aus.',
+      en: 'While you book, show only the current line, without the list beside it.',
+      'de-CH': 'Beim Buchen nur die aktuelle Zeile zeigen, ohne die Liste daneben.',
     },
   },
 ];

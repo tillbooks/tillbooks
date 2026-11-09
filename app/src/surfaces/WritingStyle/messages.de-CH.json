@@ -16,7 +16,8 @@
     },
     "account": {
       "label": "Mail-Konto",
-      "missing": "Verbinde zuerst einen lokalen Mail-Speicher auf der Korrespondenz-Seite. TILL lernt deinen Stil aus Nachrichten, die du bereits gesendet hast."
+      "missing": "Verbinde zuerst einen lokalen Mail-Speicher auf der Korrespondenz-Seite. TILL lernt deinen Stil aus Nachrichten, die du bereits gesendet hast.",
+      "desc": "Aus welchem Postfach TILL deinen Stil lernt."
     },
     "field": {
       "exemplars": "Verwendete Beispiele",
@@ -47,6 +48,9 @@
         "read": "Du hast keine Berechtigung, den Schreibstil zu sehen.",
         "write": "Du hast keine Berechtigung, den Schreibstil zu ändern."
       }
+    },
+    "group": {
+      "profile": "Stilprofil"
     }
   },
   "runtime": {

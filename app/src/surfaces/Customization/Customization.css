@@ -21,43 +21,12 @@
 
 /* --- The entity picker ------------------------------------------------------------------------ */
 
-.customization__kind {
-  display: flex;
-  align-items: center;
-  gap: var(--t-space-1);
-}
-
-.customization__kind span {
-  color: var(--t-text-dim);
-}
-
 /* --- Panels ----------------------------------------------------------------------------------- */
 
 .customization__panel {
   display: flex;
   flex-direction: column;
   gap: var(--t-space-2);
-  background: var(--t-bg-soft);
-  border-radius: var(--t-radius-md);
-  padding: var(--t-space-3);
-}
-
-.customization__form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-2);
-  max-width: 46ch;
-}
-
-.customization__form label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-0-5);
-}
-
-.customization__form-actions {
-  display: flex;
-  gap: var(--t-space-1);
 }
 
 /* The field and view lists are the shared DataTable primitive, so the per-surface list CSS is gone.

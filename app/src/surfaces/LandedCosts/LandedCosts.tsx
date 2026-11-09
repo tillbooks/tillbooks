@@ -37,8 +37,10 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
 import { EmptyState, ErrorBanner, NoWorkspaceState, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { FilterBar } from '../../components/FilterBar';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { Modal } from '../../components/Modal';
 import { Tooltip } from '../../components/Tooltip';
@@ -154,6 +156,11 @@ export function LandedCosts(): React.ReactElement {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<Err | null>(null);
   const [rows, setRows] = useState<VoucherRow[]>([]);
+  const [search, setSearch] = useState('');
+  const shown = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return needle === '' ? rows : rows.filter((r) => `${r.number}`.toLowerCase().includes(needle));
+  }, [rows, search]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [grs, setGrs] = useState<GrOption[]>([]);
   const [items, setItems] = useState<ItemLabel[]>([]);
@@ -402,7 +409,14 @@ export function LandedCosts(): React.ReactElement {
 
   return (
     <div className="landed-costs">
-      <SurfaceHeader title={t('landedCosts.title')} help={<SurfaceHelp surface="LandedCosts" />} actions={headerActions} />
+      <SurfaceHeader title={t('landedCosts.title')} help={<SurfaceHelp surface="LandedCosts" />} actions={headerActions} count={shown.length} />
+
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel={t('landedCosts.search')}
+        searchPlaceholder={t('landedCosts.search')}
+      />
 
       {!mayWrite ? (
         <p id={createReasonId} className="lock-note">
@@ -410,44 +424,54 @@ export function LandedCosts(): React.ReactElement {
         </p>
       ) : null}
 
-      {creating && mayWrite ? (
-        <section className="lc-form" aria-label={t('landedCosts.create')}>
-          <div className="lc-field">
-            {t('landedCosts.form.receipt')}
-            <Select
-              value={formGr}
-              onChange={setFormGr}
-              options={[
-                { value: '', label: '·' },
-                ...grs.map((g) => ({ value: g.id, label: g.number })),
-              ]}
-              ariaLabel={t('landedCosts.form.receipt')}
-            />
+      <DetailDrawer
+        open={creating && mayWrite}
+        onClose={() => setCreating(false)}
+        title={t('landedCosts.create')}
+        closeLabel={t('landedCosts.close')}
+        footer={
+          <button type="button" className="btn btn--primary" onClick={() => void submitCreate()}>
+            {t('landedCosts.form.submit')}
+          </button>
+        }
+      >
+        {writeError !== null ? <ErrorBanner error={writeError} message={errorText(writeError)} /> : null}
+        <div className="form-stack">
+          <div className="form-line">
+            <Field label={t('landedCosts.form.receipt')} size="short">
+              <Select
+                value={formGr}
+                onChange={setFormGr}
+                options={[
+                  { value: '', label: '·' },
+                  ...grs.map((g) => ({ value: g.id, label: g.number })),
+                ]}
+                ariaLabel={t('landedCosts.form.receipt')}
+              />
+            </Field>
+            <Field label={t('landedCosts.form.component')} size="short">
+              <Select
+                value={formComponent}
+                onChange={setFormComponent}
+                options={COMPONENT_TYPES.map((c) => ({ value: c, label: t(`landedCosts.component.${c}`) }))}
+                ariaLabel={t('landedCosts.form.component')}
+              />
+            </Field>
           </div>
-          <div className="lc-field">
-            {t('landedCosts.form.component')}
-            <Select
-              value={formComponent}
-              onChange={setFormComponent}
-              options={COMPONENT_TYPES.map((c) => ({ value: c, label: t(`landedCosts.component.${c}`) }))}
-              ariaLabel={t('landedCosts.form.component')}
-            />
+          <div className="form-line">
+            <Field label={t('landedCosts.form.amount')} size="amount">
+              <input className="field" inputMode="decimal" value={formAmount} onChange={(e) => setFormAmount(e.target.value)} placeholder="0.00" />
+            </Field>
+            <Field label={t('landedCosts.form.method')} size="short">
+              <Select
+                value={formMethod}
+                onChange={setFormMethod}
+                options={METHODS.map((m) => ({ value: m, label: t(`landedCosts.method.${m}`) }))}
+                ariaLabel={t('landedCosts.form.method')}
+              />
+            </Field>
           </div>
-          <label>
-            {t('landedCosts.form.amount')}
-            <input className="field" inputMode="decimal" value={formAmount} onChange={(e) => setFormAmount(e.target.value)} placeholder="0.00" />
-          </label>
-          <div className="lc-field">
-            {t('landedCosts.form.method')}
-            <Select
-              value={formMethod}
-              onChange={setFormMethod}
-              options={METHODS.map((m) => ({ value: m, label: t(`landedCosts.method.${m}`) }))}
-              ariaLabel={t('landedCosts.form.method')}
-            />
-          </div>
-          <div className="lc-field">
-            {t('landedCosts.form.inventoryAccount')}
+          <Field label={t('landedCosts.form.inventoryAccount')}>
             <Select
               value={formInvAcc}
               onChange={setFormInvAcc}
@@ -457,9 +481,8 @@ export function LandedCosts(): React.ReactElement {
               ]}
               ariaLabel={t('landedCosts.form.inventoryAccount')}
             />
-          </div>
-          <div className="lc-field">
-            {t('landedCosts.form.clearingAccount')}
+          </Field>
+          <Field label={t('landedCosts.form.clearingAccount')}>
             <Select
               value={formClrAcc}
               onChange={setFormClrAcc}
@@ -469,18 +492,15 @@ export function LandedCosts(): React.ReactElement {
               ]}
               ariaLabel={t('landedCosts.form.clearingAccount')}
             />
-          </div>
-          <button type="button" className="btn btn--primary" onClick={() => void submitCreate()}>
-            {t('landedCosts.form.submit')}
-          </button>
-        </section>
-      ) : null}
+          </Field>
+        </div>
+      </DetailDrawer>
 
-      {writeError !== null ? <ErrorBanner error={writeError} message={errorText(writeError)} /> : null}
+      {writeError !== null && !creating ? <ErrorBanner error={writeError} message={errorText(writeError)} /> : null}
 
       <DataTable
         columns={columns}
-        rows={rows}
+        rows={shown}
         rowKey={(r) => r.id}
         caption={t('landedCosts.list.caption')}
         loading={loading}

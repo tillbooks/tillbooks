@@ -44,9 +44,11 @@ import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, 
 import { Status, type StatusKind } from '../../components/Status';
 import { formatCalendar } from '../../lib/format';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DetailDrawer } from '../../components/DetailDrawer';
+import { FilterBar } from '../../components/FilterBar';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import './LotSerial.css';
 
@@ -218,6 +220,9 @@ export function LotSerial() {
   const [failed, setFailed] = useState(false);
   const [denied, setDenied] = useState(false);
   const [writeError, setWriteError] = useState<Err | null>(null);
+
+  const [search, setSearch] = useState('');
+  const [modeFilter, setModeFilter] = useState<string | null>(null);
 
   const [lotDrawer, setLotDrawer] = useState(false);
   const [lotDraft, setLotDraft] = useState<LotDraft>(EMPTY_LOT);
@@ -404,6 +409,19 @@ export function LotSerial() {
 
   const activeLots = lots.filter((l) => l.status !== 'archived');
 
+  const needle = search.trim().toLocaleLowerCase();
+  const shownItems = items.filter(
+    (i) => (needle === '' || i.name.toLocaleLowerCase().includes(needle)) && (modeFilter === null || i.trackingMode === modeFilter),
+  );
+  const clearFilters = () => {
+    setSearch('');
+    setModeFilter(null);
+  };
+  const itemColumns: DataTableColumn<Item>[] = [
+    { key: 'name', header: t('lotSerial.col.item'), render: (i) => <span className="ls-item-name">{i.name}</span> },
+    { key: 'mode', header: t('lotSerial.modeLabel'), render: (i) => <span className="ls-tag">{t(`lotSerial.mode.${i.trackingMode}`)}</span> },
+  ];
+
   // The Lots detail table: text left, on-hand a numeric right-aligned `.t-num` cell, an actions column
   // whose header is read-only to assistive tech. An archived lot dims down the whole row via the shared
   // DataTable rowClassName hook. The status badge is glyph + label, never colour alone.
@@ -455,7 +473,7 @@ export function LotSerial() {
 
   return (
     <div className="ls">
-      <SurfaceHeader title={t('lotSerial.title')} help={<SurfaceHelp surface="LotSerial" />} />
+      <SurfaceHeader title={t('lotSerial.title')} help={<SurfaceHelp surface="LotSerial" />} count={showSkeleton ? undefined : shownItems.length} />
 
       {failed && <ErrorBanner context="read" message={t('lotSerial.error.transport')} onRetry={() => void loadItems()} />}
 
@@ -464,29 +482,44 @@ export function LotSerial() {
       ) : items.length === 0 ? (
         <EmptyState title={t('lotSerial.empty.title')} hint={t('lotSerial.empty.hint')} />
       ) : (
-        <div className="ls-split">
-          <section className="ls-pane" aria-label={t('lotSerial.listLabel')}>
-            <ul className="ls-list">
-              {items.map((i) => (
-                <li key={i.id}>
-                  <button
-                    type="button"
-                    className="ls-list-item"
-                    aria-current={i.id === selectedId ? 'true' : undefined}
-                    onClick={() => choose(selectedId === i.id ? null : i.id)}
-                  >
-                    <span className="ls-item-name">{i.name}</span>
-                    <span className="ls-tag">{t(`lotSerial.mode.${i.trackingMode}`)}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="ls-pane ls-detail" aria-label={t('lotSerial.detailLabel')}>
-            {selected === null ? (
-              <p className="ls-muted">{t('lotSerial.selectHint')}</p>
-            ) : (
+        <>
+          <FilterBar
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchLabel={t('lotSerial.search')}
+            searchPlaceholder={t('lotSerial.search')}
+            facets={[
+              {
+                key: 'mode',
+                label: t('lotSerial.modeLabel'),
+                options: TRACKING_MODES.map((m) => ({ value: m, label: t(`lotSerial.mode.${m}`) })),
+                value: modeFilter,
+                onChange: setModeFilter,
+              },
+            ]}
+          />
+          <DataTable
+            columns={itemColumns}
+            rows={shownItems}
+            rowKey={(i) => i.id}
+            caption={t('lotSerial.listLabel')}
+            isRowCurrent={(i) => i.id === selectedId}
+            rowLabel={(i) => i.name}
+            emptyState={
+              <EmptyState
+                title={t('lotSerial.emptyFiltered')}
+                filtered={{ onClear: clearFilters, clearLabel: t('lotSerial.filter.clear') }}
+              />
+            }
+            // D187 Work through items B: the item opens in place under its row (its tracking mode, its
+            // lots and its serials); a deep link (`?focus=`) opens it the same way.
+            expand={{
+              openKey: selectedId,
+              onOpenChange: (key) => choose(key),
+              label: (i) => t('lotSerial.expandLabel', { name: i.name }),
+              render: () =>
+                selected === null ? null : (
+                  <section className="ls-detail" aria-label={t('lotSerial.detailLabel')}>
               <>
                 <div className="ls-mode">
                   <h2 className="ls-detail-title">{selected.name}</h2>
@@ -548,7 +581,7 @@ export function LotSerial() {
                           <h3 className="ls-h3">{t('lotSerial.serials.title')}</h3>
                           <button
                             type="button"
-                            className="btn btn--primary"
+                            className="btn btn--secondary"
                             onClick={() => {
                               setWriteError(null);
                               setSerialDraft(EMPTY_SERIAL);
@@ -574,9 +607,11 @@ export function LotSerial() {
                   </>
                 )}
               </>
-            )}
-          </section>
-        </div>
+                  </section>
+                ),
+            }}
+          />
+        </>
       )}
 
       {lotDrawer && selected !== null && (
@@ -597,17 +632,16 @@ export function LotSerial() {
           }
         >
           {writeError && <ErrorBanner error={writeError} message={localError(writeError)} />}
-          <div className="ls-field">
-            <label htmlFor="lot-number">{t('lotSerial.lots.field.number')}</label>
-            <input id="lot-number" className="field" maxLength={60} value={lotDraft.number} onChange={(e) => setLotDraft({ ...lotDraft, number: e.target.value })} />
-          </div>
-          <div className="ls-field">
-            <label htmlFor="lot-expiry">{t('lotSerial.lots.field.expiry')}</label>
-            <input id="lot-expiry" className="field" type="date" value={lotDraft.expiryDate} onChange={(e) => setLotDraft({ ...lotDraft, expiryDate: e.target.value })} />
-          </div>
-          <div className="ls-field">
-            <label htmlFor="lot-supplier">{t('lotSerial.lots.field.supplier')}</label>
-            <input id="lot-supplier" className="field" value={lotDraft.supplierReference} onChange={(e) => setLotDraft({ ...lotDraft, supplierReference: e.target.value })} />
+          <div className="form-stack">
+          <Field label={t('lotSerial.lots.field.number')} size="short">
+            <input className="field" maxLength={60} value={lotDraft.number} onChange={(e) => setLotDraft({ ...lotDraft, number: e.target.value })} />
+          </Field>
+          <Field label={t('lotSerial.lots.field.expiry')} size="date">
+            <input className="field" type="date" value={lotDraft.expiryDate} onChange={(e) => setLotDraft({ ...lotDraft, expiryDate: e.target.value })} />
+          </Field>
+          <Field label={t('lotSerial.lots.field.supplier')} size="name">
+            <input className="field" value={lotDraft.supplierReference} onChange={(e) => setLotDraft({ ...lotDraft, supplierReference: e.target.value })} />
+          </Field>
           </div>
         </DetailDrawer>
       )}
@@ -630,22 +664,18 @@ export function LotSerial() {
           }
         >
           {writeError && <ErrorBanner error={writeError} message={localError(writeError)} />}
-          <div className="ls-field">
-            <label htmlFor="serial-numbers">{t('lotSerial.serials.field.numbers')}</label>
+          <div className="form-stack">
+          <Field label={t('lotSerial.serials.field.numbers')} info={t('lotSerial.serials.field.numbersHint')} size="full">
             <textarea
-              id="serial-numbers"
               className="field"
               rows={4}
               value={serialDraft.numbers}
               onChange={(e) => setSerialDraft({ ...serialDraft, numbers: e.target.value })}
             />
-            <p className="ls-hint">{t('lotSerial.serials.field.numbersHint')}</p>
-          </div>
+          </Field>
           {selected.trackingMode === 'lot_and_serial' && (
-            <div className="ls-field">
-              <label htmlFor="serial-lot">{t('lotSerial.serials.field.lot')}</label>
+            <Field label={t('lotSerial.serials.field.lot')} size="short">
               <Select
-                id="serial-lot"
                 value={serialDraft.lotId}
                 onChange={(value) => setSerialDraft({ ...serialDraft, lotId: value })}
                 options={[
@@ -654,8 +684,9 @@ export function LotSerial() {
                 ]}
                 ariaLabel={t('lotSerial.serials.field.lot')}
               />
-            </div>
+            </Field>
           )}
+          </div>
         </DetailDrawer>
       )}
     </div>

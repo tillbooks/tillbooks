@@ -30,6 +30,9 @@
  * period-aligned change (nav `vat`), so this surface configures VAT only ONCE, while none is stored.
  * Every visible string comes from an i18n key; no money figure appears on this form.
  */
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
+import { StatusSuccessGlyph } from '../../components/icons';
 import { useCallback, useEffect, useId, useImperativeHandle, useRef, useState, type FormEvent, type ReactNode, type Ref } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -45,7 +48,6 @@ import { Tooltip } from '../../components/Tooltip';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { ChevronDownGlyph, ChevronRightGlyph } from '../../components/icons';
-import { CheckCircleGlyph, HelpGlyph } from './glyphs';
 import { WorkspacesPanel } from './Workspaces';
 import CREDITOR_ERRORS from './creditor-error-contract.json';
 import './Setup.css';
@@ -238,7 +240,7 @@ function CreateWorkspaceForm({
 
   const invalidName = error?.error === 'invalid_name';
   return (
-    <form className={framed ? 'panel setup-panel form-stack' : 'form-stack'} onSubmit={submit} noValidate>
+    <form className={framed ? 'setup-panel form-stack' : 'form-stack'} onSubmit={submit} noValidate>
       <div className="form-row">
         <label htmlFor={nameId}>{t('setup.name')}</label>
         <input
@@ -257,8 +259,7 @@ function CreateWorkspaceForm({
           </p>
         )}
       </div>
-      <div className="form-row">
-        <label htmlFor={legalId}>{t('company.legalForm.label')}</label>
+      <Field label={t('company.legalForm.label')} info={t('setup.legalFormHint')}>
         <Select
           id={legalId}
           value={legalForm}
@@ -266,8 +267,7 @@ function CreateWorkspaceForm({
           options={LEGAL_FORMS.map((form) => ({ value: form, label: t(`company.legalForm.${form}`) }))}
           ariaLabel={t('company.legalForm.label')}
         />
-        <p className="field-hint">{t('setup.legalFormHint')}</p>
-      </div>
+      </Field>
       {error !== null && !invalidName && <ErrorBanner error={error} />}
       <div className="form-actions">
         <button type="button" className="btn btn--secondary" onClick={onCancel} disabled={busy}>
@@ -341,7 +341,7 @@ function SaveSummary({ state }: { state: SaveState }) {
   if (state.kind === 'saved') {
     return (
       <p className="status-line status-ok" role="status">
-        <CheckCircleGlyph className="status-glyph status-glyph-ok" size={16} />
+        <StatusSuccessGlyph className="status-glyph status-glyph-ok" size={16} />
         {t('company.saved')}
       </p>
     );
@@ -378,7 +378,7 @@ function InfoTip({ topic, children }: { topic: string; children: ReactNode }) {
 function Panel({ title, info, children }: { title: string; info?: ReactNode; children: ReactNode }) {
   const headingId = useId();
   return (
-    <section className="panel setup-panel" aria-labelledby={headingId}>
+    <section className="setup-panel" aria-labelledby={headingId}>
       <div className="setup-panel-head">
         <h2 id={headingId} className="setup-panel-title">
           {title}
@@ -527,7 +527,6 @@ function FirstHourPanel({
     vat: useId(),
     vatTiming: useId(),
     iban: useId(),
-    ibanHint: useId(),
     creditorName: useId(),
     street: useId(),
     buildingNo: useId(),
@@ -580,7 +579,6 @@ function FirstHourPanel({
    */
   const [seedPending, setSeedPending] = useState(false);
   const [iban, setIban] = useState(profile.creditorIban ?? '');
-  const [hintOpen, setHintOpen] = useState(false);
   const hasStoredAddress = Boolean(address.street && address.buildingNo && address.zip && address.town && address.country);
   /**
    * D152 rule 5: the issuer block opens on load only when it says something the Firmenname does not.
@@ -786,6 +784,18 @@ function FirstHourPanel({
     );
   };
 
+  /** The same glyph and sentence as `fieldError`, for `Field`'s own error slot (it adds the alert role and the ids). */
+  const errorContent = (field: FirstHourError['field']): ReactNode => {
+    const e = errorFor(field);
+    if (e === undefined) return undefined;
+    return (
+      <>
+        <AlertGlyph className="status-glyph status-glyph-error" size={16} />
+        {firstHourErrMessage(t, e)}
+      </>
+    );
+  };
+
   /**
    * The issuer block's closed line: who the QR-bill names and where, from what the engine STORES
    * (the profile, re-read after every save), never from a draft: a draft can claim "wie Firmenname"
@@ -810,20 +820,10 @@ function FirstHourPanel({
   return (
     <Panel title={t('company.sections.profile')} info={t('company.firstHour.lead')}>
       <div className="form-stack">
-        <div className="form-row">
-          <label htmlFor={ids.name}>{t('setup.name')}</label>
-          <input
-            className="field"
-            id={ids.name}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            aria-invalid={errorFor('name') !== undefined || undefined}
-            aria-describedby={errorFor('name') !== undefined ? `${ids.name}-err` : undefined}
-          />
-          {fieldError('name', ids.name)}
-        </div>
-        <div className="form-row">
-          <label htmlFor={ids.legalForm}>{t('company.legalForm.label')}</label>
+        <Field label={t('setup.name')} size="name" error={errorContent('name')}>
+          <input className="field" id={ids.name} value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label={t('company.legalForm.label')} size="name">
           <Select
             id={ids.legalForm}
             value={legalForm}
@@ -831,10 +831,10 @@ function FirstHourPanel({
             options={LEGAL_FORMS.map((form) => ({ value: form, label: t(`company.legalForm.${form}`) }))}
             ariaLabel={t('company.legalForm.label')}
           />
-        </div>
+        </Field>
 
         {offerVat ? (
-          <div className="form-row">
+          <div className="form-row form-row--name">
             <span className="field-label-row">
               <label htmlFor={ids.vat}>{t('company.vatMethod.label')}</label>
               <InfoTip topic={t('company.vatMethod.label')}>{t('company.firstHour.vatHint')}</InfoTip>
@@ -863,7 +863,7 @@ function FirstHourPanel({
             )}
           </div>
         ) : (
-          <div className="form-row">
+          <div className="form-row form-row--name">
             <span className="field-label-row">
               <span>{t('company.vatMethod.label')}</span>
               {/* The stored method is a fact, and changing it is `/vat`'s period-aligned change. */}
@@ -875,19 +875,10 @@ function FirstHourPanel({
           </div>
         )}
 
-        <div className="form-row">
+        <div className="form-row form-row--name">
           <span className="field-label-row">
             <label htmlFor={ids.iban}>{t('company.iban')}</label>
-            <button
-              type="button"
-              className="help-trigger"
-              aria-label={t('company.ibanHelp')}
-              aria-expanded={hintOpen}
-              aria-controls={ids.ibanHint}
-              onClick={() => setHintOpen((v) => !v)}
-            >
-              <HelpGlyph size={16} />
-            </button>
+            <IconButton icon="info" small name={t('company.ibanHelp')} context={t('company.ibanHint')} />
           </span>
           <input
             className="field"
@@ -898,13 +889,8 @@ function FirstHourPanel({
                30000-31999 range, which read as a demand for a QR-IBAN the field does not make. */
             placeholder="CH00 0000 0000 0000 0000 0"
             aria-invalid={errorFor('iban') !== undefined || undefined}
-            aria-describedby={[hintOpen ? ids.ibanHint : null, errorFor('iban') !== undefined ? `${ids.iban}-err` : null].filter(Boolean).join(' ') || undefined}
+            aria-describedby={errorFor('iban') !== undefined ? `${ids.iban}-err` : undefined}
           />
-          {hintOpen && (
-            <p id={ids.ibanHint} className="field-hint">
-              {t('company.ibanHint')}
-            </p>
-          )}
           {fieldError('iban', ids.iban)}
         </div>
 
@@ -931,40 +917,35 @@ function FirstHourPanel({
           </div>
           {addressOpen && (
             <div className="form-stack">
-              <div className="form-row">
-                <label htmlFor={ids.creditorName}>{t('company.creditorName')}</label>
+              <Field label={t('company.creditorName')} size="name" error={errorContent('creditorName')}>
                 <input
                   className="field"
                   id={ids.creditorName}
                   value={creditorName}
                   onChange={(e) => setCreditorName(e.target.value)}
                   placeholder={name}
-                  aria-invalid={errorFor('creditorName') !== undefined || undefined}
-                  aria-describedby={errorFor('creditorName') !== undefined ? `${ids.creditorName}-err` : undefined}
                 />
-                {fieldError('creditorName', ids.creditorName)}
-              </div>
+              </Field>
               <fieldset className="setup-address-group" aria-invalid={errorFor('address') !== undefined || undefined}>
                 <legend>{t('company.address.label')}</legend>
-                <div className="form-row">
-                  <label htmlFor={ids.street}>{t('company.address.street')}</label>
-                  <input className="field" id={ids.street} value={street} onChange={(e) => setStreet(e.target.value)} />
+                <div className="form-line">
+                  <Field label={t('company.address.street')} size="name">
+                    <input className="field" id={ids.street} value={street} onChange={(e) => setStreet(e.target.value)} />
+                  </Field>
+                  <Field label={t('company.address.buildingNo')} size="code">
+                    <input className="field" id={ids.buildingNo} value={buildingNo} onChange={(e) => setBuildingNo(e.target.value)} />
+                  </Field>
                 </div>
-                <div className="form-row">
-                  <label htmlFor={ids.buildingNo}>{t('company.address.buildingNo')}</label>
-                  <input className="field" id={ids.buildingNo} value={buildingNo} onChange={(e) => setBuildingNo(e.target.value)} />
-                </div>
-                <div className="form-row">
-                  <label htmlFor={ids.zip}>{t('company.address.zip')}</label>
-                  <input className="field" id={ids.zip} value={zip} onChange={(e) => setZip(e.target.value)} />
-                </div>
-                <div className="form-row">
-                  <label htmlFor={ids.town}>{t('company.address.town')}</label>
-                  <input className="field" id={ids.town} value={town} onChange={(e) => setTown(e.target.value)} />
-                </div>
-                <div className="form-row">
-                  <label htmlFor={ids.country}>{t('company.address.country')}</label>
-                  <input className="field" id={ids.country} value={country} onChange={(e) => setCountry(e.target.value)} />
+                <div className="form-line">
+                  <Field label={t('company.address.zip')} size="code">
+                    <input className="field" id={ids.zip} value={zip} onChange={(e) => setZip(e.target.value)} />
+                  </Field>
+                  <Field label={t('company.address.town')} size="short">
+                    <input className="field" id={ids.town} value={town} onChange={(e) => setTown(e.target.value)} />
+                  </Field>
+                  <Field label={t('company.address.country')} size="code">
+                    <input className="field" id={ids.country} value={country} onChange={(e) => setCountry(e.target.value)} />
+                  </Field>
                 </div>
                 {fieldError('address', ids.street)}
               </fieldset>
@@ -989,33 +970,28 @@ function FirstHourPanel({
           </h3>
           {moreOpen && (
             <div className="form-stack">
-              <div className="form-row">
-                <label htmlFor={ids.uid}>{t('company.uid')}</label>
-                <input
-                  className="field"
-                  id={ids.uid}
-                  value={uid}
-                  onChange={(e) => setUid(e.target.value)}
-                  placeholder="CHE-000.000.000"
-                  aria-invalid={errorFor('uid') !== undefined || undefined}
-                  aria-describedby={errorFor('uid') !== undefined ? `${ids.uid}-err` : undefined}
-                />
-                {fieldError('uid', ids.uid)}
+              <div className="form-line">
+                <Field label={t('company.uid')} size="short" error={errorContent('uid')}>
+                  <input
+                    className="field"
+                    id={ids.uid}
+                    value={uid}
+                    onChange={(e) => setUid(e.target.value)}
+                    placeholder="CHE-000.000.000"
+                  />
+                </Field>
+                <Field label={t('company.mwstNo')} size="short" error={errorContent('mwstNo')}>
+                  <input
+                    className="field"
+                    id={ids.mwstNo}
+                    value={mwstNo}
+                    onChange={(e) => setMwstNo(e.target.value)}
+                    placeholder="CHE-000.000.000 MWST"
+                  />
+                </Field>
               </div>
-              <div className="form-row">
-                <label htmlFor={ids.mwstNo}>{t('company.mwstNo')}</label>
-                <input
-                  className="field"
-                  id={ids.mwstNo}
-                  value={mwstNo}
-                  onChange={(e) => setMwstNo(e.target.value)}
-                  placeholder="CHE-000.000.000 MWST"
-                  aria-invalid={errorFor('mwstNo') !== undefined || undefined}
-                  aria-describedby={errorFor('mwstNo') !== undefined ? `${ids.mwstNo}-err` : undefined}
-                />
-                {fieldError('mwstNo', ids.mwstNo)}
-              </div>
-              <div className="form-row">
+              <div className="form-line">
+              <div className="form-row form-row--code">
                 <span className="field-label-row">
                   <label htmlFor={ids.terms}>{t('company.terms.label')}</label>
                   <InfoTip topic={t('company.terms.label')}>{t('company.terms.info')}</InfoTip>
@@ -1032,8 +1008,7 @@ function FirstHourPanel({
                 />
                 {fieldError('terms', ids.terms)}
               </div>
-              <div className="form-row">
-                <label htmlFor={ids.currency}>{t('company.baseCurrency')}</label>
+              <Field label={t('company.baseCurrency')} size="code">
                 <input
                   className="field"
                   id={ids.currency}
@@ -1042,6 +1017,7 @@ function FirstHourPanel({
                   disabled={locked}
                   aria-describedby={lockNoteId}
                 />
+              </Field>
               </div>
               {/*
                 D15/C1: a real picker, never a text box whose placeholder silently demands a format.
@@ -1049,7 +1025,7 @@ function FirstHourPanel({
                 is the honest equivalent: it makes a malformed value unrepresentable. The wire format
                 stays ISO `MM-DD`.
               */}
-              <div className="form-row">
+              <div className="form-row form-row--short">
                 <label htmlFor={ids.fyStart}>{t('company.fiscalYearStart')}</label>
                 <div className="setup-fy-start">
                   <Select
@@ -1159,7 +1135,7 @@ function EbillConfig({ workspaceId, ref }: { workspaceId: string; ref: Ref<PartH
         </a>
       </p>
       <div className="form-stack">
-        <div className="form-row">
+        <div className="form-row form-row--name">
           <label htmlFor={ids.pid}>{t('ebillConfig.billerPid')}</label>
           <input
             className="field"
@@ -1244,7 +1220,7 @@ function CustomFields({ profile }: { profile: Profile }) {
   const headingId = useId();
   if (fields.length === 0) return null;
   return (
-    <section className="panel setup-panel" aria-labelledby={headingId}>
+    <section className="setup-panel" aria-labelledby={headingId}>
       <h2 id={headingId} className="setup-panel-title">
         {t('company.customFields.title')}
       </h2>
@@ -1281,7 +1257,7 @@ function WorkspacesSection({ workspaceId }: { workspaceId: string }) {
       <WorkspacesPanel activeId={workspaceId} onNewWorkspace={() => setCreateOpen(true)} />
       {createOpen && (
         <div ref={formHostRef}>
-          <section className="panel setup-panel" aria-labelledby={headingId}>
+          <section className="setup-panel" aria-labelledby={headingId}>
             <h2 id={headingId} className="setup-panel-title">
               {t('setup.title')}
             </h2>
@@ -1411,7 +1387,7 @@ function ProfileLoader({ workspaceId }: { workspaceId: string }) {
     <section className="setup-surface" aria-labelledby="company-title">
       <SurfaceHeader title={t('company.title')} titleId="company-title" help={<SurfaceHelp surface="Setup" />} actions={actions} />
       {state.kind === 'loading' ? (
-        <div className="panel setup-panel">
+        <div className="setup-panel">
           <Skeleton rows={6} height={24} />
         </div>
       ) : (
@@ -1448,8 +1424,12 @@ function NewWorkspaceFace({ workspaceId }: { workspaceId: string }) {
   };
   return (
     <section className="setup-surface" aria-labelledby={titleId}>
-      <SurfaceHeader title={t('setup.newTitle')} titleId={titleId} help={<SurfaceHelp surface="Setup" />} />
-      <p className="setup-explainer">{t('setup.newHint')}</p>
+      <SurfaceHeader
+        title={t('setup.newTitle')}
+        titleId={titleId}
+        help={<SurfaceHelp surface="Setup" />}
+        actions={<IconButton icon="info" context={t('setup.newHint')} />}
+      />
       <div ref={formHostRef}>
         <CreateWorkspaceForm seat="onboard_client" onCancel={() => navigate('/setup', { replace: true })} />
       </div>

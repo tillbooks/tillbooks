@@ -260,6 +260,7 @@ export function Checklists() {
       title={t('checklists.title')}
       titleId="checklists-title"
       help={<SurfaceHelp surface="Checklists" />}
+      count={runId === null && list.status === 'loaded' ? list.runs.length : undefined}
       actions={
         runId === null && canManage && list.status === 'loaded' ? (
           <button type="button" className="btn btn--primary" onClick={() => void openStart(null)}>

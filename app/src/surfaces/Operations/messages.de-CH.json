@@ -106,7 +106,8 @@
     },
     "value": {
       "none": "keine"
-    }
+    },
+    "moreLabel": "Weitere Aktionen"
   },
   "feedback": {
     "kind": {
@@ -254,6 +255,7 @@
       "ok": "Gültig: {entries} Buchungen, ausgeglichen. Schema-Generation {generation}.",
       "unbalanced": "Geprüft, aber nicht ausgeglichen: {entries} Buchungen. Diese Sicherung solltest du nicht wiederherstellen.",
       "failed": "Die Prüfung ist fehlgeschlagen. Versuch es nochmals."
-    }
+    },
+    "rowActions": "Aktionen für Sicherung {kind}, {date}"
   }
 }

@@ -381,12 +381,6 @@ button.att-row-title {
   max-width: 480px;
 }
 
-.att-row-confirm-label {
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  color: var(--t-text-dim);
-}
-
 .att-row-confirm-actions {
   display: flex;
   gap: var(--t-space-1);

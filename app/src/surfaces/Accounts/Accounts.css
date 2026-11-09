@@ -131,55 +131,17 @@
 
 /* Drawer form: the fields stack with a rhythm inside the shared DetailDrawer body (which owns the
    scroll and padding). */
-.acc-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-2);
-}
-
-/* Fields. */
-.acc-field,
-.acc-field-inner {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-0-5);
-}
-
-.acc-field-label {
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-  color: var(--t-text-dim);
-}
+/* The rhythm is the shared `.form-stack` / `Field` (D187). */
 
 /* The inputs are the shared `.field` (K-15); this only makes them fill the drawer column. */
 .acc-input {
   width: 100%;
 }
 
-.acc-field-error {
-  color: var(--t-danger);
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-}
-
-.acc-field-warn {
-  color: var(--t-warn);
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-}
-
 .acc-checkbox {
   display: inline-flex;
   align-items: center;
   gap: var(--t-space-1);
-}
-
-/* D142 amendment: the one-line explainer under "Beleg = Kontoauszug" (dim ink, never the accent). */
-.acc-hint {
-  margin: 0;
-  color: var(--t-text-dim);
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
 }
 
 /* Accounts' OWN create/edit drawer and its OWN destructive confirms are shared primitives now
@@ -220,8 +182,6 @@
   display: flex;
   justify-content: flex-end;
   gap: var(--t-space-1);
-  padding: var(--t-space-2);
-  border-top: 1px solid var(--t-border);
 }
 
 /* The cost-centre section header. Shared the drawer-head rule before it was deleted; now stated on
@@ -239,8 +199,6 @@
   display: flex;
   justify-content: flex-end;
   gap: var(--t-space-1);
-  padding: var(--t-space-2);
-  border-top: 1px solid var(--t-border);
 }
 
 /* Cost-centre section. */
@@ -272,9 +230,6 @@
 }
 
 .cc-create {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-1);
   padding: var(--t-space-2);
   border-bottom: 1px solid var(--t-border);
 }

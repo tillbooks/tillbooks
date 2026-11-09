@@ -4,24 +4,24 @@
   },
   "firstrun": {
     "title": "Set up your ledger",
-    "lead": "TILL found no ledger on this machine. Pick a door: nothing is created until you do.",
-    "lead_existing_one": "This machine already carries one ledger. These doors add another; your existing books stay untouched.",
-    "lead_existing_many": "This machine already carries {count} ledgers. These doors add another; your existing books stay untouched.",
+    "lead": "There is no ledger on this device yet. It only exists once you create it.",
+    "lead_existing_one": "This device already carries one ledger. What you create here is added; your existing books stay untouched.",
+    "lead_existing_many": "This device already carries {count} ledgers. What you create here is added; your existing books stay untouched.",
     "existing": {
       "overview": "Back to the overview"
     },
     "create": {
       "label": "Create a new ledger",
       "label_existing": "Create another ledger",
-      "hint": "Start a fresh set of books with the Swiss KMU chart of accounts.",
+      "hint": "New books start with the Swiss KMU chart of accounts.",
       "name_label": "Company name",
-      "name_placeholder": "Acme GmbH",
-      "action": "Create ledger",
-      "busy": "Creating..."
+      "name_placeholder": "Company name",
+      "action": "Create",
+      "busy": "Creating …"
     },
     "restore": {
       "label": "Restore a backup",
-      "hint": "Load a .tillbackup file. Ids are re-minted into a fresh workspace; nothing is overwritten.",
+      "hint": "Ids are re-minted into a fresh workspace; nothing is overwritten.",
       "expects": "This install expects schema generation {generation}.",
       "pick_label": "Backups on this device ({count})",
       "pick_row": "{date}: generation {generation}, {entries} entries",
@@ -30,20 +30,23 @@
       "verified": "Checked: generation {generation}, {entries} entries, balanced. Restoring.",
       "source_label": "Backup file",
       "source_placeholder": "/path/to/books.tillbackup",
-      "name_label": "New workspace name (optional)",
+      "name_label": "Name (optional)",
       "name_default": "Restored ledger",
-      "action": "Restore backup",
-      "busy": "Restoring..."
+      "action": "Restore",
+      "busy": "Restoring …",
+      "context": "From a .tillbackup file",
+      "pick_more": "Show all ({count})",
+      "pick_incompatible_short": "Greyed-out ones do not fit this install."
     },
     "adopt": {
-      "label": "Adopt an existing database",
-      "hint": "Already have a TILL book on this machine? Choose the file and TILL opens it. It is never copied or moved.",
+      "label": "Open a ledger",
+      "hint": "TILL opens the file where it lies and never copies or moves it.",
       "pick": "Choose file …",
       "picked": "Chosen: {name}",
       "path_label": "Path to your book",
       "path_placeholder": "/Users/you/Documents/till.db",
       "path_hint": "In the Finder: right-click the file, hold the Option key (⌥) and choose “Copy as Pathname”.",
-      "action": "Adopt",
+      "action": "Open",
       "busy": "Checking …",
       "opening_title": "Opening your book …",
       "opening_body": "TILL restarts briefly to open it. This only takes a moment.",
@@ -59,7 +62,8 @@
         "book_not_forgotten": "TILL could not forget the book. Nothing was changed. Try again.",
         "restart_unavailable": "This installation cannot switch its book by itself. Nothing was changed.",
         "fallback": "That did not work. Nothing was changed. Try again."
-      }
+      },
+      "context": "A TILL ledger on this device"
     },
     "unavailable": {
       "title": "Your adopted book is not reachable",

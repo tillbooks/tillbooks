@@ -146,8 +146,8 @@ describe('Contacts, the C00 kind axis', () => {
     renderContacts({ ...happy(), list_contacts: listSpy });
     await screen.findByRole('row', { name: 'Muster AG' });
 
-    await userEvent.click(screen.getByRole('combobox', { name: 'Art' }));
-    await userEvent.click(screen.getByRole('option', { name: 'Person' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Filter hinzufügen' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Art: Person' }));
     // A segment is a read model over the whole tenant, so the filter must reach the verb.
     await waitFor(() => {
       expect(listSpy.mock.calls.some((c) => c[0].kind === 'person')).toBe(true);
@@ -159,14 +159,13 @@ describe('Contacts, segment chips', () => {
   it('offers only the segments the loaded rows actually carry, and filters through the verb', async () => {
     const listSpy = vi.fn<CannedHandler>(() => ok({ contacts: CRM_CONTACTS }));
     renderContacts({ ...happy(), list_contacts: listSpy });
-    const chip = await screen.findByRole('button', { name: 'newsletter', pressed: false });
-
-    await userEvent.click(chip);
+    await userEvent.click(await screen.findByRole('button', { name: 'Filter hinzufügen' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'newsletter' }));
     await waitFor(() => {
       expect(listSpy.mock.calls.some((c) => c[0].segment === 'newsletter')).toBe(true);
     });
-    // The pressed state carries the filter, so it is never signalled by colour alone.
-    expect(await screen.findByRole('button', { name: 'newsletter', pressed: true })).toBeInTheDocument();
+    // The chip carries the filter in words, so it is never signalled by colour alone.
+    expect(await screen.findByRole('button', { name: 'Entfernen' })).toBeInTheDocument();
   });
 
   it('toggles E06 ledger-grounding consent through update_contact, C00\'s own write path', async () => {

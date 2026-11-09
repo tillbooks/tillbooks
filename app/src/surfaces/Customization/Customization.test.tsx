@@ -165,6 +165,9 @@ const openViews = (user: ReturnType<typeof userEvent.setup>) =>
  */
 const loaded = () => screen.findAllByText('Segment');
 
+/** D187: archive and delete sit under the row's Mehr menu. */
+const ROW_MENU = /^Aktionen für /;
+
 describe('Customization, the load states', () => {
   it('shows a loading skeleton while the field defs are in flight', async () => {
     // The wait goes BEFORE the assertion: every surface initialises `loading` to true, so a skeleton
@@ -322,7 +325,7 @@ describe('Customization, archiving says what it really does', () => {
     await loaded();
     // The live list offers an archive control per field; the archived one is inside a `details` and
     // offers none, which is what stops it being acted on as though it were live.
-    expect(screen.getAllByRole('button', { name: new RegExp(de.customization.fields.archive) })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: ROW_MENU })).toHaveLength(1);
   });
 
   it('warns, rather than refuses, when the archived field is still named by a saved view', async () => {
@@ -333,7 +336,8 @@ describe('Customization, archiving says what it really does', () => {
       ...baseCanned(),
       archive_field: ok({ fieldDef: DEF({ archived: true }), archived: true, referencingViews: 2 }),
     });
-    await user.click(await screen.findByRole('button', { name: new RegExp(de.customization.fields.archive) }));
+    await user.click(await screen.findByRole('button', { name: ROW_MENU }));
+    await user.click(await screen.findByRole('menuitem', { name: de.customization.fields.archive }));
     expect(await screen.findByText(de.customization.warn.referenced.replace('{n}', '2'))).toBeInTheDocument();
   });
 
@@ -343,7 +347,8 @@ describe('Customization, archiving says what it really does', () => {
       ...baseCanned(),
       archive_field: ok({ fieldDef: DEF({ archived: true }), archived: true, referencingViews: 0 }),
     });
-    await user.click(await screen.findByRole('button', { name: new RegExp(de.customization.fields.archive) }));
+    await user.click(await screen.findByRole('button', { name: ROW_MENU }));
+    await user.click(await screen.findByRole('menuitem', { name: de.customization.fields.archive }));
     expect(await screen.findByText(de.customization.fields.archived)).toBeInTheDocument();
   });
 });
@@ -353,7 +358,7 @@ describe('Customization, the two capability gates are separate', () => {
     withCapabilities({ ...baseCanned(), whoami: whoamiViewer });
     await loaded();
     await waitFor(() => expect(screen.queryByRole('button', { name: de.customization.fields.create })).toBeNull());
-    expect(screen.queryByRole('button', { name: new RegExp(de.customization.fields.archive) })).toBeNull();
+    expect(screen.queryByRole('button', { name: ROW_MENU })).toBeNull();
   });
 
   it('offers the field controls to an actor holding manage_custom_fields', async () => {
@@ -369,7 +374,7 @@ describe('Customization, the two capability gates are separate', () => {
     await loaded();
     await openViews(user);
     expect(
-      screen.getByRole('button', { name: `${de.customization.views.delete}: Grosskunden` }),
+      screen.getByRole('button', { name: 'Aktionen für Grosskunden' }),
     ).toBeInTheDocument();
   });
 
@@ -390,7 +395,7 @@ describe('Customization, the two capability gates are separate', () => {
     expect(screen.getAllByText('Team Ansicht').length).toBeGreaterThan(0);
     await waitFor(() =>
       expect(
-        screen.queryByRole('button', { name: `${de.customization.views.delete}: Team Ansicht` }),
+        screen.queryByRole('button', { name: 'Aktionen für Team Ansicht' }),
       ).toBeNull(),
     );
     withoutIt.unmount();
@@ -399,14 +404,15 @@ describe('Customization, the two capability gates are separate', () => {
     await loaded();
     await openViews(user);
     expect(
-      await screen.findByRole('button', { name: `${de.customization.views.delete}: Team Ansicht` }),
+      await screen.findByRole('button', { name: 'Aktionen für Team Ansicht' }),
     ).toBeInTheDocument();
   });
 
   it('renders the engine own rejection code on the panel that owns the input', async () => {
     const user = userEvent.setup();
     withCapabilities({ ...baseCanned(), archive_field: reject('permission_denied') });
-    await user.click(await screen.findByRole('button', { name: new RegExp(de.customization.fields.archive) }));
+    await user.click(await screen.findByRole('button', { name: ROW_MENU }));
+    await user.click(await screen.findByRole('menuitem', { name: de.customization.fields.archive }));
     expect(await screen.findByText(de.customization.error.permission_denied)).toBeInTheDocument();
   });
 });

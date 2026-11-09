@@ -141,7 +141,8 @@
         "read": "You do not have permission to view bank accounts.",
         "post": "You do not have permission to post the opening balance."
       }
-    }
+    },
+    "search": "Search accounts"
   },
   "channel": {
     "title": "Bank channel",

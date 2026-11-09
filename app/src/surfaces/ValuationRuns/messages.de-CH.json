@@ -75,6 +75,9 @@
       "fifo": "FIFO",
       "standard_cost": "Standardkosten"
     },
+    "search": "Stichtag oder Methode suchen",
+    "emptyFiltered": "Keine Läufe für diesen Filter.",
+    "filter": { "clear": "Filter zurücksetzen" },
     "rowActions": "Aktionen für den Lauf per {asOf}"
   },
   "help": {

@@ -89,9 +89,8 @@
       "body": "Du hast noch keinen Lieferanten erfasst.",
       "action": "Kontakt anlegen"
     },
+    "search": "Rechnungen suchen",
     "filter": {
-      "allStatuses": "Alle",
-      "allVendors": "Alle Lieferanten",
       "vendorById": "Lieferant {id}"
     },
     "reconciliation": {

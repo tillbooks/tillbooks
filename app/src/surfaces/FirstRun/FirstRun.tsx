@@ -51,7 +51,10 @@ import { NAV_ITEMS } from '../../app/nav';
 import { useT, formatDate } from '../../i18n';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
-import { ErrorBanner, Skeleton, refusalText } from '../../components/states';
+import { IconButton } from '../../components/IconButton';
+import { Field } from '../../components/Field';
+import { Tooltip } from '../../components/Tooltip';
+import { ErrorBanner, refusalText } from '../../components/states';
 import { adoptBook, forgetAdoptedBook, hasNativeBookPicker, pickBookNatively, reloadAfterRestart, restartBaseline } from '../../lib/studio-key';
 import { RuntimeLine } from './RuntimeLine';
 import './FirstRun.css';
@@ -70,6 +73,9 @@ const ADOPT_ERRORS = new Set([
   'book_not_forgotten',
   'restart_unavailable',
 ]);
+
+/** D187: how many bundles the restore door lists before "Alle zeigen". */
+const BACKUPS_AT_REST = 3;
 
 /** The adopted book `till up` could not open (`delivery_status.adoptedBookUnavailable`). */
 interface AdoptedBookUnavailable {
@@ -141,6 +147,10 @@ export function FirstRun() {
   const [opening, setOpening] = useState<null | 'adopt' | 'forget'>(null);
   /** D166 point 8 (critic F1/F2): the adopted book this `till up` could not open, from delivery_status. */
   const [unavailable, setUnavailable] = useState<AdoptedBookUnavailable | null>(null);
+  /** D187: the restore list shows a few rows until the person asks for all of them. */
+  const [allBackups, setAllBackups] = useState(false);
+  /** D187: which rarer door is open beneath the icon row, if any. One at a time. */
+  const [alt, setAlt] = useState<null | 'restore' | 'adopt'>(null);
   /** On the "not reachable" page: the person asked to choose another book (the adopt form shows). */
   const [choosingOther, setChoosingOther] = useState(false);
   /** On the "not reachable" page: "Vergessen und neu beginnen" waits for its confirmation. */
@@ -210,6 +220,17 @@ export function FirstRun() {
   }, [client]);
 
   const provisioned = existingCount > 0;
+  /** D187: the bundles this install can take first, newest first within each, a few until "Alle zeigen". */
+  const orderedBackups = [...(restorable ?? [])].sort(
+    (a, b) => Number(b.compatible) - Number(a.compatible) || b.createdAt.localeCompare(a.createdAt),
+  );
+  const shownBackups = allBackups ? orderedBackups : orderedBackups.slice(0, BACKUPS_AT_REST);
+  const hiddenBackups = orderedBackups.length - shownBackups.length;
+  const incompatibleGenerations = [...new Set(shownBackups.filter((r) => !r.compatible).map((r) => r.schemaVersion))];
+  /** One primary on the page (K-08): the header's "Zur Übersicht" once books exist, else the open door's
+   *  act while a door is open, else "Anlegen". */
+  const mainPrimary = !provisioned && alt === null;
+  const altPrimary = !provisioned && unavailable === null;
   /** True only once we KNOW this is a cloud agent session. Null (unresolved/failed) reads as local. */
   const cloudSession = runtimeMode === 'agent_session';
 
@@ -397,41 +418,44 @@ export function FirstRun() {
     );
   }
 
-  /** The adopt form: TILL.app's native picker, or a path field in a browser, then one action. */
+  /** The adopt form: TILL.app's native picker, or a path field in a browser, then one action. The how-to
+   *  (the Finder hint, the file never moves) is words on demand behind the (i) (D187). */
   const adoptForm = (
     <form className="firstrun-adopt-form" onSubmit={onAdopt}>
       {nativePicker ? (
-        <div className="firstrun-field">
+        <div className="firstrun-pickline">
           <button type="button" className="btn btn--secondary firstrun-adopt-pick" disabled={busy !== null} onClick={() => void onPick()}>
             {t('firstrun.adopt.pick')}
           </button>
-          <p className="firstrun-adopt-file" title={adoptPath === '' ? undefined : adoptPath} aria-live="polite">
+          <p className="firstrun-adopt-file" aria-live="polite">
             {adoptPath === '' ? null : t('firstrun.adopt.picked', { name: fileName(adoptPath) })}
           </p>
         </div>
       ) : (
-        <div className="firstrun-field">
-          <label className="firstrun-field">
-            <span>{t('firstrun.adopt.path_label')}</span>
-            <input
-              type="text"
-              className="field"
-              value={adoptPath}
-              onChange={(e) => setAdoptPath(e.target.value)}
-              placeholder={t('firstrun.adopt.path_placeholder')}
-              autoComplete="off"
-              spellCheck={false}
-              aria-describedby="firstrun-adopt-path-hint"
-            />
-          </label>
-          <p id="firstrun-adopt-path-hint" className="firstrun-door-hint firstrun-adopt-path-hint">
-            {t('firstrun.adopt.path_hint')}
-          </p>
+        <div className="firstrun-combo">
+          <input
+            type="text"
+            className="firstrun-combo-input"
+            value={adoptPath}
+            onChange={(e) => setAdoptPath(e.target.value)}
+            placeholder={t('firstrun.adopt.path_placeholder')}
+            aria-label={t('firstrun.adopt.path_label')}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <button type="submit" className={`btn ${altPrimary ? 'btn--primary' : 'btn--secondary'}`} disabled={busy !== null || adoptPath.trim() === ''}>
+            {busy === 'adopt' ? t('firstrun.adopt.busy') : t('firstrun.adopt.action')}
+          </button>
         </div>
       )}
-      <button type="submit" className="btn btn--secondary" disabled={busy !== null || adoptPath.trim() === ''}>
-        {busy === 'adopt' ? t('firstrun.adopt.busy') : t('firstrun.adopt.action')}
-      </button>
+      <div className="firstrun-panel-foot">
+        {nativePicker && (
+          <button type="submit" className={`btn ${altPrimary ? 'btn--primary' : 'btn--secondary'}`} disabled={busy !== null || adoptPath.trim() === ''}>
+            {busy === 'adopt' ? t('firstrun.adopt.busy') : t('firstrun.adopt.action')}
+          </button>
+        )}
+        <IconButton icon="info" small context={nativePicker ? t('firstrun.adopt.hint') : `${t('firstrun.adopt.hint')} ${t('firstrun.adopt.path_hint')}`} />
+      </div>
     </form>
   );
 
@@ -497,12 +521,34 @@ export function FirstRun() {
     );
   }
 
+  /** What TILL found and what stays on this device: words on demand behind the title's (i) (D187). K-05:
+   *  nothing about the device is claimed before the list read has answered. M03: the local-first sentence
+   *  is dropped in a cloud agent session, where the runtime line at the foot carries residency. */
+  const info = [
+    listSettled
+      ? provisioned
+        ? existingCount === 1
+          ? t('firstrun.lead_existing_one')
+          : t('firstrun.lead_existing_many', { count: existingCount })
+        : t('firstrun.lead')
+      : null,
+    t('firstrun.create.hint'),
+    cloudSession ? null : t('journey.residency.lead'),
+  ]
+    .filter((line): line is string => line !== null)
+    .join(' ');
+
+  const toggle = (which: 'restore' | 'adopt'): void => {
+    setAlt((current) => (current === which ? null : which));
+    setError(null);
+  };
+
   return (
     <section className="firstrun" aria-labelledby="firstrun-title">
       <SurfaceHeader
-        title={t('firstrun.title')}
+        title={provisioned ? t('firstrun.create.label_existing') : t('firstrun.title')}
         titleId="firstrun-title"
-        help={<SurfaceHelp surface="FirstRun" />}
+        help={<IconButton icon="info" small context={info} />}
         actions={
           provisioned ? (
             <Link to={landing} className="btn btn--primary firstrun-overview-link">
@@ -511,25 +557,6 @@ export function FirstRun() {
           ) : undefined
         }
       />
-      <div className="firstrun-intro">
-        {/* K-05: a placeholder line until the list has answered, never the premature sentence. */}
-        {listSettled ? (
-          <p className="firstrun-lead">
-            {provisioned
-              ? existingCount === 1
-                ? t('firstrun.lead_existing_one')
-                : t('firstrun.lead_existing_many', { count: existingCount })
-              : t('firstrun.lead')}
-          </p>
-        ) : (
-          <Skeleton rows={1} height={20} width="60%" />
-        )}
-        {/* M03 (V1, S1.2): the residency answer BEFORE the first door is pressed. One sentence of
-            prose above the doors, below the title; the doors stay the visual centre and unchanged.
-            The local-first claim is true only outside a cloud agent session, so it is dropped there and
-            the RuntimeLine caveat at the foot answers residency instead. */}
-        {!cloudSession && <p className="firstrun-residency">{t('journey.residency.lead')}</p>}
-      </div>
 
       {/* A refused write names its remedy in the one shared banner (K-35), never a hand-drawn box. */}
       {error !== null && <ErrorBanner message={error} />}
@@ -542,52 +569,70 @@ export function FirstRun() {
         </div>
       )}
 
-      <div className="firstrun-doors">
-        {/* Door 1: create. */}
-        <article className="firstrun-door" aria-labelledby="door-create">
-          <h2 id="door-create" className="firstrun-door-title">
-            {provisioned ? t('firstrun.create.label_existing') : t('firstrun.create.label')}
-          </h2>
-          <p className="firstrun-door-hint">{t('firstrun.create.hint')}</p>
-          <form onSubmit={onCreate}>
-            <label className="firstrun-field">
-              <span>{t('firstrun.create.name_label')}</span>
-              <input
-                type="text"
-                className="field"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t('firstrun.create.name_placeholder')}
-                autoComplete="off"
-              />
-            </label>
-            {/* K-08: one primary per surface. With books on this device the header's "Zur Übersicht"
-                is it, and creating another ledger is a secondary door like the other two. */}
-            <button
-              type="submit"
-              className={provisioned ? 'btn btn--secondary' : 'btn btn--primary'}
-              disabled={busy !== null || name.trim() === ''}
-            >
-              {busy === 'create' ? t('firstrun.create.busy') : t('firstrun.create.action')}
-            </button>
-          </form>
-        </article>
+      {/* The one main act: a name and "Anlegen" (D187). K-08: with books on this device the header's
+          "Zur Übersicht" is the primary, and while a door below is open its own act is. */}
+      <form className="firstrun-create" onSubmit={onCreate}>
+        <div className="firstrun-combo firstrun-combo--main">
+          <input
+            type="text"
+            className="firstrun-combo-input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t('firstrun.create.name_placeholder')}
+            aria-label={t('firstrun.create.name_label')}
+            autoComplete="off"
+          />
+          <button type="submit" className={`btn ${mainPrimary ? 'btn--primary' : 'btn--secondary'}`} disabled={busy !== null || name.trim() === ''}>
+            {busy === 'create' ? t('firstrun.create.busy') : t('firstrun.create.action')}
+          </button>
+        </div>
+      </form>
 
-        {/* Door 2: restore. */}
-        <article className="firstrun-door" aria-labelledby="door-restore">
-          <h2 id="door-restore" className="firstrun-door-title">
-            {t('firstrun.restore.label')}
-          </h2>
-          <p className="firstrun-door-hint">{t('firstrun.restore.hint')}</p>
-          {/* F-06 (J7.2): the door names the generation it expects BEFORE the act. */}
-          {expectedGeneration !== null && (
-            <p className="firstrun-door-hint firstrun-generation">{t('firstrun.restore.expects', { generation: String(expectedGeneration) })}</p>
-          )}
-          <form onSubmit={onRestore}>
+      {/* The rarer doors as icons, each named on hover, each opening its form in place beneath. */}
+      <div className="firstrun-alts">
+        <IconButton
+          icon="restore"
+          size={20}
+          name={t('firstrun.restore.label')}
+          context={t('firstrun.restore.context')}
+          aria-expanded={alt === 'restore'}
+          aria-controls="firstrun-restore"
+          className={alt === 'restore' ? 'is-on' : undefined}
+          onClick={() => toggle('restore')}
+        />
+        <IconButton
+          icon="folder"
+          size={20}
+          name={t('firstrun.adopt.label')}
+          context={t('firstrun.adopt.context')}
+          aria-expanded={alt === 'adopt'}
+          aria-controls="firstrun-adopt"
+          className={alt === 'adopt' ? 'is-on' : undefined}
+          onClick={() => toggle('adopt')}
+        />
+        {/* F-05: a way to look first while nothing is provisioned; not a door of its own. */}
+        {!provisioned && (
+          <>
+            <span className="firstrun-alts-sep" aria-hidden="true" />
+            <Tooltip content={<span className="tooltip-context">{t('firstrun.demo.hint')}</span>}>
+              <button type="button" className="btn btn--ghost btn--sm" disabled={busy !== null} onClick={() => void onDemo()}>
+                {busy === 'demo' ? t('firstrun.demo.busy') : t('firstrun.demo.action')}
+              </button>
+            </Tooltip>
+          </>
+        )}
+      </div>
+
+      {alt === 'restore' && (
+        <section id="firstrun-restore" className="firstrun-panel" aria-label={t('firstrun.restore.label')}>
+          <form className="form-stack" onSubmit={onRestore}>
             {restorable !== null && restorable.length > 0 && (
               <fieldset className="firstrun-picklist">
-                <legend>{t('firstrun.restore.pick_label', { count: String(restorable.length) })}</legend>
-                {restorable.map((row) => (
+                <legend className="visually-hidden">{t('firstrun.restore.pick_label', { count: String(restorable.length) })}</legend>
+                {/* D187: the ones this install can take first, then at most a few rows until "Alle zeigen";
+                    a bundle from another generation stays named and disabled, never hidden, and why it
+                    does not fit is one (i) under the list instead of a sentence on every row. */}
+                {shownBackups.map((row) => (
                   <label key={row.source} className={`firstrun-pick${row.compatible ? '' : ' firstrun-pick--incompatible'}`}>
                     <input
                       type="radio"
@@ -608,28 +653,30 @@ export function FirstRun() {
                           entries: String(row.entryCount),
                         })}
                       </span>
-                      {!row.compatible && (
-                        <span className="firstrun-pick-note">{t('firstrun.restore.pick_incompatible', { generation: String(row.schemaVersion) })}</span>
-                      )}
                     </span>
                   </label>
                 ))}
                 <label className="firstrun-pick">
-                  <input
-                    type="radio"
-                    name="firstrun-restore-pick"
-                    value=""
-                    checked={otherPath}
-                    disabled={busy !== null}
-                    onChange={() => setOtherPath(true)}
-                  />
+                  <input type="radio" name="firstrun-restore-pick" value="" checked={otherPath} disabled={busy !== null} onChange={() => setOtherPath(true)} />
                   <span className="firstrun-pick-text">{t('firstrun.restore.pick_other')}</span>
                 </label>
+                <div className="firstrun-picklist-foot">
+                  {hiddenBackups > 0 && (
+                    <button type="button" className="btn btn--ghost btn--sm" onClick={() => setAllBackups(true)}>
+                      {t('firstrun.restore.pick_more', { count: String(restorable.length) })}
+                    </button>
+                  )}
+                  {incompatibleGenerations.length > 0 && (
+                    <span className="firstrun-pick-note">
+                      {t('firstrun.restore.pick_incompatible_short')}
+                      <IconButton icon="info" small context={t('firstrun.restore.pick_incompatible', { generation: incompatibleGenerations.join(', ') })} />
+                    </span>
+                  )}
+                </div>
               </fieldset>
             )}
             {(restorable === null || restorable.length === 0 || otherPath) && (
-              <label className="firstrun-field">
-                <span>{t('firstrun.restore.source_label')}</span>
+              <Field label={t('firstrun.restore.source_label')}>
                 <input
                   type="text"
                   className="field"
@@ -637,52 +684,43 @@ export function FirstRun() {
                   onChange={(e) => setSource(e.target.value)}
                   placeholder={t('firstrun.restore.source_placeholder')}
                   autoComplete="off"
+                  spellCheck={false}
                 />
-              </label>
+              </Field>
             )}
-            <label className="firstrun-field">
-              <span>{t('firstrun.restore.name_label')}</span>
-              <input
-                type="text"
-                className="field"
-                value={restoreName}
-                onChange={(e) => setRestoreName(e.target.value)}
-                autoComplete="off"
-              />
-            </label>
+            <Field label={t('firstrun.restore.name_label')}>
+              <input type="text" className="field" value={restoreName} onChange={(e) => setRestoreName(e.target.value)} placeholder={t('firstrun.restore.name_default')} autoComplete="off" />
+            </Field>
             {verified !== null && (
-              <p className="firstrun-door-hint firstrun-verified" role="status">
+              <p className="status-line status-ok" role="status">
                 {verified}
               </p>
             )}
-            <button type="submit" className="btn btn--secondary" disabled={busy !== null || chosenSource === ''}>
-              {busy === 'restore' ? t('firstrun.restore.busy') : t('firstrun.restore.action')}
-            </button>
+            <div className="form-actions">
+              <button type="submit" className={`btn ${altPrimary ? 'btn--primary' : 'btn--secondary'}`} disabled={busy !== null || chosenSource === ''}>
+                {busy === 'restore' ? t('firstrun.restore.busy') : t('firstrun.restore.action')}
+              </button>
+              {/* F-06 (J7.2): the generation this install expects is named BEFORE the act, on demand. */}
+              <IconButton
+                icon="info"
+                small
+                context={
+                  expectedGeneration === null
+                    ? t('firstrun.restore.hint')
+                    : `${t('firstrun.restore.hint')} ${t('firstrun.restore.expects', { generation: String(expectedGeneration) })}`
+                }
+              />
+            </div>
           </form>
-        </article>
+        </section>
+      )}
 
-        {/* Door 3: adopt (D166 point 8). The host probes the file read-only, remembers it and restarts
-            onto it: no terminal, no command to copy. Inside TILL.app the native open panel picks the
-            file; a browser names its path. */}
-        <article className="firstrun-door" aria-labelledby="door-adopt">
-          <h2 id="door-adopt" className="firstrun-door-title">
-            {t('firstrun.adopt.label')}
-          </h2>
-          <p className="firstrun-door-hint">{t('firstrun.adopt.hint')}</p>
+      {/* Door 3: adopt (D166 point 8). The host probes the file read-only, remembers it and restarts
+          onto it: no terminal, no command to copy. */}
+      {alt === 'adopt' && (
+        <section id="firstrun-adopt" className="firstrun-panel" aria-label={t('firstrun.adopt.label')}>
           {adoptForm}
-        </article>
-      </div>
-
-      {/* F-05: the demo door, a quiet line under the three doors while nothing is provisioned. Not a
-          fourth door (the M03 doors are the three real decisions); a way to look first. */}
-      {!provisioned && (
-        <p className="firstrun-demo">
-          <span>{t('firstrun.demo.lead')}</span>{' '}
-          <button type="button" className="btn btn--ghost btn--sm" disabled={busy !== null} onClick={() => void onDemo()}>
-            {busy === 'demo' ? t('firstrun.demo.busy') : t('firstrun.demo.action')}
-          </button>
-          <span className="firstrun-demo-hint">{t('firstrun.demo.hint')}</span>
-        </p>
+        </section>
       )}
 
       <footer className="firstrun-foot">

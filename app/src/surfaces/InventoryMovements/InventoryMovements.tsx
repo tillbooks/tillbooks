@@ -50,6 +50,7 @@ import { useSeatLabel } from '../Time/seatLabels';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import './InventoryMovements.css';
 
@@ -428,6 +429,10 @@ export function InventoryMovements() {
   // The history columns: text left, the quantity/balance/cost numeric and right-aligned via `.t-num`.
   // The signed quantity keeps its neutral/dim sign class (a quantity ledger, not a money page: the
   // sign carries the meaning, so the minus stays a fact rather than a red alarm).
+  const itemColumns: DataTableColumn<Item>[] = [
+    { key: 'name', header: t('invMovements.listLabel'), render: (i) => i.name },
+  ];
+
   const columns: DataTableColumn<Movement>[] = [
     { key: 'date', header: t('invMovements.col.date'), render: (m) => formatCalendar(m.effectiveDate) },
     // The kind of movement is a category, not a state: the word alone, no bordered badge (K-22).
@@ -493,6 +498,7 @@ export function InventoryMovements() {
       <SurfaceHeader
         title={t('invMovements.title')}
         help={<SurfaceHelp surface="InventoryMovements" />}
+        count={showSkeleton ? undefined : items.length}
         actions={selected === null ? undefined : headerActions}
       />
 
@@ -505,57 +511,43 @@ export function InventoryMovements() {
       ) : items.length === 0 ? (
         <EmptyState title={t('invMovements.empty.title')} hint={t('invMovements.empty.hint')} />
       ) : (
-        <div className="im-split">
-          <section className="im-pane" aria-label={t('invMovements.listLabel')}>
-            <ul className="im-list">
-              {items.map((i) => (
-                <li key={i.id}>
-                  {/* A list row: the open item is current (K-17, K-22), the pill, announced. */}
-                  <button
-                    type="button"
-                    className="im-list-item"
-                    onClick={() => choose(selectedId === i.id ? null : i.id)}
-                    aria-current={i.id === selectedId ? 'true' : undefined}
-                  >
-                    {i.name}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="im-pane im-detail" aria-label={t('invMovements.detailLabel')}>
-            {selected === null ? (
-              <p className="im-muted">{t('invMovements.selectHint')}</p>
-            ) : (
-              <>
-                <div className="im-detail-head">
-                  <h2 className="im-detail-title">{selected.name}</h2>
+        <DataTable
+          columns={itemColumns}
+          rows={items}
+          rowKey={(i) => i.id}
+          caption={t('invMovements.listLabel')}
+          isRowCurrent={(i) => i.id === selectedId}
+          expand={{
+            openKey: selectedId,
+            onOpenChange: (key) => choose(key),
+            label: (i) => t('invMovements.expandLabel', { name: i.name }),
+            render: () =>
+              selected === null ? null : (
+                <div className="im-detail">
                   <p className="im-onhand">
                     {t('invMovements.onHand')}: <strong>{onHand}</strong>
                   </p>
+
+                  <label className="im-policy">
+                    <input type="checkbox" checked={allowNegative} disabled={!canWrite} onChange={() => void toggleNegative()} />
+                    <span>{t('invMovements.allowNegative')}</span>
+                  </label>
+
+                  {writeError && !moveDrawer && !transferDrawer && <ErrorBanner error={writeError} message={localError(writeError)} />}
+
+                  <DataTable
+                    columns={columns}
+                    rows={movements}
+                    rowKey={(m) => m.id}
+                    caption={t('invMovements.detailLabel')}
+                    loading={detailLoading}
+                    skeletonRows={3}
+                    emptyState={<EmptyState title={t('invMovements.noMovements')} />}
+                  />
                 </div>
-
-                <label className="im-policy">
-                  <input type="checkbox" checked={allowNegative} disabled={!canWrite} onChange={() => void toggleNegative()} />
-                  <span>{t('invMovements.allowNegative')}</span>
-                </label>
-
-                {writeError && !moveDrawer && !transferDrawer && <ErrorBanner error={writeError} message={localError(writeError)} />}
-
-                <DataTable
-                  columns={columns}
-                  rows={movements}
-                  rowKey={(m) => m.id}
-                  caption={t('invMovements.detailLabel')}
-                  loading={detailLoading}
-                  skeletonRows={3}
-                  emptyState={<EmptyState title={t('invMovements.noMovements')} />}
-                />
-              </>
-            )}
-          </section>
-        </div>
+              ),
+          }}
+        />
       )}
 
       {moveDrawer && selected !== null && (
@@ -576,8 +568,8 @@ export function InventoryMovements() {
           }
         >
           {writeError && <ErrorBanner error={writeError} message={localError(writeError)} />}
-          <div className="im-field">
-            <label htmlFor="im-type">{t('invMovements.form.type')}</label>
+          <div className="form-stack">
+          <Field label={t('invMovements.form.type')}>
             <Select
               id="im-type"
               value={moveDraft.movementType}
@@ -585,9 +577,8 @@ export function InventoryMovements() {
               options={RECORD_TYPES.map((ty) => ({ value: ty, label: t(`invMovements.type.${ty}`) }))}
               ariaLabel={t('invMovements.form.type')}
             />
-          </div>
-          <div className="im-field">
-            <label htmlFor="im-loc">{t('invMovements.form.location')}</label>
+          </Field>
+          <Field label={t('invMovements.form.location')}>
             <Select
               id="im-loc"
               value={moveDraft.locationId}
@@ -595,31 +586,25 @@ export function InventoryMovements() {
               options={locations.map((l) => ({ value: l.id, label: l.name }))}
               ariaLabel={t('invMovements.form.location')}
             />
-          </div>
-          <div className="im-field">
-            <label htmlFor="im-qty">{t('invMovements.form.qty')}</label>
+          </Field>
+          <Field label={t('invMovements.form.qty')} info={t('invMovements.form.qtyHint')}>
             <input id="im-qty" className="field" type="number" value={moveDraft.qty} onChange={(e) => setMoveDraft({ ...moveDraft, qty: e.target.value })} />
-            <p className="im-hint">{t('invMovements.form.qtyHint')}</p>
-          </div>
-          <div className="im-field">
-            <label htmlFor="im-cost">{t('invMovements.form.unitCost')}</label>
+          </Field>
+          <Field label={t('invMovements.form.unitCost')}>
             <input id="im-cost" className="field" type="number" min="0" value={moveDraft.unitCostMinor} onChange={(e) => setMoveDraft({ ...moveDraft, unitCostMinor: e.target.value })} />
-          </div>
-          <div className="im-field">
-            <label htmlFor="im-date">{t('invMovements.form.date')}</label>
+          </Field>
+          <Field label={t('invMovements.form.date')}>
             <input id="im-date" className="field" type="date" value={moveDraft.effectiveDate} onChange={(e) => setMoveDraft({ ...moveDraft, effectiveDate: e.target.value })} />
-          </div>
-          <div className="im-field">
-            <label htmlFor="im-lot">{t('invMovements.form.lot')}</label>
+          </Field>
+          <Field label={t('invMovements.form.lot')}>
             <input id="im-lot" className="field" value={moveDraft.lotId} onChange={(e) => setMoveDraft({ ...moveDraft, lotId: e.target.value })} placeholder={t('invMovements.form.optional')} />
-          </div>
-          <div className="im-field">
-            <label htmlFor="im-serial">{t('invMovements.form.serial')}</label>
+          </Field>
+          <Field label={t('invMovements.form.serial')}>
             <input id="im-serial" className="field" value={moveDraft.serialId} onChange={(e) => setMoveDraft({ ...moveDraft, serialId: e.target.value })} placeholder={t('invMovements.form.optional')} />
-          </div>
-          <div className="im-field">
-            <label htmlFor="im-desc">{t('invMovements.form.description')}</label>
+          </Field>
+          <Field label={t('invMovements.form.description')}>
             <input id="im-desc" className="field" value={moveDraft.description} onChange={(e) => setMoveDraft({ ...moveDraft, description: e.target.value })} />
+          </Field>
           </div>
         </DetailDrawer>
       )}
@@ -642,8 +627,8 @@ export function InventoryMovements() {
           }
         >
           {writeError && <ErrorBanner error={writeError} message={localError(writeError)} />}
-          <div className="im-field">
-            <label htmlFor="im-from">{t('invMovements.form.from')}</label>
+          <div className="form-stack">
+          <Field label={t('invMovements.form.from')}>
             <Select
               id="im-from"
               value={transferDraft.fromLocationId}
@@ -651,9 +636,8 @@ export function InventoryMovements() {
               options={locations.map((l) => ({ value: l.id, label: l.name }))}
               ariaLabel={t('invMovements.form.from')}
             />
-          </div>
-          <div className="im-field">
-            <label htmlFor="im-to">{t('invMovements.form.to')}</label>
+          </Field>
+          <Field label={t('invMovements.form.to')}>
             <Select
               id="im-to"
               value={transferDraft.toLocationId}
@@ -661,18 +645,16 @@ export function InventoryMovements() {
               options={locations.map((l) => ({ value: l.id, label: l.name }))}
               ariaLabel={t('invMovements.form.to')}
             />
-          </div>
-          <div className="im-field">
-            <label htmlFor="im-tqty">{t('invMovements.form.qty')}</label>
+          </Field>
+          <Field label={t('invMovements.form.qty')}>
             <input id="im-tqty" className="field" type="number" min="1" value={transferDraft.qty} onChange={(e) => setTransferDraft({ ...transferDraft, qty: e.target.value })} />
-          </div>
-          <div className="im-field">
-            <label htmlFor="im-tdate">{t('invMovements.form.date')}</label>
+          </Field>
+          <Field label={t('invMovements.form.date')}>
             <input id="im-tdate" className="field" type="date" value={transferDraft.effectiveDate} onChange={(e) => setTransferDraft({ ...transferDraft, effectiveDate: e.target.value })} />
-          </div>
-          <div className="im-field">
-            <label htmlFor="im-tdesc">{t('invMovements.form.description')}</label>
+          </Field>
+          <Field label={t('invMovements.form.description')}>
             <input id="im-tdesc" className="field" value={transferDraft.description} onChange={(e) => setTransferDraft({ ...transferDraft, description: e.target.value })} />
+          </Field>
           </div>
         </DetailDrawer>
       )}

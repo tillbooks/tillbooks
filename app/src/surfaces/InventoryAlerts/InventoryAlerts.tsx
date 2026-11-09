@@ -19,6 +19,8 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useT, useTStrict, formatMoney } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { Field } from '../../components/Field';
+import { FilterBar } from '../../components/FilterBar';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { EmptyState, NoWorkspaceState } from '../../components/states';
 import { Status, type StatusKind } from '../../components/Status';
@@ -186,6 +188,8 @@ export function InventoryAlerts() {
   const workspaceId = useWorkspaceId();
 
   const [reportId, setReportId] = useState<string>(REPORTS[0].id);
+  const [search, setSearch] = useState('');
+  const [severityFilter, setSeverityFilter] = useState<string | null>(null);
   const [asOf, setAsOf] = useState('2026-12-31');
   const [since, setSince] = useState('2026-01-01');
   // What the fields show, committed to the query 250ms after the last change (K-16).
@@ -267,6 +271,16 @@ export function InventoryAlerts() {
 
   // The active report's columns, mapped onto DataTable: figures right-align with tabular digits, the
   // severity value renders as the surface's status chip, everything else is text formatted at the edge.
+  // D187 List A: the search runs over the text each row shows; the severity facet exists only for the
+  // reports that carry a severity.
+  const hasSeverity = report.columns.some(([key]) => key === 'severity');
+  const needle = search.trim().toLocaleLowerCase();
+  const shown = rows.filter(
+    (row) =>
+      (needle === '' || report.columns.some(([key]) => cell(row, key).toLocaleLowerCase().includes(needle))) &&
+      (severityFilter === null || row.severity === severityFilter),
+  );
+
   const columns: DataTableColumn<Record<string, unknown>>[] = report.columns.map(([key, labelKey]) => ({
     key,
     header: t(labelKey),
@@ -283,8 +297,8 @@ export function InventoryAlerts() {
     <div className="invalerts">
       <SurfaceHeader
         title={t('inventory.alerts.title')}
-        subtitle={t('inventory.alerts.subtitle')}
         help={<SurfaceHelp surface="InventoryAlerts" />}
+        count={body === null ? undefined : shown.length}
       />
 
       {/* The report list is the vertical Tabs (K-11): one view of the surface at a time, the chosen
@@ -294,25 +308,43 @@ export function InventoryAlerts() {
         label={t('inventory.alerts.reportsLabel')}
         tabs={REPORTS.map((r) => ({ id: r.id, label: t(`inventory.alerts.report.${r.id}`) }))}
         activeId={reportId}
-        onChange={setReportId}
+        onChange={(id) => {
+          setReportId(id);
+          setSearch('');
+          setSeverityFilter(null);
+        }}
       >
         <section className="invalerts__main">
-          {(report.needsSince === true || report.needsAsOf === true) && (
-            <div className="invalerts__filters">
-              {report.needsAsOf === true && (
-                <label>
-                  {t('inventory.alerts.asOf')}
-                  <input className="field" type="date" value={asOfDraft} onChange={(e) => setAsOfDraft(e.target.value)} />
-                </label>
-              )}
-              {report.needsSince === true && (
-                <label>
-                  {t('inventory.alerts.since')}
-                  <input className="field" type="date" value={sinceDraft} onChange={(e) => setSinceDraft(e.target.value)} />
-                </label>
-              )}
-            </div>
-          )}
+          <FilterBar
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchLabel={t('inventory.alerts.search')}
+            searchPlaceholder={t('inventory.alerts.search')}
+            facets={
+              hasSeverity
+                ? [
+                    {
+                      key: 'severity',
+                      label: t('inventory.alerts.col.severity'),
+                      options: (['critical', 'warning', 'info'] as const).map((sv) => ({ value: sv, label: tStrict(`inventory.alerts.severity.${sv}`) })),
+                      value: severityFilter,
+                      onChange: setSeverityFilter,
+                    },
+                  ]
+                : undefined
+            }
+          >
+            {report.needsAsOf === true && (
+              <Field label={t('inventory.alerts.asOf')} size="date">
+                <input className="field" type="date" value={asOfDraft} onChange={(e) => setAsOfDraft(e.target.value)} />
+              </Field>
+            )}
+            {report.needsSince === true && (
+              <Field label={t('inventory.alerts.since')} size="date">
+                <input className="field" type="date" value={sinceDraft} onChange={(e) => setSinceDraft(e.target.value)} />
+              </Field>
+            )}
+          </FilterBar>
 
           {totals.length > 0 && (
             <div className="invalerts__totals" role="status">
@@ -327,7 +359,7 @@ export function InventoryAlerts() {
 
           <DataTable
             columns={columns}
-            rows={rows}
+            rows={shown}
             rowKey={(row) => String(rows.indexOf(row))}
             caption={t(`inventory.alerts.report.${report.id}`)}
             loading={loading}

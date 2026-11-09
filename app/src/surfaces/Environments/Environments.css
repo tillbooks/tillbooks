@@ -71,19 +71,6 @@
   font-weight: 600;
 }
 
-.env-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--t-space-1);
-  justify-content: flex-end;
-}
-
-.env-padlock {
-  display: inline-flex;
-  align-items: center;
-  color: var(--t-warn);
-}
-
 /* --- dialogs / drawers ------------------------------------------------------------------------ */
 
 .env-dialog-lead {
@@ -111,9 +98,7 @@
 }
 
 .env-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-3);
+  max-width: 36rem;
 }
 
 .env-field {
@@ -126,7 +111,8 @@
 }
 
 .env-field-label {
-  font-weight: 600;
+  font-weight: 500;
+  color: var(--t-text-dim);
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
 }

@@ -16,14 +16,16 @@
     "bucket": {
       "needs_reply": "Antwort nötig",
       "drafted": "Entwurf bereit",
-      "done": "Erledigt"
+      "done": "Erledigt",
+      "label": "Stand"
     },
     "action": {
       "connect": "Lokalen Mail-Speicher verbinden",
       "reindex": "Neu einlesen",
       "open": "Öffnen",
       "close": "Schliessen",
-      "discard": "Abbrechen"
+      "discard": "Abbrechen",
+      "reindexContext": "Mail-Speicher neu einlesen"
     },
     "connect": {
       "no_password": "Kein Passwort nötig. TILL liest den Mail-Speicher auf diesem Mac und meldet sich nie bei deinem Anbieter an.",
@@ -67,8 +69,7 @@
       "last": "Zuletzt"
     },
     "view": {
-      "label": "Ansicht",
-      "all": "Alle"
+      "label": "Ansicht"
     },
     "error": {
       "needs_mailstore": "Kein lokaler Mail-Speicher gefunden.",
@@ -80,7 +81,12 @@
         "read": "Für die Korrespondenz fehlt die Berechtigung «Lokalen Mail-Index und Threads lesen».",
         "write": "Dafür fehlt die Berechtigung «Lokalen Mail-Speicher verbinden und Entwürfe schreiben»."
       }
-    }
+    },
+    "search": "Threads suchen",
+    "filter": {
+      "clear": "Filter zurücksetzen"
+    },
+    "rowActions": "Aktionen für {title}"
   },
   "draft": {
     "pane": {

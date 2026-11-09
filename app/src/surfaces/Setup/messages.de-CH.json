@@ -154,8 +154,6 @@
       "items": "{n} Einträge",
       "percent": "{n} %"
     },
-    "defaultIs": "Standard: {value}",
-    "isDefault": "Standard",
     "editTitle": "Ändern: {setting}",
     "cancel": "Abbrechen",
     "reset": "Auf Standard zurücksetzen ({value})",

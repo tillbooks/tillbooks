@@ -27,7 +27,7 @@
 }
 
 .search-saved {
-  padding: var(--t-space-2);
+  padding: var(--t-space-1) 0;
 }
 
 .search-saved-title {
@@ -59,7 +59,7 @@
 }
 
 .search-group {
-  padding: var(--t-space-2);
+  padding: var(--t-space-1) 0;
 }
 
 .search-group-title {

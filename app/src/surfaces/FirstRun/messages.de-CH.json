@@ -3,25 +3,25 @@
     "firstRun": "Erster Start"
   },
   "firstrun": {
-    "title": "Richte dein Hauptbuch ein",
-    "lead": "TILL hat auf diesem Gerät kein Hauptbuch gefunden. Wähle eine Tür: es wird nichts angelegt, bis du es tust.",
-    "lead_existing_one": "Auf diesem Gerät gibt es bereits ein Hauptbuch. Diese Türen legen ein weiteres an; deine bestehenden Bücher bleiben unberührt.",
-    "lead_existing_many": "Auf diesem Gerät gibt es bereits {count} Hauptbücher. Diese Türen legen ein weiteres an; deine bestehenden Bücher bleiben unberührt.",
+    "title": "Hauptbuch einrichten",
+    "lead": "Auf diesem Gerät gibt es noch kein Hauptbuch. Es entsteht erst, wenn du es anlegst.",
+    "lead_existing_one": "Auf diesem Gerät gibt es bereits ein Hauptbuch. Was du hier anlegst, kommt dazu; deine bestehenden Bücher bleiben unberührt.",
+    "lead_existing_many": "Auf diesem Gerät gibt es bereits {count} Hauptbücher. Was du hier anlegst, kommt dazu; deine bestehenden Bücher bleiben unberührt.",
     "existing": {
       "overview": "Zur Übersicht"
     },
     "create": {
       "label": "Neues Hauptbuch anlegen",
       "label_existing": "Ein weiteres Hauptbuch anlegen",
-      "hint": "Beginne frische Bücher mit dem Schweizer KMU-Kontenplan.",
+      "hint": "Neue Bücher starten mit dem Schweizer KMU-Kontenplan.",
       "name_label": "Firmenname",
-      "name_placeholder": "Acme GmbH",
-      "action": "Hauptbuch anlegen",
-      "busy": "Wird angelegt..."
+      "name_placeholder": "Firmenname",
+      "action": "Anlegen",
+      "busy": "Wird angelegt …"
     },
     "restore": {
       "label": "Backup wiederherstellen",
-      "hint": "Lade eine .tillbackup-Datei. Die IDs werden in einen neuen Arbeitsbereich neu vergeben; nichts wird überschrieben.",
+      "hint": "Die IDs werden in einem neuen Arbeitsbereich neu vergeben; nichts wird überschrieben.",
       "expects": "Diese Installation erwartet Schema-Generation {generation}.",
       "pick_label": "Sicherungen auf diesem Gerät ({count})",
       "pick_row": "{date}: Generation {generation}, {entries} Buchungen",
@@ -30,20 +30,23 @@
       "verified": "Geprüft: Generation {generation}, {entries} Buchungen, ausgeglichen. Wird wiederhergestellt.",
       "source_label": "Backup-Datei",
       "source_placeholder": "/pfad/zu/backup.tillbackup",
-      "name_label": "Name des neuen Arbeitsbereichs (optional)",
+      "name_label": "Name (optional)",
       "name_default": "Wiederhergestelltes Hauptbuch",
-      "action": "Backup wiederherstellen",
-      "busy": "Wird wiederhergestellt..."
+      "action": "Wiederherstellen",
+      "busy": "Wird wiederhergestellt …",
+      "context": "Aus einer .tillbackup-Datei",
+      "pick_more": "Alle zeigen ({count})",
+      "pick_incompatible_short": "Ausgegraute passen nicht zu dieser Installation."
     },
     "adopt": {
-      "label": "Bestehende Datenbank übernehmen",
-      "hint": "Hast du schon ein TILL-Hauptbuch auf diesem Gerät? Wähle die Datei, und TILL öffnet sie. Kopiert oder verschoben wird sie nie.",
+      "label": "Hauptbuch öffnen",
+      "hint": "TILL öffnet die Datei dort, wo sie liegt, und kopiert oder verschiebt sie nie.",
       "pick": "Datei wählen …",
       "picked": "Gewählt: {name}",
       "path_label": "Pfad zum Hauptbuch",
       "path_placeholder": "/Users/du/Dokumente/till.db",
       "path_hint": "Im Finder: Datei mit der rechten Maustaste anklicken, die Wahltaste (⌥) halten und «Als Pfadname kopieren» wählen.",
-      "action": "Übernehmen",
+      "action": "Öffnen",
       "busy": "Wird geprüft …",
       "opening_title": "TILL öffnet dein Hauptbuch …",
       "opening_body": "TILL startet dafür kurz neu. Das dauert nur einen Moment.",
@@ -59,7 +62,8 @@
         "book_not_forgotten": "TILL konnte das Hauptbuch nicht vergessen. Es wurde nichts verändert. Versuche es noch einmal.",
         "restart_unavailable": "Diese Installation kann ihr Hauptbuch nicht selbst wechseln. Es wurde nichts verändert.",
         "fallback": "Das hat nicht geklappt. Es wurde nichts verändert. Versuche es noch einmal."
-      }
+      },
+      "context": "Ein TILL-Hauptbuch auf diesem Gerät"
     },
     "unavailable": {
       "title": "Dein übernommenes Hauptbuch ist nicht erreichbar",
@@ -84,9 +88,9 @@
     },
     "demo": {
       "lead": "Lieber erst mit Beispieldaten anschauen?",
-      "action": "Demo ausprobieren",
+      "action": "Demo ansehen",
       "busy": "Demo wird erstellt",
-      "hint": "Ein Demo-Arbeitsbereich mit Beispielbuchungen. Du kannst ihn später löschen."
+      "hint": "Ein Arbeitsbereich mit Beispielbuchungen. Du kannst ihn später löschen."
     }
   },
   "runtime": {

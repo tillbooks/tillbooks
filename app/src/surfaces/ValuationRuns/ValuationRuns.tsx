@@ -45,6 +45,8 @@ import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { Tabs, type TabItem } from '../../components/Tabs';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DetailDrawer } from '../../components/DetailDrawer';
+import { Field } from '../../components/Field';
+import { FilterBar } from '../../components/FilterBar';
 import { Modal } from '../../components/Modal';
 import { Status, type StatusKind } from '../../components/Status';
 import { formatCalendar } from '../../lib/format';
@@ -112,6 +114,11 @@ export function ValuationRuns() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Err | null>(null);
   const [runs, setRuns] = useState<RunSummary[]>([]);
+
+  // The runs list: search and facets (D187 List A).
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [methodFilter, setMethodFilter] = useState<string | null>(null);
 
   // Draft / new-run drawer state.
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -289,35 +296,62 @@ export function ValuationRuns() {
     [t],
   );
 
+  const needle = search.trim().toLocaleLowerCase();
+  const shownRuns = runs.filter(
+    (r) =>
+      (needle === '' || formatCalendar(r.asOf).toLocaleLowerCase().includes(needle) || t(`invRun.method.${r.method}`).toLocaleLowerCase().includes(needle)) &&
+      (statusFilter === null || r.status === statusFilter) &&
+      (methodFilter === null || r.method === methodFilter),
+  );
+  const clearFilters = () => {
+    setSearch('');
+    setStatusFilter(null);
+    setMethodFilter(null);
+  };
+
   const runsPane = (
     <div className="valrun-pane">
-      <div className="valrun-toolbar">
-        <button
-          type="button"
-          className="btn btn--primary"
-          disabled={!canPost}
-          onClick={() => {
-            setDraft(null);
-            setDrawerOpen(true);
-          }}
-          data-testid="new-run"
-        >
-          {t('invRun.newRun')}
-        </button>
-      </div>
       {loading ? (
         <Skeleton rows={5} height={36} />
       ) : (
         <div data-testid="runs-table">
+          <FilterBar
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchLabel={t('invRun.search')}
+            searchPlaceholder={t('invRun.search')}
+            facets={[
+              {
+                key: 'status',
+                label: t('invRun.col.status'),
+                options: (['draft', 'posted', 'reversed'] as const).map((st) => ({ value: st, label: t(`invRun.status.${st}`) })),
+                value: statusFilter,
+                onChange: setStatusFilter,
+              },
+              {
+                key: 'method',
+                label: t('invRun.col.method'),
+                options: (['weighted_average', 'fifo', 'standard_cost'] as const).map((m) => ({ value: m, label: t(`invRun.method.${m}`) })),
+                value: methodFilter,
+                onChange: setMethodFilter,
+              },
+            ]}
+          />
           <DataTable
             columns={runColumns}
-            rows={runs}
+            rows={shownRuns}
             rowKey={(r) => r.id}
             caption={t('invRun.caption.runs')}
             rowClassName={(r) => (r.status === 'reversed' ? 'valrun-row--reversed' : undefined)}
             rowActions={canPost ? runActions : undefined}
             rowActionsLabel={(r) => t('invRun.rowActions', { asOf: formatCalendar(r.asOf) })}
-            emptyState={<EmptyState title={t('invRun.empty.title')} hint={t('invRun.empty.hint')} />}
+            emptyState={
+              runs.length > 0 ? (
+                <EmptyState title={t('invRun.emptyFiltered')} filtered={{ onClear: clearFilters, clearLabel: t('invRun.filter.clear') }} />
+              ) : (
+                <EmptyState title={t('invRun.empty.title')} hint={t('invRun.empty.hint')} />
+              )
+            }
           />
         </div>
       )}
@@ -326,9 +360,10 @@ export function ValuationRuns() {
 
   const reportPane = (
     <div className="valrun-pane">
-      <div className="valrun-toolbar">
-        <label htmlFor="valrun-report-asof">{t('invRun.asOf')}</label>
-        <input id="valrun-report-asof" className="field" type="date" value={reportAsOf} onChange={(e) => setReportAsOf(e.target.value)} />
+      <div className="form-line">
+        <Field label={t('invRun.asOf')} size="date">
+          <input id="valrun-report-asof" className="field" type="date" value={reportAsOf} onChange={(e) => setReportAsOf(e.target.value)} />
+        </Field>
         <button type="button" className="btn btn--secondary" disabled={busy} onClick={() => void runReport()} data-testid="run-report">
           {t('invRun.compute')}
         </button>
@@ -355,9 +390,10 @@ export function ValuationRuns() {
 
   const reconPane = (
     <div className="valrun-pane">
-      <div className="valrun-toolbar">
-        <label htmlFor="valrun-recon-period">{t('invRun.period')}</label>
-        <input id="valrun-recon-period" className="field" type="month" value={reconPeriod} onChange={(e) => setReconPeriod(e.target.value)} />
+      <div className="form-line">
+        <Field label={t('invRun.period')} size="date">
+          <input id="valrun-recon-period" className="field" type="month" value={reconPeriod} onChange={(e) => setReconPeriod(e.target.value)} />
+        </Field>
         <button type="button" className="btn btn--secondary" disabled={busy} onClick={() => void runRecon()} data-testid="run-recon">
           {t('invRun.runCheck')}
         </button>
@@ -400,7 +436,28 @@ export function ValuationRuns() {
 
   return (
     <section className="valrun" aria-labelledby="valrun-title">
-      <SurfaceHeader title={t('invRun.title')} titleId="valrun-title" help={<SurfaceHelp surface="ValuationRuns" />} />
+      <SurfaceHeader
+        title={t('invRun.title')}
+        titleId="valrun-title"
+        help={<SurfaceHelp surface="ValuationRuns" />}
+        count={tab === 'runs' && !loading ? shownRuns.length : undefined}
+        actions={
+          tab === 'runs' ? (
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={!canPost}
+              onClick={() => {
+                setDraft(null);
+                setDrawerOpen(true);
+              }}
+              data-testid="new-run"
+            >
+              {t('invRun.newRun')}
+            </button>
+          ) : undefined
+        }
+      />
 
       {error !== null ? <ErrorBanner error={error} /> : null}
 
@@ -426,9 +483,10 @@ export function ValuationRuns() {
           </>
         }
       >
-        <div className="valrun-toolbar">
-          <label htmlFor="valrun-asof">{t('invRun.asOf')}</label>
-          <input id="valrun-asof" className="field" type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+        <div className="form-line">
+          <Field label={t('invRun.asOf')} size="date">
+            <input id="valrun-asof" className="field" type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+          </Field>
           <button type="button" className="btn btn--secondary" disabled={busy} onClick={() => void calculate()} data-testid="calculate">
             {t('invRun.calculate')}
           </button>

@@ -21,6 +21,7 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useT, useTStrict, formatDate } from '../../i18n';
 import { displayName, type SeatMember } from '../../lib/displayName';
 import { EmptyState, NoWorkspaceState } from '../../components/states';
+import { Field } from '../../components/Field';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
 import { ChevronRightGlyph } from '../../components/icons';
@@ -249,24 +250,22 @@ export function AuditPanel() {
                     ariaLabel={t('audit.filterAction')}
                   />
                 </div>
-                <label className="period-field">
-                  {t('audit.filterFrom')}
+                <Field label={t('audit.filterFrom')} className="period-field">
                   <input
                     className="field"
                     type="date"
                     value={filters.from}
                     onChange={(e) => setFilter({ from: e.target.value })}
                   />
-                </label>
-                <label className="period-field">
-                  {t('audit.filterTo')}
+                </Field>
+                <Field label={t('audit.filterTo')} className="period-field">
                   <input
                     className="field"
                     type="date"
                     value={filters.to}
                     onChange={(e) => setFilter({ to: e.target.value })}
                   />
-                </label>
+                </Field>
               </div>
 
               <DataTable<AuditRow>

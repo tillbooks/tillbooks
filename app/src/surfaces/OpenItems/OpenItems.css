@@ -96,30 +96,10 @@
 
 /* --- toolbar and filters (the tabs are the shared Tabs) -------------------------------------------- */
 
-.oi-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--t-space-2);
+.oi-asof-input {
+  width: 9.5rem;
 }
 
-.oi-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--t-space-2);
-  align-items: center;
-}
-
-/* A filter label beside its control; the controls are the shared `.field` and Select (K-15). */
-.oi-filter {
-  display: flex;
-  align-items: center;
-  gap: var(--t-space-1);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  color: var(--t-text-dim);
-}
 
 /* --- the historical cut-off band ---------------------------------------------------------------- */
 
@@ -452,9 +432,13 @@
   font-weight: 600;
 }
 
-.oi-popover-source,
-.oi-popover-preview,
-.oi-popover-note {
+.oi-popover-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.oi-popover-preview {
   margin: 0;
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
@@ -492,3 +476,4 @@
 .oi-mismatch .t-money {
   font-size: inherit;
 }
+

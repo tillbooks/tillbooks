@@ -1,0 +1,20 @@
+/* D190: the export range (Von, Bis, the quick picks) and the journal's small account field. */
+.ex-range-bound {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.ex-range-word {
+  color: var(--t-text-dim);
+}
+
+.ex-range-date {
+  width: 9.5rem;
+}
+
+/* The FilterBar's search is the account field here: a number, so a small field, not a search strip. */
+.ex .filter-bar-search {
+  flex: 0 0 auto;
+  width: 9.5rem;
+}

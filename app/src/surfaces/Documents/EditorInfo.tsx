@@ -5,16 +5,13 @@
  * sighted reader sees it on hover or focus. It holds plain text only: a way out (a link) stays on
  * the surface, because a tooltip must not carry interactive content.
  */
-import type { ReactNode } from 'react';
-
-import { Tooltip } from '../../components/Tooltip';
-import { InfoGlyph } from '../../components/states/glyphs';
+import { IconButton } from '../../components/IconButton';
 
 export interface EditorInfoProps {
   /** The trigger's accessible name, e.g. "Mehr zur Währung". */
   label: string;
-  /** The explanation the card holds. */
-  children: ReactNode;
+  /** The explanation the card holds (plain text). */
+  children: string;
   /** A state marker the browser flows wait on (CurrencyPicker's `data-fx`). */
   dataFx?: string;
 }
@@ -22,11 +19,7 @@ export interface EditorInfoProps {
 export function EditorInfo({ label, children, dataFx }: EditorInfoProps) {
   return (
     <span className="documents-info" data-fx={dataFx}>
-      <Tooltip content={children} placement="bottom">
-        <button type="button" className="btn btn--ghost btn--icon btn--sm documents-info-trigger" aria-label={label}>
-          <InfoGlyph size={16} />
-        </button>
-      </Tooltip>
+      <IconButton icon="info" small name={label} context={children} placement="bottom" />
     </span>
   );
 }

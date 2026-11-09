@@ -98,7 +98,10 @@
       "retry": "Finish it",
       "retried": "The run was finished."
     },
-    "rowActions": "Actions for {name}"
+    "rowActions": "Actions for {name}",
+    "hintTitle": {
+      "permission": "Permission"
+    }
   },
   "help": {
     "Automations": {

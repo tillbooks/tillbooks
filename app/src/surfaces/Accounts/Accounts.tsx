@@ -185,6 +185,7 @@ export function Accounts() {
   const header = (
     <SurfaceHeader
       title={t('account.title')}
+      count={filtered.length}
       help={<SurfaceHelp surface="Accounts" />}
       actions={
         canManageChart ? (
@@ -230,16 +231,16 @@ export function Accounts() {
         onSearchChange={setSearch}
         searchLabel={t('account.search')}
         searchPlaceholder={t('account.search')}
-      >
-        <label className="acc-checkbox">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(event) => setShowArchived(event.target.checked)}
-          />
-          <span>{t('account.showArchived')}</span>
-        </label>
-      </FilterBar>
+        facets={[
+          {
+            key: 'archived',
+            label: t('account.showArchived'),
+            options: [{ value: '1', label: t('account.showArchived') }],
+            value: showArchived ? '1' : null,
+            onChange: (value) => setShowArchived(value !== null),
+          },
+        ]}
+      />
 
       {rowError !== null && <ErrorBanner error={rowError} />}
 

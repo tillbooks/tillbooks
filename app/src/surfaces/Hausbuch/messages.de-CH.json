@@ -80,6 +80,11 @@
       "invalid_input": "Diese Angabe passt nicht. Eine Hausregel hat 1 bis 500 Zeichen, ein Thema höchstens 40. Es wurde nichts gespeichert.",
       "not_found": "Diese Hausregel gibt es nicht mehr. Lade die Seite neu. Es wurde nichts geändert.",
       "permission_denied": "Dafür fehlt dir das Recht, Einstellungen zu verwalten. Es wurde nichts geändert."
+    },
+    "edit": "Bearbeiten",
+    "hintTitle": {
+      "readOnly": "Nur lesen",
+      "withheld": "Nicht sichtbar"
     }
   },
   "help": {

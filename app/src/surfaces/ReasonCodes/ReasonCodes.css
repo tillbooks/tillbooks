@@ -35,16 +35,3 @@
   color: var(--t-text-dim);
 }
 
-/* Drawer form fields the DetailDrawer body hosts. */
-.rc-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.rc-field label {
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  color: var(--t-text-dim);
-}
-

@@ -351,8 +351,13 @@ export function Items() {
 
   // The header is the one block every state shares, so it is rendered once here and reused by the
   // early returns below rather than copy-pasted into each of them (SurfaceHeader, D118 B2).
-  const header = (actions?: ReactNode) => (
-    <SurfaceHeader title={t('item.title')} help={<SurfaceHelp surface="Items" />} actions={actions} />
+  const header = (actions?: ReactNode, count?: number) => (
+    <SurfaceHeader
+      title={t('item.title')}
+      help={<SurfaceHelp surface="Items" />}
+      actions={actions}
+      count={count}
+    />
   );
 
   if (workspaceId === null) {
@@ -497,7 +502,7 @@ export function Items() {
 
   const catalogPanel = (
     <div className="items-layout">
-      <nav className="items-sidebar panel" aria-label={t('item.categories')}>
+      <nav className="items-sidebar" aria-label={t('item.categories')}>
         <button
           type="button"
           className={`items-cat${categoryFilter === null ? ' items-cat--active' : ''}`}
@@ -545,16 +550,16 @@ export function Items() {
           onSearchChange={setSearch}
           searchLabel={t('item.search')}
           searchPlaceholder={t('item.search')}
-        >
-          <label className="item-checkbox">
-            <input
-              type="checkbox"
-              checked={showArchived}
-              onChange={(event) => setShowArchived(event.target.checked)}
-            />
-            <span>{t('item.showArchived')}</span>
-          </label>
-        </FilterBar>
+          facets={[
+            {
+              key: 'archived',
+              label: t('item.showArchived'),
+              options: [{ value: '1', label: t('item.showArchived') }],
+              value: showArchived ? '1' : null,
+              onChange: (value) => setShowArchived(value !== null),
+            },
+          ]}
+        />
 
         {rowError !== null && <RowErrorBanner rowError={rowError} onArchive={archive} />}
 
@@ -581,6 +586,7 @@ export function Items() {
             {t('item.new')}
           </button>
         ) : undefined,
+        tab === 'items' ? rows.length : undefined,
       )}
 
       <Tabs

@@ -22,6 +22,7 @@
  * and a deep link (`/search?q=`, a bookmark) opens the palette prefilled, while a hop from the
  * palette itself (`state.fromPalette`) does not reopen it.
  */
+import { IconButton } from '../../components/IconButton';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -205,9 +206,12 @@ export function Search() {
         help={<SurfaceHelp surface="Search" />}
         actions={
           keyboard !== null ? (
-            <button type="button" className="btn btn--secondary" onClick={openPalette}>
-              {q.trim().length > 0 ? t('search.action.change') : t('search.action.open')}
-            </button>
+            <IconButton
+              icon="search"
+              name={q.trim().length > 0 ? t('search.action.change') : t('search.action.open')}
+              context={t('search.route.title')}
+              onClick={openPalette}
+            />
           ) : undefined
         }
       />
@@ -228,7 +232,7 @@ export function Search() {
       )}
 
       {saved.length > 0 && (
-        <nav className="search-saved panel" aria-label={t('search.savedSearch.list')}>
+        <nav className="search-saved" aria-label={t('search.savedSearch.list')}>
           <h2 className="search-saved-title">{t('search.savedSearch.list')}</h2>
           <ul className="search-saved-list">
             {saved.map((entry) => (
@@ -280,7 +284,7 @@ export function Search() {
       {!tooShort && !loading && !failed && model !== null && model.hits.length > 0 && (
         <div className="search-results">
           {[...groups.entries()].map(([kind, hits]) => (
-            <section key={kind} className="search-group panel" aria-label={t(KIND_DISPLAY[kind].labelKey)}>
+            <section key={kind} className="search-group" aria-label={t(KIND_DISPLAY[kind].labelKey)}>
               <h2 className="search-group-title">
                 <NavIcon name={KIND_DISPLAY[kind].icon} className="search-group-icon" size={16} />
                 {t(KIND_DISPLAY[kind].labelKey)}

@@ -205,8 +205,8 @@ describe('S1: the Zahlungen list, in all five states', () => {
 
   it('gives the Guthaben a live Zuweisen action, so a credit is never a dead label', async () => {
     renderPayments();
-    const allocate = await screen.findByRole('button', { name: 'Zuweisen' });
-    await userEvent.click(allocate);
+    await userEvent.click((await screen.findAllByRole('button', { name: /^Aktionen für die Zahlung vom / }))[0]!);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Zuweisen' }));
     // The allocator opens in allocation mode and states the one-way warning (P46).
     expect(await screen.findByText(/lässt sich nur rückgängig machen/)).toBeInTheDocument();
   });
@@ -223,7 +223,6 @@ describe('S1: the Zahlungen list, in all five states', () => {
     // The Guthaben is a note in the row, not a second row under it.
     const row = screen.getAllByRole('row', { name: /^Zahlung vom / })[0]!;
     expect(within(row).getByText('Guthaben CHF 19.00')).toBeInTheDocument();
-    expect(within(row).getByRole('button', { name: 'Zuweisen' })).toBeInTheDocument();
     // The status is the shared Status word.
     expect(within(row).getByText('Gebucht').closest('.status-word')).toHaveAttribute('data-kind', 'success');
     // No expander glyph and no raw ISO date in the row (K-38).
@@ -242,11 +241,11 @@ describe('S1: the Zahlungen list, in all five states', () => {
     expect(screen.getByRole('menuitem', { name: 'Bankzeile zeigen' })).toBeInTheDocument();
   });
 
-  it('K-11: the direction is a Segmented control', async () => {
+  it('D187: the direction is a filter facet, offered under + Filter', async () => {
     renderPayments();
     await screen.findByText('Muster AG');
-    const group = screen.getByRole('radiogroup', { name: 'Richtung' });
-    expect(within(group).getAllByRole('radio')).toHaveLength(3);
+    await userEvent.click(screen.getByRole('button', { name: 'Filter hinzufügen' }));
+    expect(screen.getByRole('menuitem', { name: 'Richtung: Eingehend' })).toBeInTheDocument();
     expect(screen.queryByRole('tab')).toBeNull();
   });
 });

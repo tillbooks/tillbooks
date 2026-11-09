@@ -6,7 +6,7 @@
  * working, and the Escape-returns-focus-to-the-trigger case is the one that silently regresses.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { OverflowMenu, type OverflowMenuItem } from './OverflowMenu';
@@ -50,7 +50,7 @@ describe('OverflowMenu', () => {
 
   it('Enter opens the menu and puts focus on the FIRST item', async () => {
     const trigger = renderMenu();
-    trigger.focus();
+    act(() => trigger.focus());
     await userEvent.keyboard('{Enter}');
 
     expect(screen.getByRole('menuitem', { name: 'Archivieren' })).toHaveFocus();
@@ -58,7 +58,7 @@ describe('OverflowMenu', () => {
 
   it('Space opens the menu and puts focus on the first item', async () => {
     const trigger = renderMenu();
-    trigger.focus();
+    act(() => trigger.focus());
     await userEvent.keyboard(' ');
 
     expect(screen.getByRole('menuitem', { name: 'Archivieren' })).toHaveFocus();
@@ -66,7 +66,7 @@ describe('OverflowMenu', () => {
 
   it('ArrowDown opens at the first item, ArrowUp opens at the LAST', async () => {
     const trigger = renderMenu();
-    trigger.focus();
+    act(() => trigger.focus());
     await userEvent.keyboard('{ArrowDown}');
     expect(screen.getByRole('menuitem', { name: 'Archivieren' })).toHaveFocus();
 

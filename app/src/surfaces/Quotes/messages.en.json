@@ -45,11 +45,10 @@
       "superseded": "Superseded"
     },
     "savedView": "Saved view",
-    "view": {
-      "all": "All open"
-    },
+    "view": {},
     "filter": {
-      "showSuperseded": "Show superseded"
+      "showSuperseded": "Show superseded",
+      "clear": "Clear filters"
     },
     "drawer": {
       "close": "Close"
@@ -82,7 +81,8 @@
     },
     "unknownContact": "Unknown contact",
     "rowOpen": "Open quote {row}",
-    "rowOpenDraft": "Open quote draft"
+    "rowOpenDraft": "Open quote draft",
+    "search": "Search quotes"
   },
   "help": {
     "Quotes": {

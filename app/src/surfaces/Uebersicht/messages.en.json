@@ -150,7 +150,7 @@
     },
     "doors": {
       "label": "Common actions",
-      "book": "Book",
+      "book": "New entry",
       "backup": "Back up",
       "demo": "Try the demo",
       "demoBusy": "Creating the demo"

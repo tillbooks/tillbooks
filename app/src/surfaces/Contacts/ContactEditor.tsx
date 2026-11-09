@@ -40,8 +40,8 @@ import { isErr } from '../../lib/client';
 import { useT } from '../../i18n';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { ErrorBanner } from '../../components/states';
-import { AlertGlyph, InfoGlyph } from '../../components/states/glyphs';
-import { Tooltip } from '../../components/Tooltip';
+import { AlertGlyph } from '../../components/states/glyphs';
+import { Field } from '../../components/Field';
 import { focusFirstInvalid } from '../../components/useFocusTrap';
 import { Select } from '../../components/Select';
 import type { Err } from '../../lib/client';
@@ -101,6 +101,16 @@ export interface ContactEditorProps {
 const TERMS_RE = /^\d+$/;
 /** The engine's bound on a contact's terms (`PAYMENT_TERMS_MAX_DAYS`, critic M1). */
 const TERMS_MAX_DAYS = 365;
+
+/** A field's refusal: the alert glyph and the words, never colour alone. */
+function fieldError(message: string) {
+  return (
+    <>
+      <AlertGlyph size={16} aria-hidden="true" />
+      {message}
+    </>
+  );
+}
 
 function termsAcceptable(value: string): boolean {
   return value === '' || (TERMS_RE.test(value) && Number(value) <= TERMS_MAX_DAYS);
@@ -300,235 +310,140 @@ export function ContactEditor({
       closeLabel={t('contact.close')}
       footer={footer}
     >
-      <div className="ct-editor-form" ref={formRef}>
+      <div className="ct-editor-form form-stack" ref={formRef}>
         {formError !== null && <ErrorBanner error={formError} />}
 
-          <div className="ct-field">
-            <div className="ct-field-inner">
-              <span className="ct-field-label">{t('contact.partyRole')}</span>
-              <Select
-                value={partyRole}
-                onChange={(value) => setPartyRole(value as PartyRole)}
-                options={PARTY_ROLES.map((role) => ({ value: role, label: t(`contact.role.${role}`) }))}
-                ariaLabel={t('contact.partyRole')}
-              />
-            </div>
-          </div>
+        <Field label={t('contact.partyRole')}>
+          <Select
+            value={partyRole}
+            onChange={(value) => setPartyRole(value as PartyRole)}
+            options={PARTY_ROLES.map((role) => ({ value: role, label: t(`contact.role.${role}`) }))}
+            ariaLabel={t('contact.partyRole')}
+          />
+        </Field>
 
-          {/* C00's company|person axis (US-C00.1). A separate control from the role above, because
-              the two are orthogonal: a person can be a customer, a company can be both. */}
-          <div className="ct-field">
-            <div className="ct-field-inner">
-              <span className="ct-field-label">{t('contact.kindLabel')}</span>
-              <Select
-                value={kind}
-                onChange={(value) => setKind(value as ContactKind)}
-                options={CONTACT_KINDS.map((k) => ({ value: k, label: t(`contact.kind.${k}`) }))}
-                ariaLabel={t('contact.kindLabel')}
-              />
-            </div>
-          </div>
+        {/* C00's company|person axis (US-C00.1). A separate control from the role above, because
+            the two are orthogonal: a person can be a customer, a company can be both. */}
+        <Field label={t('contact.kindLabel')}>
+          <Select
+            value={kind}
+            onChange={(value) => setKind(value as ContactKind)}
+            options={CONTACT_KINDS.map((k) => ({ value: k, label: t(`contact.kind.${k}`) }))}
+            ariaLabel={t('contact.kindLabel')}
+          />
+        </Field>
 
-          <div className="ct-field">
-            <label className="ct-field-inner">
-              <span className="ct-field-label">{t('contact.name')}</span>
-              <input
-                className="field"
-                value={name}
-                required
-                aria-invalid={nameError !== null}
-                aria-describedby={nameError !== null ? `${titleId}-name-err` : undefined}
-                onChange={(event) => {
-                  setName(event.target.value);
-                  if (nameError !== null && event.target.value.trim() !== '') setNameError(null);
-                }}
-              />
-            </label>
-            {nameError !== null && (
-              <p id={`${titleId}-name-err`} className="field-error" role="alert">
-                <AlertGlyph size={16} aria-hidden="true" />
-                {nameError}
-              </p>
-            )}
-          </div>
+        <Field label={t('contact.name')} error={nameError === null ? undefined : fieldError(nameError)}>
+          <input
+            className="field"
+            value={name}
+            required
+            onChange={(event) => {
+              setName(event.target.value);
+              if (nameError !== null && event.target.value.trim() !== '') setNameError(null);
+            }}
+          />
+        </Field>
 
-          {/* The employer link, offered only for a PERSON, and only ever listing companies: the
-              engine refuses a person as an employer, so offering one would be a dead end the form
-              created. A person with no employer is perfectly valid, hence the empty option. */}
-          {kind === 'person' && (
-            <div className="ct-field">
-              <div className="ct-field-inner">
-                <span className="ct-field-label">{t('contact.field.employer')}</span>
-                <Select
-                  value={companyContactId}
-                  onChange={(value) => setCompanyContactId(value)}
-                  options={[
-                    { value: '', label: t('contact.field.employerNone') },
-                    ...contacts
-                      .filter((c) => kindOf(c) === 'company' && c.id !== contact?.id)
-                      .map((c) => ({ value: c.id, label: c.name })),
-                  ]}
-                  invalid={employerError !== null}
-                  describedBy={employerError !== null ? `${titleId}-employer-err` : undefined}
-                  ariaLabel={t('contact.field.employer')}
-                />
-              </div>
-              {employerError !== null && (
-                <p id={`${titleId}-employer-err`} className="field-error" role="alert">
-                  <AlertGlyph size={16} aria-hidden="true" />
-                  {employerError}
-                </p>
-              )}
-            </div>
-          )}
+        {/* The employer link, offered only for a PERSON, and only ever listing companies: the
+            engine refuses a person as an employer, so offering one would be a dead end the form
+            created. A person with no employer is perfectly valid, hence the empty option. */}
+        {kind === 'person' && (
+          <Field
+            id={`${titleId}-employer`}
+            label={t('contact.field.employer')}
+            error={employerError === null ? undefined : fieldError(employerError)}
+          >
+            <Select
+              value={companyContactId}
+              onChange={(value) => setCompanyContactId(value)}
+              options={[
+                { value: '', label: t('contact.field.employerNone') },
+                ...contacts
+                  .filter((c) => kindOf(c) === 'company' && c.id !== contact?.id)
+                  .map((c) => ({ value: c.id, label: c.name })),
+              ]}
+              invalid={employerError !== null}
+              describedBy={employerError !== null ? `${titleId}-employer-error` : undefined}
+              ariaLabel={t('contact.field.employer')}
+            />
+          </Field>
+        )}
 
-          <fieldset className="ct-fieldset">
-            <legend className="ct-field-label">{t('contact.addressGroup')}</legend>
-            <div className="ct-address-grid">
-              <label className="ct-field-inner ct-street">
-                <span className="ct-field-label">{t('contact.address')}</span>
-                <input
-                  className="field"
-                  value={street}
-                  onChange={(event) => setStreet(event.target.value)}
-                />
-              </label>
-              <label className="ct-field-inner">
-                <span className="ct-field-label">{t('contact.houseNo')}</span>
-                <input
-                  className="field"
-                  value={houseNo}
-                  onChange={(event) => setHouseNo(event.target.value)}
-                />
-              </label>
-              <label className="ct-field-inner">
-                <span className="ct-field-label">{t('contact.zip')}</span>
-                <input
-                  className="field"
-                  inputMode="numeric"
-                  value={zip}
-                  onChange={(event) => setZip(event.target.value)}
-                />
-              </label>
-              <label className="ct-field-inner ct-address-city">
-                <span className="ct-field-label">{t('contact.city')}</span>
-                <input
-                  className="field"
-                  value={city}
-                  onChange={(event) => setCity(event.target.value)}
-                />
-              </label>
-              <label className="ct-field-inner">
-                <span className="ct-field-label">{t('contact.country')}</span>
-                <input
-                  className="field"
-                  value={country}
-                  onChange={(event) => setCountry(event.target.value)}
-                />
-              </label>
-            </div>
-          </fieldset>
+        <h3 className="form-section-title">{t('contact.addressGroup')}</h3>
+        <div className="ct-address-grid">
+          <Field className="ct-street" label={t('contact.address')}>
+            <input className="field" value={street} onChange={(event) => setStreet(event.target.value)} />
+          </Field>
+          <Field label={t('contact.houseNo')}>
+            <input className="field" value={houseNo} onChange={(event) => setHouseNo(event.target.value)} />
+          </Field>
+          <Field label={t('contact.zip')}>
+            <input
+              className="field"
+              inputMode="numeric"
+              value={zip}
+              onChange={(event) => setZip(event.target.value)}
+            />
+          </Field>
+          <Field className="ct-address-city" label={t('contact.city')}>
+            <input className="field" value={city} onChange={(event) => setCity(event.target.value)} />
+          </Field>
+          <Field label={t('contact.country')}>
+            <input className="field" value={country} onChange={(event) => setCountry(event.target.value)} />
+          </Field>
+        </div>
 
-          <div className="ct-field">
-            <label className="ct-field-inner">
-              <span className="ct-field-label">{t('contact.vatNumber')}</span>
-              <input
-                className="field t-num"
-                value={vatNumber}
-                aria-invalid={vatError !== null}
-                aria-describedby={
-                  vatError !== null ? `${titleId}-vat-err` : `${titleId}-vat-hint`
-                }
-                onChange={(event) => setVatNumber(event.target.value)}
-              />
-            </label>
-            {vatError !== null ? (
-              <p id={`${titleId}-vat-err`} className="field-error" role="alert">
-                <AlertGlyph size={16} aria-hidden="true" />
-                {vatError}
-              </p>
-            ) : (
-              <span id={`${titleId}-vat-hint`} className="ct-field-hint">
-                {t('contact.vatNumberHint')}
-              </span>
-            )}
-          </div>
+        <Field
+          label={t('contact.vatNumber')}
+          hint={vatError === null ? t('contact.vatNumberHint') : undefined}
+          error={vatError === null ? undefined : fieldError(vatError)}
+        >
+          <input className="field t-num" value={vatNumber} onChange={(event) => setVatNumber(event.target.value)} />
+        </Field>
 
-          <div className="ct-field">
-            <label className="ct-field-inner">
-              <span className="ct-field-label">{t('contact.email')}</span>
-              <input
-                className="field"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </label>
-          </div>
+        <Field label={t('contact.email')}>
+          <input
+            className="field"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+        </Field>
 
-          <div className="ct-field-row">
-            <div className="ct-field">
-              <div className="ct-field-inner">
-                <span className="ct-field-label">{t('contact.defaultCurrency')}</span>
-                <Select
-                  value={defaultCurrency}
-                  onChange={(value) => setDefaultCurrency(value)}
-                  options={CURRENCIES.map((code) => ({ value: code, label: code }))}
-                  ariaLabel={t('contact.defaultCurrency')}
-                />
-              </div>
-            </div>
-            <div className="ct-field">
-              <div className="ct-field-inner">
-                <span className="ct-field-inline">
-                  <label htmlFor={`${titleId}-terms`} className="ct-field-label">
-                    {t('contact.paymentTerms')} ({t('contact.paymentTermsUnit')})
-                  </label>
-                  <Tooltip content={termsInfo}>
-                    <button type="button" className="btn btn--ghost btn--icon btn--sm" aria-label={t('contact.paymentTermsInfo')}>
-                      <InfoGlyph size={16} />
-                    </button>
-                  </Tooltip>
-                </span>
-                <input
-                  id={`${titleId}-terms`}
-                  className="field t-num"
-                  inputMode="numeric"
-                  min={0}
-                  value={paymentTermsDays}
-                  placeholder={standardTerms}
-                  aria-invalid={termsError !== null}
-                  aria-describedby={
-                    termsError !== null ? `${titleId}-terms-err` : termsHint !== null ? `${titleId}-terms-hint` : undefined
-                  }
-                  onChange={(event) => setPaymentTermsDays(event.target.value)}
-                />
-              </div>
-              {termsError !== null ? (
-                <p id={`${titleId}-terms-err`} className="field-error" role="alert">
-                  <AlertGlyph size={16} aria-hidden="true" />
-                  {termsError}
-                </p>
-              ) : (
-                termsHint !== null && (
-                  <span id={`${titleId}-terms-hint`} className="ct-field-hint">
-                    {termsHint}
-                  </span>
-                )
-              )}
-            </div>
-          </div>
+        <div className="ct-field-row">
+          <Field label={t('contact.defaultCurrency')}>
+            <Select
+              value={defaultCurrency}
+              onChange={(value) => setDefaultCurrency(value)}
+              options={CURRENCIES.map((code) => ({ value: code, label: code }))}
+              ariaLabel={t('contact.defaultCurrency')}
+            />
+          </Field>
+          <Field
+            label={`${t('contact.paymentTerms')} (${t('contact.paymentTermsUnit')})`}
+            info={termsInfo}
+            hint={termsError === null && termsHint !== null ? termsHint : undefined}
+            error={termsError === null ? undefined : fieldError(termsError)}
+          >
+            <input
+              className="field t-num"
+              inputMode="numeric"
+              min={0}
+              value={paymentTermsDays}
+              placeholder={standardTerms}
+              onChange={(event) => setPaymentTermsDays(event.target.value)}
+            />
+          </Field>
+        </div>
 
-          <div className="ct-field">
-            <label className="ct-field-inner">
-              <span className="ct-field-label">{t('contact.description')}</span>
-              <textarea
-                className="field ct-textarea"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-              />
-            </label>
-          </div>
+        <Field label={t('contact.description')}>
+          <textarea
+            className="field ct-textarea"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </Field>
       </div>
     </DetailDrawer>
   );

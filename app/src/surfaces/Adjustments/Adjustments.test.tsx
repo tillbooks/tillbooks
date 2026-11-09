@@ -96,6 +96,27 @@ describe('Adjustments, the reason-coded adjustment ledger', () => {
     expect(screen.getByText('SCHWUND')).toBeInTheDocument();
   });
 
+  it('says at rest why Neue Korrektur is disabled when no reason code exists', async () => {
+    const canned = baseCanned();
+    canned.inventory_reason_list = ok({ reasons: [] });
+    renderSurface(canned);
+    await screen.findByText('Widget');
+    const note = await screen.findByText(de.adjustments.noReasonsHint, { exact: false });
+    expect(note).toBeVisible();
+    const btn = screen.getByRole('button', { name: de.adjustments.new });
+    expect(btn).toBeDisabled();
+    expect(btn.getAttribute('aria-describedby')).toBe(note.id);
+  });
+
+  it('shows the permission panel, not a blank page, when the read is refused (round-2 critic)', async () => {
+    const canned = baseCanned();
+    canned.inventory_adjust_list = reject('permission_denied', {}, 403);
+    renderSurface(canned);
+    // The permission panel renders; with the hook after the early return the subtree threw and was empty.
+    expect(await screen.findByText(/nötige Recht/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: de.adjustments.new })).toBeNull();
+  });
+
   it('posts a new adjustment through inventory_adjust', async () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     const canned = baseCanned();

@@ -98,7 +98,7 @@ describe('D163: the Zahlungsfrist field, Standard versus sofort', () => {
     // A number of its own needs no words.
     expect(field).not.toHaveAttribute('aria-describedby');
     // The (i) holds the rule.
-    const info = within(dialog).getByRole('button', { name: 'Woher die Zahlungsfrist kommt' });
+    const info = within(dialog).getByRole('button', { name: 'Info' });
     expect(describedText(info)).toContain('0 heisst sofort fällig');
   });
 

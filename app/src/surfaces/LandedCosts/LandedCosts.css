@@ -12,9 +12,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: var(--t-space-2);
-  padding: var(--t-space-2);
-  background: var(--t-bg-elev);
-  border-radius: var(--t-radius-md);
+  align-items: start;
 }
 .lc-form label,
 .lc-form .lc-field {

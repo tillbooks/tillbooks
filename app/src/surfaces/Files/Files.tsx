@@ -40,7 +40,7 @@ import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { FileDrop } from '../../components/FileDrop';
-import { FilterChips } from '../../components/FilterChips';
+import { FilterBar, type FilterFacet } from '../../components/FilterBar';
 import { Status } from '../../components/Status';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { FolderTree } from './FolderTree';
@@ -395,11 +395,31 @@ export function Files() {
     },
   ];
 
+  // D187 Listen A: the folder and the open-signatures switch are facets (chips while set, under "+ Filter"
+  // while not); the search text is the search box itself, so it needs no chip.
+  const facets: FilterFacet[] = [
+    {
+      key: 'folder',
+      label: t('files.filter.folderFacet'),
+      options: folders.map((f) => ({ value: f.id, label: f.name })),
+      value: folderParam,
+      onChange: (value) => setParam('folder', value),
+    },
+    {
+      key: 'sign',
+      label: t('sign.filter.open'),
+      options: [{ value: 'open', label: t('sign.filter.open') }],
+      value: signParam === 'open' ? 'open' : null,
+      onChange: (value) => setParam('sign', value),
+    },
+  ];
+
   return (
     <section className="files" aria-labelledby="files-title">
       <SurfaceHeader
         title={t('files.route.title')}
         titleId="files-title"
+        count={loading || failed ? undefined : visible.length}
         help={<SurfaceHelp surface="Files" />}
         actions={
           canWrite ? (
@@ -418,52 +438,23 @@ export function Files() {
         }
       />
 
-      <div className="files-search" role="search">
-        <label className="visually-hidden" htmlFor="files-q">
-          {t('files.search.label')}
-        </label>
-        <input
-          id="files-q"
-          type="search"
-          className="field files-search-input"
-          value={search}
-          placeholder={t('files.search.placeholder')}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        {/* One FilterChips row (K-11): whatever is narrowing the list shows as a pressed chip, so an
-            empty result is never a mystery about a filter the operator forgot was on, and pressing
-            it lifts that filter. The Offene-Signaturen facet (E01) is the one chip that is also
-            offered while off. */}
-        <FilterChips
-          label={t('files.filter.group')}
-          chips={[
-            ...(queryParam !== '' ? [{ value: 'q', label: t('files.filter.query', { q: queryParam }) }] : []),
-            ...(folderParam !== null
-              ? [
-                  {
-                    value: 'folder',
-                    label: t('files.filter.folder', {
-                      name: folders.find((f) => f.id === folderParam)?.name ?? folderParam,
-                    }),
-                  },
-                ]
-              : []),
-            { value: 'sign', label: t('sign.filter.open') },
-          ]}
-          selected={[
-            ...(queryParam !== '' ? ['q'] : []),
-            ...(folderParam !== null ? ['folder'] : []),
-            ...(signParam === 'open' ? ['sign'] : []),
-          ]}
-          onChange={(next) => {
-            if (queryParam !== '' && !next.includes('q')) {
-              setSearch('');
-              setParam('q', null);
-            } else if (folderParam !== null && !next.includes('folder')) setParam('folder', null);
-            else setParam('sign', next.includes('sign') ? 'open' : null);
-          }}
-        />
-      </div>
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel={t('files.search.label')}
+        searchPlaceholder={t('files.search.placeholder')}
+        onClear={() => {
+          setSearch('');
+          const next = new URLSearchParams(params);
+          next.delete('q');
+          next.delete('folder');
+          next.delete('sign');
+          setParams(next, { replace: false });
+        }}
+        clearLabel={t('files.filter.clear')}
+        active={queryParam !== '' || folderParam !== null || signParam === 'open'}
+        facets={facets}
+      />
 
       {listError !== null && (
         <ErrorBanner

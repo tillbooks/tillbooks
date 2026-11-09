@@ -9,9 +9,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--t-space-3);
-  padding: var(--t-space-4);
-  background: var(--t-bg-elev);
-  border-radius: var(--t-radius-md);
   max-width: 42rem;
 }
 
@@ -24,10 +21,7 @@
 }
 
 .sync-dial-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--t-space-1);
+  display: block;
 }
 
 /* A real switch (role="switch"): the track + thumb are decoration, the state text carries the meaning
@@ -131,10 +125,6 @@
   display: inline-flex;
 }
 
-.sync-posture-trigger {
-  color: var(--t-text-dim);
-}
-
 .sync-posture-info .tooltip {
   left: auto;
   right: 0;
@@ -226,9 +216,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--t-space-1);
-  padding: var(--t-space-3);
-  background: var(--t-bg-soft);
-  border-radius: var(--t-radius-sm);
 }
 
 .sync-exit-title {
@@ -237,10 +224,11 @@
   line-height: var(--t-lh-lg);
 }
 
-.sync-exit-body {
-  margin: 0;
-  color: var(--t-text-dim);
-  max-width: 60ch;
+.sync-exit-head,
+.sync-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
 }
 
 .sync-exit-link {
@@ -248,13 +236,6 @@
   color: var(--t-text);
 }
 
-.sync-tier-note {
-  margin: 0;
-  color: var(--t-text-dim);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  max-width: 72ch;
-}
 
 /* --- M03 journey (N4a): the Hosting block, checklist and V3a inline error ---------------------- */
 
@@ -275,17 +256,6 @@
 
 .hosting-head .diag-subtitle {
   margin: 0;
-}
-
-.hosting-info-trigger {
-  color: var(--t-text-dim);
-}
-
-/* The card opens below and anchors to the trigger's left edge, at a reading measure. */
-.hosting-info .tooltip {
-  left: 0;
-  transform: none;
-  max-width: min(24rem, calc(100vw - 2 * var(--t-space-2)));
 }
 
 .hosting-rungs {
@@ -346,10 +316,6 @@
 .hosting-step-note {
   color: var(--t-text-dim);
   font-weight: 400;
-}
-
-.hosting-rung-hint {
-  color: var(--t-text-dim);
 }
 
 .hosting-guide-link {

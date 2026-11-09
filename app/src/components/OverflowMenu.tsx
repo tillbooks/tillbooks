@@ -57,6 +57,11 @@ export interface OverflowMenuItem {
   /** Renders the item in the danger variant. Destructive items are passed last by the caller. */
   danger?: boolean;
   disabled?: boolean;
+  /**
+   * D187 (the filter menu): items that share a `group` sit under one quiet heading, shown once above the
+   * first of them. The heading is presentational; the item's accessible name gains it ("Status: Offen").
+   */
+  group?: string;
 }
 
 export interface OverflowMenuProps {
@@ -70,8 +75,8 @@ export interface OverflowMenuProps {
   /** Disables the trigger outright, for a row whose actions are all unavailable. */
   disabled?: boolean;
   /**
-   * A borderless ghost trigger instead of the secondary button, for the trailing overflow of a table
-   * row, where a bordered box on every line would outweigh the data.
+   * A borderless ghost trigger (the default since D187: a box around three dots is load, not
+   * meaning). `quiet={false}` keeps the bordered secondary button where a menu stands alone.
    */
   quiet?: boolean;
   /**
@@ -90,6 +95,14 @@ export interface OverflowMenuProps {
    * it when there is no room below, right-aligned to the trigger's trailing edge.
    */
   portal?: boolean;
+  /**
+   * D187: a WORD trigger instead of a glyph (a filter chip, "+ Filter"). The words are the visible name,
+   * so no tooltip is added; `label` stays the accessible name. The menu then opens under the trigger's
+   * leading edge.
+   */
+  triggerLabel?: ReactNode;
+  /** The class of a word trigger (default: a small ghost button). */
+  triggerClassName?: string;
 }
 
 /** The check beside the chosen item of a radio group: the vocabulary's own (Fertig), drawn once. */
@@ -97,7 +110,8 @@ const CheckMark = VOCABULARY.done.glyph;
 /** The check's slot keeps its width when empty, so the words of a group line up. */
 const CHECK_SLOT: CSSProperties = { display: 'inline-flex', width: 16, flex: '0 0 auto' };
 
-export function OverflowMenu({ label, items, disabled = false, quiet = false, icon, tooltip, className, portal = false }: OverflowMenuProps) {
+export function OverflowMenu({ label, items, disabled = false, quiet = true, icon, tooltip, className, portal = false, triggerLabel, triggerClassName }: OverflowMenuProps) {
+  const worded = triggerLabel !== undefined;
   const [open, setOpen] = useState(false);
   /** Index of the item currently holding focus. -1 while the menu is closed. */
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -110,6 +124,7 @@ export function OverflowMenu({ label, items, disabled = false, quiet = false, ic
 
   const menuId = useId();
   const triggerId = useId();
+  const nameId = useId();
 
   const openAt = useCallback(
     (index: number) => {
@@ -145,7 +160,8 @@ export function OverflowMenu({ label, items, disabled = false, quiet = false, ic
     const below = window.innerHeight - rect.bottom;
     const estimate = items.length * 46 + 16;
     const right = Math.max(8, window.innerWidth - rect.right);
-    setPlace(below >= estimate || below >= rect.top ? { position: 'fixed', top: rect.bottom + 4, right, left: 'auto' } : { position: 'fixed', bottom: window.innerHeight - rect.top + 4, top: 'auto', right, left: 'auto' });
+    const x: CSSProperties = worded ? { left: Math.max(8, rect.left), right: 'auto' } : { right, left: 'auto' };
+    setPlace(below >= estimate || below >= rect.top ? { position: 'fixed', top: rect.bottom + 4, ...x } : { position: 'fixed', bottom: window.innerHeight - rect.top + 4, top: 'auto', ...x });
     const close = () => closeQuietly();
     const onScroll = (event: Event) => {
       if (listRef.current?.contains(event.target as Node) === true) return;
@@ -157,7 +173,7 @@ export function OverflowMenu({ label, items, disabled = false, quiet = false, ic
       window.removeEventListener('resize', close);
       window.removeEventListener('scroll', onScroll, true);
     };
-  }, [portal, open, items.length, closeQuietly]);
+  }, [portal, open, items.length, closeQuietly, worded]);
 
   // Roving focus: whenever the active index changes while open, move real DOM focus to match.
   useEffect(() => {
@@ -236,7 +252,11 @@ export function OverflowMenu({ label, items, disabled = false, quiet = false, ic
       type="button"
       id={triggerId}
       ref={triggerRef}
-      className={`btn ${quiet ? 'btn--ghost' : 'btn--secondary'} btn--icon overflow-menu-trigger`}
+      className={
+        worded
+          ? `${triggerClassName ?? 'btn btn--ghost btn--sm'} overflow-menu-trigger overflow-menu-trigger--words`
+          : `btn ${quiet ? 'btn--ghost' : 'btn--secondary'} btn--icon overflow-menu-trigger`
+      }
       aria-label={label}
       aria-haspopup="menu"
       aria-expanded={open}
@@ -246,15 +266,19 @@ export function OverflowMenu({ label, items, disabled = false, quiet = false, ic
       onClick={() => (open ? closeQuietly() : openAt(0))}
       onKeyDown={onTriggerKeyDown}
     >
-      <span aria-hidden="true" className="overflow-menu-glyph">
-        <Glyph size={16} />
-      </span>
+      {worded ? (
+        triggerLabel
+      ) : (
+        <span aria-hidden="true" className="overflow-menu-glyph">
+          <Glyph size={16} />
+        </span>
+      )}
     </button>
   );
 
   const menuList = (
         <div
-          className={portal ? 'overflow-menu-list overflow-menu-list--portal' : 'overflow-menu-list'}
+          className={['overflow-menu-list', portal ? 'overflow-menu-list--portal' : '', worded ? 'overflow-menu-list--start' : ''].filter(Boolean).join(' ')}
           id={menuId}
           ref={listRef}
           style={portal ? (place ?? { position: 'fixed', visibility: 'hidden' }) : undefined}
@@ -267,10 +291,16 @@ export function OverflowMenu({ label, items, disabled = false, quiet = false, ic
               {item.danger === true && index > 0 && items[index - 1]?.danger !== true && (
                 <div role="separator" className="overflow-menu-separator" />
               )}
+              {item.group !== undefined && items[index - 1]?.group !== item.group && (
+                <div className="overflow-menu-group" aria-hidden="true">
+                  {item.group}
+                </div>
+              )}
               <button
                 type="button"
                 role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
                 aria-checked={item.checked === undefined ? undefined : item.checked}
+                aria-label={item.group === undefined ? undefined : `${item.group}: ${item.label}`}
                 ref={(node) => {
                   itemRefs.current[index] = node;
                 }}
@@ -297,23 +327,36 @@ export function OverflowMenu({ label, items, disabled = false, quiet = false, ic
         </div>
   );
 
+  if (worded) {
+    return (
+      <div className={className === undefined ? 'overflow-menu' : `overflow-menu ${className}`} ref={rootRef}>
+        {trigger}
+        {open && (portal ? createPortal(menuList, document.body) : menuList)}
+      </div>
+    );
+  }
+
   return (
     <div className={className === undefined ? 'overflow-menu' : `overflow-menu ${className}`} ref={rootRef}>
-      {icon !== undefined ? (
-        <Tooltip
-          suppressed={open}
-          content={
-            <>
-              <span className="tooltip-name">{VOCABULARY[icon].name}</span>
-              {tooltip !== undefined && <span className="tooltip-context">{tooltip}</span>}
-            </>
-          }
-        >
-          {trigger}
-        </Tooltip>
-      ) : (
-        trigger
-      )}
+      {/* D187: every glyph-only trigger is named on hover. The plain overflow reads "Mehr" over its
+          own label ("Weitere Aktionen für Kontakt X"), so a sighted pointer user sees what the three
+          dots hold; it used to show nothing on 166 rows (the 07.10.2026 audit). */}
+      {/* D187 critic nit: the trigger's accessible name is already `label`, so the bubble describes it by
+          its glyph's name only ("Mehr"); pointing at the whole bubble read the label a second time. */}
+      <Tooltip
+        suppressed={open}
+        descriptionId={nameId}
+        content={
+          <>
+            <span className="tooltip-name" id={nameId}>
+              {(icon === undefined ? VOCABULARY.more : VOCABULARY[icon]).name}
+            </span>
+            <span className="tooltip-context">{tooltip ?? label}</span>
+          </>
+        }
+      >
+        {trigger}
+      </Tooltip>
 
       {open && (portal ? createPortal(menuList, document.body) : menuList)}
     </div>

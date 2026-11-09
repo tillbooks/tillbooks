@@ -40,9 +40,11 @@ import { useWorkspaceId } from '../../app/workspace';
 import { formatMoney, useT } from '../../i18n';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import { useMemberNames, ActorLabel } from '../../lib/useMemberNames';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { FilterBar } from '../../components/FilterBar';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { Provenance } from '../../components/Provenance';
@@ -299,10 +301,12 @@ export function Requisitions() {
     [client, workspaceId, load],
   );
 
-  const visible = useMemo(
-    () => (showAll ? rows : rows.filter((r) => r.status === 'draft' || r.status === 'pending_approval' || r.status === 'approved')),
-    [rows, showAll],
-  );
+  const [search, setSearch] = useState('');
+  const visible = useMemo(() => {
+    const open = showAll ? rows : rows.filter((r) => r.status === 'draft' || r.status === 'pending_approval' || r.status === 'approved');
+    const needle = search.trim().toLowerCase();
+    return needle === '' ? open : open.filter((r) => `${r.number} ${r.description ?? ''}`.toLowerCase().includes(needle));
+  }, [rows, showAll, search]);
 
   const openCreate = () => {
     setWriteError(null);
@@ -427,15 +431,10 @@ export function Requisitions() {
 
   const isTerminal = (status: string) => status === 'rejected' || status === 'cancelled' || status === 'closed';
 
-  // The show-all toggle filters the list; there is no search row and inventing one is out of scope
-  // (D118 B2), so it rides the SurfaceHeader actions beside the primary create action rather than a
-  // FilterBar.
+  // D187 (Listen A): the open-only filter is a one-option facet after the search; the primary create
+  // action stays alone in the header.
   const headerActions = (
     <>
-      <label className="req-toggle">
-        <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-        {t('requisitions.showAll')}
-      </label>
       <button type="button" className="btn btn--primary" onClick={openCreate} disabled={!canWrite}>
         {t('requisitions.new')}
       </button>
@@ -503,7 +502,23 @@ export function Requisitions() {
 
   return (
     <div className="req">
-      <SurfaceHeader title={t('requisitions.title')} help={<SurfaceHelp surface="Requisitions" />} actions={headerActions} />
+      <SurfaceHeader title={t('requisitions.title')} help={<SurfaceHelp surface="Requisitions" />} actions={headerActions} count={visible.length} />
+
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel={t('requisitions.search')}
+        searchPlaceholder={t('requisitions.search')}
+        facets={[
+          {
+            key: 'open',
+            label: t('requisitions.openOnly'),
+            options: [{ value: '1', label: t('requisitions.openOnly') }],
+            value: showAll ? null : '1',
+            onChange: (value) => setShowAll(value === null),
+          },
+        ]}
+      />
 
       {failed && <ErrorBanner message={t('requisitions.error.transport')} onRetry={() => void load()} context="read" />}
 
@@ -545,8 +560,8 @@ export function Requisitions() {
           }
         >
           {writeError !== null && <ErrorBanner error={writeError} />}
-          <div className="req-field">
-            <label htmlFor="req-needed">{t('requisitions.field.neededBy')}</label>
+          <div className="form-stack">
+          <Field label={t('requisitions.field.neededBy')}>
             <input
               id="req-needed"
               className="field"
@@ -554,9 +569,8 @@ export function Requisitions() {
               value={draft.neededBy}
               onChange={(e) => setDraft({ ...draft, neededBy: e.target.value })}
             />
-          </div>
-          <div className="req-field">
-            <label htmlFor="req-urgency">{t('requisitions.field.urgency')}</label>
+          </Field>
+          <Field label={t('requisitions.field.urgency')}>
             <Select
               id="req-urgency"
               value={draft.urgency}
@@ -564,13 +578,11 @@ export function Requisitions() {
               options={URGENCIES.map((u) => ({ value: u, label: t(`requisitions.urgency.${u}`) }))}
               ariaLabel={t('requisitions.field.urgency')}
             />
-          </div>
-          <div className="req-field">
-            <label htmlFor="req-desc">{t('requisitions.field.description')}</label>
+          </Field>
+          <Field label={t('requisitions.field.description')}>
             <input id="req-desc" className="field" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
-          </div>
-          <div className="req-field">
-            <label htmlFor="req-cc">{t('requisitions.field.costCenter')}</label>
+          </Field>
+          <Field label={t('requisitions.field.costCenter')}>
             <Select
               id="req-cc"
               value={draft.costCenterId}
@@ -581,6 +593,7 @@ export function Requisitions() {
               ]}
               ariaLabel={t('requisitions.field.costCenter')}
             />
+          </Field>
           </div>
 
           <h3 className="req-lines-title">{t('requisitions.detail.lines')}</h3>
@@ -707,36 +720,33 @@ export function Requisitions() {
           )}
 
           {(s === 'pending_approval' || s === 'rejected') && (
-            <div className="req-field">
-              <label htmlFor="req-decision">
-                {s === 'pending_approval' ? t('requisitions.field.reason') : t('requisitions.field.comment')}
-              </label>
-              <input id="req-decision" className="field" value={decisionText} onChange={(e) => setDecisionText(e.target.value)} />
+            <div className="form-stack">
+              <Field label={s === 'pending_approval' ? t('requisitions.field.reason') : t('requisitions.field.comment')}>
+                <input id="req-decision" className="field" value={decisionText} onChange={(e) => setDecisionText(e.target.value)} />
+              </Field>
             </div>
           )}
 
           {converting && s !== undefined && (
-            <div className="req-convert" role="group" aria-label={t('requisitions.convert.title')}>
-              <p className="req-muted">{t('requisitions.convert.help')}</p>
+            <div className="req-convert form-stack" role="group" aria-label={t('requisitions.convert.title')}>
               {detail.lines
                 .filter((l) => l.openQtyMilli > 0)
                 .map((l) => (
-                  <div className="req-field" key={l.id}>
-                    <label htmlFor={`req-cv-${l.id}`}>
-                      {l.description} ({t('requisitions.detail.open')} {l.openQtyMilli / MILLI})
-                    </label>
+                  <Field
+                    key={l.id}
+                    label={`${l.description} (${t('requisitions.detail.open')} ${l.openQtyMilli / MILLI})`}
+                    id={`req-cv-${l.id}`}
+                  >
                     <input
-                      id={`req-cv-${l.id}`}
                       className="field"
                       type="number"
                       min={0}
                       value={convertQty[l.id] ?? ''}
                       onChange={(e) => setConvertQty({ ...convertQty, [l.id]: e.target.value })}
                     />
-                  </div>
+                  </Field>
                 ))}
-              <div className="req-field">
-                <label htmlFor="req-cv-supplier">{t('requisitions.field.supplier')}</label>
+              <Field label={t('requisitions.field.supplier')} info={t('requisitions.convert.help')}>
                 <Select
                   id="req-cv-supplier"
                   value={convertSupplier}
@@ -747,9 +757,8 @@ export function Requisitions() {
                   ]}
                   ariaLabel={t('requisitions.field.supplier')}
                 />
-              </div>
-              <div className="req-field">
-                <label htmlFor="req-cv-as">{t('requisitions.field.createAs')}</label>
+              </Field>
+              <Field label={t('requisitions.field.createAs')}>
                 <Select
                   id="req-cv-as"
                   value={convertAs}
@@ -760,10 +769,12 @@ export function Requisitions() {
                   ]}
                   ariaLabel={t('requisitions.field.createAs')}
                 />
+              </Field>
+              <div className="form-actions">
+                <button type="button" className="btn btn--primary" onClick={() => void submitConvert()} disabled={!canWrite}>
+                  {t('requisitions.action.confirmConvert')}
+                </button>
               </div>
-              <button type="button" className="btn btn--primary" onClick={() => void submitConvert()} disabled={!canWrite}>
-                {t('requisitions.action.confirmConvert')}
-              </button>
             </div>
           )}
         </DetailDrawer>

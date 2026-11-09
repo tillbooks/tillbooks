@@ -30,6 +30,7 @@ import { useT, formatDate } from '../../i18n';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { FileDrop } from '../../components/FileDrop';
 import { ErrorBanner, refusalText } from '../../components/states';
+import { Field } from '../../components/Field';
 import { LockGlyph, PendingGlyph, VersionsGlyph } from './glyphs';
 import { SignSection, type SignSectionProps } from './SignSection';
 import { formatBytes, type StoredFile } from './model';
@@ -222,17 +223,16 @@ export function FileDrawer({
             {t('files.field.tags')}
           </h3>
           {canWrite ? (
-            <div className="files-field">
-              <label className="files-label" htmlFor="files-tags">
-                {t('files.field.tagsHint')}
-              </label>
-              <input
-                id="files-tags"
-                type="text"
-                className="field"
-                value={tagDraft}
-                onChange={(event) => setTagDraft(event.target.value)}
-              />
+            <div className="files-field files-field--act">
+              <Field label={t('files.field.tagsHint')}>
+                <input
+                  id="files-tags"
+                  type="text"
+                  className="field"
+                  value={tagDraft}
+                  onChange={(event) => setTagDraft(event.target.value)}
+                />
+              </Field>
               <button
                 type="button"
                 className="btn btn--secondary btn--sm"
@@ -277,17 +277,16 @@ export function FileDrawer({
             )}
           </p>
           {canAdmin ? (
-            <div className="files-field">
-              <label className="files-label" htmlFor="files-retention">
-                {t('files.retention.editHint')}
-              </label>
-              <input
-                id="files-retention"
-                type="date"
-                className="field"
-                value={retentionDraft}
-                onChange={(event) => setRetentionDraft(event.target.value)}
-              />
+            <div className="files-field files-field--act">
+              <Field label={t('files.retention.editHint')}>
+                <input
+                  id="files-retention"
+                  type="date"
+                  className="field"
+                  value={retentionDraft}
+                  onChange={(event) => setRetentionDraft(event.target.value)}
+                />
+              </Field>
               <button
                 type="button"
                 className="btn btn--secondary btn--sm"

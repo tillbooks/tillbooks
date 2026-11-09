@@ -29,7 +29,7 @@
  * engine is the real gate. Write controls disable behind `manage_master_data`; a click that slips
  * through still surfaces the engine's own `permission_denied`.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
@@ -40,10 +40,11 @@ import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
-import { ActionFeedback } from '../../components/ActionFeedback';
+import { Link } from 'react-router-dom';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { Modal } from '../../components/Modal';
 import { FilterBar } from '../../components/FilterBar';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import { Status } from '../../components/Status';
 import { formatCalendar } from '../../lib/format';
@@ -165,6 +166,9 @@ export function Adjustments() {
   const [newDrawer, setNewDrawer] = useState(false);
   const [newDraft, setNewDraft] = useState<NewDraft>(emptyNew);
   const [reverseDraft, setReverseDraft] = useState<ReverseDraft | null>(null);
+  // Above every early return (round-2 critic blocker): a hook after `if (denied) return` changes the hook
+  // count between renders and blanks the page instead of showing the permission panel.
+  const noReasonsId = useId();
 
   const localError = useCallback(
     (e: Err | null): string | undefined =>
@@ -329,6 +333,7 @@ export function Adjustments() {
       type="button"
       className="btn btn--primary"
       disabled={!canWrite || noReasons}
+      aria-describedby={noReasons && !loading ? noReasonsId : undefined}
       onClick={() => {
         setWriteError(null);
         setNewDraft(emptyNew());
@@ -345,11 +350,15 @@ export function Adjustments() {
         title={t('adjustments.title')}
         help={<SurfaceHelp surface="Adjustments" />}
         actions={headerActions}
+        count={visible.length}
       />
 
       {noReasons && !loading && (
-        <ActionFeedback tone="info" message={t('adjustments.noReasonsHint')} />
+        <p id={noReasonsId} className="lock-note">
+          {t('adjustments.noReasonsHint')} <Link to="/inventory-reason-codes">{t('adjustments.noReasonsLink')}</Link>
+        </p>
       )}
+
       {failed && <ErrorBanner context="read" message={t('adjustments.error.transport')} onRetry={() => void load()} />}
       {writeError && reverseDraft === null && !newDrawer && (
         <ErrorBanner error={writeError} message={localError(writeError)} />
@@ -418,8 +427,8 @@ export function Adjustments() {
           }
         >
           {writeError && <ErrorBanner error={writeError} message={localError(writeError)} />}
-          <div className="adj-field">
-            <label htmlFor="adj-item">{t('adjustments.form.item')}</label>
+          <div className="form-stack">
+          <Field label={t('adjustments.form.item')}>
             <Select
               id="adj-item"
               value={newDraft.itemId}
@@ -430,9 +439,8 @@ export function Adjustments() {
               ]}
               ariaLabel={t('adjustments.form.item')}
             />
-          </div>
-          <div className="adj-field">
-            <label htmlFor="adj-loc">{t('adjustments.form.location')}</label>
+          </Field>
+          <Field label={t('adjustments.form.location')}>
             <Select
               id="adj-loc"
               value={newDraft.locationId}
@@ -443,9 +451,8 @@ export function Adjustments() {
               ]}
               ariaLabel={t('adjustments.form.location')}
             />
-          </div>
-          <div className="adj-field">
-            <label htmlFor="adj-qty">{t('adjustments.form.qty')}</label>
+          </Field>
+          <Field label={t('adjustments.form.qty')} hint={t('adjustments.form.qtyHint')}>
             <input
               id="adj-qty"
               className="field"
@@ -453,10 +460,11 @@ export function Adjustments() {
               value={newDraft.qtyDelta}
               onChange={(e) => setNewDraft({ ...newDraft, qtyDelta: e.target.value })}
             />
-            <span className="adj-hint">{t('adjustments.form.qtyHint')}</span>
-          </div>
-          <div className="adj-field">
-            <label htmlFor="adj-reason">{t('adjustments.form.reason')}</label>
+          </Field>
+          <Field
+            label={t('adjustments.form.reason')}
+            info={selectedReason?.requiresNote ? t('adjustments.form.noteRequiredHint') : undefined}
+          >
             <Select
               id="adj-reason"
               value={newDraft.reasonCodeId}
@@ -467,19 +475,16 @@ export function Adjustments() {
               ]}
               ariaLabel={t('adjustments.form.reason')}
             />
-            {selectedReason?.requiresNote && <span className="adj-hint">{t('adjustments.form.noteRequiredHint')}</span>}
-          </div>
-          <div className="adj-field">
-            <label htmlFor="adj-note">{t('adjustments.form.note')}</label>
+          </Field>
+          <Field label={t('adjustments.form.note')}>
             <input
               id="adj-note"
               className="field"
               value={newDraft.note}
               onChange={(e) => setNewDraft({ ...newDraft, note: e.target.value })}
             />
-          </div>
-          <div className="adj-field">
-            <label htmlFor="adj-cost">{t('adjustments.form.unitCost')}</label>
+          </Field>
+          <Field label={t('adjustments.form.unitCost')}>
             <input
               id="adj-cost"
               className="field"
@@ -488,9 +493,8 @@ export function Adjustments() {
               value={newDraft.unitCostMinor}
               onChange={(e) => setNewDraft({ ...newDraft, unitCostMinor: e.target.value })}
             />
-          </div>
-          <div className="adj-field">
-            <label htmlFor="adj-date">{t('adjustments.form.date')}</label>
+          </Field>
+          <Field label={t('adjustments.form.date')}>
             <input
               id="adj-date"
               className="field"
@@ -498,6 +502,7 @@ export function Adjustments() {
               value={newDraft.effectiveDate}
               onChange={(e) => setNewDraft({ ...newDraft, effectiveDate: e.target.value })}
             />
+          </Field>
           </div>
         </DetailDrawer>
       )}
@@ -521,8 +526,8 @@ export function Adjustments() {
         {reverseDraft !== null && (
           <>
             {writeError && <ErrorBanner error={writeError} message={localError(writeError)} />}
-            <div className="adj-field">
-              <label htmlFor="adj-rev-reason">{t('adjustments.reverseForm.reason')}</label>
+            <div className="form-stack">
+            <Field label={t('adjustments.reverseForm.reason')}>
               <Select
                 id="adj-rev-reason"
                 value={reverseDraft.reasonCodeId}
@@ -533,15 +538,15 @@ export function Adjustments() {
                 ]}
                 ariaLabel={t('adjustments.reverseForm.reason')}
               />
-            </div>
-            <div className="adj-field">
-              <label htmlFor="adj-rev-note">{t('adjustments.reverseForm.note')}</label>
+            </Field>
+            <Field label={t('adjustments.reverseForm.note')}>
               <input
                 id="adj-rev-note"
                 className="field"
                 value={reverseDraft.note}
                 onChange={(e) => setReverseDraft({ ...reverseDraft, note: e.target.value })}
               />
+            </Field>
             </div>
           </>
         )}

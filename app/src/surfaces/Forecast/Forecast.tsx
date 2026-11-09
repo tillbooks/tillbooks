@@ -30,6 +30,7 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatMoney } from '../../i18n';
 import { useCalendarFormat } from '../../lib/format';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
+import { Field } from '../../components/Field';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { Select } from '../../components/Select';
 import { Segmented } from '../../components/Segmented';
@@ -273,49 +274,49 @@ export function Forecast() {
         help={<SurfaceHelp surface="Forecast" />}
         /* The §3 boundary, always on screen: only the Ist column below is an accounting figure. */
         subtitle={t('forecast.disclaimer')}
+        /* D187 (Berichte A): the grouping, horizon and period sit in the sticky header's second row. */
+        toolbar={
+          <>
+            <Field label={t('forecast.group.label')} className="forecast-field">
+              <Select
+                value={groupBy}
+                onChange={(val) => setGroupBy(val)}
+                options={[
+                  { value: 'stage', label: t('forecast.group.stage') },
+                  { value: 'month', label: t('forecast.group.month') },
+                  { value: 'quarter', label: t('forecast.group.quarter') },
+                ]}
+                groups={
+                  groupFields.length > 0
+                    ? [
+                        {
+                          label: t('forecast.group.custom'),
+                          options: groupFields.map((f) => ({ value: f.key, label: f.label })),
+                        },
+                      ]
+                    : undefined
+                }
+                ariaLabel={t('forecast.group.label')}
+              />
+            </Field>
+            <div className="forecast-field">
+              <span id="forecast-horizon-label">{t('forecast.horizon.label')}</span>
+              <Segmented
+                value={String(horizon)}
+                onChange={(val) => setHorizon(Number.parseInt(val, 10))}
+                options={HORIZONS.map((months) => ({
+                  value: String(months),
+                  label: t('forecast.horizon.months', { count: months }),
+                }))}
+                labelledBy="forecast-horizon-label"
+              />
+            </div>
+            <Field label={t('forecast.period.label')} className="forecast-field">
+              <input className="field" type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
+            </Field>
+          </>
+        }
       />
-      <div className="forecast-controls">
-        <div className="forecast-field">
-          <span>{t('forecast.group.label')}</span>
-          <Select
-            value={groupBy}
-            onChange={(val) => setGroupBy(val)}
-            options={[
-              { value: 'stage', label: t('forecast.group.stage') },
-              { value: 'month', label: t('forecast.group.month') },
-              { value: 'quarter', label: t('forecast.group.quarter') },
-            ]}
-            groups={
-              groupFields.length > 0
-                ? [
-                    {
-                      label: t('forecast.group.custom'),
-                      options: groupFields.map((f) => ({ value: f.key, label: f.label })),
-                    },
-                  ]
-                : undefined
-            }
-            ariaLabel={t('forecast.group.label')}
-          />
-        </div>
-        <div className="forecast-field">
-          <span id="forecast-horizon-label">{t('forecast.horizon.label')}</span>
-          <Segmented
-            value={String(horizon)}
-            onChange={(val) => setHorizon(Number.parseInt(val, 10))}
-            options={HORIZONS.map((months) => ({
-              value: String(months),
-              label: t('forecast.horizon.months', { count: months }),
-            }))}
-            labelledBy="forecast-horizon-label"
-          />
-        </div>
-        <label className="forecast-field">
-          <span>{t('forecast.period.label')}</span>
-          <input className="field" type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
-        </label>
-      </div>
-
       {loading && <Skeleton rows={6} labelKey="forecast.loading" />}
       {!loading && failed && <ErrorBanner onRetry={() => void load()} context="read" />}
       {!loading && !failed && readError !== null && (

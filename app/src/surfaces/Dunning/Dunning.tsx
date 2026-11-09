@@ -44,6 +44,8 @@ import { useT, formatMoney, formatDate } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
 import { Select } from '../../components/Select';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
 import { Modal } from '../../components/Modal';
@@ -507,6 +509,7 @@ export function Dunning() {
       <SurfaceHeader
         title={t('dunning.title')}
         titleId="dunning-title"
+        count={settled ? history.length : undefined}
         help={<SurfaceHelp surface="Dunning" />}
         actions={
           <button
@@ -519,8 +522,9 @@ export function Dunning() {
           </button>
         }
       />
-      <p className="dunning-dim">
-        {t('dunning.subtitle')} <Link className="link-inline" to="/open-items">{t('dunning.toOpenItems')}</Link>
+      <p className="dunning-dim dunning-sub">
+        <Link className="link-inline" to="/open-items">{t('dunning.toOpenItems')}</Link>
+        <IconButton icon="info" small context={t('dunning.subtitle')} />
       </p>
 
       {note !== null && (
@@ -961,18 +965,17 @@ function CurrentRun({
           {/* D174: what happens to an unsent letter follows the setting (or this run's override). */}
           <p>{effectiveRefreeze === 'hold' ? t('dunning.reverseFeeUnsentHold') : t('dunning.reverseFeeUnsentReissue')}</p>
           <ConsequenceLine verb="dunning_fee_reverse" />
-          <label className="dunning-reverse-reason">
-            <span>{t('dunning.reverseFeeReason')}</span>
+          <div className="form-stack">
+          <Field label={t('dunning.reverseFeeReason')}>
             <input className="field" value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} />
-          </label>
+          </Field>
           <label className="dunning-reverse-reason">
             <input type="checkbox" checked={overriding} onChange={(e) => setOverriding(e.target.checked)} />{' '}
             <span>{t('dunning.overrideToggle')}</span>
           </label>
           {overriding && (
             <>
-              <div className="dunning-reverse-reason">
-                <span>{t('dunning.overrideRefreeze')}</span>
+              <Field label={t('dunning.overrideRefreeze')}>
                 <Select
                   ariaLabel={t('dunning.overrideRefreeze')}
                   value={overrideRefreeze}
@@ -982,9 +985,8 @@ function CurrentRun({
                     { value: 'hold', label: t('dunning.refreeze.hold') },
                   ]}
                 />
-              </div>
-              <div className="dunning-reverse-reason">
-                <span>{t('dunning.overrideLetterDate')}</span>
+              </Field>
+              <Field label={t('dunning.overrideLetterDate')}>
                 <Select
                   ariaLabel={t('dunning.overrideLetterDate')}
                   value={overrideLetterDate}
@@ -994,13 +996,13 @@ function CurrentRun({
                     { value: 'today', label: t('dunning.letterDate.today') },
                   ]}
                 />
-              </div>
-              <label className="dunning-reverse-reason">
-                <span>{t('dunning.overrideReason')}</span>
+              </Field>
+              <Field label={t('dunning.overrideReason')}>
                 <input className="field" value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} />
-              </label>
+              </Field>
             </>
           )}
+          </div>
         </div>
       </Modal>
 

@@ -14,12 +14,10 @@
       "label": "Weighted"
     },
     "pipeline": {
-      "label": "Pipeline",
-      "first": "Default"
+      "label": "Pipeline"
     },
     "view": {
-      "label": "View",
-      "all": "All deals"
+      "label": "View"
     },
     "filter": {
       "showClosed": "Show closed",

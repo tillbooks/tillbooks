@@ -32,9 +32,12 @@
  * so A24 can resolve capabilities (§H-TENANT). `diagnostics.scope` says that on screen rather than
  * letting a user assume a workspace boundary protects a file that it does not.
  */
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type SVGProps } from 'react';
+import { useCallback, useEffect, useId, useState, type ReactNode, type SVGProps } from 'react';
 
 import { useClient } from '../../lib/client-context';
+import { IconButton } from '../../components/IconButton';
+import { OverflowMenu } from '../../components/OverflowMenu';
+import { SettingRow } from '../../components/SettingRow';
 import { isErr, type Err } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate, type I18n } from '../../i18n';
@@ -188,13 +191,16 @@ function ClearConfirm({ onConfirm, onCancel }: { onConfirm: () => void; onCancel
 }
 
 /** A panel shell matching the other operational panels' own, so they read as one screen. */
-function Panel({ title, children }: { title: string; children: ReactNode }) {
+function Panel({ title, info, children }: { title: string; info?: string; children: ReactNode }) {
   const headingId = useId();
   return (
-    <section className="panel setup-panel" aria-labelledby={headingId}>
-      <h2 id={headingId} className="setup-panel-title">
-        {title}
-      </h2>
+    <section className="setup-panel diag-panel" aria-labelledby={headingId}>
+      <div className="diag-panel-head">
+        <h2 id={headingId} className="setup-panel-title">
+          {title}
+        </h2>
+        {info !== undefined && <IconButton icon="info" small context={info} />}
+      </div>
       {children}
     </section>
   );
@@ -303,12 +309,10 @@ function DiagnosticsPanel({ workspaceId }: { workspaceId: string }) {
   const t = useT();
   const client = useClient();
   const captureId = useId();
-  const hintId = useId();
   const [state, setState] = useState<JournalState>({ kind: 'loading' });
   const [busy, setBusy] = useState(false);
   const [writeError, setWriteError] = useState<Err | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const clearRef = useRef<HTMLButtonElement | null>(null);
 
   const load = useCallback(async () => {
     setState({ kind: 'loading' });
@@ -366,55 +370,52 @@ function DiagnosticsPanel({ workspaceId }: { workspaceId: string }) {
       return;
     }
     await load();
-    clearRef.current?.focus();
   }
 
+  // D187: erasing the journal is destructive, so the act sits under Mehr; the confirm still guards it.
   const clearButton = (
-    <button
-      type="button"
-      className="btn btn--secondary"
-      ref={clearRef}
+    <OverflowMenu
+      label={t('diagnostics.moreLabel')}
       disabled={busy}
-      onClick={() => setConfirming(true)}
-    >
-      {t('diagnostics.action.clear')}
-    </button>
+      items={[{ key: 'clear', label: t('diagnostics.action.clear'), danger: true, onSelect: () => setConfirming(true) }]}
+    />
   );
 
-  /** The fixed Art. 19 disclosure. Rendered in every state: it explains the control, not the data. */
-  const disclosure = (
-    <div className="diag-disclosure">
-      <h3 className="diag-subtitle">{t('diagnostics.captured.title')}</h3>
-      <p className="diag-prose">{t('diagnostics.captured.list')}</p>
-      <p className="diag-prose">{t('diagnostics.captured.never')}</p>
-      <p className="diag-prose diag-prose-dim">{t('diagnostics.at_rest')}</p>
-    </div>
-  );
+  /** The fixed Art. 19 disclosure, one hover away in every state: it explains the control, not the data. */
+  const disclosureInfo = [
+    t('diagnostics.scope'),
+    `${t('diagnostics.captured.title')}: ${t('diagnostics.captured.list')}`,
+    t('diagnostics.captured.never'),
+    t('diagnostics.at_rest'),
+  ].join(' ');
 
   return (
-    <Panel title={t('diagnostics.title')}>
+    <Panel title={t('diagnostics.title')} info={disclosureInfo}>
       {/* §H-TENANT stated on screen: these files are machine-scope, and the workspace every call
-          carries is there only so A24 can resolve capabilities. */}
-      <p className="diag-prose diag-prose-dim">{t('diagnostics.scope')}</p>
+          carries is there only so A24 can resolve capabilities. The scope sentence and the Art. 19
+          disclosure sit behind the (i) beside the title. */}
 
       {state.kind === 'ready' && (
-        <div className="diag-switch">
+        /* D187 (Einstellungen A): one setting row. The consequence is stated BEFORE the click, so
+           the destruction is disclosed rather than discovered: turning this off deletes what was
+           recorded. It is the row's visible line and the checkbox's description. */
+        <SettingRow
+          label={t('diagnostics.capture.label')}
+          labelId={`${captureId}-name`}
+          description={t('diagnostics.capture.hint')}
+          dataKey="diagnostics-capture"
+        >
           <input
             id={captureId}
             type="checkbox"
             className="diag-switch-box"
             checked={state.capture}
             disabled={busy}
-            aria-describedby={hintId}
+            aria-labelledby={`${captureId}-name`}
+            aria-describedby={`${captureId}-name-desc`}
             onChange={(event) => void onToggle(event.target.checked)}
           />
-          <label htmlFor={captureId}>{t('diagnostics.capture.label')}</label>
-          {/* The consequence is stated BEFORE the click, so the destruction is disclosed rather
-              than discovered: turning this off deletes what was recorded. */}
-          <p id={hintId} className="field-hint diag-switch-hint">
-            {t('diagnostics.capture.hint')}
-          </p>
-        </div>
+        </SettingRow>
       )}
 
       {state.kind === 'ready' && !state.configReadable && (
@@ -435,9 +436,10 @@ function DiagnosticsPanel({ workspaceId }: { workspaceId: string }) {
         />
       )}
 
-      {disclosure}
-
-      <h3 className="diag-subtitle">{t('diagnostics.journal.title')}</h3>
+      <div className="diag-panel-head">
+        <h3 className="diag-subtitle">{t('diagnostics.journal.title')}</h3>
+        <IconButton icon="info" small context={t('diagnostics.cap')} />
+      </div>
 
       {state.kind === 'loading' && <JournalSkeleton />}
 
@@ -474,10 +476,7 @@ function DiagnosticsPanel({ workspaceId }: { workspaceId: string }) {
           </p>
         ))}
 
-      <div className="diag-journal-foot">
-        <p className="field-hint">{t('diagnostics.cap')}</p>
-        {clearButton}
-      </div>
+      <div className="diag-journal-foot">{clearButton}</div>
 
       {confirming && <ClearConfirm onConfirm={() => void onClear()} onCancel={() => setConfirming(false)} />}
     </Panel>
@@ -539,10 +538,10 @@ function FeedbackLogPanel({ workspaceId }: { workspaceId: string }) {
   const visible = reports.slice(from, from + PAGE_SIZE);
 
   return (
-    <Panel title={t('feedback.log.title')}>
-      {/* The honesty rule, stated once and unconditionally: no row below claims a send, because the
-          handoff to the mail client is fire and forget and TILL never observes it. */}
-      <p className="diag-prose diag-prose-dim">{t('feedback.log.cannot_confirm')}</p>
+    <Panel title={t('feedback.log.title')} info={t('feedback.log.cannot_confirm')}>
+      {/* The honesty rule, stated once and unconditionally (behind the (i) beside the title): no row
+          below claims a send, because the handoff to the mail client is fire and forget and TILL
+          never observes it. */}
 
       {state.kind === 'loading' && (
         <Skeleton rows={2} height={36} />
@@ -600,14 +599,13 @@ function FeedbackLogPanel({ workspaceId }: { workspaceId: string }) {
                         {/* The accessible name STARTS with the visible label (WCAG 2.5.3), so a
                             voice-control user can say what they read while a screen reader still
                             hears which report the button belongs to. */}
-                        <button
-                          type="button"
-                          className="btn btn--secondary btn--sm"
-                          aria-label={t('feedback.log.copyPathFor', { subject: report.subject })}
+                        <IconButton
+                          icon="copy"
+                          small
+                          name={t('feedback.log.copyPathFor', { subject: report.subject })}
+                          context={t('feedback.action.copy_path')}
                           onClick={() => void copyPath(report.path)}
-                        >
-                          {t('feedback.action.copy_path')}
-                        </button>
+                        />
                       </td>
                     </tr>
                   ))}

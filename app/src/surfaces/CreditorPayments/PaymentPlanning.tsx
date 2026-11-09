@@ -24,6 +24,7 @@ import { useT, formatMoney, formatDate } from '../../i18n';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { Select } from '../../components/Select';
+import { Field } from '../../components/Field';
 import { Status, type StatusKind } from '../../components/Status';
 import { EmptyState, ErrorBanner, PermissionDenied, Skeleton } from '../../components/states';
 import { refusalText } from '../../components/states/refusalText';
@@ -422,8 +423,7 @@ export function PaymentPlanning() {
       {error !== null && <ErrorBanner error={error} context="read" onRetry={() => void load(plan?.id)} />}
 
       <div className="pay-plan-question panel">
-        <div className="pay-cp-field">
-          <span>{t('pay.debtorAccount')}</span>
+        <Field label={t('pay.debtorAccount')} className="pay-cp-field">
           <Select
             value={debitAccount}
             onChange={(v) => {
@@ -436,9 +436,8 @@ export function PaymentPlanning() {
             options={eligible.map((a) => ({ value: a.id, label: a.name }))}
             ariaLabel={t('pay.debtorAccount')}
           />
-        </div>
-        <label className="pay-cp-field">
-          <span>{t('pay.plan.floor', { currency })}</span>
+        </Field>
+        <Field label={t('pay.plan.floor', { currency })} className="pay-cp-field">
           <input
             type="text"
             className="field"
@@ -447,16 +446,15 @@ export function PaymentPlanning() {
             placeholder="20000"
             onChange={(e) => setFloorText(e.target.value)}
           />
-        </label>
-        <div className="pay-cp-field">
-          <span>{t('pay.plan.horizon')}</span>
+        </Field>
+        <Field label={t('pay.plan.horizon')} className="pay-cp-field">
           <Select
             value={String(horizon)}
             onChange={(v) => setHorizon(Number(v))}
             options={PLAN_HORIZONS.map((h) => ({ value: String(h), label: t('pay.plan.horizonDays', { days: h }) }))}
             ariaLabel={t('pay.plan.horizon')}
           />
-        </div>
+        </Field>
         <button
           type="button"
           className={plan === null ? 'btn btn--primary' : 'btn btn--secondary'}
@@ -858,8 +856,8 @@ export function PaymentPlanning() {
           </>
         }
       >
-        <div className="pay-cp-field">
-          <span>{t('pay.plan.skontoScope')}</span>
+        <div className="form-stack">
+        <Field label={t('pay.plan.skontoScope')} className="pay-cp-field">
           <Select
             value={skontoScope}
             onChange={(v) => setSkontoScope(v === 'bill' ? 'bill' : 'vendor')}
@@ -869,23 +867,21 @@ export function PaymentPlanning() {
             ]}
             ariaLabel={t('pay.plan.skontoScope')}
           />
-        </div>
-        <label className="pay-cp-field">
-          <span>{t('pay.plan.skontoRate')}</span>
+        </Field>
+        <Field label={t('pay.plan.skontoRate')} className="pay-cp-field">
           <input type="text" className="field" inputMode="decimal" value={skontoRate} placeholder="2" onChange={(e) => setSkontoRate(e.target.value)} />
-        </label>
+        </Field>
         {skontoScope === 'vendor' ? (
-          <label className="pay-cp-field">
-            <span>{t('pay.plan.skontoDays')}</span>
+          <Field label={t('pay.plan.skontoDays')} className="pay-cp-field">
             <input type="text" className="field" inputMode="numeric" value={skontoDays} onChange={(e) => setSkontoDays(e.target.value)} />
-          </label>
+          </Field>
         ) : (
-          <label className="pay-cp-field">
-            <span>{t('pay.plan.skontoUntilLabel')}</span>
+          <Field label={t('pay.plan.skontoUntilLabel')} className="pay-cp-field">
             <input type="date" className="field" value={skontoUntil} onChange={(e) => setSkontoUntil(e.target.value)} />
-          </label>
+          </Field>
         )}
         {skontoError !== null && <ErrorBanner error={skontoError} message={refusal(skontoError)} />}
+        </div>
       </Modal>
 
       <Modal
@@ -909,38 +905,33 @@ export function PaymentPlanning() {
           </>
         }
       >
-        <label className="pay-cp-field">
-          <span>{t('pay.plan.flowLabel')}</span>
+        <div className="form-stack">
+        <Field label={t('pay.plan.flowLabel')} className="pay-cp-field">
           <input type="text" className="field" value={flowLabel} onChange={(e) => setFlowLabel(e.target.value)} />
-        </label>
-        <div className="pay-cp-field">
-          <span>{t('pay.plan.flowDirection')}</span>
+        </Field>
+        <Field label={t('pay.plan.flowDirection')} className="pay-cp-field">
           <Select
             value={flowDirection}
             onChange={setFlowDirection}
             options={PLANNED_FLOW_DIRECTIONS.map((d) => ({ value: d, label: t(`pay.plan.direction.${d}`) }))}
             ariaLabel={t('pay.plan.flowDirection')}
           />
-        </div>
-        <label className="pay-cp-field">
-          <span>{t('pay.plan.flowAmount', { currency })}</span>
+        </Field>
+        <Field label={t('pay.plan.flowAmount', { currency })} className="pay-cp-field">
           <input type="text" className="field" inputMode="decimal" value={flowAmount} onChange={(e) => setFlowAmount(e.target.value)} />
-        </label>
-        <label className="pay-cp-field">
-          <span>{t('pay.plan.flowFirst')}</span>
+        </Field>
+        <Field label={t('pay.plan.flowFirst')} className="pay-cp-field">
           <input type="date" className="field" value={flowFirst} onChange={(e) => setFlowFirst(e.target.value)} />
-        </label>
-        <div className="pay-cp-field">
-          <span>{t('pay.plan.flowRecurrence')}</span>
+        </Field>
+        <Field label={t('pay.plan.flowRecurrence')} className="pay-cp-field">
           <Select
             value={flowRecurrence}
             onChange={setFlowRecurrence}
             options={PLANNED_FLOW_RECURRENCES.map((r) => ({ value: r, label: t(`pay.plan.recurrenceName.${r}`) }))}
             ariaLabel={t('pay.plan.flowRecurrence')}
           />
-        </div>
-        <div className="pay-cp-field">
-          <span>{t('pay.plan.flowAccount')}</span>
+        </Field>
+        <Field label={t('pay.plan.flowAccount')} className="pay-cp-field">
           <Select
             value={flowAccount}
             onChange={setFlowAccount}
@@ -950,8 +941,9 @@ export function PaymentPlanning() {
             ]}
             ariaLabel={t('pay.plan.flowAccount')}
           />
-        </div>
+        </Field>
         {flowError !== null && <ErrorBanner error={flowError} message={refusal(flowError)} />}
+        </div>
       </Modal>
     </div>
   );

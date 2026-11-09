@@ -184,7 +184,8 @@
         "shown": "{name} eingeblendet",
         "reset": "Menü auf den Standard zurückgesetzt"
       }
-    }
+    },
+    "locked": "Zuerst ein Hauptbuch einrichten"
   },
   "theme": {
     "toggle": "Design wechseln"
@@ -696,5 +697,17 @@
       "reference": "Referenz"
     },
     "unshowable": "Ein Feld lässt sich nicht genau so zeigen, wie es gespeichert ist (verborgene Zeichen oder ein ungültiger Betrag). Korrigiere es im Belegeingang, dann bestätige."
+  },
+  "calm": {
+    "hints": "{count} Hinweise",
+    "hintsOne": "1 Hinweis",
+    "filterAdd": "Filter",
+    "filterAddLabel": "Filter hinzufügen",
+    "filterRemove": "Entfernen",
+    "filterChange": "{facet} ändern",
+    "settingReset": "Standard",
+    "settingResetContext": "Zurück auf den Standard: {value}",
+    "rowOpen": "Aufklappen",
+    "rowClose": "Zuklappen"
   }
 }

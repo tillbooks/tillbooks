@@ -254,8 +254,15 @@
   padding: var(--t-space-2);
 }
 
-.vr-section-title {
+.vr-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
   margin: 0 0 var(--t-space-1);
+}
+
+.vr-section-title {
+  margin: 0;
   font-size: var(--t-font-body);
   line-height: var(--t-lh-body);
   font-weight: 600;
@@ -578,7 +585,7 @@
 }
 
 .vr-settle-title {
-  margin: 0;
+  margin: 0 auto 0 0;
   font-size: var(--t-font-lg);
   line-height: var(--t-lh-lg);
   font-weight: 600;

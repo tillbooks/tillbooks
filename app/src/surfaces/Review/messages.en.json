@@ -87,12 +87,42 @@
     "error": "The export could not be produced.",
     "retry": "Try again",
     "journal": "Journal",
-    "journalDesc": "Every posted line of the period as a locale-neutral CSV that re-imports cleanly.",
+    "journalDesc": "Every posted line of the date range as a locale-neutral CSV that re-imports cleanly.",
     "statements": "Financial statements",
-    "statementsDesc": "The balance sheet and the income statement, one file each.",
+    "statementsDesc": "The balance sheet as of the To date and the income statement over the range, one file each.",
     "vat": "MWST figures",
     "vatDesc": "The MWST return figures, one row per form line.",
-    "vatWorkingPaper": "A working paper to lay beside the annual accounts, not the ESTV upload file (that is the eCH-0217 file on the MWST screen)."
+    "vatWorkingPaper": "A working paper to lay beside the annual accounts, not the ESTV upload file (that is the eCH-0217 file on the MWST screen).",
+    "kindLabel": "What",
+    "emptyExtract": "No entry matches these filters. The file carries only its headers.",
+    "badRange": "Check From and To: both a date, From not after To.",
+    "unknownAccount": "There is no account {account} in this workspace.",
+    "notWholeMonths": "The range starts or ends mid-month. Month-end accruals may be missing from the balance sheet and the income statement.",
+    "range": {
+      "label": "Range",
+      "from": "From",
+      "to": "To",
+      "month": "Month",
+      "quarter": "Quarter",
+      "year": "Year"
+    },
+    "vatPeriod": {
+      "granularity": "MWST period",
+      "quarter": "Quarter",
+      "half": "Half-year",
+      "month": "Month",
+      "year": "Year",
+      "yearLabel": "Year",
+      "monthLabel": "Month",
+      "quarterLabel": "Which quarter",
+      "halfLabel": "Which half-year"
+    },
+    "filter": {
+      "account": "Account",
+      "accountPlaceholder": "Account no.",
+      "source": "Source",
+      "clear": "Clear filters"
+    }
   },
   "help": {
     "Review": {

@@ -13,7 +13,7 @@
  * stale message says so in words with the warning glyph, never colour alone.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
 import { MemoryRouter } from 'react-router-dom';
@@ -126,10 +126,15 @@ describe('Korrespondenz, the load states', () => {
       mail_accounts_list: ok({ accounts: [], supportedAdapters: ['apple_mail', 'thunderbird'] }),
     });
     expect(await screen.findByText(de.mail.empty)).toBeInTheDocument();
-    // The honesty lines render IN PLACE (US-E04.1), not behind a link.
-    expect(screen.getByText(de.mail.connect.no_password)).toBeInTheDocument();
-    expect(screen.getByText(de.mail.connect.supported)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: de.mail.action.connect })).toBeInTheDocument();
+    // The connect form opens in a sheet from the empty state's one action (D187).
+    await userEvent.click(screen.getByRole('button', { name: de.mail.action.connect }));
+    // The honesty lines sit in place (US-E04.1), behind the (i) beside the fields they explain (D187).
+    const infos = screen.getAllByRole('button', { name: 'Info' });
+    await userEvent.hover(infos[0] as HTMLElement);
+    expect(await screen.findByText(de.mail.connect.supported)).toBeInTheDocument();
+    await userEvent.hover(infos[1] as HTMLElement);
+    expect(await screen.findByText(de.mail.connect.no_password)).toBeInTheDocument();
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: de.mail.action.connect })).toBeInTheDocument();
   });
 });
 
@@ -228,9 +233,10 @@ describe('Korrespondenz, the writes', () => {
     };
     renderMail(canned, asked);
     await screen.findByText(de.mail.empty);
+    await userEvent.click(screen.getByRole('button', { name: de.mail.action.connect }));
     await userEvent.type(screen.getByLabelText(de.mail.connect.storePath), '/Users/x/Mail');
     await userEvent.type(screen.getByLabelText(de.mail.connect.address), 'praxis@example.ch');
-    await userEvent.click(screen.getByRole('button', { name: de.mail.action.connect }));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: de.mail.action.connect }));
     await waitFor(() => {
       const connect = asked.find((a) => a.action === 'mail_connect');
       expect(connect).toBeDefined();
@@ -251,11 +257,13 @@ describe('Korrespondenz, the writes', () => {
     };
     renderMail(canned);
     await screen.findByText(de.mail.empty);
+    await userEvent.click(screen.getByRole('button', { name: de.mail.action.connect }));
     await userEvent.type(screen.getByLabelText(de.mail.connect.storePath), '/nope');
     await userEvent.type(screen.getByLabelText(de.mail.connect.address), 'a@b.ch');
-    await userEvent.click(screen.getByRole('button', { name: de.mail.action.connect }));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: de.mail.action.connect }));
     expect(await screen.findByText(de.mail.error.needs_mailstore)).toBeInTheDocument();
-    // The supported-clients line is still on screen, which IS the "what to do" half of the refusal.
-    expect(screen.getByText(de.mail.connect.supported)).toBeInTheDocument();
+    // The supported-clients line is still one hover away, which IS the "what to do" half of the refusal.
+    await userEvent.hover(screen.getAllByRole('button', { name: 'Info' })[0] as HTMLElement);
+    expect(await screen.findByText(de.mail.connect.supported)).toBeInTheDocument();
   });
 });

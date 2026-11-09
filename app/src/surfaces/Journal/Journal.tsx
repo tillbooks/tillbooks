@@ -19,7 +19,7 @@ import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { EmptyState, NoWorkspaceState, PermissionDenied } from '../../components/states';
-import { Select } from '../../components/Select';
+import { FilterBar } from '../../components/FilterBar';
 import { Status } from '../../components/Status';
 import { Tabs } from '../../components/Tabs';
 import { EntryDrawer } from './EntryDrawer';
@@ -455,6 +455,7 @@ export function Journal() {
       <SurfaceHeader
         title={t('journal.title')}
         titleId="journal-title"
+        count={view === 'live' && state.kind === 'ok' ? entries.length : undefined}
         help={<SurfaceHelp surface="Journal" />}
         // Always opens the composer; the write controls INSIDE are what a missing capability disables
         // (A24: disable the action, do not hide the surface). On the ARCHIVE face it does not render
@@ -488,89 +489,59 @@ export function Journal() {
         <ArchiveTab workspaceId={workspaceId as string} />
       ) : (
         <>
-      {/* K-16: live filters, no apply button. Enter still reads at once. */}
-      <form
-        className="journal-filters panel"
-        aria-label={t('journal.filters.legend')}
-        onSubmit={(e) => {
-          e.preventDefault();
-          void load(filters);
-        }}
-      >
-        <label className="journal-field">
-          {t('journal.filters.from')}
-          <input
-            className="field"
-            type="date"
-            value={filters.from}
-            onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value }))}
-          />
-        </label>
-        <label className="journal-field">
-          {t('journal.filters.to')}
-          <input
-            className="field"
-            type="date"
-            value={filters.to}
-            onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value }))}
-          />
-        </label>
-        <label className="journal-field">
-          {t('journal.filters.number')}
-          <input
-            className="field t-num journal-field--number"
-            type="text"
-            inputMode="text"
-            autoComplete="off"
-            spellCheck={false}
-            value={filters.number}
-            onChange={(e) => setFilters((f) => ({ ...f, number: e.target.value }))}
-          />
-        </label>
-        <label className="journal-field">
-          {t('journal.filters.account')}
-          <input
-            className="field"
-            type="text"
-            value={filters.account}
-            onChange={(e) => setFilters((f) => ({ ...f, account: e.target.value }))}
-          />
-        </label>
-        <div className="journal-field">
-          {t('journal.filters.source')}
-          <Select
-            value={filters.source}
-            onChange={(value) => setFilters((f) => ({ ...f, source: value }))}
-            options={[
-              { value: '', label: t('journal.filters.all') },
-              ...SOURCES.map((s) => ({ value: s, label: t(`journal.source.${s}`) })),
-            ]}
-            ariaLabel={t('journal.filters.source')}
-          />
-        </div>
-        <div className="journal-field">
-          {t('journal.filters.status')}
-          <Select
-            value={filters.status}
-            onChange={(value) => setFilters((f) => ({ ...f, status: value }))}
-            options={[
-              { value: '', label: t('journal.filters.all') },
+      {/* D187 Listen A: the voucher number is the search; source and status are facets (chips while set);
+          the date range and the account stay as sized inputs. Live (K-16): no apply button. */}
+      <FilterBar
+        searchValue={filters.number}
+        onSearchChange={(value) => setFilters((f) => ({ ...f, number: value }))}
+        searchLabel={t('journal.filters.number')}
+        searchPlaceholder={t('journal.filters.number')}
+        onClear={clearFilters}
+        clearLabel={t('journal.filters.clear')}
+        active={anyFilterSet}
+        facets={[
+          {
+            key: 'source',
+            label: t('journal.filters.source'),
+            options: SOURCES.map((s) => ({ value: s, label: t(`journal.source.${s}`) })),
+            value: filters.source === '' ? null : filters.source,
+            onChange: (value) => setFilters((f) => ({ ...f, source: value ?? '' })),
+          },
+          {
+            key: 'status',
+            label: t('journal.filters.status'),
+            options: [
               { value: 'draft', label: t('entry.status.draft') },
               { value: 'posted', label: t('entry.status.posted') },
-            ]}
-            ariaLabel={t('journal.filters.status')}
-          />
-        </div>
-        {/* Five fields have no cross each, so the way back to the whole journal is one quiet
-            ghost, shown only while a filter is set. */}
-        {anyFilterSet && (
-          <div className="journal-filter-actions">
-            <button type="button" className="btn btn--ghost btn--sm" onClick={clearFilters}>
-              {t('journal.filters.clear')}
-            </button>
-          </div>
-        )}
-      </form>
+            ],
+            value: filters.status === '' ? null : filters.status,
+            onChange: (value) => setFilters((f) => ({ ...f, status: value ?? '' })),
+          },
+        ]}
+      >
+        <input
+          className="field journal-filter-date"
+          type="date"
+          aria-label={t('journal.filters.from')}
+          value={filters.from}
+          onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value }))}
+        />
+        <input
+          className="field journal-filter-date"
+          type="date"
+          aria-label={t('journal.filters.to')}
+          value={filters.to}
+          onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value }))}
+        />
+        <input
+          className="field journal-filter-account"
+          type="text"
+          aria-label={t('journal.filters.account')}
+          placeholder={t('journal.filters.account')}
+          value={filters.account}
+          onChange={(e) => setFilters((f) => ({ ...f, account: e.target.value }))}
+        />
+      </FilterBar>
 
       {/* A24: a refused read hides the table and states why, never a table shell behind an error.
           Every other state (loading, empty, error-with-retry, and the rows) is the shared DataTable,

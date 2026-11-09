@@ -184,7 +184,8 @@
         "shown": "{name} shown",
         "reset": "Menu reset to the default"
       }
-    }
+    },
+    "locked": "Set up a ledger first"
   },
   "theme": {
     "toggle": "Switch colour scheme"
@@ -696,5 +697,17 @@
       "reference": "Reference"
     },
     "unshowable": "A field cannot be shown exactly as it is stored (hidden characters or an invalid amount). Correct it in the Belegeingang, then confirm."
+  },
+  "calm": {
+    "hints": "{count} notes",
+    "hintsOne": "1 note",
+    "filterAdd": "Filter",
+    "filterAddLabel": "Add a filter",
+    "filterRemove": "Remove",
+    "filterChange": "Change {facet}",
+    "settingReset": "Default",
+    "settingResetContext": "Back to the default: {value}",
+    "rowOpen": "Expand",
+    "rowClose": "Collapse"
   }
 }

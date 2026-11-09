@@ -32,48 +32,42 @@
   word-break: break-all;
 }
 
-/*
- * M03 invite (N4b): the S4.2 go-online notice. It sits WITH the invite form (rendered directly
- * above it, inside the same manager-only block), so it reads as the form's precondition and never
- * as a page banner.
- */
-.members-goonline a {
-  white-space: nowrap;
-}
+/* --- Invite row (D187, the owner's pick "Hinzufügen A") ------------------------------------- */
 
-/* --- Invite form ----------------------------------------------------------------------------- */
-
-/*
- * A grid rather than a flex row, and the reason is German: "Berechtigung" compounds run about 30%
- * longer than their English equivalents, and a flex row would either truncate the label or push the
- * button off the end. The columns collapse to a stack under 640px.
- */
+/* One row above the table: e-mail, role, Person or Agent, Einladen, and the (i) that says what the
+   click does. Fields are as wide as what they hold; the row wraps on a narrow screen. */
 .members-invite {
-  padding: var(--t-space-2);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+  margin-bottom: var(--t-space-3);
 }
 
-/* Phase 2c: the grid sits on the fieldset, so `disabled` covers every control at once in local mode. */
+/* The fieldset carries `disabled`, so local mode covers every control at once. */
 .members-invite-fields {
-  display: grid;
-  grid-template-columns: auto minmax(12rem, 1fr) auto minmax(10rem, auto) auto auto auto;
   align-items: center;
-  gap: var(--t-space-1) var(--t-space-2);
+  gap: var(--t-space-1);
   border: 0;
   margin: 0;
   padding: 0;
   min-width: 0;
 }
 
-.members-field {
-  color: var(--t-text-dim);
-  font-size: var(--t-font-body);
-  line-height: var(--t-lh-body);
+.members-invite-email {
+  width: 20rem;
+  max-width: 100%;
 }
 
-@media (max-width: 640px) {
-  .members-invite-fields {
-    grid-template-columns: 1fr;
-  }
+.members-invite-role {
+  width: 12rem;
+}
+
+/* A role is a value; its pencil appears on hover or focus of the row (DataTable `.row-reveal`). */
+.members-role-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
 }
 
 /* --- Roster cells (inside the shared DataTable) ---------------------------------------------- */
@@ -229,29 +223,7 @@
   gap: var(--t-space-1);
 }
 
-/* --- Phase 2c (F-11): the kind field, the local-mode disabled form, the revoke confirm --------- */
-
-.members-kind {
-  display: flex;
-  gap: var(--t-space-2);
-  align-items: center;
-}
-
-.members-kind-option {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--t-space-0-5);
-  font-size: var(--t-font-body);
-  line-height: var(--t-lh-body);
-}
-
-.members-kind-hint {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--t-text-dim);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-}
+/* --- Phase 2c (F-11): the agent word, the revoke confirm ----------------------------------- */
 
 /* An agent member, in words: a quiet dim word beside the name, no chip and no colour (K-22). */
 .members-kind-word {

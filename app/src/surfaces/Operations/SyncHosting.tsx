@@ -25,9 +25,10 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
 import { useCapabilities } from '../../lib/capabilities';
 import { ErrorBanner, PermissionDenied, Skeleton } from '../../components/states';
-import { InfoGlyph, LockGlyph } from '../../components/states/glyphs';
-import { Tooltip } from '../../components/Tooltip';
+import { LockGlyph } from '../../components/states/glyphs';
+import { IconButton } from '../../components/IconButton';
 import { HelpHint } from '../../components/HelpHint';
+import { SettingRow } from '../../components/SettingRow';
 import { useSyncSignal } from './sync-signal';
 import { HostingJourney, ExitChecklist } from './HostingJourney';
 import './SyncHosting.css';
@@ -136,8 +137,10 @@ export function SyncHosting() {
   const standingBlocks = (
     <>
       <div className="sync-exit" id="sync-exit">
-        <h3 className="sync-exit-title">{t('sync.exit.title')}</h3>
-        <p className="sync-exit-body">{t('sync.exit.body')}</p>
+        <div className="sync-exit-head">
+          <h3 className="sync-exit-title">{t('sync.exit.title')}</h3>
+          <IconButton icon="info" small context={t('sync.exit.body')} />
+        </div>
         {/* Fronts G04 in place: no backup/export control is re-implemented here, the anchor to Data &
             Backup's existing heading is the whole affordance. */}
         <a className="sync-exit-link link-inline" href="#data-title">
@@ -147,19 +150,41 @@ export function SyncHosting() {
             journey uses: one design language, same step vocabulary, position marker included. */}
         <ExitChecklist />
       </div>
-      <p className="sync-tier-note">{t('sync.tier.note')}</p>
     </>
   );
 
   return (
     <section className="sync-panel" aria-labelledby="sync-title">
       <header className="sync-head">
-        <h2 id="sync-title" className="diag-subtitle">
-          {t('sync.title')}
-        </h2>
-        {/* The dial renders only on a known posture: never a switch whose state is unknown (design §4). */}
-        {load.kind === 'ready' && (
-          <div className="sync-dial-wrap">
+        <span className="sync-title-row">
+          <h2 id="sync-title" className="diag-subtitle">
+            {t('sync.title')}
+          </h2>
+          <IconButton icon="info" small context={t('sync.tier.note')} />
+        </span>
+      </header>
+
+      {/* D187 (Einstellungen A): the dial is one setting row, its posture sentence visible beside it.
+          The dial renders only on a known posture: never a switch whose state is unknown (design §4).
+          OFF says no stream is published; ON says the stream is AVAILABLE to authorised readers and
+          explicitly NOT that anything is connected (the claims-honesty anchor). */}
+      {load.kind === 'ready' && (
+        <div className="sync-dial-wrap">
+          <SettingRow
+            label={t('sync.dial.label')}
+            description={publishing ? t('sync.state.on.body') : t('sync.state.off.body')}
+            dataKey="sync-publish"
+            status={
+              /* A non-owner sees the switch DISABLED with a padlock and the reason, never
+                 enabled-then-rejected (design §2, A24 courtesy gate; the engine is the real gate). */
+              !canManage ? (
+                <span className="sync-dial-lock" id={hintId}>
+                  <LockGlyph className="sync-lock-glyph" size={14} />
+                  {t('sync.dial.denied')}
+                </span>
+              ) : undefined
+            }
+          >
             <span className="sync-dial-row">
               <button
                 type="button"
@@ -176,34 +201,10 @@ export function SyncHosting() {
                 </span>
                 <span className="sync-dial-state">{publishing ? t('sync.dial.on') : t('sync.dial.off')}</span>
               </button>
-              {/* The claims-honesty anchor: OFF says no stream is published; ON says the stream is
-                  AVAILABLE to authorised readers and explicitly NOT that anything is connected. The
-                  dial's own label is the one-line state, so the sentence sits behind the (i) beside
-                  it (D152 rule 4, the owner's pick of 03.10.2026), one hover or focus away. */}
-              <span className="sync-posture-info">
-                <Tooltip
-                  placement="bottom"
-                  content={
-                    <span className="sync-posture">{publishing ? t('sync.state.on.body') : t('sync.state.off.body')}</span>
-                  }
-                >
-                  <button type="button" className="btn btn--ghost btn--icon sync-posture-trigger" aria-label={t('journey.publishing.infoLabel')}>
-                    <InfoGlyph size={16} />
-                  </button>
-                </Tooltip>
-              </span>
             </span>
-            {/* A non-owner sees the switch DISABLED with a padlock and the reason, never enabled-then-
-                rejected (design §2, A24 courtesy gate; the engine is the real gate). */}
-            {!canManage && (
-              <span className="sync-dial-lock" id={hintId}>
-                <LockGlyph className="sync-lock-glyph" size={14} />
-                {t('sync.dial.denied')}
-              </span>
-            )}
-          </div>
-        )}
-      </header>
+          </SettingRow>
+        </div>
+      )}
 
       {/* M03 (V3): the Hosting journey: the D106 model, the three rungs, and the directional move
           checklist driven by the Move record. Renders above the built dial, per the spec wireframe. */}

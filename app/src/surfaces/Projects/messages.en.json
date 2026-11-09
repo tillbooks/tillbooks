@@ -52,7 +52,6 @@
       "searchLabel": "Search projects",
       "search": "Search (code or name)",
       "statusFilter": "Filter by status",
-      "allStatuses": "All statuses",
       "rowActions": "Actions for {name}",
       "subprojectOf": "Sub-project of {code}"
     },

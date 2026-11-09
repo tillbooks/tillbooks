@@ -18,6 +18,7 @@
  * which right is missing. Counterparty notes a reader without `read_sales` may not see are counted, never
  * shown. Archiving answers in a status line with Rückgängig, which sets the note again on its id.
  */
+import { Field } from '../../components/Field';
 import { useCallback, useEffect, useId, useState } from 'react';
 
 import { useI18n } from '../../i18n';
@@ -30,9 +31,9 @@ import { useMemberNames } from '../../lib/useMemberNames';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
-import { IconButton } from '../../components/IconButton';
-import { OverflowMenu } from '../../components/OverflowMenu';
-import { Modal } from '../../components/Modal';
+import { DetailDrawer } from '../../components/DetailDrawer';
+import { DataTable, type DataTableColumn } from '../../components/DataTable';
+import type { Hint } from '../../components/HintsChip';
 import { Select } from '../../components/Select';
 import { ActionFeedback } from '../../components/ActionFeedback';
 import './Hausbuch.css';
@@ -133,6 +134,25 @@ export function HausbuchPage({ workspaceId }: { workspaceId: string }) {
     void load();
   }
 
+  const noteColumns: DataTableColumn<HausbuchNote>[] = [
+    { key: 'note', header: t('hausbuch.col.note'), rowHeader: true, render: (note) => note.text },
+    { key: 'scope', header: t('hausbuch.col.scope'), render: (note) => scopeText(t, note) },
+    {
+      key: 'changed',
+      header: t('hausbuch.col.changed'),
+      render: (note) => t('hausbuch.changedBy', { who: who(note.updatedBy), date: formatDate(note.updatedAt) }),
+    },
+  ];
+
+  // D187 (Hinweise A): the read-only line and the withheld count fold into the header chip.
+  const hints: Hint[] = [];
+  if (canRead && notes !== null && !canWrite) {
+    hints.push({ key: 'readOnly', title: t('hausbuch.hintTitle.readOnly'), body: t('hausbuch.readOnly') });
+  }
+  if (notes !== null && withheld > 0) {
+    hints.push({ key: 'withheld', title: t('hausbuch.hintTitle.withheld'), body: t('hausbuch.withheld', { count: withheld }) });
+  }
+
   const addButton = canWrite ? (
     <button type="button" className="btn btn--primary" onClick={() => setEditing('new')}>
       {t('hausbuch.add')}
@@ -145,6 +165,8 @@ export function HausbuchPage({ workspaceId }: { workspaceId: string }) {
       titleId="hausbuch-title"
       subtitle={t('hausbuch.subtitle')}
       help={<SurfaceHelp surface="Hausbuch" />}
+      count={notes !== null ? notes.length : undefined}
+      hints={hints}
       actions={notes !== null && notes.length > 0 ? addButton : null}
     />
   );
@@ -160,11 +182,6 @@ export function HausbuchPage({ workspaceId }: { workspaceId: string }) {
     body = (
       <>
         {loadError !== null && <ErrorBanner context="read" error={loadError} onRetry={() => void load()} />}
-        {!canWrite && (
-          <p className="status-line hausbuch-readonly" role="note">
-            {t('hausbuch.readOnly')}
-          </p>
-        )}
         {archived !== null && (
           <ActionFeedback tone="success" message={t('hausbuch.archived', { text: archived.text })}>
             <button type="button" className="btn btn--secondary btn--sm" onClick={() => void undoArchive(archived)}>
@@ -193,52 +210,26 @@ export function HausbuchPage({ workspaceId }: { workspaceId: string }) {
                 <h3 className="hausbuch-group-title">
                   {t(`hausbuch.group.${group.kind}`)} <span className="hausbuch-count t-num">{group.notes.length}</span>
                 </h3>
-                <table className="hausbuch-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">{t('hausbuch.col.note')}</th>
-                      <th scope="col">{t('hausbuch.col.scope')}</th>
-                      <th scope="col">{t('hausbuch.col.changed')}</th>
-                      {canWrite && (
-                        <th scope="col">
-                          <span className="visually-hidden">{t('hausbuch.col.actions')}</span>
-                        </th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {group.notes.map((note) => (
-                      <tr key={note.id} data-note={note.id}>
-                        <th scope="row" className="hausbuch-text">
-                          {note.text}
-                        </th>
-                        <td>{scopeText(t, note)}</td>
-                        <td className="hausbuch-changed">
-                          {t('hausbuch.changedBy', { who: who(note.updatedBy), date: formatDate(note.updatedAt) })}
-                        </td>
-                        {canWrite && (
-                          <td className="hausbuch-actions">
-                            <IconButton icon="edit" small context={note.text} onClick={() => setEditing(note)} />
-                            <OverflowMenu
-                              label={t('hausbuch.more', { text: note.text })}
-                              icon="more"
-                              quiet
-                              items={[{ key: 'archive', label: t('hausbuch.archive'), onSelect: () => void archive(note) }]}
-                            />
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataTable<HausbuchNote>
+                  columns={noteColumns}
+                  rows={group.notes}
+                  rowKey={(note) => note.id}
+                  caption={t(`hausbuch.group.${group.kind}`)}
+                  onRowClick={canWrite ? (note) => setEditing(note) : undefined}
+                  rowLabel={(note) => note.text}
+                  rowActions={
+                    canWrite
+                      ? (note) => [
+                          { key: 'edit', label: t('hausbuch.edit'), onSelect: () => setEditing(note) },
+                          { key: 'archive', label: t('hausbuch.archive'), onSelect: () => void archive(note) },
+                        ]
+                      : undefined
+                  }
+                  rowActionsLabel={(note) => t('hausbuch.more', { text: note.text })}
+                />
               </div>
             ))}
           </section>
-        )}
-        {withheld > 0 && (
-          <p className="status-line hausbuch-withheld" role="note">
-            {t('hausbuch.withheld', { count: withheld })}
-          </p>
         )}
         <BriefPreview workspaceId={workspaceId} />
       </>
@@ -363,7 +354,7 @@ function NoteDialog({
 }) {
   const { t } = useI18n();
   const client = useClient();
-  const ids = { text: useId(), kind: useId(), ref: useId(), hint: useId(), count: useId() };
+  const ids = { text: useId(), kind: useId(), ref: useId() };
   const [text, setText] = useState(note?.text ?? '');
   const [kind, setKind] = useState<ScopeKind>(note?.scope.kind ?? 'workspace');
   // An account is shown and edited by its label's number; anything else by its reference as stored.
@@ -392,7 +383,7 @@ function NoteDialog({
   }
 
   return (
-    <Modal
+    <DetailDrawer
       open
       onClose={onClose}
       title={note === null ? t('hausbuch.dialog.addTitle') : t('hausbuch.dialog.editTitle')}
@@ -409,8 +400,10 @@ function NoteDialog({
       }
     >
       <div className="form-stack">
-        <div className="form-row">
-          <label htmlFor={ids.text}>{t('hausbuch.dialog.text')}</label>
+        <Field
+          label={t('hausbuch.dialog.text')}
+          hint={<span className="t-num">{t('hausbuch.dialog.count', { used: trimmed.length, max: NOTE_TEXT_MAX })}</span>}
+        >
           <textarea
             id={ids.text}
             className="field"
@@ -418,15 +411,10 @@ function NoteDialog({
             maxLength={NOTE_TEXT_MAX}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            aria-describedby={ids.count}
             required
           />
-          <p id={ids.count} className="field-hint t-num">
-            {t('hausbuch.dialog.count', { used: trimmed.length, max: NOTE_TEXT_MAX })}
-          </p>
-        </div>
-        <div className="form-row">
-          <label htmlFor={ids.kind}>{t('hausbuch.dialog.kind')}</label>
+        </Field>
+        <Field label={t('hausbuch.dialog.kind')}>
           <Select
             id={ids.kind}
             value={kind}
@@ -436,15 +424,11 @@ function NoteDialog({
             }}
             options={SCOPE_KINDS.map((k) => ({ value: k, label: t(`hausbuch.scope.${k}`) }))}
           />
-        </div>
+        </Field>
         {needsRef && (
-          <div className="form-row">
-            <label htmlFor={ids.ref}>{t(`hausbuch.dialog.ref.${kind}`)}</label>
-            <input id={ids.ref} className="field" value={ref} onChange={(e) => setRef(e.target.value)} aria-describedby={ids.hint} />
-            <p id={ids.hint} className="field-hint">
-              {t(`hausbuch.dialog.refHint.${kind}`)}
-            </p>
-          </div>
+          <Field label={t(`hausbuch.dialog.ref.${kind}`)} info={t(`hausbuch.dialog.refHint.${kind}`)}>
+            <input id={ids.ref} className="field" value={ref} onChange={(e) => setRef(e.target.value)} />
+          </Field>
         )}
         {error !== null && (
           <p className="status-line status-error" role="alert">
@@ -452,7 +436,7 @@ function NoteDialog({
           </p>
         )}
       </div>
-    </Modal>
+    </DetailDrawer>
   );
 }
 

@@ -21,7 +21,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { render, screen, within, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, within, waitFor, cleanup, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
@@ -176,7 +176,7 @@ describe('the focus trap (the audit AA gap)', () => {
     const first = items[0];
     const last = items[items.length - 1];
 
-    last.focus();
+    act(() => last.focus());
     await userEvent.tab();
     expect(dialog.contains(document.activeElement)).toBe(true);
     expect(first).toHaveFocus();

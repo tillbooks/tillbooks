@@ -40,6 +40,7 @@ import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
+import { Field } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { Status, type StatusKind } from '../../components/Status';
 import { Skeleton, refusalText } from '../../components/states';
@@ -314,10 +315,9 @@ export function ThreeWayMatchPanel({ billId, onMatched, onDialogOpenChange }: Th
           {intent === 'override' ? t('procurement.match.overrideBody') : t('procurement.match.confirmBody')}
         </p>
         {intent === 'override' && (
-          <label className="twm-field">
-            <span>{t('procurement.match.reason')}</span>
+          <Field label={t('procurement.match.reason')}>
             <input type="text" className="field" value={reason} onChange={(e) => setReason(e.target.value)} minLength={5} />
-          </label>
+          </Field>
         )}
         {message !== '' && (
           <p className="twm-state" role="alert">

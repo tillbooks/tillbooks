@@ -21,6 +21,7 @@ import { isErr, type Err } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useI18n, useT, formatDate, formatMoney } from '../../i18n';
 import { ConceptTerm } from '../../components/ConceptTerm';
+import { Field } from '../../components/Field';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { Modal } from '../../components/Modal';
@@ -766,7 +767,7 @@ function ConfigPanel({
         </p>
       </div>
 
-      <div className="form-row">
+      <div className="form-row form-row--name">
         <label htmlFor={ids.number}>{t('vat.vatNumber')}</label>
         <input
           className="field"
@@ -1136,9 +1137,11 @@ function SaldoEditor({
 
   return (
     <section className="vat-saldo" aria-labelledby="vat-saldo-title">
-      <h2 id="vat-saldo-title" className="vat-subtitle">
-        {t('vat.saldo.title')}
-      </h2>
+      <div className="vat-subtitle-row">
+        <h2 id="vat-saldo-title" className="vat-subtitle">
+          {t('vat.saldo.title')}
+        </h2>
+      </div>
       <p className="field-hint">{t('vat.saldo.hint')}</p>
 
       {rates.length === 0 ? (
@@ -1591,9 +1594,11 @@ function ApprovalHistory({ generations }: { generations: SaldoGeneration[] }) {
 
   return (
     <section className="panel vat-panel" aria-labelledby="vat-history-title">
-      <h2 id="vat-history-title" className="vat-subtitle">
-        {t('vat.history.title')}
-      </h2>
+      <div className="vat-subtitle-row">
+        <h2 id="vat-history-title" className="vat-subtitle">
+          {t('vat.history.title')}
+        </h2>
+      </div>
       <p className="field-hint">{t('vat.history.hint')}</p>
       <ul className="vat-history-list">
         {ordered.map((g) => (
@@ -1902,12 +1907,10 @@ function AddCodeForm({
 
   return (
     <form className="vat-add-code form-stack" onSubmit={onSubmit}>
-      <div className="form-row">
-        <label htmlFor={ids.code}>{t('vat.code.code')}</label>
+      <Field label={t('vat.code.code')} id={ids.code}>
         <input className="field" id={ids.code} value={code} onChange={(e) => setCode(e.target.value)} required />
-      </div>
-      <div className="form-row">
-        <label htmlFor={ids.kind}>{t('vat.code.kindLabel')}</label>
+      </Field>
+      <Field label={t('vat.code.kindLabel')} id={ids.kind}>
         <Select
           id={ids.kind}
           value={kind}
@@ -1915,7 +1918,7 @@ function AddCodeForm({
           options={TAX_KINDS.map((k) => ({ value: k, label: t(`vat.code.kind.${kindKeySegment(k)}`) }))}
           ariaLabel={t('vat.code.kindLabel')}
         />
-      </div>
+      </Field>
       <div className="form-row">
         <label htmlFor={ids.rate}>{t('vat.code.rateBpLabel')}</label>
         <input
@@ -1938,14 +1941,12 @@ function AddCodeForm({
           </p>
         )}
       </div>
-      <div className="form-row">
-        <label htmlFor={ids.formLine}>{t('vat.code.formLine')}</label>
+      <Field label={t('vat.code.formLine')} id={ids.formLine}>
         <input className="field" id={ids.formLine} value={formLine} onChange={(e) => setFormLine(e.target.value)} placeholder="303" />
-      </div>
-      <div className="form-row">
-        <label htmlFor={ids.label}>{t('vat.code.label')}</label>
+      </Field>
+      <Field label={t('vat.code.label')} id={ids.label}>
         <input className="field" id={ids.label} value={label} onChange={(e) => setLabel(e.target.value)} />
-      </div>
+      </Field>
       <div className="form-actions">
         <button type="submit" className="btn btn--secondary" disabled={busy || rateInvalid}>
           {t('vat.save')}

@@ -36,43 +36,6 @@
   font-weight: 500;
 }
 
-.hausbuch-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--t-font-table);
-  line-height: var(--t-lh-body);
-}
-
-.hausbuch-table th,
-.hausbuch-table td {
-  padding: var(--t-row-pad-y) var(--t-cell-pad-x);
-  text-align: left;
-  vertical-align: top;
-  border-bottom: 1px solid var(--t-border);
-}
-
-.hausbuch-table thead th {
-  height: var(--t-row-head-h);
-  font-weight: 500;
-  color: var(--t-text-dim);
-}
-
-.hausbuch-table th.hausbuch-text {
-  font-weight: 600;
-  color: var(--t-text);
-  white-space: pre-wrap;
-}
-
-.hausbuch-changed {
-  color: var(--t-text-dim);
-  white-space: nowrap;
-}
-
-.hausbuch-actions {
-  white-space: nowrap;
-  text-align: right;
-}
-
 .hausbuch-preview {
   display: flex;
   flex-direction: column;
@@ -104,15 +67,4 @@
 
 .hausbuch-figure dd {
   margin: 0;
-}
-
-@media (hover: hover) {
-  .hausbuch-table tbody tr .hausbuch-actions > * {
-    opacity: 0;
-  }
-
-  .hausbuch-table tbody tr:hover .hausbuch-actions > *,
-  .hausbuch-table tbody tr:focus-within .hausbuch-actions > * {
-    opacity: 1;
-  }
 }

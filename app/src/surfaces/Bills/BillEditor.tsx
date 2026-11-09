@@ -84,10 +84,10 @@ import { isErr, type Err } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate, formatMoney } from '../../i18n';
 import { ErrorBanner, Skeleton } from '../../components/states';
-import { InfoGlyph } from '../../components/states/glyphs';
+import { IconButton } from '../../components/IconButton';
+import { Field } from '../../components/Field';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { Select } from '../../components/Select';
-import { Tooltip } from '../../components/Tooltip';
 import { useIdempotencyKey } from '../../lib/idempotency';
 import { useCan, CAP } from '../../lib/capabilities';
 // The composer's own D152 rules, imported rather than restated, so the bill and the Buchungssatz can
@@ -154,13 +154,7 @@ function termsOf(value: unknown): number | null {
 
 /** An (i) beside a value: the sentence that explains it, on hover and focus, named by `aria-describedby`. */
 function InfoTip({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <Tooltip content={<span className="bill-explain">{children}</span>}>
-      <button type="button" className="btn btn--ghost btn--icon btn--sm bill-info" aria-label={label}>
-        <InfoGlyph size={16} />
-      </button>
-    </Tooltip>
-  );
+  return <IconButton icon="info" small name={label} context={children} />;
 }
 
 export function BillEditor({ bill, onClose, onSaved, onOpenBill }: BillEditorProps) {
@@ -647,9 +641,8 @@ export function BillEditor({ bill, onClose, onSaved, onOpenBill }: BillEditorPro
         </p>
       )}
 
-      <div className="bill-form">
-        <div className="bill-field">
-          <span>{t('bills.vendor')}</span>
+      <div className="bill-form form-stack">
+        <Field label={t('bills.vendor')}>
           <Select
             value={vendorId}
             disabled={readOnly || noVendors}
@@ -660,45 +653,39 @@ export function BillEditor({ bill, onClose, onSaved, onOpenBill }: BillEditorPro
             )}
             ariaLabel={t('bills.vendor')}
           />
-        </div>
+        </Field>
 
         <div className="bill-pair">
-          <label className="bill-field" htmlFor="bill-date">
-            <span>{t('bills.billDate')}</span>
+          <Field label={t('bills.billDate')} id="bill-date">
             <input
-              id="bill-date"
               className="field"
               type="date"
               value={billDate}
               disabled={readOnly}
               onChange={(event) => setBillDate(event.target.value)}
             />
-          </label>
+          </Field>
 
-          <label className="bill-field" htmlFor="bill-reference">
-            <span>{t('bills.vendorReference')}</span>
+          <Field label={t('bills.vendorReference')} id="bill-reference">
             <input
-              id="bill-reference"
               className="field"
               value={vendorReference}
               disabled={readOnly}
               onChange={(event) => setVendorReference(event.target.value)}
             />
-          </label>
+          </Field>
         </div>
 
         <div className="bill-pair">
-          <label className="bill-field" htmlFor="bill-amount">
-            <span>{t('bills.amount')}</span>
+          <Field label={t('bills.amount')} id="bill-amount">
             <input
-              id="bill-amount"
               className="field t-num"
               inputMode="decimal"
               value={amount}
               disabled={readOnly}
               onChange={(event) => setAmount(event.target.value)}
             />
-          </label>
+          </Field>
 
           {/*
             THE NET/GROSS TOGGLE RE-ASKS THE ENGINE, it does not recompute. A06 preserves the ENTERED
@@ -730,8 +717,7 @@ export function BillEditor({ bill, onClose, onSaved, onOpenBill }: BillEditorPro
           </fieldset>
         </div>
 
-        <div className="bill-field">
-          <span>{t('bills.expenseAccount')}</span>
+        <Field label={t('bills.expenseAccount')}>
           <Select
             value={expenseAccountId}
             disabled={readOnly || noAccounts}
@@ -745,13 +731,12 @@ export function BillEditor({ bill, onClose, onSaved, onOpenBill }: BillEditorPro
             )}
             ariaLabel={t('bills.expenseAccount')}
           />
-        </div>
+        </Field>
 
         {(showTax || showDue) && (
           <div className="bill-pair">
             {showTax && (
-              <div className="bill-field">
-                <span>{t('bills.vatCode')}</span>
+              <Field label={t('bills.vatCode')}>
                 <Select
                   value={taxCode}
                   disabled={readOnly}
@@ -762,15 +747,17 @@ export function BillEditor({ bill, onClose, onSaved, onOpenBill }: BillEditorPro
                   )}
                   ariaLabel={t('bills.vatCode')}
                 />
-              </div>
+              </Field>
             )}
 
             {showDue && (
-              <div className="bill-field">
-                <span className="bill-label">
+              <div className="form-row">
+                <span className="field-label-row">
                   <label htmlFor="bill-due">{t('bills.dueDate')}</label>
                   {bill === null && vendorId !== '' && (
-                    <InfoTip label={t('bills.due.info')}>{dueSourceText}</InfoTip>
+                    <InfoTip label={t('bills.due.info')}>
+                      {dueSourceText}
+                    </InfoTip>
                   )}
                 </span>
                 <input
@@ -793,8 +780,7 @@ export function BillEditor({ bill, onClose, onSaved, onOpenBill }: BillEditorPro
         )}
 
         {showCostCenter && (
-          <div className="bill-field">
-            <span>{t('bills.costCenter')}</span>
+          <Field label={t('bills.costCenter')}>
             <Select
               id="bill-cost-center"
               value={costCenterId}
@@ -809,12 +795,11 @@ export function BillEditor({ bill, onClose, onSaved, onOpenBill }: BillEditorPro
               )}
               ariaLabel={t('bills.costCenter')}
             />
-          </div>
+          </Field>
         )}
 
         {showProject && (
-          <div className="bill-field">
-            <span>{t('bills.project')}</span>
+          <Field label={t('bills.project')}>
             <Select
               id="bill-project"
               value={projectId}
@@ -829,20 +814,18 @@ export function BillEditor({ bill, onClose, onSaved, onOpenBill }: BillEditorPro
               )}
               ariaLabel={t('bills.project')}
             />
-          </div>
+          </Field>
         )}
 
         {showReceipt && (
-          <label className="bill-field" htmlFor="bill-receipt">
-            <span>{t('bills.receipt')}</span>
+          <Field label={t('bills.receipt')} id="bill-receipt">
             <input
-              id="bill-receipt"
               className="field"
               value={receiptRef}
               disabled={!receiptLive}
               onChange={(event) => setReceiptRef(event.target.value)}
             />
-          </label>
+          </Field>
         )}
 
         {(offerCostCenter || offerProject || offerReceipt) && (

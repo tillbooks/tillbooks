@@ -74,7 +74,8 @@
       },
       "error": {
         "transport": "Kategorien konnten nicht geladen werden. Bitte erneut versuchen."
-      }
+      },
+      "search": "Kategorien suchen"
     },
     "register": {
       "title": "Anlagenregister",
@@ -491,7 +492,8 @@
       },
       "error": {
         "transport": "Standorte konnten nicht geladen werden. Bitte erneut versuchen."
-      }
+      },
+      "search": "Standorte suchen"
     },
     "transfer": {
       "action": "Transfer",
@@ -688,7 +690,8 @@
       },
       "error": {
         "transport": "Wartungseinträge konnten nicht geladen werden. Bitte erneut versuchen."
-      }
+      },
+      "search": "Wartung suchen"
     }
   },
   "errors": {

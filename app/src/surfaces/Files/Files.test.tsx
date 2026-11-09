@@ -169,8 +169,8 @@ describe('Dateien, the five states', () => {
     expect(screen.queryByRole('button', { name: 'Suchen' })).not.toBeInTheDocument();
 
     expect(await screen.findByText('Keine Treffer.')).toBeInTheDocument();
-    // And the filter that produced it is on screen as a removable chip.
-    expect(screen.getByRole('button', { name: /Suche: versicherung/ })).toBeInTheDocument();
+    // And the filter that produced it stays in the search box, so it is never a mystery.
+    expect(screen.getByRole('searchbox')).toHaveValue('versicherung');
   });
 
   it('renders a transport failure as a failure, with a retry, and never as an empty list', async () => {

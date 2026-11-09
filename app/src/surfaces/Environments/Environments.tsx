@@ -24,12 +24,11 @@ import { envErrorMessage } from './errors';
 import { LockGlyph } from '../../components/states/glyphs';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Status } from '../../components/Status';
+import { Tooltip } from '../../components/Tooltip';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { ActionFeedback } from '../../components/ActionFeedback';
 import { FilterBar } from '../../components/FilterBar';
-import { OverflowMenu } from '../../components/OverflowMenu';
-import { Tooltip } from '../../components/Tooltip';
 import {
   type EnvironmentRow,
   type EnvListOk,
@@ -125,48 +124,25 @@ export function Environments() {
 
   const noWorkspace = workspaceId === null;
 
-  // --- the action column, shared by both tables ------------------------------------------------
-  const renderActions = useCallback(
-    (env: EnvironmentRow) => {
-      const open = (
-        <button
-          type="button"
-          className="btn btn--secondary btn--sm"
-          onClick={() => setDialog({ kind: 'detail', name: env.name })}
-        >
-          {t('env.row.open')}
-        </button>
-      );
-      // main (protected): a padlock and NO destructive controls, only the read affordance (E7).
-      if (isProtected(env)) {
-        return (
-          <div className="env-actions">
-            {open}
-            <Tooltip content={t('env.guard.liveTooltip')}>
-              <span className="env-padlock" aria-label={t('env.guard.liveTooltip')}>
-                <LockGlyph size={14} />
-              </span>
-            </Tooltip>
-          </div>
-        );
-      }
-      return (
-        <div className="env-actions">
-          {open}
-          <OverflowMenu
-            label={t('env.row.moreLabel', { name: env.name })}
-            disabled={!canManage}
-            items={[
-              { key: 'refresh', label: t('env.row.refresh'), onSelect: () => setDialog({ kind: 'copy', target: env.name }) },
-              { key: 'reset', label: t('env.row.reset'), onSelect: () => setDialog({ kind: 'reset', env }) },
-              { key: 'delete', label: t('env.row.delete'), danger: true, onSelect: () => setDialog({ kind: 'delete', env }) },
-            ]}
-          />
-        </div>
-      );
-    },
+  // D187 (List A): the row opens the detail; refresh, reset and delete sit under the row's Mehr. `main`
+  // is protected (E7): its padlock is in the guard column and it has no destructive verbs at all.
+  const rowActions = useCallback(
+    (env: EnvironmentRow) =>
+      isProtected(env) || !canManage
+        ? []
+        : [
+            { key: 'refresh', label: t('env.row.refresh'), onSelect: () => setDialog({ kind: 'copy' as const, target: env.name }) },
+            { key: 'reset', label: t('env.row.reset'), onSelect: () => setDialog({ kind: 'reset' as const, env }) },
+            { key: 'delete', label: t('env.row.delete'), danger: true, onSelect: () => setDialog({ kind: 'delete' as const, env }) },
+          ],
     [t, canManage],
   );
+  const rowProps = {
+    onRowClick: (env: EnvironmentRow) => setDialog({ kind: 'detail', name: env.name }),
+    rowLabel: (env: EnvironmentRow) => `${t('env.row.open')}: ${env.name}`,
+    rowActions,
+    rowActionsLabel: (env: EnvironmentRow) => t('env.row.moreLabel', { name: env.name }),
+  };
 
   const columns: DataTableColumn<EnvironmentRow>[] = useMemo(
     () => [
@@ -205,12 +181,18 @@ export function Environments() {
       {
         key: 'guard',
         header: t('env.col.guard'),
-        render: (env) => (
-          <span className={`env-guard ${isProtected(env) ? 'env-guard--protected' : ''}`}>
-            {isProtected(env) && <LockGlyph size={12} />}
-            {t(`env.guard.${env.guardTier}`)}
-          </span>
-        ),
+        render: (env) => {
+          const guard = (
+            <span
+              className={`env-guard ${isProtected(env) ? 'env-guard--protected' : ''}`}
+              aria-label={isProtected(env) ? t('env.guard.liveTooltip') : undefined}
+            >
+              {isProtected(env) && <LockGlyph size={12} />}
+              {t(`env.guard.${env.guardTier}`)}
+            </span>
+          );
+          return isProtected(env) ? <Tooltip content={t('env.guard.liveTooltip')}>{guard}</Tooltip> : guard;
+        },
       },
       {
         key: 'lastRefresh',
@@ -223,14 +205,8 @@ export function Environments() {
         numeric: true,
         render: (env) => <span>{formatSize(env.sizeBytes) ?? '-'}</span>,
       },
-      {
-        key: 'actions',
-        header: t('env.col.actions'),
-        headerHidden: true,
-        render: renderActions,
-      },
     ],
-    [t, activeName, renderActions],
+    [t, activeName],
   );
 
   // No read right: the surface is hidden behind the shared padlock (the engine gate is the real one).
@@ -261,6 +237,7 @@ export function Environments() {
         title={t('env.title')}
         titleId="environments-title"
         subtitle={t('env.subtitle')}
+        count={rows.length}
         help={<SurfaceHelp surface="Environments" />}
         actions={
           <button
@@ -316,6 +293,7 @@ export function Environments() {
               loading={state.kind === 'loading'}
               skeletonRows={3}
               isRowCurrent={(env) => env.name === activeName}
+              {...rowProps}
             />
           </section>
 
@@ -341,6 +319,7 @@ export function Environments() {
                   rowKey={(env) => env.name}
                   caption={t('env.named.heading')}
                   isRowCurrent={(env) => env.name === activeName}
+                  {...rowProps}
                   emptyState={<EmptyState title={t('env.filter.none')} filtered={{ onClear: () => setFilter('') }} />}
                 />
               ) : (

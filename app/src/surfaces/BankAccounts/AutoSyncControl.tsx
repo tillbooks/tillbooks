@@ -10,6 +10,7 @@
  * "Ändern" toggle; the editor opens on demand and closes after a save. A failed last run and the
  * missing right stay visible at rest, because they need the person.
  */
+import { IconButton } from '../../components/IconButton';
 import { useEffect, useId, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
@@ -137,7 +138,7 @@ export function AutoSyncControl({ workspaceId, connectionId, autoSync, canPay, o
               {saving ? t('channel.auto.saving') : t('channel.auto.save')}
             </button>
           </div>
-          <p className="bank-channel-note">{t('channel.auto.upOnly')}</p>
+          <IconButton icon="info" small context={t('channel.auto.upOnly')} />
           {last !== null && last.ok && <p className="bank-channel-note">{t('channel.auto.lastOk', { when: stamp(last.finishedAt) })}</p>}
         </div>
       )}

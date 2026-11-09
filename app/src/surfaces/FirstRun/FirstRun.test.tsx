@@ -5,7 +5,7 @@
  * I18nProvider default) unless a test names the locale.
  */
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { axe } from 'jest-axe';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -48,26 +48,51 @@ function setup(canned: Record<string, RestResponse | Handler>, opts: { locale?: 
   return { calls, transport };
 }
 
+/** D187: the rarer doors sit behind icons under the main field; open one the way a person does. */
+async function openRestore(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
+  await user.click(screen.getByRole('button', { name: /^Backup wiederherstellen$|^Restore a backup$/ }));
+  return screen.getByRole('region', { name: /^Backup wiederherstellen$|^Restore a backup$/ });
+}
+
 describe('FirstRun', () => {
-  it('renders the three doors', async () => {
+  it('D187: the main act on top, the rarer doors as named icons beneath it, nothing open at rest', async () => {
     setup({ delivery_status: ok({ mode: 'up', scheduler: { enabled: false, lastTickAt: null, nextTickAt: null } }) });
-    expect(screen.getByRole('heading', { name: /Neues Hauptbuch anlegen/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Backup wiederherstellen/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Bestehende Datenbank übernehmen/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Hauptbuch einrichten' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Firmenname')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Anlegen' })).toHaveClass('btn--primary');
+    for (const name of ['Backup wiederherstellen', 'Hauptbuch öffnen']) {
+      const door = screen.getByRole('button', { name });
+      expect(door).toHaveAttribute('aria-expanded', 'false');
+    }
+    // Nothing opens itself (D152 rule 5): no door's form is on the page at rest.
+    expect(screen.queryByRole('region', { name: /^(Backup wiederherstellen|Hauptbuch öffnen)$/ })).toBeNull();
     // Let the footer runtime line settle so its async read does not update state after the test.
     await screen.findByText(/Läuft als:/);
   });
 
-  it('M03 (V1, S1.2): the residency lead renders above the doors, and the doors are unchanged', async () => {
+  it('D187: opening a door hands the one primary to its act, and a second click closes it', async () => {
+    const user = userEvent.setup();
     setup({ delivery_status: ok({ mode: 'up', scheduler: { enabled: false, lastTickAt: null, nextTickAt: null } }) });
-    // The exact specced sentence: one file, nothing sent, FileVault named.
-    const lead = screen.getByText(
-      'Deine Bücher sind eine einzelne Datei auf diesem Gerät. Nichts wird gesendet. Verschlüsselung übernimmt das Betriebssystem (FileVault).',
-    );
-    // Above the doors: the lead precedes the first door heading in the document.
-    const firstDoor = screen.getByRole('heading', { name: /Neues Hauptbuch anlegen/ });
-    expect(lead.compareDocumentPosition(firstDoor) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // The residency lead adds no action: still exactly the three door headings.
+    await screen.findByText(/Läuft als:/);
+    await openRestore(user);
+    expect(screen.getByRole('button', { name: 'Anlegen' })).toHaveClass('btn--secondary');
+    expect(screen.getByRole('button', { name: 'Wiederherstellen' })).toHaveClass('btn--primary');
+    await user.click(screen.getByRole('button', { name: 'Hauptbuch öffnen' }));
+    expect(screen.queryByRole('region', { name: 'Backup wiederherstellen' })).toBeNull();
+    expect(screen.getByRole('region', { name: 'Hauptbuch öffnen' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Hauptbuch öffnen' }));
+    expect(screen.queryByRole('region', { name: /^(Backup wiederherstellen|Hauptbuch öffnen)$/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Anlegen' })).toHaveClass('btn--primary');
+  });
+
+  it('M03 (V1, S1.2): the residency sentence is on the page before the first act, as words on demand (D187)', async () => {
+    setup({ delivery_status: ok({ mode: 'up', scheduler: { enabled: false, lastTickAt: null, nextTickAt: null } }) });
+    // The exact specced sentence: one file, nothing sent, FileVault named. It lives in the title's (i).
+    const lead = screen.getByText(/Deine Bücher sind eine einzelne Datei auf diesem Gerät\. Nichts wird gesendet\. Verschlüsselung übernimmt das Betriebssystem \(FileVault\)\./);
+    expect(lead.closest('[role="tooltip"]')).not.toBeNull();
+    // Before the first act: the sentence precedes the name field in the document.
+    const field = screen.getByLabelText('Firmenname');
+    expect(lead.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     await screen.findByText(/Läuft als:/);
   });
 
@@ -78,15 +103,15 @@ describe('FirstRun', () => {
     // The RuntimeLine caveat proves the cloud mode has resolved; the false local lead must be gone.
     expect(await screen.findByText(/Cloud-Umgebung/)).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText(/Nichts wird gesendet/)).toBeNull());
-    // The doors are unchanged: still exactly the three headings.
-    expect(screen.getByRole('heading', { name: /Neues Hauptbuch anlegen/ })).toBeInTheDocument();
+    // The main act is unchanged.
+    expect(screen.getByLabelText('Firmenname')).toBeInTheDocument();
   });
 
   it('creates a ledger through create_workspace', async () => {
     const user = userEvent.setup();
     const { calls } = setup({ create_workspace: ok({ workspaceId: 'ws_new' }), delivery_status: ok({ mode: 'up', scheduler: { enabled: true, lastTickAt: null, nextTickAt: null } }) });
     await user.type(screen.getByLabelText(/Firmenname/), 'Acme GmbH');
-    await user.click(screen.getByRole('button', { name: /Hauptbuch anlegen/ }));
+    await user.click(screen.getByRole('button', { name: 'Anlegen' }));
     await waitFor(() => expect(calls.some((c) => c.action === 'create_workspace')).toBe(true));
     const call = calls.find((c) => c.action === 'create_workspace');
     expect(call?.input.name).toBe('Acme GmbH');
@@ -96,8 +121,9 @@ describe('FirstRun', () => {
   it('restores a backup through restore_backup with confirmed:true', async () => {
     const user = userEvent.setup();
     const { calls } = setup({ verify_backup: VERIFIED, restore_backup: ok({ workspaceId: 'ws_r' }), delivery_status: ok({ mode: 'up', scheduler: { enabled: false, lastTickAt: null, nextTickAt: null } }) });
+    await openRestore(user);
     await user.type(screen.getByLabelText(/Backup-Datei/), '/tmp/books.tillbackup');
-    await user.click(screen.getByRole('button', { name: /Backup wiederherstellen/ }));
+    await user.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     await waitFor(() => expect(calls.some((c) => c.action === 'restore_backup')).toBe(true));
     const call = calls.find((c) => c.action === 'restore_backup');
     expect(call?.input.source).toBe('/tmp/books.tillbackup');
@@ -111,8 +137,9 @@ describe('FirstRun', () => {
       restore_backup: ok({ workspaceId: 'ws_r', portalLinksAwaitingHandover: 2 }),
       delivery_status: ok({ mode: 'up', scheduler: { enabled: false, lastTickAt: null, nextTickAt: null } }),
     });
+    await openRestore(user);
     await user.type(screen.getByLabelText(/Backup-Datei/), '/tmp/books.tillbackup');
-    await user.click(screen.getByRole('button', { name: /Backup wiederherstellen/ }));
+    await user.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     expect(await screen.findByText(/2 Portal-Links bleiben zu, bis du sie wieder freigibst/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Weiter' })).toBeInTheDocument();
   });
@@ -120,8 +147,9 @@ describe('FirstRun', () => {
   it('renders the remedy when the restored file is not a TILL database', async () => {
     const user = userEvent.setup();
     setup({ verify_backup: VERIFIED, restore_backup: reject('not_a_till_database'), delivery_status: reject('transport_error', 500) });
+    await openRestore(user);
     await user.type(screen.getByLabelText(/Backup-Datei/), '/tmp/nope.bin');
-    await user.click(screen.getByRole('button', { name: /Backup wiederherstellen/ }));
+    await user.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/keine TILL-Datenbank/);
   });
 
@@ -132,8 +160,9 @@ describe('FirstRun', () => {
       body: { ok: false, error: 'schema_newer_than_runtime', bookGeneration: 8, buildGeneration: 7, path: '/x/book.db', partial: true, completed: true },
     };
     setup({ verify_backup: VERIFIED, restore_backup: saved, delivery_status: reject('transport_error', 500) });
+    await openRestore(user);
     await user.type(screen.getByLabelText(/Backup-Datei/), '/tmp/books.tillbackup');
-    await user.click(screen.getByRole('button', { name: /Backup wiederherstellen/ }));
+    await user.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Diese Aktion ist gespeichert.');
     expect(alert).toHaveTextContent('Wiederhole die Aktion nicht, sonst entsteht sie doppelt.');
@@ -143,8 +172,9 @@ describe('FirstRun', () => {
   it('R4-1: a newer book refused BEFORE anything was written keeps the first-run sentence', async () => {
     const user = userEvent.setup();
     setup({ verify_backup: VERIFIED, restore_backup: reject('schema_newer_than_runtime'), delivery_status: reject('transport_error', 500) });
+    await openRestore(user);
     await user.type(screen.getByLabelText(/Backup-Datei/), '/tmp/books.tillbackup');
-    await user.click(screen.getByRole('button', { name: /Backup wiederherstellen/ }));
+    await user.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Die Datei wurde nicht verändert.');
   });
 
@@ -160,8 +190,9 @@ describe('FirstRun', () => {
       restore_backup: ok({ workspaceId: 'ws_r' }),
       delivery_status: reject('transport_error', 500),
     });
+    await openRestore(user);
     await user.type(screen.getByLabelText(/Backup-Datei/), '/tmp/newer.tillbackup');
-    await user.click(screen.getByRole('button', { name: /Backup wiederherstellen/ }));
+    await user.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     const alert = await screen.findByRole('alert');
     expect(calls.some((c) => c.action === 'restore_backup')).toBe(false);
     expect(alert).toHaveTextContent(/Schema-Generation 12/);
@@ -175,8 +206,9 @@ describe('FirstRun', () => {
     // restores under the default name instead of surfacing a raw invalid_input.
     const user = userEvent.setup();
     const { calls } = setup({ verify_backup: VERIFIED, restore_backup: ok({ workspaceId: 'ws_r' }), delivery_status: ok({ mode: 'up', scheduler: { enabled: false, lastTickAt: null, nextTickAt: null } }) });
+    await openRestore(user);
     await user.type(screen.getByLabelText(/Backup-Datei/), '/tmp/books.tillbackup');
-    await user.click(screen.getByRole('button', { name: /Backup wiederherstellen/ }));
+    await user.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     await waitFor(() => expect(calls.some((c) => c.action === 'restore_backup')).toBe(true));
     const call = calls.find((c) => c.action === 'restore_backup');
     expect(call?.input.newWorkspaceName).toBe('Wiederhergestelltes Hauptbuch');
@@ -188,8 +220,8 @@ describe('FirstRun', () => {
       delivery_status: ok({ mode: 'up', scheduler: { enabled: false, lastTickAt: null, nextTickAt: null } }),
     });
     await screen.findByText(/Läuft als:/); // let the async reads settle
-    expect(screen.getByText(/TILL hat auf diesem Gerät kein Hauptbuch gefunden/)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /^Neues Hauptbuch anlegen$/ })).toBeInTheDocument();
+    expect(screen.getByText(/Auf diesem Gerät gibt es noch kein Hauptbuch/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Hauptbuch einrichten' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Zur Übersicht/ })).not.toBeInTheDocument();
   });
 
@@ -201,8 +233,7 @@ describe('FirstRun', () => {
       delivery_status: ok({ mode: 'up', scheduler: { enabled: false, lastTickAt: null, nextTickAt: null } }),
     });
     await screen.findByText(/Läuft als:/);
-    expect(screen.getByText(/Lieber erst mit Beispieldaten anschauen/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Demo ausprobieren' }));
+    await user.click(screen.getByRole('button', { name: 'Demo ansehen' }));
     await waitFor(() => expect(calls.some((c) => c.action === 'create_demo_workspace')).toBe(true));
     expect(typeof calls.find((c) => c.action === 'create_demo_workspace')?.input.idempotencyKey).toBe('string');
     expect(window.localStorage.getItem('till-workspace')).toBe('ws_demo');
@@ -218,7 +249,7 @@ describe('FirstRun', () => {
       delivery_status: ok({ mode: 'up', scheduler: { enabled: false, lastTickAt: null, nextTickAt: null } }),
     });
     await screen.findByText(/bereits ein Hauptbuch/);
-    expect(screen.queryByRole('button', { name: 'Demo ausprobieren' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Demo ansehen' })).not.toBeInTheDocument();
     await screen.findByText(/Läuft als:/);
   });
 
@@ -258,7 +289,9 @@ describe('FirstRun, the restore door lists what it can restore (F-06, J7.2)', ()
 
   it('names the expected generation and each bundle with its date, generation and entry count; an incompatible one is named, not hidden', async () => {
     setup({ list_restorable_backups: LISTED, delivery_status: RUNTIME });
-    expect(await screen.findByText('Diese Installation erwartet Schema-Generation 6.')).toBeInTheDocument();
+    const user = userEvent.setup();
+    await openRestore(user);
+    expect(await screen.findByText(/Diese Installation erwartet Schema-Generation 6\./)).toBeInTheDocument();
     const good = screen.getByRole('radio', { name: /05\.09\.2026: Generation 6, 193 Buchungen/ });
     expect(good).toBeEnabled();
     const old = screen.getByRole('radio', { name: /05\.01\.2026: Generation 5, 12 Buchungen/ });
@@ -277,8 +310,9 @@ describe('FirstRun, the restore door lists what it can restore (F-06, J7.2)', ()
       restore_backup: ok({ workspaceId: 'ws_r' }),
       delivery_status: RUNTIME,
     });
+    await openRestore(user);
     await user.click(await screen.findByRole('radio', { name: /Generation 6, 193 Buchungen/ }));
-    await user.click(screen.getByRole('button', { name: /Backup wiederherstellen/ }));
+    await user.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     await waitFor(() => expect(calls.some((c) => c.action === 'restore_backup')).toBe(true));
     const verify = calls.find((c) => c.action === 'verify_backup');
     const restore = calls.find((c) => c.action === 'restore_backup');
@@ -290,9 +324,10 @@ describe('FirstRun, the restore door lists what it can restore (F-06, J7.2)', ()
   it('"Anderer Pfad" brings the typed field back as the fallback', async () => {
     const user = userEvent.setup();
     const { calls } = setup({ list_restorable_backups: LISTED, verify_backup: VERIFIED, restore_backup: ok({ workspaceId: 'ws_r' }), delivery_status: RUNTIME });
+    await openRestore(user);
     await user.click(await screen.findByRole('radio', { name: 'Anderer Pfad' }));
     await user.type(screen.getByLabelText(/Backup-Datei/), '/elsewhere/books.tillbackup');
-    await user.click(screen.getByRole('button', { name: /Backup wiederherstellen/ }));
+    await user.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     await waitFor(() => expect(calls.find((c) => c.action === 'restore_backup')?.input.source).toBe('/elsewhere/books.tillbackup'));
   });
 
@@ -303,8 +338,9 @@ describe('FirstRun, the restore door lists what it can restore (F-06, J7.2)', ()
       restore_backup: ok({ workspaceId: 'ws_r' }),
       delivery_status: RUNTIME,
     });
+    await openRestore(user);
     await user.type(screen.getByLabelText(/Backup-Datei/), '/tmp/export.tillexport');
-    await user.click(screen.getByRole('button', { name: /Backup wiederherstellen/ }));
+    await user.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/keine Wiederherstellungsquelle/);
     expect(calls.some((c) => c.action === 'restore_backup')).toBe(false);
   });
@@ -323,8 +359,9 @@ describe('FirstRun, the restore door lists what it can restore (F-06, J7.2)', ()
       restore_backup: ok({ workspaceId: 'ws_r' }),
       delivery_status: RUNTIME,
     });
+    await openRestore(user);
     await user.click(await screen.findByRole('radio', { name: /Generation 6, 193 Buchungen/ }));
-    await user.click(screen.getByRole('button', { name: /Backup wiederherstellen/ }));
+    await user.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Geprüft, aber nicht ausgeglichen: Generation 6, 193 Buchungen.');
     expect(screen.queryByText(/ausgeglichen\. Wird wiederhergestellt/)).not.toBeInTheDocument();
@@ -342,7 +379,6 @@ describe('FirstRun, the restore door lists what it can restore (F-06, J7.2)', ()
     await screen.findByText(/Läuft als:/);
     expect(screen.queryByText(/kein Hauptbuch gefunden/)).not.toBeInTheDocument();
     expect(screen.queryByText(/bereits/)).not.toBeInTheDocument();
-    expect(document.querySelector('.firstrun-intro [aria-busy="true"]')).not.toBeNull();
   });
 
   it('K-05/K-07: the shared SurfaceHeader names the page, and no MCP verb name is copy', async () => {
@@ -350,7 +386,7 @@ describe('FirstRun, the restore door lists what it can restore (F-06, J7.2)', ()
       list_workspaces: ok({ workspaces: [] }),
       delivery_status: ok({ mode: 'up', scheduler: { enabled: false, lastTickAt: null, nextTickAt: null } }),
     });
-    const title = await screen.findByRole('heading', { level: 1, name: /Richte dein Hauptbuch ein/ });
+    const title = await screen.findByRole('heading', { level: 1, name: 'Hauptbuch einrichten' });
     expect(title.closest('.surface-header')).not.toBeNull();
     await screen.findByText(/Läuft als:/);
     expect(document.body.textContent).not.toMatch(/Agent: |create_workspace|restore_backup/);
@@ -388,10 +424,13 @@ describe('FirstRun, adopting an existing book without a terminal (D166 point 8)'
     return fetchMock;
   }
 
+  /** The adopt door's form, opened from its icon the first time it is asked for (D187). */
   function adoptDoor(): HTMLElement {
-    const article = screen.getByRole('heading', { name: /Bestehende Datenbank übernehmen|Adopt an existing database/ }).closest('article');
-    if (article === null) throw new Error('the adopt door is not rendered');
-    return article;
+    const name = /^Hauptbuch öffnen$|^Open a ledger$/;
+    const open = screen.queryByRole('region', { name });
+    if (open !== null) return open;
+    fireEvent.click(screen.getByRole('button', { name }));
+    return screen.getByRole('region', { name });
   }
 
   for (const locale of ['de-CH', 'en'] as const) {
@@ -410,7 +449,7 @@ describe('FirstRun, adopting an existing book without a terminal (D166 point 8)'
     const { calls } = setup({ delivery_status: RUNTIME });
     await screen.findByText(/Läuft als:/);
     await user.type(within(adoptDoor()).getByLabelText(/Pfad zum Hauptbuch/), '/Users/du/Dokumente/till.db');
-    await user.click(within(adoptDoor()).getByRole('button', { name: 'Übernehmen' }));
+    await user.click(within(adoptDoor()).getByRole('button', { name: 'Öffnen' }));
     expect(await screen.findByRole('heading', { name: 'TILL öffnet dein Hauptbuch …' })).toBeInTheDocument();
     const adoptCall = fetchMock.mock.calls.find(([url]) => url === STUDIO_ADOPT_PATH);
     expect(adoptCall).toBeDefined();
@@ -433,7 +472,7 @@ describe('FirstRun, adopting an existing book without a terminal (D166 point 8)'
     await user.click(within(adoptDoor()).getByRole('button', { name: 'Datei wählen …' }));
     expect(postMessage).toHaveBeenCalledWith({ type: 'pickBook' });
     expect(await within(adoptDoor()).findByText('Gewählt: Beispiel AG.db')).toBeInTheDocument();
-    await user.click(within(adoptDoor()).getByRole('button', { name: 'Übernehmen' }));
+    await user.click(within(adoptDoor()).getByRole('button', { name: 'Öffnen' }));
     expect(await screen.findByRole('heading', { name: 'TILL öffnet dein Hauptbuch …' })).toBeInTheDocument();
     const adoptCall = fetchMock.mock.calls.find(([url]) => url === STUDIO_ADOPT_PATH);
     expect(JSON.parse(String(adoptCall?.[1]?.body))).toEqual({ path: '/Users/du/Dokumente/Beispiel AG.db' });
@@ -460,7 +499,7 @@ describe('FirstRun, adopting an existing book without a terminal (D166 point 8)'
       setup({ delivery_status: RUNTIME });
       await screen.findByText(/Läuft als:/);
       await user.type(within(adoptDoor()).getByLabelText(/Pfad zum Hauptbuch/), '/Users/du/till.db');
-      await user.click(within(adoptDoor()).getByRole('button', { name: 'Übernehmen' }));
+      await user.click(within(adoptDoor()).getByRole('button', { name: 'Öffnen' }));
       const alert = await screen.findByRole('alert');
       expect(alert).toHaveTextContent(sentence);
       expect(alert).not.toHaveTextContent(code);
@@ -475,7 +514,7 @@ describe('FirstRun, adopting an existing book without a terminal (D166 point 8)'
     await screen.findByText(/Läuft als:/);
     expect(await axe(adoptDoor())).toHaveNoViolations();
     await user.type(within(adoptDoor()).getByLabelText(/Pfad zum Hauptbuch/), '/Users/du/till.db');
-    await user.click(within(adoptDoor()).getByRole('button', { name: 'Übernehmen' }));
+    await user.click(within(adoptDoor()).getByRole('button', { name: 'Öffnen' }));
     const opening = await screen.findByRole('heading', { name: 'TILL öffnet dein Hauptbuch …' });
     expect(await axe(opening.closest('section') as HTMLElement)).toHaveNoViolations();
   });
@@ -486,7 +525,7 @@ describe('FirstRun, adopting an existing book without a terminal (D166 point 8)'
     setup({ delivery_status: RUNTIME });
     await screen.findByText(/Läuft als:/);
     await user.type(within(adoptDoor()).getByLabelText(/Pfad zum Hauptbuch/), '/Users/du/till.db');
-    await user.click(within(adoptDoor()).getByRole('button', { name: 'Übernehmen' }));
+    await user.click(within(adoptDoor()).getByRole('button', { name: 'Öffnen' }));
     expect(await screen.findByText('Agenten, die schon verbunden sind, sehen das neue Hauptbuch, sobald sie neu starten.')).toBeInTheDocument();
   });
 });
@@ -576,7 +615,7 @@ describe('FirstRun, the adopted book is not reachable (D166 point 8, critic F1/F
     setup({ delivery_status: unavailableRuntime('missing') });
     await user.click(await screen.findByRole('button', { name: 'Anderes Hauptbuch wählen' }));
     await user.type(screen.getByLabelText(/Pfad zum Hauptbuch/), '/Users/du/Dokumente/anderes.db');
-    await user.click(screen.getByRole('button', { name: 'Übernehmen' }));
+    await user.click(screen.getByRole('button', { name: 'Öffnen' }));
     expect(await screen.findByRole('heading', { name: 'TILL öffnet dein Hauptbuch …' })).toBeInTheDocument();
     const call = fetchMock.mock.calls.find(([url]) => url === STUDIO_ADOPT_PATH);
     expect(JSON.parse(String(call?.[1]?.body))).toEqual({ path: '/Users/du/Dokumente/anderes.db' });

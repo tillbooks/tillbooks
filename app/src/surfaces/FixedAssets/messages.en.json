@@ -74,7 +74,8 @@
       },
       "error": {
         "transport": "Could not load categories. Please retry."
-      }
+      },
+      "search": "Search categories"
     },
     "register": {
       "title": "Asset register",
@@ -491,7 +492,8 @@
       },
       "error": {
         "transport": "Could not load locations. Please retry."
-      }
+      },
+      "search": "Search locations"
     },
     "transfer": {
       "action": "Transfer",
@@ -688,7 +690,8 @@
       },
       "error": {
         "transport": "Could not load the maintenance entries. Please try again."
-      }
+      },
+      "search": "Search maintenance"
     }
   },
   "errors": {

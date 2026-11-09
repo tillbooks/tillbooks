@@ -292,15 +292,9 @@
 }
 /* The 32px trigger must not grow the label line it sits on, or the control under the label drops
    below its neighbours: the negative margin gives back exactly the overhang over one text line. */
-.documents-info-trigger {
+.documents-info .icon-button {
   margin-block: calc((var(--t-lh-md) - 32px) / 2);
   color: var(--t-text-dim);
-}
-.documents-info .tooltip {
-  left: 0;
-  transform: none;
-  max-width: min(26rem, calc(100vw - 2 * var(--t-space-2)));
-  font-weight: 400;
 }
 .documents-detail-sub {
   align-items: center;

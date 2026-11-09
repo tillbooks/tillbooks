@@ -24,16 +24,6 @@
   flex-direction: column;
 }
 
-/* The close actions: the month form, and the one door to the guided year close beside it (D152
-   rule 3), on one line that wraps on a narrow viewport. */
-.periods-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--t-space-3);
-  padding: var(--t-space-2);
-}
-
 /* The month form (a field plus its action) wraps instead of overflowing: on a narrow viewport the
    button drops below its field rather than pushing off the edge. `min-width: 0` lets the field column
    shrink to the available width instead of forcing a horizontal scroll. */

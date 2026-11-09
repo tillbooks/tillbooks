@@ -13,12 +13,19 @@
    cross-links), and the EntryDrawer body that rides inside the shared DetailDrawer. */
 
 /* Filter bar. The controls are the shared `.field` and `Select` (K-15); the filters are live (K-16). */
+.journal-filter-date {
+  width: 9.5rem;
+}
+
+.journal-filter-account {
+  width: 9rem;
+}
+
 .journal-filters {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
   gap: var(--t-space-2);
-  padding: var(--t-space-2);
   margin-bottom: var(--t-space-2);
 }
 

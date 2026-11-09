@@ -212,8 +212,8 @@ describe('WritingStyle', () => {
     expect(radios[1]).toBeDisabled();
     expect(screen.getByText('Benötigt 128 GB RAM. Dein Mac hat 16 GB.')).toBeInTheDocument();
     // The honesty notes render with the list, not behind anything.
-    expect(screen.getByText(de.runtime.picker.updates)).toBeInTheDocument();
-    expect(screen.getByText(de.runtime.download.once)).toBeInTheDocument();
+    expect(screen.getByText((c) => c.includes(de.runtime.picker.updates))).toBeInTheDocument();
+    expect(screen.getByText((c) => c.includes(de.runtime.download.once))).toBeInTheDocument();
     // Erweitert is a collapsed disclosure: present, closed, its note not visible yet.
     const advanced = screen.getByText(de.runtime.picker.advanced);
     expect(advanced.closest('details')?.open).not.toBe(true);

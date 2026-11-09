@@ -37,7 +37,7 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
-import { FilterBar } from '../../components/FilterBar';
+import { FilterBar, type FilterFacet } from '../../components/FilterBar';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { useCan, CAP } from '../../lib/capabilities';
 import {
@@ -47,8 +47,7 @@ import {
   PermissionDenied,
   useSkeletonHold,
 } from '../../components/states';
-import { FilterChips } from '../../components/FilterChips';
-import { Select } from '../../components/Select';
+import { IconButton } from '../../components/IconButton';
 import { Status } from '../../components/Status';
 import type { Err } from '../../lib/client';
 import { ContactEditor } from './ContactEditor';
@@ -339,9 +338,10 @@ export function Contacts() {
 
   // The header is the one block every state shares, so it is rendered once here and reused by the
   // early returns below rather than copy-pasted into each of them (SurfaceHeader, D118 B2).
-  const header = (actions?: ReactNode) => (
+  const header = (actions?: ReactNode, count?: number) => (
     <SurfaceHeader
       title={t('contact.title')}
+      count={count}
       help={<SurfaceHelp surface="Contacts" />}
       actions={actions}
     />
@@ -385,13 +385,50 @@ export function Contacts() {
   }
 
   const hasContacts = contacts.length > 0;
+  // D187 Listen A: every axis is a facet, a chip while set and under "+ Filter" while not. `list_contacts`
+  // takes ONE segment, so choosing a segment replaces the active one.
+  const facets: FilterFacet[] = [
+    {
+      key: 'role',
+      label: t('contact.partyRole'),
+      options: PARTY_ROLES.map((role) => ({ value: role, label: t(`contact.role.${role}`) })),
+      value: roleFilter === 'all' ? null : roleFilter,
+      onChange: (value) => setRoleFilter(value === null ? 'all' : (value as RoleFilter)),
+    },
+    // C00's kind axis, beside A09's role axis: the two are orthogonal facts about one row.
+    {
+      key: 'kind',
+      label: t('contact.kindLabel'),
+      options: CONTACT_KINDS.map((kind) => ({ value: kind, label: t(`contact.kind.${kind}`) })),
+      value: kindFilter === 'all' ? null : kindFilter,
+      onChange: (value) => setKindFilter(value === null ? 'all' : (value as KindFilter)),
+    },
+    ...(segments.length > 0 || segmentFilter !== null
+      ? [
+          {
+            key: 'segment',
+            label: t('contact.segmentsTitle'),
+            options: (segmentFilter !== null && !segments.includes(segmentFilter) ? [...segments, segmentFilter] : segments).map(
+              (segment) => ({ value: segment, label: segment }),
+            ),
+            value: segmentFilter,
+            onChange: setSegmentFilter,
+          } satisfies FilterFacet,
+        ]
+      : []),
+    {
+      key: 'archived',
+      label: t('contact.showArchived'),
+      options: [{ value: '1', label: t('contact.showArchived') }],
+      value: showArchived ? '1' : null,
+      onChange: (value) => setShowArchived(value !== null),
+    },
+  ];
   const canMerge = selected.length === 2;
 
   const createButton = canManage ? (
     <>
-      <button type="button" className="btn btn--secondary" onClick={() => setImporting(true)}>
-        {t('contact.action.import')}
-      </button>
+      <IconButton icon="import" context={t('contact.action.importContext')} onClick={() => setImporting(true)} />
       <button type="button" className="btn btn--primary" onClick={() => setEditor({ mode: 'create' })}>
         {t('contact.new')}
       </button>
@@ -412,7 +449,7 @@ export function Contacts() {
 
   return (
     <div className="contacts">
-      {header(createButton)}
+      {header(createButton, hasContacts ? filtered.length : undefined)}
 
       {rowError !== null && <ErrorBanner error={rowError} />}
 
@@ -435,59 +472,8 @@ export function Contacts() {
             searchPlaceholder={t('contact.search')}
             onClear={clearFilters}
             clearLabel={t('contact.clearSearch')}
-            active={
-              search.trim() !== '' ||
-              roleFilter !== 'all' ||
-              kindFilter !== 'all' ||
-              segmentFilter !== null
-            }
-          >
-            <div className="ct-field-inline">
-              <span className="visually-hidden">{t('contact.partyRole')}</span>
-              <Select
-                value={roleFilter}
-                onChange={(value) => setRoleFilter(value as RoleFilter)}
-                options={[
-                  { value: 'all', label: t('contact.roleFilter.all') },
-                  ...PARTY_ROLES.map((role) => ({ value: role, label: t(`contact.role.${role}`) })),
-                ]}
-                ariaLabel={t('contact.partyRole')}
-              />
-            </div>
-            {/* C00's kind axis, beside A09's role axis: the two are orthogonal facts about one row. */}
-            <div className="ct-field-inline">
-              <span className="visually-hidden">{t('contact.kindLabel')}</span>
-              <Select
-                value={kindFilter}
-                onChange={(value) => setKindFilter(value as KindFilter)}
-                options={[
-                  { value: 'all', label: t('contact.kindFilter.all') },
-                  ...CONTACT_KINDS.map((kind) => ({ value: kind, label: t(`contact.kind.${kind}`) })),
-                ]}
-                ariaLabel={t('contact.kindLabel')}
-              />
-            </div>
-            <label className="ct-checkbox">
-              <input
-                type="checkbox"
-                checked={showArchived}
-                onChange={(event) => setShowArchived(event.target.checked)}
-              />
-              <span>{t('contact.showArchived')}</span>
-            </label>
-          </FilterBar>
-
-          {/* Segment filter chips (US-C00.2), the shared FilterChips (K-11). `list_contacts` takes ONE
-              segment, so pressing a chip replaces the active one and pressing it again clears it.
-              `aria-pressed` carries the state, so it is never colour-only. */}
-          {segments.length > 0 && (
-            <FilterChips
-              label={t('contact.segments.filter')}
-              chips={segments.map((segment) => ({ value: segment, label: segment }))}
-              selected={segmentFilter === null ? [] : [segmentFilter]}
-              onChange={(next) => setSegmentFilter(next.find((v) => v !== segmentFilter) ?? null)}
-            />
-          )}
+            facets={facets}
+          />
 
           {/* The merge toolbar, present only once something is selected, so it never occupies space
               it has no use for. D15: the disabled action states its own precondition inline. Gated

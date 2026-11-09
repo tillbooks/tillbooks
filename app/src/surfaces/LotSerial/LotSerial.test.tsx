@@ -77,7 +77,7 @@ function renderSurface(canned: Canned, asked?: Array<{ action: string; input: Re
 
 /** D152 rule 5: an item opens by the person's act. Click it in the list, as the person would. */
 async function openItem(name = 'Impfstoff-Charge') {
-  await userEvent.click(await screen.findByRole('button', { name: new RegExp(`^${name}`) }));
+  await userEvent.click(await screen.findByRole('row', { name: new RegExp(`^${name}`) }));
 }
 
 describe('LotSerial, the item + lots/serials detail', () => {
@@ -175,29 +175,31 @@ describe('LotSerial, a list never opens itself (D152 rule 5)', () => {
   it('selects nothing on load: no current item, one quiet line, no lot or serial read', async () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     const { container } = renderSurface(two(), asked);
-    await screen.findByRole('button', { name: /^Serien-Artikel/ });
+    await screen.findByRole('row', { name: /^Serien-Artikel/ });
     expect(container.querySelector('[aria-current="true"]')).toBeNull();
-    expect(screen.getByText(de.lotSerial.selectHint)).toBeInTheDocument();
+    for (const toggle of screen.getAllByRole('button', { name: /^Details zu / })) {
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    }
     expect(screen.queryByRole('combobox', { name: de.lotSerial.modeLabel })).not.toBeInTheDocument();
     expect(asked.some((a) => a.action === 'lot_list' || a.action === 'serial_list')).toBe(false);
   });
 
   it('opens the item a deep link names (?focus=)', async () => {
     renderSurface(two(), undefined, '/lot-serial-tracking?focus=it_ser');
-    const item = await screen.findByRole('button', { name: /^Serien-Artikel/ });
+    const item = await screen.findByRole('row', { name: /^Serien-Artikel/ });
     await waitFor(() => expect(item).toHaveAttribute('aria-current', 'true'));
     expect(await screen.findByRole('heading', { name: 'Serien-Artikel' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Impfstoff-Charge/ })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('row', { name: /^Impfstoff-Charge/ })).not.toHaveAttribute('aria-current');
   });
 
   it('a click opens the detail with the same controls, a second click closes it', async () => {
     renderSurface(two());
     await openItem();
-    expect(screen.getByRole('button', { name: /^Impfstoff-Charge/ })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('row', { name: /^Impfstoff-Charge/ })).toHaveAttribute('aria-current', 'true');
     expect(await screen.findByRole('combobox', { name: de.lotSerial.modeLabel })).toBeInTheDocument();
     expect(await screen.findByText(de.lotSerial.lots.new)).toBeInTheDocument();
     await openItem();
-    await waitFor(() => expect(screen.getByText(de.lotSerial.selectHint)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Details zu Impfstoff-Charge/ })).toHaveAttribute('aria-expanded', 'false'));
     expect(screen.queryByRole('combobox', { name: de.lotSerial.modeLabel })).not.toBeInTheDocument();
   });
 });

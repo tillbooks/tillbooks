@@ -45,11 +45,10 @@
       "superseded": "Ersetzt"
     },
     "savedView": "Gespeicherte Ansicht",
-    "view": {
-      "all": "Alle offenen"
-    },
+    "view": {},
     "filter": {
-      "showSuperseded": "Ersetzte anzeigen"
+      "showSuperseded": "Ersetzte anzeigen",
+      "clear": "Filter zurücksetzen"
     },
     "drawer": {
       "close": "Schliessen"
@@ -82,7 +81,8 @@
     },
     "unknownContact": "Unbekannter Kontakt",
     "rowOpen": "Offerte {row} öffnen",
-    "rowOpenDraft": "Offertentwurf öffnen"
+    "rowOpenDraft": "Offertentwurf öffnen",
+    "search": "Offerten suchen"
   },
   "help": {
     "Quotes": {

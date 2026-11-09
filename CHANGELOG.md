@@ -7,6 +7,40 @@ compatibility promise yet, so back up before every upgrade.
 
 ## [Unreleased]
 
+## [1.0.0-beta.4] - 2026-11-09
+
+A calmer Studio and a more flexible export. Every screen now follows one of a few page patterns, and
+the hints that explain a booking stay on the page instead of hiding in tooltips. No database
+upgrade: books from 1.0.0-beta.3 open as they are. Still a beta: back up before you update.
+
+### Added
+
+- Export by date range: the journal and the bank statements export for any Von/Bis range, with quick
+  picks for the usual periods. A range that is exactly a month or a year gives the same file as the
+  period export. `export_journal` and `export_statements` take `from` and `to` for agents too.
+- Journal export filters: limit the journal to one account, one source or one status. An unknown
+  account or an incomplete range is refused with a named reason, never a silent default.
+- First run: one field to start with, and the other ways in as icons below it, plus a short backup
+  checklist.
+
+### Changed
+
+- The Studio's screens share a small set of layouts (lists, work-through queues, forms), so the same
+  kind of task looks and works the same everywhere.
+- The sentences that say what a booking will do (depreciation, dunning fees and interest, stock
+  adjustments, currency rates, recurring invoices, transfers, VAT balances) are visible next to the
+  button instead of behind a hover.
+- The collapsed menu opens when you rest the pointer on it, and every icon button names itself on
+  hover.
+
+### Fixed
+
+- The app scrolls as one page: no more second scrollbar inside the window, and a closed tooltip no
+  longer pushes a list sideways.
+- An open-items search with no match can be cleared, and the count shows the rows you see.
+- Controls are at least 44 px tall at phone width, and a "Mehr" button is read once by screen readers.
+- The company profile shows the whole legal form, and the eBill ID field has room for its value.
+
 ## [1.0.0-beta.3] - 2026-11-09
 
 The third beta. Receipts now find their bank lines, and rules and agents take over more of the daily

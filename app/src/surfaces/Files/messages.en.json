@@ -36,10 +36,8 @@
       "noResultsHint": "Adjust the search or remove a filter."
     },
     "filter": {
-      "query": "Search: {q}",
-      "folder": "Folder: {name}",
-      "remove": "Remove filter",
-      "group": "Filters"
+      "folderFacet": "Folder",
+      "clear": "Clear filters"
     },
     "field": {
       "title": "Title",

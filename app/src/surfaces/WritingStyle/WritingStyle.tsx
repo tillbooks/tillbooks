@@ -18,6 +18,8 @@
  * action and the picker's confirm render only with `voice.write`; without it the picker renders
  * READ-ONLY rather than disappearing, so a read-only user still sees what is selected (spec §6).
  */
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
@@ -29,6 +31,7 @@ import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, 
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { Status } from '../../components/Status';
+import { SettingGroup, SettingRow } from '../../components/SettingRow';
 import { Select } from '../../components/Select';
 import './WritingStyle.css';
 
@@ -288,6 +291,7 @@ export function WritingStyle() {
         </span>
       )}
       {!registered && runtime?.reason !== undefined && <span>{t('runtime.status.reason', { reason: runtime.reason })}</span>}
+      <IconButton icon="info" small context={t('voice.corpus.note')} />
     </p>
   );
 
@@ -344,15 +348,14 @@ export function WritingStyle() {
       ) : (
         <>
           {accounts.length > 1 && (
-            <div className="voice-field">
-              <span>{t('voice.account.label')}</span>
+            <SettingRow label={t('voice.account.label')} description={t('voice.account.desc')}>
               <Select
                 value={accountId}
                 onChange={(val) => setAccountId(val)}
                 options={accounts.map((account) => ({ value: account.id, label: account.address }))}
                 ariaLabel={t('voice.account.label')}
               />
-            </div>
+            </SettingRow>
           )}
           {files.length > 0 && (
             <details className="voice-documents">
@@ -387,8 +390,11 @@ export function WritingStyle() {
   );
 
   const modelSection = registered && catalog !== null && (
-    <section className="voice-models" aria-labelledby="voice-models-title">
-      <h2 id="voice-models-title">{t('runtime.picker.title')}</h2>
+    <SettingGroup
+      title={t('runtime.picker.title')}
+      dataKey="voice-models"
+      action={<IconButton icon="info" small context={`${t('runtime.download.once')} ${t('runtime.picker.updates')}`} />}
+    >
       {catalog.selection !== null && (
         <p className="voice-note">{t('runtime.picker.selected', { model: catalog.selection.modelRef })}</p>
       )}
@@ -428,8 +434,6 @@ export function WritingStyle() {
           </li>
         ))}
       </ul>
-      <p className="voice-note">{t('runtime.download.once')}</p>
-      <p className="voice-note">{t('runtime.picker.updates')}</p>
       {canWrite && (
         <button
           type="button"
@@ -444,10 +448,11 @@ export function WritingStyle() {
         <details className="voice-advanced">
           <summary>{t('runtime.picker.advanced')}</summary>
           <p className="voice-note">{t('runtime.picker.byo_note')}</p>
-          <label className="voice-field">
-            <span>{t('runtime.picker.byo')}</span>
-            <input className="field" type="text" value={ggufPath} onChange={(e) => setGgufPath(e.target.value)} placeholder="/pfad/zu/modell.gguf" />
-          </label>
+          <div className="form-stack">
+            <Field label={t('runtime.picker.byo')}>
+              <input className="field" type="text" value={ggufPath} onChange={(e) => setGgufPath(e.target.value)} placeholder="/pfad/zu/modell.gguf" />
+            </Field>
+          </div>
           <button
             type="button"
             className="btn btn--secondary btn--sm"
@@ -458,7 +463,7 @@ export function WritingStyle() {
           </button>
         </details>
       )}
-    </section>
+    </SettingGroup>
   );
 
   return (
@@ -469,9 +474,10 @@ export function WritingStyle() {
         help={<SurfaceHelp surface="WritingStyle" />}
       />
 
-      {statusLine}
-      {!registered && !loading && <p className="voice-no-cloud">{t('runtime.error.needs_local_runtime')}</p>}
-      <p className="voice-corpus-note">{t('voice.corpus.note')}</p>
+      <SettingGroup title={t('runtime.status.title')} dataKey="voice-runtime">
+        {statusLine}
+        {!registered && !loading && <p className="voice-no-cloud">{t('runtime.error.needs_local_runtime')}</p>}
+      </SettingGroup>
 
       {writeError !== null && <ErrorBanner message={errorMessage(writeError)} />}
       {failed && <ErrorBanner context="read" message={t('voice.error.transport')} onRetry={() => void load()} />}
@@ -482,7 +488,7 @@ export function WritingStyle() {
       ) : failed ? null : (
         <>
           {newest === undefined ? (
-            <div className="voice-empty">
+            <SettingGroup title={t('voice.group.profile')} dataKey="voice-profile">
               {/* K-33: the style is learned from sent mail, so with no mail store connected the one
                   action is the way to connect it, on Korrespondenz. */}
               <EmptyState
@@ -491,9 +497,9 @@ export function WritingStyle() {
                 action={accounts.length === 0 ? { label: t('voice.emptyAction'), to: '/correspondence' } : undefined}
               />
               {accounts.length > 0 && buildControls}
-            </div>
+            </SettingGroup>
           ) : (
-            <div className="voice-profile">
+            <SettingGroup title={t('voice.group.profile')} dataKey="voice-profile">
               {stale && (
                 <p className="voice-stale">
                   <Status kind="warn" label={t('voice.stale')} />
@@ -501,7 +507,7 @@ export function WritingStyle() {
               )}
               {styleCardView(newest)}
               {buildControls}
-            </div>
+            </SettingGroup>
           )}
           {modelSection}
         </>

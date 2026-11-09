@@ -34,6 +34,7 @@ import { formatCalendar } from '../../lib/format';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { Segmented } from '../../components/Segmented';
 import { Status } from '../../components/Status';
+import { IconButton } from '../../components/IconButton';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { ErrorBanner, PermissionDenied, Skeleton } from '../../components/states';
 
@@ -270,10 +271,10 @@ export function ProjectProfitability({ workspaceId, projectId }: ProjectProfitab
           </div>
         )}
       </dl>
-      {pl.unattributableComponents.length > 0 && <p className="costing-hint">{t('costing.hint.unattributable')}</p>}
+      {pl.unattributableComponents.length > 0 && <p className="costing-hint"><IconButton icon="info" small context={t('costing.hint.unattributable')} /></p>}
       {basis === 'cost' && pl.basisDegraded && (
         <p className="costing-hint" role="status">
-          {t('costing.hint.costRateMissing')}
+          <IconButton icon="info" small context={t('costing.hint.costRateMissing')} />
         </p>
       )}
 

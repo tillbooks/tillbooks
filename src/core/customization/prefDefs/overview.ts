@@ -75,8 +75,8 @@ export const MOTION_PREFS: readonly PrefDef[] = [
     area: APPEARANCE,
     label: { en: 'Motion', 'de-CH': 'Bewegung' },
     description: {
-      en: 'Lively (default): charts grow in, the overview figures count up, tiles lift on hover. Standard: charts grow in briefly. Calm: only the small transitions. Off: nothing moves. Your system setting for reduced motion always wins.',
-      'de-CH': 'Lebendig (Standard): Diagramme wachsen ein, die Zahlen der Übersicht zählen hoch, Kacheln heben sich beim Überfahren. Normal: Diagramme wachsen kurz ein. Ruhig: nur die kleinen Übergänge. Aus: nichts bewegt sich. Die Systemeinstellung für weniger Bewegung gilt immer.',
+      en: 'How lively figures and charts appear when the page opens. Your device\'s reduced-motion setting always wins.',
+      'de-CH': 'Wie lebhaft Zahlen und Diagramme beim Öffnen erscheinen. Reduzierte Bewegung auf deinem Gerät gilt immer.',
     },
     valueLabels: {
       lively: { en: 'Lively', 'de-CH': 'Lebendig' },
@@ -96,8 +96,8 @@ export const OVERVIEW_PREFS: readonly PrefDef[] = [
     area: OVERVIEW,
     label: { en: 'Waiting bank lines', 'de-CH': 'Wartende Bankbuchungen' },
     description: {
-      en: 'Where the overview shows the bank lines that wait for you: a tile among the key figures (default), a card above them, or a slim bar.',
-      'de-CH': 'Wo die Übersicht die Bankbuchungen zeigt, die auf dich warten: als Kachel bei den Kennzahlen (Standard), als Karte darüber oder als schmale Leiste.',
+      en: 'Where the overview shows the bank lines that wait for you.',
+      'de-CH': 'Wo die Übersicht die Bankbuchungen zeigt, die auf dich warten.',
     },
     valueLabels: {
       tile: { en: 'Tile', 'de-CH': 'Kachel' },
@@ -113,8 +113,8 @@ export const OVERVIEW_PREFS: readonly PrefDef[] = [
     area: OVERVIEW,
     label: { en: 'Overview content', 'de-CH': 'Inhalt der Übersicht' },
     description: {
-      en: 'The cards the overview starts with. Charts and lists (default): top expenses, money in and out per month, open creditors, open tasks. Trends: key figures with trend lines, cash flow, top expenses as bars. Figures only. Once you arrange the cards on the overview, your arrangement decides; this set applies again after Restore the standard.',
-      'de-CH': 'Die Karten, mit denen die Übersicht beginnt. Diagramme und Listen (Standard): grösste Aufwände, Geld rein und raus pro Monat, offene Kreditoren, offene Aufgaben. Verlauf: Kennzahlen mit Verlaufslinie, Geldfluss, grösste Aufwände als Balken. Nur Kennzahlen. Sobald du die Karten auf der Übersicht anordnest, gilt deine Anordnung; nach Standard wiederherstellen gilt wieder diese Auswahl.',
+      en: 'Which cards the overview starts with.',
+      'de-CH': 'Mit welchen Karten die Übersicht beginnt.',
     },
     valueLabels: {
       bexio: { en: 'Charts and lists', 'de-CH': 'Diagramme und Listen' },
@@ -130,8 +130,8 @@ export const OVERVIEW_PREFS: readonly PrefDef[] = [
     area: OVERVIEW,
     label: { en: 'Overview widgets', 'de-CH': 'Elemente der Übersicht' },
     description: {
-      en: 'Which cards the overview shows, in what order and how wide. Empty means the cards of the chosen content.',
-      'de-CH': 'Welche Karten die Übersicht zeigt, in welcher Reihenfolge und wie breit. Leer heisst: die Karten des gewählten Inhalts.',
+      en: 'Which cards the overview shows, in what order and how wide.',
+      'de-CH': 'Welche Karten die Übersicht zeigt, in welcher Reihenfolge und wie breit.',
     },
   },
   {
@@ -143,8 +143,8 @@ export const OVERVIEW_PREFS: readonly PrefDef[] = [
     area: OVERVIEW,
     label: { en: 'Overview key figures', 'de-CH': 'Kennzahlen der Übersicht' },
     description: {
-      en: 'Which key figures the overview shows, in what order, how wide (w: double), what each compares with (compare: previous_year, previous_period or none; absent follows Compare with) and whether it shows its twelve-month line (trend). Empty means the standard. Your role still decides which ones you may see.',
-      'de-CH': 'Welche Kennzahlen die Übersicht zeigt, in welcher Reihenfolge, wie breit (w: double), womit jede vergleicht (compare: previous_year, previous_period oder none; fehlt es, gilt «Vergleichen mit») und ob sie ihren Verlauf über zwölf Monate zeigt (trend). Leer heisst: der Standard. Welche du sehen darfst, entscheidet weiterhin deine Rolle.',
+      en: 'Which key figures the overview shows, in what order, and what each compares with.',
+      'de-CH': 'Welche Kennzahlen die Übersicht zeigt, in welcher Reihenfolge und womit jede vergleicht.',
     },
   },
   {
@@ -155,8 +155,8 @@ export const OVERVIEW_PREFS: readonly PrefDef[] = [
     area: OVERVIEW,
     label: { en: 'Compare with', 'de-CH': 'Vergleichen mit' },
     description: {
-      en: 'What the key figures are compared with, always up to the same day: the previous year (default), the previous period, or nothing. A key figure can choose its own under Anpassen.',
-      'de-CH': 'Womit die Kennzahlen verglichen werden, immer bis zum gleichen Tag: mit dem Vorjahr (Standard), der Vorperiode oder gar nicht. Eine Kennzahl kann unter Anpassen ihren eigenen Vergleich wählen.',
+      en: 'What the key figures are compared with: the previous year, the previous period, or nothing.',
+      'de-CH': 'Womit die Kennzahlen verglichen werden: mit dem Vorjahr, der Vorperiode oder gar nicht.',
     },
     valueLabels: {
       previous_year: { en: 'Previous year', 'de-CH': 'Vorjahr' },
@@ -172,8 +172,8 @@ export const OVERVIEW_PREFS: readonly PrefDef[] = [
     area: OVERVIEW,
     label: { en: 'Compare a running period', 'de-CH': 'Laufende Periode vergleichen' },
     description: {
-      en: 'Up to the same day (default): the 1st to the 9th against the 1st to the 9th. Whole period: the running period against the whole earlier one.',
-      'de-CH': 'Bis zum gleichen Tag (Standard): der 1. bis 9. gegen den 1. bis 9. Ganze Periode: die laufende Periode gegen die ganze frühere.',
+      en: 'Up to the same day compares the 1st to the 9th with the 1st to the 9th; whole period compares with the whole earlier one.',
+      'de-CH': 'Bis zum gleichen Tag vergleicht den 1. bis 9. mit dem 1. bis 9., Ganze Periode mit der ganzen früheren.',
     },
     valueLabels: {
       same_day: { en: 'Up to the same day', 'de-CH': 'Bis zum gleichen Tag' },
@@ -188,8 +188,8 @@ export const OVERVIEW_PREFS: readonly PrefDef[] = [
     area: OVERVIEW,
     label: { en: 'Estimated turnover', 'de-CH': 'Geschätzter Umsatz' },
     description: {
-      en: 'Which open bank lines the turnover estimate counts. Rules (default): lines a booking rule books, and the sure and learned proposals. All proposals: also the ones to check. Off: no estimate.',
-      'de-CH': 'Welche offenen Bankzeilen der geschätzte Umsatz zählt. Regeln (Standard): Zeilen, die eine Buchungsregel bucht, und die sicheren und gelernten Vorschläge. Alle Vorschläge: auch die zum Prüfen. Aus: keine Schätzung.',
+      en: 'Which open bank lines the turnover estimate counts.',
+      'de-CH': 'Welche offenen Bankzeilen der geschätzte Umsatz mitzählt.',
     },
     valueLabels: {
       rules: { en: 'Rules', 'de-CH': 'Regeln' },
@@ -222,8 +222,8 @@ export const OVERVIEW_PREFS: readonly PrefDef[] = [
     area: OVERVIEW,
     label: { en: 'Largest expenses by', 'de-CH': 'Grösste Aufwände nach' },
     description: {
-      en: 'Whether the largest-expenses cards group by expense account (default) or by vendor.',
-      'de-CH': 'Ob die Karten der grössten Aufwände nach Aufwandkonto (Standard) oder nach Lieferant gruppieren.',
+      en: 'Whether the largest expenses group by account or by supplier.',
+      'de-CH': 'Ob die grössten Aufwände nach Konto oder nach Lieferant gruppiert sind.',
     },
     valueLabels: {
       account: { en: 'Account', 'de-CH': 'Konto' },

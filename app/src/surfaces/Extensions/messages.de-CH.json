@@ -1,9 +1,16 @@
 {
-  "nav": { "extensions": "Erweiterungen" },
+  "nav": {
+    "extensions": "Erweiterungen"
+  },
   "plugin": {
-    "panel": { "title": "Erweiterungen" },
+    "panel": {
+      "title": "Erweiterungen"
+    },
     "lede": "Erweiterungen von Drittanbietern ergänzen TILL um Werkzeuge, Bildschirme, Berichtsquellen und Automatisierungen. Jede läuft in einem isolierten Rahmen mit nur den Berechtigungen, die du erteilst, ein allfälliger Netzwerkzugriff wird von ihrem Host abgesichert und nicht von TILL, und keine kann einen zweiten Weg zu deinem Journal öffnen.",
-    "tab": { "installed": "Installiert", "browse": "Durchsuchen" },
+    "tab": {
+      "installed": "Installiert",
+      "browse": "Durchsuchen"
+    },
     "action": {
       "install": "Installieren",
       "browse": "Durchsuchen",
@@ -19,7 +26,9 @@
       "disabled": "Deaktiviert",
       "incompatible": "Nicht kompatibel"
     },
-    "incompatible": { "reason": "Erfordert Kernversion {range}, installiert ist {version}." },
+    "incompatible": {
+      "reason": "Erfordert Kernversion {range}, installiert ist {version}."
+    },
     "card": {
       "version": "Version {version}",
       "capabilities": "{count} Fähigkeiten",
@@ -34,7 +43,10 @@
       "compatWarning": "Diese Erweiterung ist mit der aktuellen Kernversion nicht kompatibel und wird deaktiviert installiert.",
       "cancel": "Abbrechen"
     },
-    "screen": { "title": "Panel von {name}", "sandboxNote": "Dieses Panel läuft in einem isolierten Rahmen, der den Rest des Studios nicht lesen kann. Es bleibt leer, bis ein Host seinen Inhalt bereitstellt, und ein allfälliger Netzwerkzugriff wird von diesem Host abgesichert, nicht von diesem Panel." },
+    "screen": {
+      "title": "Panel von {name}",
+      "sandboxNote": "Dieses Panel läuft in einem isolierten Rahmen, der den Rest des Studios nicht lesen kann. Es bleibt leer, bis ein Host seinen Inhalt bereitstellt, und ein allfälliger Netzwerkzugriff wird von diesem Host abgesichert, nicht von diesem Panel."
+    },
     "empty": "Keine Erweiterungen installiert.",
     "registry": {
       "empty": "Kein Erweiterungs-Verzeichnis verbunden.",
@@ -48,7 +60,9 @@
       "stale": "Es werden die letzten bekannten Ergebnisse angezeigt."
     },
     "needsPermission": "Dafür brauchst du das Recht «Erweiterungen installieren und verwalten».",
-    "confirm": { "uninstall": "{name} deinstallieren? Die Einstellungen werden entfernt." },
+    "confirm": {
+      "uninstall": "{name} deinstallieren? Die Einstellungen werden entfernt."
+    },
     "error": {
       "manifest_checksum_failed": "Diese Erweiterungsdatei hat die Integritätsprüfung nicht bestanden und wurde nicht installiert.",
       "invalid_manifest": "Diese Datei ist keine gültige Erweiterung.",
@@ -68,6 +82,18 @@
       "enabled": "Die Erweiterung ist aktiviert.",
       "disabled": "Die Erweiterung ist deaktiviert.",
       "uninstalled": "Die Erweiterung ist deinstalliert."
+    },
+    "rowActions": "Aktionen für {name}",
+    "col": {
+      "name": "Name",
+      "status": "Status",
+      "version": "Version",
+      "capabilities": "Fähigkeiten",
+      "publisher": "Herausgeber",
+      "summary": "Beschreibung"
+    },
+    "hintTitle": {
+      "permission": "Berechtigung"
     }
   },
   "help": {

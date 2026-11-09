@@ -151,7 +151,7 @@
   gap: var(--t-space-2);
 }
 
-.chk-dialog-form label {
+.chk-dialog-form .chk-choice-option {
   font-weight: 500;
 }
 

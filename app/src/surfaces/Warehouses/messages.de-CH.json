@@ -95,7 +95,8 @@
       "invalid_location_type": "Dieser Lagerort-Typ ist unbekannt.",
       "max_depth_exceeded": "Die Lagerort-Hierarchie ist zu tief."
     },
-    "actionsFor": "Aktionen für Lager {code}"
+    "actionsFor": "Aktionen für Lager {code}",
+    "search": "Lager suchen"
   },
   "help": {
     "Warehouses": {

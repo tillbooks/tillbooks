@@ -121,9 +121,9 @@ describe('Extensions', () => {
   it('renders an installed plugin card with a status glyph + label', async () => {
     render(tree({ ...baseCanned(), list_plugins: ok({ plugins: [PLUGIN({ capabilityCount: 2 })] }) }));
     await screen.findByText('Acme Reporter');
-    const card = screen.getByRole('listitem');
-    expect(within(card).getByText(en.plugin.status.installed)).toBeInTheDocument();
-    expect(within(card).getByText('2 capabilities')).toBeInTheDocument();
+    const row = screen.getByRole('row', { name: /Acme Reporter/ });
+    expect(within(row).getByText(en.plugin.status.installed)).toBeInTheDocument();
+    expect(within(row).getByText('2 capabilities')).toBeInTheDocument();
   });
 
   it('shows the incompatible reason with the real range/version interpolated', async () => {
@@ -204,7 +204,8 @@ describe('Extensions', () => {
       }),
     );
     await screen.findByText('Acme Reporter');
-    await userEvent.click(screen.getByRole('button', { name: en.plugin.action.viewScreen }));
+    await userEvent.click(screen.getByRole('button', { name: /^Actions for / }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: en.plugin.action.viewScreen }));
     const frame = (await screen.findByTitle('Acme Reporter panel')) as HTMLIFrameElement;
     const sandbox = frame.getAttribute('sandbox') ?? '';
     expect(sandbox).toContain('allow-scripts');

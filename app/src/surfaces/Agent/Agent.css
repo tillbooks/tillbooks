@@ -257,3 +257,14 @@
   flex-direction: column;
   gap: 2px;
 }
+
+/* D187: a group heading with its (i) beside it. */
+.agent-head-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.agent-head-row > .agent-group-head {
+  margin-block: var(--t-space-3) var(--t-space-1);
+}

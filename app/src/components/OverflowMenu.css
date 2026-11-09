@@ -88,3 +88,27 @@
   justify-content: flex-start;
   white-space: nowrap;
 }
+
+/* D187: a word trigger (a filter chip, "+ Filter") opens its menu under its LEADING edge, since it sits
+   at the start of a toolbar, not the end of a row. */
+.overflow-menu-list--start {
+  left: 0;
+  right: auto;
+}
+
+/* The quiet heading over a group of items (the filter menu's facet name). */
+.overflow-menu-group {
+  padding: var(--t-space-1) var(--t-space-1) var(--t-space-0-5);
+  font-size: var(--t-font-sm);
+  color: var(--t-text-dim);
+}
+
+.overflow-menu-group:not(:first-child) {
+  margin-top: var(--t-space-0-5);
+  border-top: 1px solid var(--t-border);
+}
+
+/* A word trigger carries no 44px pseudo-target: its words are the target. */
+.overflow-menu-trigger--words::after {
+  content: none;
+}

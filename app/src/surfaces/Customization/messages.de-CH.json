@@ -4,7 +4,6 @@
     "noWorkspaceHint": "Wähle zuerst einen Mandanten, dann siehst du dessen eigene Felder und Ansichten.",
     "entityKind": "Datensatz",
     "cancel": "Abbrechen",
-    "actionsColumn": "Aktionen",
     "tab": {
       "title": "Anpassung"
     },
@@ -158,7 +157,8 @@
       "not_owner": "Diese Ansicht gehört jemand anderem.",
       "not_found": "Das gibt es nicht mehr.",
       "permission_denied": "Dafür fehlt dir die Berechtigung."
-    }
+    },
+    "rowActions": "Aktionen für {name}"
   },
   "help": {
     "Customization": {

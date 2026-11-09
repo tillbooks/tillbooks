@@ -514,7 +514,10 @@ describe('GoodsReceipt, a list never opens itself (D152 rule 5)', () => {
     expect(screen.queryByRole('button', { name: de.goodsReceipt.post })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: de.goodsReceipt.cancel })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: de.goodsReceipt.addLine })).not.toBeInTheDocument();
-    expect(container.querySelector('.gr-split--solo')).not.toBeNull();
+    // The list takes the width: every row's chevron reports itself closed.
+    for (const toggle of screen.getAllByRole('button', { name: /Details zu GR-2026-000/ })) {
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    }
     // Nothing was read for a receipt nobody opened.
     expect(asked.some((a) => a.action === 'goods_receipt_get' || a.action === 'goods_receipt_preview')).toBe(false);
   });
@@ -528,20 +531,23 @@ describe('GoodsReceipt, a list never opens itself (D152 rule 5)', () => {
   });
 
   it('a click opens the receipt with the same actions, a second click closes it, and Enter reopens it', async () => {
-    const { container } = renderSurface(twoReceipts());
+    renderSurface(twoReceipts());
     await openReceipt();
     const row = screen.getByRole('row', { name: /GR-2026-0001/ });
     expect(row).toHaveAttribute('aria-current', 'true');
     expect(await screen.findByRole('button', { name: de.goodsReceipt.post })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: de.goodsReceipt.cancel })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: de.goodsReceipt.addLine })).toBeInTheDocument();
-    expect(container.querySelector('.gr-split--solo')).toBeNull();
+    const toggle = screen.getByRole('button', { name: /Details zu GR-2026-0001/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
 
     await userEvent.click(row);
     await waitFor(() => expect(screen.queryByRole('button', { name: de.goodsReceipt.post })).not.toBeInTheDocument());
     expect(row).not.toHaveAttribute('aria-current');
 
-    row.focus();
+    // Closed again: the chevron is the keyboard control of an expandable row, Enter on it reopens.
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    toggle.focus();
     await userEvent.keyboard('{Enter}');
     expect(await screen.findByRole('button', { name: de.goodsReceipt.post })).toBeInTheDocument();
   });

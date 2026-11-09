@@ -18,7 +18,9 @@ import { useCan } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate, formatMoney } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
+import { Field } from '../../components/Field';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import type { Hint } from '../../components/HintsChip';
 import { Tabs, type TabItem } from '../../components/Tabs';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
@@ -101,7 +103,6 @@ export function Hr() {
   const [denied, setDenied] = useState(false);
   const [writeError, setWriteError] = useState<Err | null>(null);
   const [addEmp, setAddEmp] = useState({ firstName: '', lastName: '', employmentPct: '100', startsOn: '' });
-  const [creatingEmp, setCreatingEmp] = useState(false);
   // The claim whose Dateien panel is open. Clicking a claim's title toggles its E00 attachments
   // (the scanned receipt behind the reimbursement) open below the list; no per-claim drawer exists.
   const [openClaimId, setOpenClaimId] = useState<string | null>(null);
@@ -171,7 +172,7 @@ export function Hr() {
       employee: { firstName: addEmp.firstName, lastName: addEmp.lastName, employmentPct: Number(addEmp.employmentPct), startsOn: addEmp.startsOn },
       idempotencyKey: newKey(),
     });
-    if (ok) { setCreatingEmp(false); setAddEmp({ firstName: '', lastName: '', employmentPct: '100', startsOn: '' }); }
+    if (ok) { setAddEmp({ firstName: '', lastName: '', employmentPct: '100', startsOn: '' }); }
   }, [write, addEmp]);
 
   const employeeColumns: DataTableColumn<Employee>[] = [
@@ -258,16 +259,14 @@ export function Hr() {
     if (id === 'employees') {
       return (
         <div className="hr-panel">
-          {/* K-08: the add action lives in the page header at its natural width; its inline form
-              opens here, the header button standing down while it is open. */}
-          {canManage && creatingEmp && (
-            <form className="hr-form" onSubmit={(e) => { e.preventDefault(); void createEmployee(); }}>
-              <input className="field" aria-label={t('hr.employee.firstName')} placeholder={t('hr.employee.firstName')} value={addEmp.firstName} onChange={(e) => setAddEmp({ ...addEmp, firstName: e.target.value })} />
-              <input className="field" aria-label={t('hr.employee.lastName')} placeholder={t('hr.employee.lastName')} value={addEmp.lastName} onChange={(e) => setAddEmp({ ...addEmp, lastName: e.target.value })} />
-              <input className="field" aria-label={t('hr.employee.pct')} type="number" min={1} max={100} value={addEmp.employmentPct} onChange={(e) => setAddEmp({ ...addEmp, employmentPct: e.target.value })} />
-              <input className="field" aria-label={t('hr.employee.startsOn')} type="date" value={addEmp.startsOn} onChange={(e) => setAddEmp({ ...addEmp, startsOn: e.target.value })} />
-              <button type="submit" className="btn btn--primary">{t('hr.action.save')}</button>
-              <button type="button" className="btn btn--ghost" onClick={() => setCreatingEmp(false)}>{t('hr.action.cancel')}</button>
+          {/* D187 (Hinzufügen A): a short add is one row above the table, fields side by side. */}
+          {canManage && (
+            <form className="form-line hr-form" onSubmit={(e) => { e.preventDefault(); void createEmployee(); }}>
+              <input className="field hr-form-name" aria-label={t('hr.employee.firstName')} placeholder={t('hr.employee.firstName')} value={addEmp.firstName} onChange={(e) => setAddEmp({ ...addEmp, firstName: e.target.value })} />
+              <input className="field hr-form-name" aria-label={t('hr.employee.lastName')} placeholder={t('hr.employee.lastName')} value={addEmp.lastName} onChange={(e) => setAddEmp({ ...addEmp, lastName: e.target.value })} />
+              <input className="field hr-form-pct" aria-label={t('hr.employee.pct')} type="number" min={1} max={100} value={addEmp.employmentPct} onChange={(e) => setAddEmp({ ...addEmp, employmentPct: e.target.value })} />
+              <input className="field hr-form-date" aria-label={t('hr.employee.startsOn')} type="date" value={addEmp.startsOn} onChange={(e) => setAddEmp({ ...addEmp, startsOn: e.target.value })} />
+              <button type="submit" className="btn btn--secondary">{t('hr.action.add')}</button>
             </form>
           )}
           <DataTable
@@ -276,12 +275,7 @@ export function Hr() {
             rowKey={(e) => e.id}
             loading={loading}
             caption={t('hr.tab.employees')}
-            emptyState={
-              <EmptyState
-                title={t('hr.empty.employees')}
-                {...(canManage ? { action: { label: t('hr.action.add'), onClick: () => setCreatingEmp(true) } } : {})}
-              />
-            }
+            emptyState={<EmptyState title={t('hr.empty.employees')} />}
           />
         </div>
       );
@@ -316,7 +310,6 @@ export function Hr() {
           rowActions={canApprove ? claimActions : undefined}
           rowActionsLabel={(c) => t('spesen.rowActions', { title: c.title })}
         />
-        {!canSubmit && !canApprove && <p className="hr-hint">{t('hr.claim.readonly')}</p>}
         {/* E00: the shared Dateien panel for the open claim, parameterised by the OP3 pair. The scanned
             receipt a Spesenantrag reimburses is filed here, in the ONE attachment UI, never a copy. */}
         {openClaimId !== null && workspaceId !== null && claims.some((c) => c.id === openClaimId) && (
@@ -328,6 +321,12 @@ export function Hr() {
 
   if (workspaceId === null) return <NoWorkspaceState body={t('hr.noWorkspace')} />;
 
+  // D187 (Hinweise A): the read-only notice folds into the header chip, only while it holds.
+  const hints: Hint[] =
+    tab === 'claims' && !canSubmit && !canApprove
+      ? [{ key: 'readonly', title: t('hr.hintTitle.readonly'), body: t('hr.claim.readonly') }]
+      : [];
+
   const tabs: TabItem[] = TABS.map((id) => ({ id, label: t(`hr.tab.${id}`), panel: renderPanel(id) }));
 
   return (
@@ -336,13 +335,7 @@ export function Hr() {
         title={t('hr.route.title')}
         titleId="hr-title"
         help={<SurfaceHelp surface="Hr" />}
-        actions={
-          tab === 'employees' && canManage && !creatingEmp ? (
-            <button type="button" className="btn btn--primary" onClick={() => setCreatingEmp(true)}>
-              {t('hr.action.add')}
-            </button>
-          ) : undefined
-        }
+        hints={hints}
       />
 
       {writeError !== null && <ErrorBanner error={writeError} message={refusalText(t, writeError, { own: 'hr.error' })} />}
@@ -370,10 +363,9 @@ export function Hr() {
         <div id="hr-reverse-body">
           <p>{t('spesen.reverseDialog.body')}</p>
           <ConsequenceLine verb="expense_claim_reverse" />
-          <label className="hr-reverse-reason">
-            <span>{t('spesen.reverseDialog.reason')}</span>
+          <Field label={t('spesen.reverseDialog.reason')}>
             <input className="field" value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} />
-          </label>
+          </Field>
         </div>
       </Modal>
     </section>

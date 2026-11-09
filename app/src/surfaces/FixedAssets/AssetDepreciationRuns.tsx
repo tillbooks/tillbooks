@@ -12,7 +12,7 @@
  * Every write carries a fresh idempotency key, so a double click never double-posts (the engine is the
  * real guard: a re-post of a posted run returns the same result and books nothing further).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
@@ -20,6 +20,7 @@ import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { formatMoney, useT, useTStrict } from '../../i18n';
 import { EmptyState, ErrorBanner, NoWorkspaceState } from '../../components/states';
+import { Field } from '../../components/Field';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
@@ -138,6 +139,7 @@ export function AssetDepreciationRuns() {
   const canPost = can(CAP.post);
 
   const [runs, setRuns] = useState<RunSummary[]>([]);
+  const postNoteId = useId();
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
@@ -390,7 +392,7 @@ export function AssetDepreciationRuns() {
     <div className="fa">
       <SurfaceHeader
         title={t('assets.depreciationRun.title')}
-        subtitle={t('assets.depreciationRun.subtitle')}
+        count={runs.length}
         help={<SurfaceHelp surface="FixedAssets" />}
       />
 
@@ -398,15 +400,14 @@ export function AssetDepreciationRuns() {
       {actionError && <ErrorBanner error={actionError} />}
 
       <section className="fa-filters" aria-label={t('assets.depreciationRun.new')}>
-        <label className="fa-field-inline">
-          <span>{t('assets.depreciationRun.period')}</span>
+        <Field label={t('assets.depreciationRun.period')}>
           <input className="field"
             type="month"
             aria-label={t('assets.depreciationRun.period')}
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
           />
-        </label>
+        </Field>
         <button
           type="button"
           className="btn btn--primary"
@@ -439,9 +440,13 @@ export function AssetDepreciationRuns() {
                   { key: 'amount', content: <strong>{money(draft.run.totalAmountRappen)}</strong> },
                 ]}
               />
+              <p id={postNoteId} className="fa-hint">
+                {t('assets.depreciationRun.subtitle')}
+              </p>
               <button
                 type="button"
                 className="btn btn--primary"
+                aria-describedby={postNoteId}
                 onClick={() => draft.run !== null && setPosting(draft.run)}
                 disabled={!canPost || busy || draft.run === null}
               >
@@ -568,8 +573,7 @@ export function AssetDepreciationRuns() {
         }
       >
         <p className="fa-hint">{t('assets.depreciationRun.reverseHint')}</p>
-        <div className="fa-field">
-          <label htmlFor="fa-adrun-reverse-reason">{t('assets.depreciationRun.reverseReason')}</label>
+        <Field label={t('assets.depreciationRun.reverseReason')} id="fa-adrun-reverse-reason">
           <input className="field"
             id="fa-adrun-reverse-reason"
             type="text"
@@ -578,7 +582,7 @@ export function AssetDepreciationRuns() {
             maxLength={200}
             onChange={(e) => setReason(e.target.value)}
           />
-        </div>
+        </Field>
       </Modal>
     </div>
   );

@@ -61,7 +61,8 @@
         "out_of_tolerance": "Die Abweichung liegt ausserhalb der Toleranz. Mit Begründung übersteuern.",
         "match_already_exists": "Diese Rechnung hat bereits einen aktiven Abgleich.",
         "reason_required": "Eine Begründung mit mindestens fünf Zeichen ist erforderlich."
-      }
+      },
+      "search": "Lieferanten suchen"
     }
   },
   "help": {

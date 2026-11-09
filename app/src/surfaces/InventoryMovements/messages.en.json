@@ -7,7 +7,6 @@
     "noWorkspace": "Pick a workspace to view the movement ledger.",
     "listLabel": "Stockable items",
     "detailLabel": "Movement history",
-    "selectHint": "Select an item.",
     "onHand": "On hand",
     "record": "Record movement",
     "transfer": "Transfer",
@@ -15,7 +14,9 @@
     "noMovements": "No movements yet for this item.",
     "cancel": "Cancel",
     "save": "Save",
-    "error": { "transport": "Could not load the movement ledger. Please try again." },
+    "error": {
+      "transport": "Could not load the movement ledger. Please try again."
+    },
     "empty": {
       "title": "No stockable items yet",
       "hint": "Create a stockable item first, then record its movements here."
@@ -66,7 +67,8 @@
       "lot_item_mismatch": "That lot belongs to a different item.",
       "serial_item_mismatch": "That serial belongs to a different item.",
       "serial_already_in_stock": "That serial is already in stock, and there is only one of it. To move it, book a transfer; to receive it again, issue, return or scrap it first."
-    }
+    },
+    "expandLabel": "Movements of {name}"
   },
   "help": {
     "InventoryMovements": {

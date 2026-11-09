@@ -14,6 +14,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
+import { HintsChip, type Hint } from './HintsChip';
 import './SurfaceHeader.css';
 
 export interface SurfaceHeaderProps {
@@ -30,9 +31,18 @@ export interface SurfaceHeaderProps {
    * left, per the design law. Capability-gated by the caller (hide, never show-then-reject).
    */
   actions?: ReactNode;
+  /** D187: how many rows a list holds, quiet beside the title ("Belege 128"). */
+  count?: number;
+  /** D187 (the owner's pick "Hinweise A"): the page's notices, folded into one "N Hinweise" chip. */
+  hints?: readonly Hint[];
+  /**
+   * D187 (the owner's pick "Berichte A"): a second row inside the sticky header, for a report's period,
+   * its filters, or a list's search and filter chips, so they stay in view while the result scrolls.
+   */
+  toolbar?: ReactNode;
 }
 
-export function SurfaceHeader({ title, titleId, subtitle, help, actions }: SurfaceHeaderProps) {
+export function SurfaceHeader({ title, titleId, subtitle, help, actions, count, hints, toolbar }: SurfaceHeaderProps) {
   const headerRef = useRef<HTMLElement>(null);
 
   // S1 (N5 sweep): the sticky DataTable thead and this sticky header live in the ONE .frame>main
@@ -95,15 +105,26 @@ export function SurfaceHeader({ title, titleId, subtitle, help, actions }: Surfa
   }, []);
 
   return (
-    <header ref={headerRef} className="surface-header" data-stuck={stuck ? '' : undefined}>
+    <header
+      ref={headerRef}
+      className={toolbar === undefined ? 'surface-header' : 'surface-header surface-header--toolbar'}
+      data-stuck={stuck ? '' : undefined}
+    >
       <div className="surface-header-titles">
-        <h1 id={titleId} className="surface-header-title">
-          {title}
+        {/* D187: the help trigger sits BESIDE the h1, not inside it. Inside, its hover name became part
+            of the heading's accessible name ("Kontakte Hilfe zu Kontakte"). */}
+        <div className="surface-header-titleline">
+          <h1 id={titleId} className="surface-header-title">
+            {title}
+          </h1>
+          {count !== undefined && <span className="surface-header-count t-num">{count}</span>}
           {help !== undefined && <span className="surface-header-help">{help}</span>}
-        </h1>
+          {hints !== undefined && hints.length > 0 && <HintsChip hints={hints} />}
+        </div>
         {subtitle !== undefined && <p className="surface-header-subtitle">{subtitle}</p>}
       </div>
       {actions !== undefined && <div className="surface-header-actions">{actions}</div>}
+      {toolbar !== undefined && <div className="surface-header-toolbar">{toolbar}</div>}
     </header>
   );
 }

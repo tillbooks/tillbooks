@@ -1754,7 +1754,7 @@ body {
 /* Icon-only: a square control. Composes with a colour variant and, optionally, with `--sm`. The
    caller always supplies an aria-label, because there is no text to read. */
 .btn--icon {
-  width: 36px;
+  width: var(--t-control-h);
   padding: 0;
   flex: 0 0 auto;
 }
@@ -2030,6 +2030,50 @@ textarea.field:disabled {
   min-width: 0;
 }
 
+/* D187 (the owner: "fields far too large"): a field is as wide as what it holds, not the whole line.
+   `Field size` picks one of six widths; `full` keeps the line for a text area or a long address. */
+.form-row--code {
+  width: 8rem;
+}
+
+.form-row--date {
+  width: 9.5rem;
+}
+
+.form-row--amount {
+  width: 10rem;
+}
+
+.form-row--short {
+  width: 14rem;
+}
+
+.form-row--name {
+  width: 22rem;
+}
+
+.form-row--code,
+.form-row--date,
+.form-row--amount,
+.form-row--short,
+.form-row--name {
+  max-width: 100%;
+}
+
+/* D187: fields side by side (PLZ and Ort, Rolle and Zahlungsfrist), wrapping when there is no room.
+   A button in the line sits on the controls' baseline, so a one-line add (Hinzufügen A: e-mail, role,
+   Einladen) reads as one row and the button never touches a field. */
+.form-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--t-space-2);
+}
+
+.form-line > .btn {
+  flex: 0 0 auto;
+}
+
 .form-row > label,
 .form-row .field-label-row > label {
   font-size: var(--t-font-md);
@@ -2044,8 +2088,8 @@ textarea.field:disabled {
 .form-row > input,
 .form-row > select {
   height: var(--t-control-h);
-  padding: 0 var(--t-space-2);
-  background: var(--t-bg);
+  padding: 0 var(--t-space-1);
+  background: var(--t-bg-elev);
   color: var(--t-text);
   border: 1px solid var(--t-border-strong);
   border-radius: var(--t-radius-sm);
@@ -2053,8 +2097,8 @@ textarea.field:disabled {
 }
 
 .form-row > textarea {
-  padding: var(--t-space-1) var(--t-space-2);
-  background: var(--t-bg);
+  padding: var(--t-space-1);
+  background: var(--t-bg-elev);
   color: var(--t-text);
   border: 1px solid var(--t-border-strong);
   border-radius: var(--t-radius-sm);
@@ -2086,6 +2130,27 @@ textarea.field:disabled {
   display: flex;
   align-items: center;
   gap: var(--t-space-1);
+}
+
+/* D187: the (i) beside a label never grows the label line, so label to field stays 4px. The 32px
+   target keeps its hit area; only its share of the line height is given back. */
+.field-label-row > .tooltip-wrap {
+  margin-block: calc((32px - var(--t-lh-md)) / -2);
+}
+
+/* D187, the heading rhythm: a section title inside a form stack sits 32px under what is above it
+   (the stack's 16 plus 16) and 8px over its first field (16 less 8), so a heading always belongs to
+   what follows it. */
+.form-stack > .form-section-title {
+  margin: var(--t-space-2) 0 calc(var(--t-space-1) * -1);
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+.form-stack > .form-section-title:first-child {
+  margin-top: 0;
 }
 
 .field-hint {
@@ -2334,6 +2399,17 @@ textarea.field:disabled {
 .tooltip.is-open {
   opacity: 1;
   visibility: visible;
+}
+
+/* D187: a SHUT bubble stays in the DOM beside its trigger (its text is the trigger's description), but
+   it must not reach past its trigger's trailing edge: centred on a row's Mehr in the last column, the
+   hidden bubble widened every list's table into a sideways scroll. Shut, it hangs to the left of the
+   trigger's end; it hides at once and only fades when it opens. */
+.tooltip:not(.is-open) {
+  left: auto;
+  right: 0;
+  transform: none;
+  transition: none;
 }
 
 /* D177: a bubble in the overlay layer (TooltipPortalContext): fixed to its trigger by the component,
@@ -3078,6 +3154,62 @@ textarea.field:disabled {
   color: var(--t-text-faint);
 }
 
+/* D187, the owner's option B: the collapsed rail floats at the left edge over a spacer that keeps its
+   56px, so when a resting pointer slides the whole menu open (.rail--peek) its width animates over the
+   page and back without moving anything under it. */
+.rail--floating {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: var(--t-z-rail);
+}
+
+.rail--peek {
+  box-shadow: var(--t-shadow-overlay);
+}
+
+.rail-peek-spacer {
+  flex: 0 0 calc(var(--t-space-6) + var(--t-space-1));
+}
+
+/* D187: the locked strip before a ledger exists says why it does not react. The hover area covers the
+   icon column (outside its inert subtree); the note floats beside the strip in the overlay tier. */
+/* Not while floating: there the fixed position already anchors the locked note, and a relative one
+   here would drop the floating rail back into the flow beside its own spacer. */
+.rail--icon:not(.rail--floating) {
+  position: relative;
+}
+
+.rail-locked {
+  position: absolute;
+  inset: calc(var(--t-space-6) + var(--t-space-1)) 0 calc(var(--t-space-6) + var(--t-space-1));
+}
+
+.rail-locked-tip {
+  position: fixed;
+  top: calc(var(--t-space-8) + var(--t-space-2));
+  left: calc(var(--t-space-6) + var(--t-space-2));
+  z-index: var(--t-z-rail);
+  padding: var(--t-space-0-5) var(--t-space-1);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  box-shadow: var(--t-shadow-overlay);
+  color: var(--t-text);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--t-motion-hover) var(--t-ease-out);
+}
+
+.rail-locked:hover .rail-locked-tip {
+  opacity: 1;
+}
+
 /* The flyout: a fixed-position disclosure panel anchored beside its icon, so it escapes the rail's
    overflow clip. A menu of the one overlay tier (K-28): elevated ground, one hairline, one overlay
    shadow, the menu radius, at the rail's level. */
@@ -3094,6 +3226,17 @@ textarea.field:disabled {
   border: 1px solid var(--t-border);
   border-radius: var(--t-radius-md);
   box-shadow: var(--t-shadow-overlay);
+}
+
+/* D187 fix: an invisible bridge over the 4px gap between the icon and its flyout, so a pointer moving
+   from one to the other never crosses a strip that belongs to neither and closes it. */
+.rail-flyout::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--t-space-1) * -1);
+  width: var(--t-space-1);
 }
 
 .rail-flyout-title {
@@ -3167,4 +3310,36 @@ textarea.field:disabled {
   color: var(--t-text-dim);
   font-size: var(--t-font-body);
   line-height: var(--t-lh-body);
+}
+
+/* D187 (the Übersicht fresh-eyes judge, 09.11.2026): on a phone-width layout every control meets the
+   44px target DESIGN.md's tap-target rule asks for (WCAG 2.5.5). The dense 32px band is a desktop
+   allowance; below the collapse width a small button, a select trigger and a field all grow, and an
+   icon-only button grows square. Declared once here so no surface has to remember it. */
+@media (max-width: 767px) {
+  .btn,
+  .btn--sm,
+  .select-trigger,
+  input.field,
+  select.field {
+    min-height: 44px;
+  }
+
+  .btn--icon,
+  .btn--icon.btn--sm {
+    min-width: 44px;
+  }
+}
+
+/* D187: the list header's Filter icon and the count of what is on (components/FilterToggle.tsx). */
+.filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.filter-count {
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  color: var(--t-text-dim);
 }

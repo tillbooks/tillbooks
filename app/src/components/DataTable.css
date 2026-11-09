@@ -398,3 +398,53 @@
 .data-table-skeleton-row:last-child .data-table-skeleton-bar {
   width: 60%;
 }
+
+/* D187 (Arbeitsflächen B): a row that opens in place. The chevron turns down while open; the detail is
+   a full-width row on the soft ground, indented to the first column's text, with no box of its own. */
+.data-table-expand {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.data-table-expand-toggle svg {
+  transition: transform var(--t-motion-hover) var(--t-ease-out);
+}
+
+.data-table-expand-toggle[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+
+.data-table-row[data-open] > td,
+.data-table-row[data-open] > th,
+.data-table-detail-row > td {
+  background: var(--t-bg-soft);
+}
+
+.data-table-detail-row > td {
+  padding: 0 var(--t-space-2) var(--t-space-2) var(--t-space-4);
+}
+
+.data-table-detail {
+  display: grid;
+  gap: var(--t-space-1);
+}
+
+/* D187 (the owner's pick "Listen A"): row actions appear on hover or focus. At rest a list shows its
+   data, not a column of buttons. A touch screen has no hover, so there they stay visible; an open menu
+   keeps its row's controls up (focus is inside the row). `.row-reveal` gives the same behaviour to a
+   control inside a cell (the role pencil on Zugriff). */
+@media (hover: hover) {
+  .data-table-row > .data-table-actions > *,
+  .data-table-row .row-reveal {
+    opacity: 0;
+    transition: opacity var(--t-motion-hover) var(--t-ease-out);
+  }
+
+  .data-table-row:hover > .data-table-actions > *,
+  .data-table-row:focus-within > .data-table-actions > *,
+  .data-table-row:hover .row-reveal,
+  .data-table-row:focus-within .row-reveal,
+  .data-table-row > .data-table-actions > :has([aria-expanded='true']) {
+    opacity: 1;
+  }
+}

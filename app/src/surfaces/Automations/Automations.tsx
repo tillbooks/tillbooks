@@ -24,6 +24,8 @@
  * live registries. A hand-copied list here would drift the first time a capability registers an event,
  * and the drift would show up as a rejection the operator cannot explain.
  */
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
@@ -37,6 +39,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { Tabs, type TabItem } from '../../components/Tabs';
+import { DetailDrawer } from '../../components/DetailDrawer';
 import { Status, type StatusKind } from '../../components/Status';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
 import { useSeatNames } from '../../app/useSeatNames';
@@ -231,6 +234,7 @@ export function Automations() {
   const client = useClient();
   const workspaceId = useWorkspaceId();
   const caps = useCapabilities();
+  const formId = useId();
   const nameInputId = useId();
   const eventSelectId = useId();
   const toolSelectId = useId();
@@ -519,14 +523,15 @@ export function Automations() {
             than rejected on click.
           */}
           {run.status === 'running' ? (
-            <button
-              type="button"
-              className="btn btn--secondary btn--sm automations__retry"
+            <IconButton
+              icon="refresh"
+              small
+              className="automations__retry"
+              name={t('automation.run.retry')}
+              context={run.ruleName ?? humanizeId(run.ruleId)}
               disabled={busy || !canManage}
               onClick={() => void retryRun(run.runId)}
-            >
-              {t('automation.run.retry')}
-            </button>
+            />
           ) : null}
           {run.status === 'running' && !canManage ? (
             <span className="lock-note">{t('automation.needsPermission')}</span>
@@ -543,82 +548,6 @@ export function Automations() {
   // the form stay above the table so the first rule can be created from an empty list.
   const rulesPanel = (
     <div className="automations__panel">
-      <div className="automations__actions">
-        <button
-          type="button"
-          className="btn btn--secondary"
-          disabled={!canManage || busy}
-          onClick={() => void tickNow()}
-        >
-          {t('automation.tick.now')}
-        </button>
-        {/*
-          THE PRECONDITION IS STATED BESIDE THE CONTROL, not hung on `title`. `.lock-note` is the
-          house answer and already exists in `global.css` for exactly this ("why can I not edit this").
-        */}
-        {!canManage ? <p className="lock-note">{t('automation.needsPermission')}</p> : null}
-      </div>
-
-      {draft !== null ? (
-        <form
-          className="automations__form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void submitDraft();
-          }}
-        >
-          <label htmlFor={nameInputId}>
-            <span>{t('automation.form.name')}</span>
-            <input
-              className="field"
-              id={nameInputId}
-              value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.currentTarget.value })}
-              required
-            />
-          </label>
-          <label htmlFor={eventSelectId}>
-            <span>{t('automation.form.trigger')}</span>
-            <Select
-              id={eventSelectId}
-              value={draft.event}
-              onChange={(val) => setDraft({ ...draft, event: val })}
-              options={catalogue.events.map((ev) => ({ value: ev.event, label: humanizeId(ev.event) }))}
-              ariaLabel={t('automation.form.trigger')}
-            />
-          </label>
-          <label htmlFor={toolSelectId}>
-            <span>{t('automation.form.action')}</span>
-            <Select
-              id={toolSelectId}
-              value={draft.tool}
-              onChange={(val) => setDraft({ ...draft, tool: val })}
-              options={catalogue.actions.map((tool) => ({ value: tool, label: verbLabel(locale, tool) }))}
-              ariaLabel={t('automation.form.action')}
-            />
-          </label>
-          <label htmlFor={templateInputId}>
-            <span>{t('automation.form.template')}</span>
-            <textarea
-              className="field automations__template"
-              id={templateInputId}
-              rows={4}
-              value={draft.inputTemplate}
-              onChange={(e) => setDraft({ ...draft, inputTemplate: e.currentTarget.value })}
-            />
-          </label>
-          <p className="automations__hint">{t('automation.form.templateHint')}</p>
-          <div className="automations__formActions">
-            <button type="submit" className="btn btn--primary" disabled={busy}>
-              {t('automation.form.save')}
-            </button>
-            <button type="button" className="btn btn--secondary" onClick={() => setDraft(null)} disabled={busy}>
-              {t('automation.form.cancel')}
-            </button>
-          </div>
-        </form>
-      ) : null}
-
       <DataTable
         columns={ruleColumns}
         rows={rules}
@@ -670,12 +599,23 @@ export function Automations() {
         titleId="automations-title"
         subtitle={t('automation.lede')}
         help={<SurfaceHelp surface="Automations" />}
-        // K-08: the one primary, in the header slot; hidden while the draft form is open.
+        count={state.kind === 'ok' && tab === 'rules' ? liveRules.length : undefined}
+        hints={!canManage ? [{ key: 'permission', title: t('automation.hintTitle.permission'), body: t('automation.needsPermission') }] : []}
+        // D187: the one primary create action in words, the tick as an icon beside it.
         actions={
-          draft === null && state.kind === 'ok' ? (
-            <button type="button" className="btn btn--primary" disabled={!canManage} onClick={openDraft}>
-              {t('automation.rules.create')}
-            </button>
+          state.kind === 'ok' ? (
+            <>
+              <IconButton
+                icon="refresh"
+                name={t('automation.tick.now')}
+                context={t('automation.rules.title')}
+                disabled={!canManage || busy}
+                onClick={() => void tickNow()}
+              />
+              <button type="button" className="btn btn--primary" disabled={!canManage} onClick={openDraft}>
+                {t('automation.rules.create')}
+              </button>
+            </>
           ) : undefined
         }
       />
@@ -702,6 +642,71 @@ export function Automations() {
         <ErrorBanner error={state.error} context="read" onRetry={() => void load()} />
       ) : (
         <Tabs tabs={tabs} activeId={tab} onChange={(id) => setTab(id as Tab)} label={t('automation.title')} />
+      )}
+
+      {draft !== null && (
+        <DetailDrawer
+          open
+          onClose={() => setDraft(null)}
+          title={t('automation.rules.create')}
+          closeLabel={t('automation.form.cancel')}
+          footer={
+            <>
+              <button type="button" className="btn btn--secondary" onClick={() => setDraft(null)} disabled={busy}>
+                {t('automation.form.cancel')}
+              </button>
+              <button type="submit" form={formId} className="btn btn--primary" disabled={busy}>
+                {t('automation.form.save')}
+              </button>
+            </>
+          }
+        >
+          <form
+            id={formId}
+            className="automations__form form-stack"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submitDraft();
+            }}
+          >
+          <Field label={t('automation.form.name')} size="name">
+            <input
+              className="field"
+              id={nameInputId}
+              value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.currentTarget.value })}
+              required
+            />
+          </Field>
+          <Field label={t('automation.form.trigger')} size="name">
+            <Select
+              id={eventSelectId}
+              value={draft.event}
+              onChange={(val) => setDraft({ ...draft, event: val })}
+              options={catalogue.events.map((ev) => ({ value: ev.event, label: humanizeId(ev.event) }))}
+              ariaLabel={t('automation.form.trigger')}
+            />
+          </Field>
+          <Field label={t('automation.form.action')} size="name">
+            <Select
+              id={toolSelectId}
+              value={draft.tool}
+              onChange={(val) => setDraft({ ...draft, tool: val })}
+              options={catalogue.actions.map((tool) => ({ value: tool, label: verbLabel(locale, tool) }))}
+              ariaLabel={t('automation.form.action')}
+            />
+          </Field>
+          <Field label={t('automation.form.template')} size="full" info={t('automation.form.templateHint')}>
+            <textarea
+              className="field automations__template"
+              id={templateInputId}
+              rows={4}
+              value={draft.inputTemplate}
+              onChange={(e) => setDraft({ ...draft, inputTemplate: e.currentTarget.value })}
+            />
+          </Field>
+          </form>
+        </DetailDrawer>
       )}
     </section>
   );

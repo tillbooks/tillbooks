@@ -202,3 +202,50 @@ describe('IconRail: the favourites lead the strip, and one row is lit (D178, US-
     expect(screen.getByRole('button', { name: 'Stammdaten' })).toBeInTheDocument();
   });
 });
+
+describe('IconRail: the hover fixes of the Ruhig sweep (D187)', () => {
+  it('opens a group flyout on hover, and a click on the group keeps it open (it used to toggle it shut)', () => {
+    renderIconRail();
+    const group = screen.getByRole('button', { name: 'Stammdaten' });
+    fireEvent.mouseEnter(group.parentElement as HTMLElement);
+    expect(group).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(group);
+    expect(group).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('group', { name: 'Stammdaten' })).toBeInTheDocument();
+  });
+
+  it('brings a link icon its label back when the pointer moves over it after a click', () => {
+    renderIconRail('/journal');
+    const overview = screen.getByRole('button', { name: 'Übersicht' });
+    const entry = overview.parentElement as HTMLElement;
+    fireEvent.mouseEnter(entry);
+    fireEvent.click(overview);
+    expect(path()).toBe('/overview');
+    expect(screen.queryByRole('group', { name: 'Übersicht' })).toBeNull();
+    fireEvent.mouseMove(entry);
+    expect(screen.getByRole('group', { name: 'Übersicht' })).toBeInTheDocument();
+  });
+
+  it('opens nothing on hover while the whole menu slides open instead (hoverFlyouts off), but still on focus', () => {
+    render(
+      <I18nProvider>
+        <TillClientProvider client={new TillClient(quiet)}>
+          <WorkspaceProvider initialId={null}>
+            <MemoryRouter initialEntries={['/journal']}>
+              <nav aria-label="Hauptnavigation">
+                <RailStateProvider>
+                  <IconRail hoverFlyouts={false} />
+                </RailStateProvider>
+              </nav>
+            </MemoryRouter>
+          </WorkspaceProvider>
+        </TillClientProvider>
+      </I18nProvider>,
+    );
+    const group = screen.getByRole('button', { name: 'Stammdaten' });
+    fireEvent.mouseEnter(group.parentElement as HTMLElement);
+    expect(group).toHaveAttribute('aria-expanded', 'false');
+    focus(group);
+    expect(group).toHaveAttribute('aria-expanded', 'true');
+  });
+});

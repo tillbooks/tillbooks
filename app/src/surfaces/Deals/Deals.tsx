@@ -39,11 +39,13 @@ import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatMoney, formatDate } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
+import { Field } from '../../components/Field';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
-import { FilterBar } from '../../components/FilterBar';
+import { FilterBar, type FilterFacet } from '../../components/FilterBar';
+import { DetailDrawer } from '../../components/DetailDrawer';
 import { Select } from '../../components/Select';
 import { Status, type StatusKind } from '../../components/Status';
-import { CloseGlyph } from '../../components/icons';
+import { IconButton } from '../../components/IconButton';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
 import './Deals.css';
 
@@ -387,10 +389,9 @@ export function Deals() {
               void markLost(deal.id);
             }}
           >
-            <label className="deals-field">
-              <span>{t('deals.lost.reason')}</span>
+            <Field label={t('deals.lost.reason')}>
               <input className="field" type="text" value={lostReason} onChange={(e) => setLostReason(e.target.value)} required />
-            </label>
+            </Field>
             <div className="deals-form-actions">
               <button type="submit" className="btn btn--secondary btn--sm">
                 {t('deals.action.markLost')}
@@ -429,6 +430,38 @@ export function Deals() {
     );
   };
 
+  const facets: FilterFacet[] = [
+    ...((board?.pipelines.length ?? 0) > 1
+      ? [
+          {
+            key: 'pipeline',
+            label: t('deals.pipeline.label'),
+            options: (board?.pipelines ?? []).map((p) => ({ value: p.id, label: p.name })),
+            value: pipelineId === '' ? null : pipelineId,
+            onChange: (value: string | null) => setPipelineId(value ?? ''),
+          } satisfies FilterFacet,
+        ]
+      : []),
+    ...(views.length > 0
+      ? [
+          {
+            key: 'view',
+            label: t('deals.view.label'),
+            options: views.map((view) => ({ value: view.id, label: view.name })),
+            value: viewId === '' ? null : viewId,
+            onChange: (value: string | null) => setViewId(value ?? ''),
+          } satisfies FilterFacet,
+        ]
+      : []),
+    {
+      key: 'closed',
+      label: t('deals.filter.showClosed'),
+      options: [{ value: '1', label: t('deals.filter.showClosed') }],
+      value: showClosed ? '1' : null,
+      onChange: (value) => setShowClosed(value !== null),
+    },
+  ];
+
   const filtersActive = search.trim() !== '' || pipelineId !== '' || viewId !== '' || showClosed;
   const clearFilters = () => {
     setSearch('');
@@ -442,6 +475,7 @@ export function Deals() {
       <SurfaceHeader
         title={t('deals.route.title')}
         titleId="deals-title"
+        count={loading || failed || board === null ? undefined : board.deals.filter(dealMatches).length}
         help={<SurfaceHelp surface="Deals" />}
         actions={
           canWrite ? (
@@ -472,111 +506,85 @@ export function Deals() {
         onClear={clearFilters}
         clearLabel={t('deals.filter.clear')}
         active={filtersActive}
-      >
-        {(board?.pipelines.length ?? 0) > 1 && (
-          <div className="deals-picker">
-            <span>{t('deals.pipeline.label')}</span>
-            <Select
-              value={pipelineId}
-              onChange={setPipelineId}
-              options={[
-                { value: '', label: t('deals.pipeline.first') },
-                ...(board?.pipelines ?? []).map((p) => ({ value: p.id, label: p.name })),
-              ]}
-              ariaLabel={t('deals.pipeline.label')}
-            />
-          </div>
-        )}
-        {views.length > 0 && (
-          <div className="deals-picker">
-            <span>{t('deals.view.label')}</span>
-            <Select
-              value={viewId}
-              onChange={setViewId}
-              options={[
-                { value: '', label: t('deals.view.all') },
-                ...views.map((view) => ({ value: view.id, label: view.name })),
-              ]}
-              ariaLabel={t('deals.view.label')}
-            />
-          </div>
-        )}
-        <label className="deals-toggle">
-          <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
-          <span>{t('deals.filter.showClosed')}</span>
-        </label>
-      </FilterBar>
+        facets={facets}
+      />
 
       {writeError !== null && <ErrorBanner message={errorMessage(writeError)} />}
       {failed && <ErrorBanner message={t('deals.error.transport')} onRetry={() => void load()} />}
 
       {creating && canWrite && (
-        <form
-          className="deals-editor"
-          aria-label={t('deals.action.create')}
-          onSubmit={(e) => {
-            e.preventDefault();
-            void create();
-          }}
+        <DetailDrawer
+          open
+          onClose={() => setCreating(false)}
+          title={t('deals.action.create')}
+          closeLabel={t('deals.drawer.close')}
+          footer={
+            <>
+              <button type="button" className="btn btn--secondary" onClick={() => setCreating(false)}>
+                {t('deals.editor.discard')}
+              </button>
+              <button type="submit" form="deals-create-form" className="btn btn--primary">
+                {t('deals.editor.save')}
+              </button>
+            </>
+          }
         >
-          <div className="deals-field">
-            <span>{t('deals.field.contact')}</span>
-            <Select
-              value={draft.contactId}
-              onChange={(value) => setDraft({ ...draft, contactId: value })}
-              options={[
-                { value: '', label: t('deals.field.contactPick') },
-                ...[...contacts.entries()].map(([id, name]) => ({ value: id, label: name })),
-              ]}
-              ariaLabel={t('deals.field.contact')}
-            />
-          </div>
-          <label className="deals-field">
-            <span>{t('deals.field.title')}</span>
-            <input className="field" type="text" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} required />
-          </label>
-          <label className="deals-field">
-            <span>{t('deals.field.value')}</span>
-            <input
-              className="field"
-              type="text"
-              inputMode="decimal"
-              value={draft.value}
-              placeholder="25'000.00"
-              onChange={(e) => setDraft({ ...draft, value: e.target.value })}
-              required
-            />
-          </label>
-          <label className="deals-field">
-            <span>{t('deals.field.currency')}</span>
-            <input
-              className="field"
-              type="text"
-              value={draft.currency}
-              maxLength={3}
-              placeholder="CHF"
-              onChange={(e) => setDraft({ ...draft, currency: e.target.value })}
-            />
-          </label>
-          <label className="deals-field">
-            <span>{t('deals.field.expectedClose')}</span>
-            <input className="field" type="date" value={draft.expectedCloseOn} onChange={(e) => setDraft({ ...draft, expectedCloseOn: e.target.value })} />
-          </label>
-          {/* The surface's one primary is "Deal anlegen" in the header (K-08): this save is secondary. */}
-          <div className="deals-form-actions">
-            <button type="submit" className="btn btn--secondary btn--sm">
-              {t('deals.editor.save')}
-            </button>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setCreating(false)}>
-              {t('deals.editor.discard')}
-            </button>
-          </div>
-        </form>
+          {writeError !== null && <ErrorBanner message={errorMessage(writeError)} />}
+          <form
+            id="deals-create-form"
+            className="form-stack"
+            aria-label={t('deals.action.create')}
+            onSubmit={(e) => {
+              e.preventDefault();
+              void create();
+            }}
+          >
+            <Field label={t('deals.field.contact')}>
+              <Select
+                value={draft.contactId}
+                onChange={(value) => setDraft({ ...draft, contactId: value })}
+                options={[
+                  { value: '', label: t('deals.field.contactPick') },
+                  ...[...contacts.entries()].map(([id, name]) => ({ value: id, label: name })),
+                ]}
+                ariaLabel={t('deals.field.contact')}
+              />
+            </Field>
+            <Field label={t('deals.field.title')}>
+              <input className="field" type="text" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} required />
+            </Field>
+            <div className="form-line">
+              <Field label={t('deals.field.value')} size="amount">
+                <input
+                  className="field"
+                  type="text"
+                  inputMode="decimal"
+                  value={draft.value}
+                  placeholder="25'000.00"
+                  onChange={(e) => setDraft({ ...draft, value: e.target.value })}
+                  required
+                />
+              </Field>
+              <Field label={t('deals.field.currency')} size="code">
+                <input
+                  className="field"
+                  type="text"
+                  value={draft.currency}
+                  maxLength={3}
+                  placeholder="CHF"
+                  onChange={(e) => setDraft({ ...draft, currency: e.target.value })}
+                />
+              </Field>
+            </div>
+            <Field label={t('deals.field.expectedClose')} size="date">
+              <input className="field" type="date" value={draft.expectedCloseOn} onChange={(e) => setDraft({ ...draft, expectedCloseOn: e.target.value })} />
+            </Field>
+          </form>
+        </DetailDrawer>
       )}
 
       {settingsOpen && canWrite && board !== null && (
-        <section className="deals-settings" aria-labelledby="deals-settings-title">
-          <h2 id="deals-settings-title">{t('deals.settings.title')}</h2>
+        <DetailDrawer open onClose={() => setSettingsOpen(false)} title={t('deals.settings.title')} closeLabel={t('deals.drawer.close')}>
           <ul className="deals-settings-stages">
             {board.stages.map((stage) => (
               <li key={stage.id}>
@@ -588,7 +596,7 @@ export function Deals() {
             ))}
           </ul>
           <form
-            className="deals-settings-add"
+            className="form-line"
             aria-label={t('deals.settings.addStage')}
             onSubmit={(e) => {
               e.preventDefault();
@@ -603,12 +611,10 @@ export function Deals() {
               })();
             }}
           >
-            <label className="deals-field">
-              <span>{t('deals.settings.stageName')}</span>
+            <Field label={t('deals.settings.stageName')} size="name">
               <input className="field" type="text" value={newStage.name} onChange={(e) => setNewStage({ ...newStage, name: e.target.value })} required />
-            </label>
-            <label className="deals-field">
-              <span>{t('deals.field.probability')}</span>
+            </Field>
+            <Field label={t('deals.field.probability')} size="code">
               <input
                 className="field"
                 type="number"
@@ -617,28 +623,27 @@ export function Deals() {
                 value={newStage.probability}
                 onChange={(e) => setNewStage({ ...newStage, probability: e.target.value })}
               />
-            </label>
+            </Field>
             <button type="submit" className="btn btn--secondary btn--sm">
               {t('deals.settings.addStage')}
             </button>
           </form>
           <form
-            className="deals-settings-view"
+            className="form-line"
             aria-label={t('deals.customization.save_view')}
             onSubmit={(e) => {
               e.preventDefault();
               void saveView();
             }}
           >
-            <label className="deals-field">
-              <span>{t('deals.customization.viewName')}</span>
+            <Field label={t('deals.customization.viewName')} size="name">
               <input className="field" type="text" value={viewName} onChange={(e) => setViewName(e.target.value)} required />
-            </label>
+            </Field>
             <button type="submit" className="btn btn--secondary btn--sm">
               {t('deals.customization.save_view')}
             </button>
           </form>
-        </section>
+        </DetailDrawer>
       )}
 
       <div className="deals-workspace">
@@ -669,9 +674,7 @@ export function Deals() {
           <section className="deals-drawer" aria-labelledby="deals-drawer-title">
           <header className="deals-drawer-head">
             <h2 id="deals-drawer-title">{selected.title}</h2>
-            <button type="button" className="btn btn--ghost btn--icon btn--sm" aria-label={t('deals.drawer.close')} onClick={() => setOpenId(null)}>
-              <CloseGlyph aria-hidden="true" />
-            </button>
+            <IconButton icon="close" small name={t('deals.drawer.close')} context={selected.title} onClick={() => setOpenId(null)} />
           </header>
           <dl className="deals-drawer-facts">
             <dt>{t('deals.field.contact')}</dt>
@@ -760,10 +763,9 @@ export function Deals() {
                 void markLost(selected.id);
               }}
             >
-              <label className="deals-field">
-                <span>{t('deals.lost.reason')}</span>
+              <Field label={t('deals.lost.reason')}>
                 <input className="field" type="text" value={lostReason} onChange={(e) => setLostReason(e.target.value)} required />
-              </label>
+              </Field>
               <div className="deals-form-actions">
                 <button type="submit" className="btn btn--secondary btn--sm">
                   {t('deals.action.markLost')}
@@ -784,28 +786,25 @@ export function Deals() {
               }}
             >
               <h3>{t('deals.activity.label')}</h3>
-              <div className="deals-field">
-                <span>{t('deals.activity.kind')}</span>
+              <Field label={t('deals.activity.kind')} size="short">
                 <Select
                   value={activity.kind}
                   onChange={(value) => setActivity({ ...activity, kind: value })}
                   options={ACTIVITY_KINDS.map((kind) => ({ value: kind, label: t(`deals.activity.kinds.${kind}`) }))}
                   ariaLabel={t('deals.activity.kind')}
                 />
-              </div>
-              <label className="deals-field">
-                <span>{t('deals.activity.body')}</span>
+              </Field>
+              <Field label={t('deals.activity.body')}>
                 <textarea className="field" value={activity.body} onChange={(e) => setActivity({ ...activity, body: e.target.value })} required rows={2} />
-              </label>
-              <label className="deals-field">
-                <span>{t('deals.activity.reminder')}</span>
+              </Field>
+              <Field label={t('deals.activity.reminder')} size="name">
                 <input
                   className="field"
                   type="datetime-local"
                   value={activity.reminderAt}
                   onChange={(e) => setActivity({ ...activity, reminderAt: e.target.value })}
                 />
-              </label>
+              </Field>
               <button type="submit" className="btn btn--secondary btn--sm">
                 {t('deals.activity.log')}
               </button>

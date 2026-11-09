@@ -20,6 +20,7 @@ import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
+import { Field } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
 import { idemKey, type DocumentDto } from './model';
@@ -126,8 +127,7 @@ export function SendDialog({ doc, customerEmail, onSent, onCancel, onOpenPdf }: 
       }
     >
       <div className="documents-confirm-body">
-        <label className="invoice-send-field" htmlFor={emailId}>
-          <span>{t('invoice.send.to')}</span>
+        <Field className="invoice-send-field" label={t('invoice.send.to')}>
           <input className="field"
             id={emailId}
             type="email"
@@ -136,7 +136,7 @@ export function SendDialog({ doc, customerEmail, onSent, onCancel, onOpenPdf }: 
             onChange={(e) => setEmail(e.target.value)}
             disabled={busy}
           />
-        </label>
+        </Field>
         {customerEmail === null && <p className="invoice-send-attachment">{t('invoice.error.needsCustomerEmail')}</p>}
         <p className="invoice-send-attachment">
           {t('invoice.send.attachment')}: {fileName}

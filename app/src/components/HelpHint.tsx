@@ -24,6 +24,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties
 
 import { useT } from '../i18n';
 import { HelpGlyph } from './icons';
+import { Tooltip } from './Tooltip';
 
 /** The popover keeps this much clear of every viewport edge, and this much off its trigger. */
 const VIEWPORT_MARGIN = 16;
@@ -273,19 +274,29 @@ export function HelpHint(props: HelpHintProps) {
     );
   }
 
+  const triggerButton = (
+    <button
+      type="button"
+      ref={triggerRef}
+      className={trigger?.kind === 'term' ? 'concept-term' : 'help-trigger'}
+      aria-label={label}
+      aria-expanded={open}
+      aria-controls={id}
+      onClick={() => (controlled ? (open ? props.onClose?.() : props.onOpen?.()) : setOpenState((prev) => !prev))}
+    >
+      {trigger?.kind === 'term' ? trigger.text : <HelpGlyph size={16} />}
+    </button>
+  );
+
   return (
     <span className="help-hint" ref={wrapRef}>
-      <button
-        type="button"
-        ref={triggerRef}
-        className={trigger?.kind === 'term' ? 'concept-term' : 'help-trigger'}
-        aria-label={label}
-        aria-expanded={open}
-        aria-controls={id}
-        onClick={() => (controlled ? (open ? props.onClose?.() : props.onOpen?.()) : setOpenState((prev) => !prev))}
-      >
-        {trigger?.kind === 'term' ? trigger.text : <HelpGlyph size={16} />}
-      </button>
+      {trigger?.kind === 'term' ? triggerButton : (
+        // D187: the (?) is named on hover like every icon (76 of them showed nothing, 07.10.2026 audit).
+        // The tooltip steps aside while the panel is open, so the two never stack.
+        <Tooltip suppressed={open} content={<span className="tooltip-name">{label}</span>}>
+          {triggerButton}
+        </Tooltip>
+      )}
       {popover}
     </span>
   );

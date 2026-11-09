@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { useClient } from '../../lib/client-context';
 import { isErr } from '../../lib/client';
 import { useT } from '../../i18n';
+import { IconButton } from '../../components/IconButton';
 import { OverflowMenu } from '../../components/OverflowMenu';
 import { AccountConfirm } from './AccountConfirm';
 import { Status } from '../../components/Status';
@@ -85,43 +86,49 @@ export function CostCenterSection({ workspaceId, costCenters, canManage, onChang
           </h2>
         </button>
         {canManage && (
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => setCreating(true)}>
-            {t('costCenter.new')}
-          </button>
+          <IconButton
+            icon="add"
+            name={t('costCenter.new')}
+            context={t('costCenter.title')}
+            onClick={() => setCreating(true)}
+          />
         )}
       </div>
 
       {open && (
         <div className="cc-body">
           {creating && (
-            <div className="cc-create">
-              <label className="acc-field">
-                <span className="acc-field-label">{t('costCenter.code')}</span>
-                <input
-                  className="field acc-input t-num"
-                  value={code}
-                  onChange={(event) => setCode(event.target.value)}
-                />
-              </label>
-              <label className="acc-field">
-                <span className="acc-field-label">{t('costCenter.name')}</span>
-                <input
-                  className="field acc-input"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                />
-              </label>
-              <div className="cc-create-foot">
-                {/* K-08: saving a cost centre is not a money commit, so no accent; and the surface's
-                    one primary is "Neues Konto" in the header. */}
-                <button type="button" className="btn btn--ghost btn--sm" onClick={() => setCreating(false)}>
-                  {t('account.cancel')}
-                </button>
-                <button type="button" className="btn btn--secondary btn--sm" onClick={create}>
-                  {t('account.save')}
-                </button>
-              </div>
-            </div>
+            <form
+              className="cc-create form-line"
+              aria-label={t('costCenter.new')}
+              onSubmit={(event) => {
+                event.preventDefault();
+                void create();
+              }}
+            >
+              <input
+                className="field acc-input t-num"
+                aria-label={t('costCenter.code')}
+                placeholder={t('costCenter.code')}
+                value={code}
+                onChange={(event) => setCode(event.target.value)}
+              />
+              <input
+                className="field acc-input"
+                aria-label={t('costCenter.name')}
+                placeholder={t('costCenter.name')}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+              {/* K-08: saving a cost centre is not a money commit, so no accent; and the surface's
+                  one primary is "Neues Konto" in the header. */}
+              <button type="button" className="btn btn--ghost btn--sm" onClick={() => setCreating(false)}>
+                {t('account.cancel')}
+              </button>
+              <button type="submit" className="btn btn--secondary btn--sm">
+                {t('account.save')}
+              </button>
+            </form>
           )}
 
           {costCenters.length === 0 ? (

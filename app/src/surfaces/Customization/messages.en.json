@@ -4,7 +4,6 @@
     "noWorkspaceHint": "Pick a workspace first, then you can see its own fields and views.",
     "entityKind": "Record",
     "cancel": "Cancel",
-    "actionsColumn": "Actions",
     "tab": {
       "title": "Customization"
     },
@@ -158,7 +157,8 @@
       "not_owner": "This view belongs to someone else.",
       "not_found": "That no longer exists.",
       "permission_denied": "You do not have permission for that."
-    }
+    },
+    "rowActions": "Actions for {name}"
   },
   "help": {
     "Customization": {

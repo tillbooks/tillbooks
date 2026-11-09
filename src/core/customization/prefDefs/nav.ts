@@ -28,8 +28,8 @@ export const NAV_PREFS: readonly PrefDef[] = [
     area: NAV,
     label: { en: 'Favourites in the menu', 'de-CH': 'Favoriten im Menü' },
     description: {
-      en: 'How a pinned page looks: its own icon with a star at the right (default), a star in place of the icon, or the icon alone, with the star showing on hover to unpin.',
-      'de-CH': 'Wie eine angeheftete Seite aussieht: ihr eigenes Symbol mit einem Stern rechts (Standard), ein Stern statt des Symbols oder nur das Symbol, der Stern erscheint dann beim Darüberfahren zum Lösen.',
+      en: 'How pinned pages look at the top of the menu.',
+      'de-CH': 'Wie angeheftete Seiten oben im Menü aussehen.',
     },
     valueLabels: {
       icon_star: { en: 'Icon and star', 'de-CH': 'Symbol und Stern' },
@@ -45,8 +45,8 @@ export const NAV_PREFS: readonly PrefDef[] = [
     area: NAV,
     label: { en: 'Open page in the menu', 'de-CH': 'Offene Seite im Menü' },
     description: {
-      en: 'Which row lights up when a pinned page is open: only the favourite (default), only its row in the menu, which then opens to it, or both, the menu row in accent ink without a fill.',
-      'de-CH': 'Welche Zeile leuchtet, wenn eine angeheftete Seite offen ist: nur der Favorit (Standard), nur ihre Zeile im Menü, das sich dann dorthin öffnet, oder beide, die Menüzeile dann nur in Akzentschrift ohne Fläche.',
+      en: 'Which row lights up when the open page is also a favourite.',
+      'de-CH': 'Welche Zeile hervorgehoben ist, wenn die offene Seite auch ein Favorit ist.',
     },
     valueLabels: {
       favourite: { en: 'The favourite only', 'de-CH': 'Nur der Favorit' },
@@ -62,8 +62,8 @@ export const NAV_PREFS: readonly PrefDef[] = [
     area: NAV,
     label: { en: 'Group names in the menu', 'de-CH': 'Gruppennamen im Menü' },
     description: {
-      en: 'How Favoriten, Menü and the groups are named: at item size in semibold, without an icon (default), at item size with a group icon, or as the small grey label of earlier versions.',
-      'de-CH': 'Wie Favoriten, Menü und die Gruppen beschriftet sind: in Zeilengrösse und halbfett ohne Symbol (Standard), in Zeilengrösse mit einem Gruppensymbol oder als kleine graue Beschriftung wie bisher.',
+      en: 'How the headings of the menu groups look.',
+      'de-CH': 'Wie die Überschriften der Menügruppen aussehen.',
     },
     valueLabels: {
       text_14_bold: { en: 'Semibold, no icon', 'de-CH': 'Halbfett, ohne Symbol' },
@@ -79,8 +79,8 @@ export const NAV_PREFS: readonly PrefDef[] = [
     area: NAV,
     label: { en: 'Favourites', 'de-CH': 'Favoriten' },
     description: {
-      en: 'The pages you pinned above the menu, in your order, with the names you gave them.',
-      'de-CH': 'Die Seiten, die du über dem Menü angeheftet hast, in deiner Reihenfolge und mit deinen Namen.',
+      en: 'The pages you pinned at the top of the menu.',
+      'de-CH': 'Die Seiten, die du oben im Menü angeheftet hast.',
     },
   },
   {
@@ -91,8 +91,8 @@ export const NAV_PREFS: readonly PrefDef[] = [
     area: NAV,
     label: { en: 'Open groups', 'de-CH': 'Offene Gruppen' },
     description: {
-      en: 'The menu groups you opened or closed yourself. Everything else starts closed.',
-      'de-CH': 'Die Menügruppen, die du selbst geöffnet oder geschlossen hast. Alles andere startet zu.',
+      en: 'Which menu groups are open. All others start closed.',
+      'de-CH': 'Welche Menügruppen offen sind. Alle anderen starten zu.',
     },
   },
   {
@@ -103,8 +103,8 @@ export const NAV_PREFS: readonly PrefDef[] = [
     area: NAV,
     label: { en: 'Folded sections', 'de-CH': 'Eingeklappte Bereiche' },
     description: {
-      en: 'Whether you folded Favoriten or Menü away.',
-      'de-CH': 'Ob du Favoriten oder Menü eingeklappt hast.',
+      en: 'Whether the favourites or the menu are folded.',
+      'de-CH': 'Ob Favoriten oder Menü eingeklappt sind.',
     },
   },
   {
@@ -115,8 +115,8 @@ export const NAV_PREFS: readonly PrefDef[] = [
     area: NAV,
     label: { en: 'Menu order', 'de-CH': 'Menüreihenfolge' },
     description: {
-      en: 'Your order of groups and pages, the pages you moved and the ones you hid. Hidden pages stay reachable through the search.',
-      'de-CH': 'Deine Reihenfolge der Gruppen und Seiten, verschobene und ausgeblendete Seiten. Ausgeblendete Seiten findest du weiterhin über die Suche.',
+      en: 'Your order in the menu and the pages you hid. Hidden pages are still in the search.',
+      'de-CH': 'Deine Reihenfolge im Menü und die Seiten, die du ausgeblendet hast. Ausgeblendetes findest du weiter über die Suche.',
     },
   },
   {
@@ -127,8 +127,8 @@ export const NAV_PREFS: readonly PrefDef[] = [
     area: NAV,
     label: { en: 'Menu width', 'de-CH': 'Menübreite' },
     description: {
-      en: 'How wide the menu is, and whether it is folded to icons.',
-      'de-CH': 'Wie breit das Menü ist und ob es auf Symbole eingeklappt ist.',
+      en: 'How wide the menu is, or icons only.',
+      'de-CH': 'Wie breit das Menü ist, oder nur Symbole.',
     },
   },
 ];

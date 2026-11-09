@@ -24,6 +24,7 @@ import { useClient } from '../../lib/client-context';
 import { isErr } from '../../lib/client';
 import { useT, formatMoney } from '../../i18n';
 import { Modal } from '../../components/Modal';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import { ErrorBanner } from '../../components/states';
 import type { Err } from '../../lib/client';
@@ -151,19 +152,17 @@ export function ProjectEditor({
     >
       <form
         id={formId}
-        className="projects-editor-form"
+        className="projects-editor-form form-stack"
         onSubmit={(e) => {
           e.preventDefault();
           void save();
         }}
       >
-        <label className="projects-field">
-          <span>{t('project.editor.name')}</span>
+        <Field label={t('project.editor.name')}>
           <input className="field" type="text" value={name} onChange={(e) => setName(e.target.value)} required />
-        </label>
+        </Field>
 
-        <div className="projects-field">
-          <span>{t('project.editor.contact')}</span>
+        <Field label={t('project.editor.contact')}>
           {contacts.length === 0 ? (
             // No dead end (DESIGN.md Interaction, spec B00 §6): the empty picker deep-links to
             // C00 to create the first contact instead of stranding the operator on a disabled form.
@@ -181,10 +180,9 @@ export function ProjectEditor({
               ariaLabel={t('project.editor.contact')}
             />
           )}
-        </div>
+        </Field>
 
-        <label className="projects-field">
-          <span>{t('project.editor.code')}</span>
+        <Field label={t('project.editor.code')} size="short">
           <input
             className="field"
             type="text"
@@ -192,59 +190,51 @@ export function ProjectEditor({
             placeholder={mode === 'create' ? t('project.editor.codePlaceholder') : undefined}
             onChange={(e) => setCode(e.target.value)}
           />
-        </label>
+        </Field>
 
-        <div className="projects-field-row">
-          <div className="projects-field">
-            <span>{t('project.editor.currency')}</span>
+        <div className="projects-field-row form-line">
+          <Field label={t('project.editor.currency')} size="code">
             <Select
               value={currency}
               onChange={(val) => setCurrency(val)}
               options={CURRENCY_OPTIONS.map((c) => ({ value: c, label: c }))}
               ariaLabel={t('project.editor.currency')}
             />
-          </div>
-          <label className="projects-field">
-            <span>{t('project.editor.budget', { currency })}</span>
+          </Field>
+          <Field
+            label={t('project.editor.budget', { currency })}
+            size="amount"
+            hint={budgetPreview === null || budgetPreview === '' ? undefined : budgetPreview}
+          >
             <input
               className="field"
               type="text"
               inputMode="decimal"
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
-              aria-describedby="project-budget-preview"
             />
-            <span id="project-budget-preview" className="projects-hint t-money">
-              {budgetPreview ?? ''}
-            </span>
-          </label>
-          <label className="projects-field">
-            <span>{t('project.editor.budgetHours')}</span>
+          </Field>
+          <Field label={t('project.editor.budgetHours')} size="code">
             <input className="field" type="text" inputMode="numeric" value={budgetHours} onChange={(e) => setBudgetHours(e.target.value)} />
-          </label>
+          </Field>
         </div>
 
         {nonBase && (
-          <label className="projects-field">
-            <span>{t('project.editor.fxRate', { base: baseCurrency })}</span>
+          <Field label={t('project.editor.fxRate', { base: baseCurrency })} info={t('project.editor.fxRateHint')} size="amount">
             <input className="field" type="text" inputMode="decimal" value={fxRate} onChange={(e) => setFxRate(e.target.value)} />
-            <span className="projects-hint">{t('project.editor.fxRateHint')}</span>
-          </label>
+          </Field>
         )}
 
-        <div className="projects-field-row">
-          <label className="projects-field">
-            <span>{t('project.editor.startsOn')}</span>
+        <div className="projects-field-row form-line">
+          <Field label={t('project.editor.startsOn')} size="date">
             <input className="field" type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} />
-          </label>
-          <label className="projects-field">
-            <span>{t('project.editor.endsOn')}</span>
+          </Field>
+          <Field label={t('project.editor.endsOn')} size="date">
             <input className="field" type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} />
-          </label>
+          </Field>
         </div>
 
-        <div className="projects-field">
-          <span>{t('project.editor.parent')}</span>
+        <Field label={t('project.editor.parent')}>
           <Select
             value={parentId}
             onChange={(val) => setParentId(val)}
@@ -254,7 +244,7 @@ export function ProjectEditor({
             ]}
             ariaLabel={t('project.editor.parent')}
           />
-        </div>
+        </Field>
 
         {fieldError !== null && (
           <p className="field-error" role="alert">

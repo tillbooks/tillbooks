@@ -20,7 +20,9 @@
   z-index: var(--t-z-sticky);
   background: var(--t-bg);
   padding-block: var(--t-row-pad-y) var(--t-space-2);
-  margin-bottom: var(--t-space-2);
+  /* D187: the header's own 16px bottom padding is the gap to the content; a margin on top of the
+     surface's own flex gap put the search 40px under the title, further than the title from the top. */
+  margin-bottom: 0;
 }
 
 /* The scrolled-state hairline. No border at rest (the hairline is earned, not issued); once content
@@ -57,9 +59,21 @@
   color: var(--t-text);
 }
 
+.surface-header-titleline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
 .surface-header-help {
   display: inline-flex;
   align-items: center;
+  align-self: center;
+}
+
+.surface-header-titleline > .hints-chip-root {
+  align-self: center;
 }
 
 .surface-header-subtitle {
@@ -98,4 +112,32 @@
     justify-content: flex-end;
     min-width: 0;
   }
+}
+
+/* D187: the count beside a list's title, quiet and tabular. */
+.surface-header-count {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+}
+
+/* D187 (Berichte A, Listen A): the second row of the sticky header (a report's period and filters, a
+   list's search and filter chips). It wraps under the title and the actions and spans the width. */
+.surface-header--toolbar {
+  flex-wrap: wrap;
+  row-gap: var(--t-space-1);
+}
+
+.surface-header-toolbar {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* A FilterBar inside the toolbar keeps the header's own rhythm, not its own bottom margin. */
+.surface-header-toolbar > .filter-bar {
+  margin-bottom: 0;
+  flex: 1 1 auto;
 }

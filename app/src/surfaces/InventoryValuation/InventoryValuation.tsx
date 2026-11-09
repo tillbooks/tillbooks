@@ -38,6 +38,7 @@ import { useT, formatMoney } from '../../i18n';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, useSkeletonHold, refusalText } from '../../components/states';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DetailDrawer } from '../../components/DetailDrawer';
@@ -481,6 +482,20 @@ export function InventoryValuation() {
             {t('invValuation.workspaceTotal')}: <strong className="t-money">{formatMoney(totalValueMinor, 'CHF')}</strong>
           </p>
         }
+        /* D187 (Berichte A): the valuation date and the net realisable value of the chosen item sit in
+           the sticky header's second row; its figures follow beneath. */
+        toolbar={
+          selected === null ? undefined : (
+            <>
+              <Field label={t('invValuation.asOf')}>
+                <input className="field" type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
+              </Field>
+              <Field label={t('invValuation.netRealisableValue')} hint={t('invValuation.nrvHint')}>
+                <input className="field" type="number" min="0" value={nrv} onChange={(e) => setNrv(e.target.value)} />
+              </Field>
+            </>
+          )
+        }
       />
 
       {failed && <ErrorBanner context="read" message={t('invValuation.error.transport')} onRetry={() => void loadBase()} />}
@@ -540,17 +555,6 @@ export function InventoryValuation() {
                 ) : (
                   <>
                     <h2 className="iv-detail-title">{selected.name}</h2>
-                    <div className="iv-controls">
-                      <div className="form-row">
-                        <label htmlFor="iv-asof">{t('invValuation.asOf')}</label>
-                        <input id="iv-asof" className="field" type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
-                      </div>
-                      <div className="form-row">
-                        <label htmlFor="iv-nrv">{t('invValuation.netRealisableValue')}</label>
-                        <input id="iv-nrv" className="field" type="number" min="0" value={nrv} onChange={(e) => setNrv(e.target.value)} />
-                        <p className="field-hint">{t('invValuation.nrvHint')}</p>
-                      </div>
-                    </div>
 
                     {detailLoading ? (
                       <Skeleton rows={3} height={36} />
@@ -672,10 +676,8 @@ export function InventoryValuation() {
       >
         {writeError && <ErrorBanner error={writeError} message={localError(writeError)} />}
         <div className="form-stack">
-          <div className="form-row">
-            <label htmlFor="iv-method">{t('invValuation.col.method')}</label>
+          <Field label={t('invValuation.col.method')}>
             <Select
-              id="iv-method"
               value={defaultDraft.method}
               onChange={(value) => setDefaultDraft({ ...defaultDraft, method: value })}
               options={methods
@@ -683,33 +685,31 @@ export function InventoryValuation() {
                 .map((m) => ({ value: m.method, label: t(`invValuation.method.${m.method}`) }))}
               ariaLabel={t('invValuation.col.method')}
             />
-          </div>
-          <div className="form-row">
-            <label htmlFor="iv-eff">{t('invValuation.effectiveFrom')}</label>
+          </Field>
+          <Field label={t('invValuation.effectiveFrom')} hint={t('invValuation.effectiveFromHint')}>
             <input
-              id="iv-eff"
               type="date"
               value={defaultDraft.effectiveFrom}
               onChange={(e) => setDefaultDraft({ ...defaultDraft, effectiveFrom: e.target.value })}
             />
-            <p className="field-hint">{t('invValuation.effectiveFromHint')}</p>
-          </div>
-          <div className="form-row">
-            <label htmlFor="iv-reason">{t('invValuation.history.reason')}</label>
-            <input id="iv-reason" value={defaultDraft.reason} onChange={(e) => setDefaultDraft({ ...defaultDraft, reason: e.target.value })} />
-            <p className="field-hint">{t('invValuation.reasonHint')}</p>
-          </div>
-          <div className="form-row">
+          </Field>
+          <Field label={t('invValuation.history.reason')} info={t('invValuation.reasonHint')}>
+            <input value={defaultDraft.reason} onChange={(e) => setDefaultDraft({ ...defaultDraft, reason: e.target.value })} />
+          </Field>
+          <div className="iv-check-row">
             <label className="iv-check">
               <input
                 type="checkbox"
                 checked={defaultDraft.forceRevaluation}
+                aria-describedby="iv-force-hint"
                 onChange={(e) => setDefaultDraft({ ...defaultDraft, forceRevaluation: e.target.checked })}
               />
               <span>{t('invValuation.forceRevaluation')}</span>
             </label>
-            <p className="field-hint">{t('invValuation.forceHint')}</p>
           </div>
+          <p id="iv-force-hint" className="field-hint">
+            {t('invValuation.forceHint')}
+          </p>
         </div>
       </DetailDrawer>
     </div>

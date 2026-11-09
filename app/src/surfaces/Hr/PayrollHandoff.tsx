@@ -22,6 +22,9 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
 import { formatCalendar } from '../../lib/format';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
+import { Select } from '../../components/Select';
+import { IconButton } from '../../components/IconButton';
+import { Field } from '../../components/Field';
 import { EmptyState, ErrorBanner, refusalText } from '../../components/states';
 import { FileDrop } from '../../components/FileDrop';
 import { Status } from '../../components/Status';
@@ -305,14 +308,16 @@ export function PayrollHandoff() {
 
   return (
     <div className="hr-panel payroll">
-      <p className="hr-hint payroll-oss">{t('payroll.oss.note')}</p>
       {error !== null && <ErrorBanner error={error} message={refusalText(t, error, { own: 'payroll.err' })} />}
       {reverseError !== null && <ErrorBanner error={reverseError} message={refusalText(t, reverseError, { own: 'payroll.reverse.err' })} />}
       {reversedNote && <p className="hr-hint" role="status">{t('payroll.reverse.done')}</p>}
       {/* Three steps, three panels on the elevated ground, separated by the step and the gap (K-09). */}
 
       <section className="payroll-card" aria-labelledby="payroll-export-h">
-        <h2 id="payroll-export-h">{t('payroll.export.title')}</h2>
+        <div className="payroll-card-head">
+          <h2 id="payroll-export-h">{t('payroll.export.title')}</h2>
+          <IconButton icon="info" small context={t('payroll.oss.note')} />
+        </div>
         {lastExport === undefined ? (
           <p>{t('payroll.export.first')}</p>
         ) : (
@@ -343,32 +348,29 @@ export function PayrollHandoff() {
 
       <section className="payroll-card" aria-labelledby="payroll-import-h">
         <h2 id="payroll-import-h">{t('payroll.import.title')}</h2>
-        <label className="payroll-field">
-          <span>{t('payroll.import.date')}</span>
-          <input className="field" type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} aria-label={t('payroll.import.date')} />
-        </label>
-        <label className="payroll-field">
-          <span>{t('payroll.runKind.label')}</span>
-          <select
-            className="field"
-            value={runKind}
-            onChange={(e) => { setRunKind(e.target.value as RunKind); setPreview(null); }}
-            aria-label={t('payroll.runKind.label')}
-          >
-            {RUN_KINDS.map((k) => <option key={k} value={k}>{t(`payroll.runKind.${k}`)}</option>)}
-          </select>
-        </label>
-        {runKind !== 'regular' && (
-          <label className="payroll-field">
-            <span>{t(reasonRequired ? 'payroll.runKind.reason' : 'payroll.runKind.reasonOptional')}</span>
-            <input
-              className="field"
-              value={runKindReason}
-              onChange={(e) => setRunKindReason(e.target.value)}
-              aria-label={t(reasonRequired ? 'payroll.runKind.reason' : 'payroll.runKind.reasonOptional')}
+        <div className="form-stack">
+          <Field label={t('payroll.import.date')}>
+            <input className="field" type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} aria-label={t('payroll.import.date')} />
+          </Field>
+          <Field label={t('payroll.runKind.label')}>
+            <Select
+              value={runKind}
+              onChange={(value) => { setRunKind(value as RunKind); setPreview(null); }}
+              options={RUN_KINDS.map((k) => ({ value: k, label: t(`payroll.runKind.${k}`) }))}
+              ariaLabel={t('payroll.runKind.label')}
             />
-          </label>
-        )}
+          </Field>
+          {runKind !== 'regular' && (
+            <Field label={t(reasonRequired ? 'payroll.runKind.reason' : 'payroll.runKind.reasonOptional')}>
+              <input
+                className="field"
+                value={runKindReason}
+                onChange={(e) => setRunKindReason(e.target.value)}
+                aria-label={t(reasonRequired ? 'payroll.runKind.reason' : 'payroll.runKind.reasonOptional')}
+              />
+            </Field>
+          )}
+        </div>
         {/* The shared FileDrop (K-13): the real file input behind a labelled button, a CSV dropped on
             the zone filtered by the same accept list. */}
         <FileDrop
@@ -395,15 +397,14 @@ export function PayrollHandoff() {
               <span>{t('payroll.import.supplementary')}</span>
             </label>
             {supplementary && (
-              <label className="payroll-field">
-                <span>{t('payroll.import.supplementaryReason')}</span>
+              <Field label={t('payroll.import.supplementaryReason')}>
                 <input
                   className="field"
                   value={supplementaryReason}
                   onChange={(e) => setSupplementaryReason(e.target.value)}
                   aria-label={t('payroll.import.supplementaryReason')}
                 />
-              </label>
+              </Field>
             )}
             <DataTable
               columns={previewColumns}
@@ -466,10 +467,9 @@ export function PayrollHandoff() {
         <div id="payroll-reverse-body">
           <p>{t('payroll.reverse.body')}</p>
           <ConsequenceLine verb="wage_journal_reverse" />
-          <label className="payroll-field">
-            <span>{t('payroll.reverse.reason')}</span>
+          <Field label={t('payroll.reverse.reason')}>
             <input className="field" value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} />
-          </label>
+          </Field>
         </div>
       </Modal>
     </div>

@@ -9,7 +9,7 @@
  * `update_item` with a patch. Structured rejections surface inline on their field, never as a raw
  * stack trace (spec §6 error state).
  */
-import { useId, useState } from 'react';
+import { useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
 import { isErr } from '../../lib/client';
@@ -17,6 +17,8 @@ import { useT } from '../../i18n';
 import { ErrorBanner } from '../../components/states';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { Select } from '../../components/Select';
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
 import type { Err } from '../../lib/client';
 import {
   CURRENCIES,
@@ -63,9 +65,6 @@ export function ItemEditor({
 }: ItemEditorProps) {
   const t = useT();
   const client = useClient();
-  // A stable namespace for the field error ids (`${titleId}-name-err`, wired via aria-describedby).
-  // The drawer's own title/labelledby wiring is the shared DetailDrawer's job now.
-  const titleId = useId();
 
   // The overlay, its scrim, the focus trap (Tab cannot walk out to the catalog behind the scrim),
   // Escape-to-close and focus-restore are all the shared DetailDrawer's now (D118 B2). This component
@@ -236,199 +235,119 @@ export function ItemEditor({
 
   return (
     <DetailDrawer open onClose={onClose} title={title} closeLabel={t('item.close')} footer={footer}>
-      <div className="item-form">
+      <div className="form-stack">
         {formError !== null && <ErrorBanner error={formError} />}
 
-          <div className="item-field">
-            <label className="item-field-inner">
-              <span className="item-field-label">{t('item.name')}</span>
-              <input
-                className="field"
-                value={name}
-                aria-invalid={nameError !== null}
-                aria-describedby={nameError !== null ? `${titleId}-name-err` : undefined}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </label>
-            {nameError !== null && (
-              <span id={`${titleId}-name-err`} className="field-error" role="alert">
-                {nameError}
-              </span>
-            )}
-          </div>
+        <Field label={t('item.name')} error={nameError}>
+          <input className="field" value={name} onChange={(event) => setName(event.target.value)} />
+        </Field>
 
-          <div className="item-row2">
-            <div className="item-field">
-              <label className="item-field-inner">
-                <span className="item-field-label">{t('item.field.sku')}</span>
-                <input
-                  className="field"
-                  value={sku}
-                  aria-invalid={skuError !== null}
-                  aria-describedby={skuError !== null ? `${titleId}-sku-err` : undefined}
-                  onChange={(event) => setSku(event.target.value)}
-                />
-              </label>
-              {skuError !== null && (
-                <span id={`${titleId}-sku-err`} className="field-error" role="alert">
-                  {skuError}
-                </span>
-              )}
-            </div>
+        <div className="item-row2">
+          <Field label={t('item.field.sku')} error={skuError}>
+            <input className="field" value={sku} onChange={(event) => setSku(event.target.value)} />
+          </Field>
+          <Field label={t('item.field.kind')}>
+            <Select
+              value={kind}
+              onChange={(value) => setKind(value)}
+              options={[
+                { value: '', label: t('item.kindNone') },
+                ...ITEM_KINDS.map((k) => ({ value: k, label: t(`item.kind.${k}`) })),
+              ]}
+              ariaLabel={t('item.field.kind')}
+            />
+          </Field>
+        </div>
 
-            <div className="item-field">
-              <div className="item-field-inner">
-                <span className="item-field-label">{t('item.field.kind')}</span>
-                <Select
-                  value={kind}
-                  onChange={(value) => setKind(value)}
-                  options={[
-                    { value: '', label: t('item.kindNone') },
-                    ...ITEM_KINDS.map((k) => ({ value: k, label: t(`item.kind.${k}`) })),
-                  ]}
-                  ariaLabel={t('item.field.kind')}
-                />
-              </div>
-            </div>
-          </div>
+        <div className="item-row2">
+          <Field label={t('item.field.sales_price')} error={priceError}>
+            <input
+              className="field item-num"
+              value={price}
+              inputMode="decimal"
+              placeholder="0.00"
+              onChange={(event) => setPrice(event.target.value)}
+            />
+          </Field>
+          <Field label={t('item.field.cost_price')} error={costPriceError}>
+            <input
+              className="field item-num"
+              value={costPrice}
+              inputMode="decimal"
+              placeholder="0.00"
+              onChange={(event) => setCostPrice(event.target.value)}
+            />
+          </Field>
+        </div>
 
-          <div className="item-row2">
-            <div className="item-field">
-              <label className="item-field-inner">
-                <span className="item-field-label">{t('item.field.sales_price')}</span>
-                <input
-                  className="field item-num"
-                  value={price}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  aria-invalid={priceError !== null}
-                  aria-describedby={priceError !== null ? `${titleId}-price-err` : undefined}
-                  onChange={(event) => setPrice(event.target.value)}
-                />
-              </label>
-              {priceError !== null && (
-                <span id={`${titleId}-price-err`} className="field-error" role="alert">
-                  {priceError}
-                </span>
-              )}
-            </div>
+        <div className="item-row2">
+          <Field label={t('item.currency')}>
+            <Select
+              value={currency ?? baseCurrency}
+              onChange={(value) => setCurrency(value)}
+              options={CURRENCIES.map((code) => ({ value: code, label: code }))}
+              ariaLabel={t('item.currency')}
+            />
+          </Field>
+          <Field label={t('item.field.unit')}>
+            <Select
+              value={unit ?? ''}
+              onChange={(value) => setUnit(value)}
+              options={[
+                { value: '', label: t('item.unitNone') },
+                ...(legacyUnit !== null ? [{ value: legacyUnit, label: legacyUnit }] : []),
+                ...ITEM_UNITS.map((u) => ({ value: u, label: t(`item.unit.${u}`) })),
+              ]}
+              ariaLabel={t('item.field.unit')}
+            />
+          </Field>
+        </div>
 
-            <div className="item-field">
-              <label className="item-field-inner">
-                <span className="item-field-label">{t('item.field.cost_price')}</span>
-                <input
-                  className="field item-num"
-                  value={costPrice}
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  aria-invalid={costPriceError !== null}
-                  aria-describedby={costPriceError !== null ? `${titleId}-cost-err` : undefined}
-                  onChange={(event) => setCostPrice(event.target.value)}
-                />
-              </label>
-              {costPriceError !== null && (
-                <span id={`${titleId}-cost-err`} className="field-error" role="alert">
-                  {costPriceError}
-                </span>
-              )}
-            </div>
-          </div>
+        <Field label={t('item.taxCode')} error={taxError}>
+          <Select
+            value={taxCode ?? ''}
+            onChange={(value) => setTaxCode(value)}
+            options={[
+              { value: '', label: t('item.taxNone') },
+              ...vatCodes.map((code) => ({ value: code.code, label: code.label })),
+            ]}
+            invalid={taxError !== null}
+            ariaLabel={t('item.taxCode')}
+          />
+        </Field>
 
-          <div className="item-row2">
-            <div className="item-field">
-              <div className="item-field-inner">
-                <span className="item-field-label">{t('item.currency')}</span>
-                <Select
-                  value={currency ?? baseCurrency}
-                  onChange={(value) => setCurrency(value)}
-                  options={CURRENCIES.map((code) => ({ value: code, label: code }))}
-                  ariaLabel={t('item.currency')}
-                />
-              </div>
-            </div>
+        <Field label={t('item.field.category')}>
+          <Select
+            value={categoryId ?? ''}
+            onChange={(value) => setCategoryId(value)}
+            options={[
+              { value: '', label: t('item.categoryNone') },
+              ...categories.map((category) => ({ value: category.id, label: category.name })),
+            ]}
+            ariaLabel={t('item.field.category')}
+          />
+        </Field>
 
-            <div className="item-field">
-              <div className="item-field-inner">
-                <span className="item-field-label">{t('item.field.unit')}</span>
-                <Select
-                  value={unit ?? ''}
-                  onChange={(value) => setUnit(value)}
-                  options={[
-                    { value: '', label: t('item.unitNone') },
-                    ...(legacyUnit !== null ? [{ value: legacyUnit, label: legacyUnit }] : []),
-                    ...ITEM_UNITS.map((u) => ({ value: u, label: t(`item.unit.${u}`) })),
-                  ]}
-                  ariaLabel={t('item.field.unit')}
-                />
-              </div>
-            </div>
-          </div>
+        <Field label={t('item.revenueAccount')} error={revenueError}>
+          <Select
+            value={revenueAccountId ?? ''}
+            onChange={(value) => setRevenueAccountId(value)}
+            options={[
+              { value: '', label: t('item.revenueNone') },
+              ...incomeAccounts.map((account) => ({
+                value: account.id,
+                label: `${account.number} ${account.name}`,
+              })),
+            ]}
+            invalid={revenueError !== null}
+            ariaLabel={t('item.revenueAccount')}
+          />
+        </Field>
 
-          <div className="item-field">
-            <div className="item-field-inner">
-              <span className="item-field-label">{t('item.taxCode')}</span>
-              <Select
-                value={taxCode ?? ''}
-                onChange={(value) => setTaxCode(value)}
-                options={[
-                  { value: '', label: t('item.taxNone') },
-                  ...vatCodes.map((code) => ({ value: code.code, label: code.label })),
-                ]}
-                invalid={taxError !== null}
-                describedBy={taxError !== null ? `${titleId}-tax-err` : undefined}
-                ariaLabel={t('item.taxCode')}
-              />
-            </div>
-            {taxError !== null && (
-              <span id={`${titleId}-tax-err`} className="field-error" role="alert">
-                {taxError}
-              </span>
-            )}
-          </div>
-
-          <div className="item-field">
-            <div className="item-field-inner">
-              <span className="item-field-label">{t('item.field.category')}</span>
-              <Select
-                value={categoryId ?? ''}
-                onChange={(value) => setCategoryId(value)}
-                options={[
-                  { value: '', label: t('item.categoryNone') },
-                  ...categories.map((category) => ({ value: category.id, label: category.name })),
-                ]}
-                ariaLabel={t('item.field.category')}
-              />
-            </div>
-          </div>
-
-          <div className="item-field">
-            <div className="item-field-inner">
-              <span className="item-field-label">{t('item.revenueAccount')}</span>
-              <Select
-                value={revenueAccountId ?? ''}
-                onChange={(value) => setRevenueAccountId(value)}
-                options={[
-                  { value: '', label: t('item.revenueNone') },
-                  ...incomeAccounts.map((account) => ({
-                    value: account.id,
-                    label: `${account.number} ${account.name}`,
-                  })),
-                ]}
-                invalid={revenueError !== null}
-                describedBy={revenueError !== null ? `${titleId}-rev-err` : undefined}
-                ariaLabel={t('item.revenueAccount')}
-              />
-            </div>
-            {revenueError !== null && (
-              <span id={`${titleId}-rev-err`} className="field-error" role="alert">
-                {revenueError}
-              </span>
-            )}
-          </div>
-
-          {/* Stock dials (D00 US-D00.5): products only. A service disables the toggle rather than
-              silently accepting a flag the engine would refuse (services_not_stockable). */}
-          <div className="item-field">
+        {/* Stock dials (D00 US-D00.5): products only. A service disables the toggle rather than
+            silently accepting a flag the engine would refuse (services_not_stockable). */}
+        <div className="item-field">
+          <div className="item-check-row">
             <label className="item-checkbox">
               <input
                 type="checkbox"
@@ -438,25 +357,25 @@ export function ItemEditor({
               />
               <span>{t('item.field.track_stock')}</span>
             </label>
-            {isService && <span className="item-field-hint">{t('item.error.services_not_stockable')}</span>}
-            {trackStock && !isService && (
-              <label className="item-field-inner">
-                <span className="item-field-label">{t('item.field.reorder_point_qty')}</span>
-                <input
-                  className="field item-num"
-                  value={reorderPoint}
-                  inputMode="decimal"
-                  placeholder="0"
-                  onChange={(event) => setReorderPoint(event.target.value)}
-                />
-              </label>
-            )}
-            {stockError !== null && (
-              <span className="field-error" role="alert">
-                {stockError}
-              </span>
-            )}
+            {isService && <IconButton icon="info" small context={t('item.error.services_not_stockable')} />}
           </div>
+          {trackStock && !isService && (
+            <Field label={t('item.field.reorder_point_qty')}>
+              <input
+                className="field item-num"
+                value={reorderPoint}
+                inputMode="decimal"
+                placeholder="0"
+                onChange={(event) => setReorderPoint(event.target.value)}
+              />
+            </Field>
+          )}
+          {stockError !== null && (
+            <p className="field-error" role="alert">
+              {stockError}
+            </p>
+          )}
+        </div>
       </div>
     </DetailDrawer>
   );

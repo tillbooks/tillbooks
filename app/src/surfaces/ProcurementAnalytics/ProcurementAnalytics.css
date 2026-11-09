@@ -17,22 +17,6 @@
   min-width: 0;
 }
 
-.procanalytics__filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--t-space-3);
-}
-
-.procanalytics__filters label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-0-5);
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-  color: var(--t-text-dim);
-}
-
 /* The totals strip: the elevated panel on the page, no hairline around it (K-09). */
 .procanalytics__totals {
   display: flex;

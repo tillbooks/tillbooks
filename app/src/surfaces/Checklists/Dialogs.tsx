@@ -7,10 +7,12 @@
  * front of every domain verb a posting row calls, D118 C4). Each carries its consequence sentence in
  * the body, keeps the typed value across a validation error, and renders its refusal inline.
  */
+import { Field } from '../../components/Field';
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Modal, type ModalRole } from '../../components/Modal';
+import { DetailDrawer } from '../../components/DetailDrawer';
 import { Select } from '../../components/Select';
 import { useT } from '../../i18n';
 import { periodTitle, TEMPLATE_IDS, type PeriodOption, type TemplateId } from './model';
@@ -61,7 +63,7 @@ export function StartDialog({ open, onClose, periodsFor, defaultPeriodFor, refus
     if (period !== '') onStart(templateId, period);
   };
   return (
-    <Modal
+    <DetailDrawer
       open={open}
       onClose={onClose}
       title={t('checklists.start.title')}
@@ -89,23 +91,24 @@ export function StartDialog({ open, onClose, periodsFor, defaultPeriodFor, refus
             </label>
           ))}
         </fieldset>
-        <label htmlFor={`${id}-period`}>{t(`checklists.start.period.${templateId}`)}</label>
-        {periods.length === 0 ? (
-          <p className="chk-dialog-template">{t('checklists.start.noPeriod')}</p>
-        ) : (
-          <Select
-            id={`${id}-period`}
-            value={period}
-            onChange={(val) => setPeriod(val)}
-            options={periods.map((p) => ({
-              value: p.label,
-              label: `${periodTitle(p.label)} (${p.periodStart} ${t('checklists.rangeTo')} ${p.periodEnd})${
-                p.filed ? ` ${t('checklists.start.filedSuffix')}` : ''
-              }`,
-            }))}
-            ariaLabel={t(`checklists.start.period.${templateId}`)}
-          />
-        )}
+        <Field label={t(`checklists.start.period.${templateId}`)}>
+          {periods.length === 0 ? (
+            <p className="chk-dialog-template">{t('checklists.start.noPeriod')}</p>
+          ) : (
+            <Select
+              id={`${id}-period`}
+              value={period}
+              onChange={(val) => setPeriod(val)}
+              options={periods.map((p) => ({
+                value: p.label,
+                label: `${periodTitle(p.label)} (${p.periodStart} ${t('checklists.rangeTo')} ${p.periodEnd})${
+                  p.filed ? ` ${t('checklists.start.filedSuffix')}` : ''
+                }`,
+              }))}
+              ariaLabel={t(`checklists.start.period.${templateId}`)}
+            />
+          )}
+        </Field>
         <p id={`${id}-consequence`} className="chk-consequence">
           {t(`checklists.start.consequence.${templateId}`)}
         </p>
@@ -141,7 +144,7 @@ export function StartDialog({ open, onClose, periodsFor, defaultPeriodFor, refus
           </p>
         )}
       </form>
-    </Modal>
+    </DetailDrawer>
   );
 }
 
@@ -201,8 +204,9 @@ export function AttestDialog({ open, onClose, exportedAt, today, portalUrl, refu
             {t('checklists.attest.portal')}
           </a>
         </p>
-        <label htmlFor={`${id}-date`}>{t('checklists.attest.date')}</label>
-        <input className="field" id={`${id}-date`} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <Field label={t('checklists.attest.date')}>
+          <input className="field" id={`${id}-date`} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </Field>
         <p id={`${id}-consequence`} className="chk-consequence">
           {t('checklists.attest.consequence')}
         </p>
@@ -268,13 +272,13 @@ export function GvDialog({ open, onClose, today, signedAt, refusal, working, onA
       }
     >
       <form id={`${id}-form`} onSubmit={submit} className="chk-dialog-form">
-        <label htmlFor={`${id}-date`}>{t('checklists.gv.date')}</label>
-        <input className="field" id={`${id}-date`} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <Field label={t('checklists.gv.date')}>
+          <input className="field" id={`${id}-date`} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </Field>
         {(predates || refusal === 'acknowledge_needs_reason') && (
-          <>
-            <label htmlFor={`${id}-reason`}>{t('checklists.gv.reason')}</label>
+          <Field label={t('checklists.gv.reason')}>
             <textarea className="field" id={`${id}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} rows={2} />
-          </>
+          </Field>
         )}
         <p id={`${id}-consequence`} className="chk-consequence">
           {t('checklists.gv.consequence')}
@@ -345,8 +349,9 @@ export function ReasonDialog({ open, onClose, title, label, consequence, action,
     >
       <form id={`${id}-form`} onSubmit={submit} className="chk-dialog-form">
         {lead !== undefined && <div className="chk-dialog-lead">{lead}</div>}
-        <label htmlFor={`${id}-reason`}>{label}</label>
-        <textarea className="field" id={`${id}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} rows={3} aria-required="true" />
+        <Field label={label}>
+          <textarea className="field" id={`${id}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} rows={3} aria-required="true" />
+        </Field>
         <p id={`${id}-consequence`} className="chk-consequence">
           {consequence}
         </p>
@@ -410,10 +415,9 @@ export function SignoffDialog({ open, onClose, title, consequence, needsReferenc
     >
       <form id={`${id}-form`} onSubmit={submit} className="chk-dialog-form">
         {needsReference && (
-          <>
-            <label htmlFor={`${id}-ref`}>{referenceLabel ?? t('checklists.signoff.reference')}</label>
+          <Field label={referenceLabel ?? t('checklists.signoff.reference')}>
             <input className="field" id={`${id}-ref`} type="text" value={reference} onChange={(e) => setReference(e.target.value)} placeholder={referenceHint ?? t('checklists.signoff.referenceHint')} />
-          </>
+          </Field>
         )}
         <p id={`${id}-consequence`} className="chk-consequence">
           {consequence}

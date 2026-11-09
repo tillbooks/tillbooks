@@ -27,10 +27,13 @@ import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
+import { DetailDrawer } from '../../components/DetailDrawer';
+import { FilterBar } from '../../components/FilterBar';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeletonHold, refusalText } from '../../components/states';
 import { Status } from '../../components/Status';
-import { CloseGlyph } from '../../components/icons';
+import { IconButton } from '../../components/IconButton';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import { useCan, CAP } from '../../lib/capabilities';
 import type { Err } from '../../lib/client';
@@ -103,11 +106,27 @@ export function Inventory() {
   const [toast, setToast] = useState<string | null>(null);
 
   const [moveOpen, setMoveOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [locationFilter, setLocationFilter] = useState<string | null>(null);
+  const [lowOnly, setLowOnly] = useState<string | null>(null);
   const [method, setMethod] = useState<ValuationMethod>('weighted_avg');
   const [asOf, setAsOf] = useState('');
   const [valuation, setValuation] = useState<{ totalValueMinor: number; perItem: ValuationItem[]; unpostedDeltaMinor: number; methodChanged: boolean } | null>(null);
 
   const lowIds = useMemo(() => new Set(low.map((l) => l.itemId)), [low]);
+
+  // The on-hand grid narrowed by the search and the two facets (D187 List A).
+  const shownRows = useMemo(() => {
+    const needle = search.trim().toLocaleLowerCase();
+    return rows.filter(
+      (r) =>
+        (needle === '' ||
+          r.itemName.toLocaleLowerCase().includes(needle) ||
+          r.locationName.toLocaleLowerCase().includes(needle)) &&
+        (locationFilter === null || r.locationId === locationFilter) &&
+        (lowOnly === null || lowIds.has(r.itemId)),
+    );
+  }, [rows, search, locationFilter, lowOnly, lowIds]);
 
   const load = useCallback(async () => {
     if (workspaceId === null) return;
@@ -196,6 +215,7 @@ export function Inventory() {
     <SurfaceHeader
       title={t('stock.route.title')}
       help={<SurfaceHelp surface="Inventory" />}
+      count={showSkeleton || error ? undefined : shownRows.length}
       actions={
         canMove && !showSkeleton && !error ? (
           <button type="button" className="btn btn--primary" onClick={() => setMoveOpen(true)}>
@@ -229,33 +249,69 @@ export function Inventory() {
       {toast !== null && (
         <div className="inventory__toast" role="status">
           <span>{toast}</span>
-          <button
-            type="button"
-            className="btn btn--ghost btn--sm inventory__toast-close"
+          <IconButton
+            icon="close"
+            small
+            className="inventory__toast-close"
+            name={t('stock.toast.dismiss')}
+            context={t('stock.route.title')}
             onClick={() => setToast(null)}
-            aria-label={t('stock.toast.dismiss')}
-          >
-            <CloseGlyph size={16} aria-hidden="true" />
-          </button>
+          />
         </div>
       )}
 
       {items.length === 0 ? (
         <EmptyState title={t('stock.empty')} action={{ to: '/items', label: t('stock.empty_cta') }} />
       ) : (
-        <DataTable
-          columns={gridColumns}
-          rows={rows}
-          rowKey={(r) => `${r.itemId}:${r.locationId}`}
-          caption={t('stock.route.title')}
-        />
+        <>
+          <FilterBar
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchLabel={t('stock.search')}
+            searchPlaceholder={t('stock.search')}
+            facets={[
+              {
+                key: 'location',
+                label: t('stock.movement.location'),
+                options: locations.filter((l) => !l.archived).map((l) => ({ value: l.id, label: l.name })),
+                value: locationFilter,
+                onChange: setLocationFilter,
+              },
+              {
+                key: 'low',
+                label: t('stock.badge.low'),
+                options: [{ value: '1', label: t('stock.badge.low') }],
+                value: lowOnly,
+                onChange: setLowOnly,
+              },
+            ]}
+          />
+          <DataTable
+            columns={gridColumns}
+            rows={shownRows}
+            rowKey={(r) => `${r.itemId}:${r.locationId}`}
+            caption={t('stock.route.title')}
+            emptyState={
+              <EmptyState
+                title={t('stock.emptyFiltered')}
+                filtered={{
+                  onClear: () => {
+                    setSearch('');
+                    setLocationFilter(null);
+                    setLowOnly(null);
+                  },
+                  clearLabel: t('stock.filter.clear'),
+                }}
+              />
+            }
+          />
+        </>
       )}
 
       <section className="inventory__panel" aria-label={t('stock.action.run_valuation')}>
         <h2>{t('stock.action.run_valuation')}</h2>
-        <div className="inventory__row">
-          <div className="inventory__field">
-            {t('stock.method.label')}
+        <div className="form-line">
+          <Field label={t('stock.method.label')} size="name">
             <Select
               value={method}
               onChange={(value) => setMethod(value as ValuationMethod)}
@@ -265,11 +321,10 @@ export function Inventory() {
               ]}
               ariaLabel={t('stock.method.label')}
             />
-          </div>
-          <label>
-            {t('stock.valuation.as_of')}
+          </Field>
+          <Field label={t('stock.valuation.as_of')} size="date">
             <input className="field" type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} />
-          </label>
+          </Field>
           <button type="button" className="btn btn--secondary" onClick={() => void previewValuation()} disabled={asOf === ''}>
             {t('stock.valuation.preview')}
           </button>
@@ -364,65 +419,59 @@ function MovementDialog({
   };
 
   return (
-    <Modal
+    <DetailDrawer
       open
       onClose={onClose}
       title={t('stock.action.record_movement')}
       closeLabel={t('stock.toast.dismiss')}
       footer={
-        <>
-          <button type="button" className="btn btn--ghost" onClick={onClose}>
-            {t('stock.dialog.cancel')}
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={() => void save()}
-            disabled={saving || locationId === '' || itemId === ''}
-          >
-            {t('stock.dialog.save')}
-          </button>
-        </>
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={() => void save()}
+          disabled={saving || locationId === '' || itemId === ''}
+        >
+          {t('stock.dialog.save')}
+        </button>
       }
     >
-      <div className="inventory__form">
-        <div className="inventory__field">
-          {t('stock.movement.item')}
+      <div className="form-stack">
+        <Field label={t('stock.movement.item')} size="name">
           <Select
             value={itemId}
             onChange={(value) => setItemId(value)}
             options={items.map((i) => ({ value: i.id, label: i.name }))}
             ariaLabel={t('stock.movement.item')}
           />
+        </Field>
+        <div className="form-line">
+          <Field label={t('stock.movement.location')} size="short">
+            <Select
+              value={locationId}
+              onChange={(value) => setLocationId(value)}
+              options={locations.map((l) => ({ value: l.id, label: l.name }))}
+              ariaLabel={t('stock.movement.location')}
+            />
+          </Field>
+          <Field label={t('stock.movement.reason_label')} size="short">
+            <Select
+              value={reason}
+              onChange={(value) => setReason(value as Reason)}
+              options={REASONS.map((r) => ({ value: r, label: t(`stock.reason.${r}`) }))}
+              ariaLabel={t('stock.movement.reason_label')}
+            />
+          </Field>
         </div>
-        <div className="inventory__field">
-          {t('stock.movement.location')}
-          <Select
-            value={locationId}
-            onChange={(value) => setLocationId(value)}
-            options={locations.map((l) => ({ value: l.id, label: l.name }))}
-            ariaLabel={t('stock.movement.location')}
-          />
+        <div className="form-line">
+          <Field label={t('stock.movement.qty')} size="code">
+            <input className="field" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} />
+          </Field>
+          <Field label={t('stock.movement.unit_cost')} size="amount">
+            <input className="field" inputMode="decimal" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
+          </Field>
         </div>
-        <div className="inventory__field">
-          {t('stock.movement.reason_label')}
-          <Select
-            value={reason}
-            onChange={(value) => setReason(value as Reason)}
-            options={REASONS.map((r) => ({ value: r, label: t(`stock.reason.${r}`) }))}
-            ariaLabel={t('stock.movement.reason_label')}
-          />
-        </div>
-        <label>
-          {t('stock.movement.qty')}
-          <input className="field" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} />
-        </label>
-        <label>
-          {t('stock.movement.unit_cost')}
-          <input className="field" inputMode="decimal" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
-        </label>
       </div>
-    </Modal>
+    </DetailDrawer>
   );
 }
 
@@ -517,11 +566,10 @@ function InventurPanel({ baseCurrency, onChanged, setToast }: { baseCurrency: st
     <section className="inventory__panel" aria-label={t('stock.stocktake.title')}>
       <h2>{t('stock.stocktake.title')}</h2>
       {sessionId === null ? (
-        <div className="inventory__row">
-          <label>
-            {t('stock.valuation.as_of')}
+        <div className="form-line">
+          <Field label={t('stock.valuation.as_of')} size="date">
             <input className="field" type="date" value={frozenAt} onChange={(e) => setFrozenAt(e.target.value)} />
-          </label>
+          </Field>
           <button type="button" className="btn btn--secondary" onClick={() => void open()} disabled={frozenAt === ''}>
             {t('stock.stocktake.open')}
           </button>

@@ -622,7 +622,8 @@ describe('D00 variants, indented under their parent', () => {
   it('offers no variant action on an archived row, whose only ways out are restore and delete', async () => {
     const { container } = renderItems();
     await catalogReady(container);
-    await userEvent.click(screen.getByLabelText('Archivierte anzeigen'));
+    await userEvent.click(screen.getByRole('button', { name: 'Filter hinzufügen' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Archivierte anzeigen' }));
     await waitFor(() => expect(rowNames(container)).toContain('Altprodukt'));
 
     const row = itemRow(container, 'Altprodukt');
@@ -640,7 +641,8 @@ describe('D00 variants, indented under their parent', () => {
     const unarchiveSpy = vi.fn<CannedHandler>(() => ok());
     const { container } = renderItems({ ...HAPPY, unarchive_item: unarchiveSpy });
     await catalogReady(container);
-    await userEvent.click(screen.getByLabelText('Archivierte anzeigen'));
+    await userEvent.click(screen.getByRole('button', { name: 'Filter hinzufügen' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Archivierte anzeigen' }));
     await waitFor(() => expect(rowNames(container)).toContain('Altprodukt'));
 
     await rowAction(itemRow(container, 'Altprodukt'), 'Altprodukt', 'Wiederherstellen');
@@ -965,8 +967,7 @@ describe('D00 stock dials, and a disabled control that says why', () => {
     expect(
       within(field).getByText('Für Dienstleistungen ist keine Lagerführung möglich.'),
     ).toBeInTheDocument();
-    // Not a tooltip: nothing was hovered, and there is no tooltip to hover.
-    expect(within(dialog).queryByRole('tooltip')).not.toBeInTheDocument();
+    // D187: the reason sits behind an (i) beside the control; its text is in the DOM from first paint.
   });
 
   it('drops a stock flag that was set before the kind became a service', async () => {

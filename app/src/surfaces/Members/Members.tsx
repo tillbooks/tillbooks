@@ -62,6 +62,9 @@ import { CopyButton } from '../../components/CopyButton';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { type Hint } from '../../components/HintsChip';
+import { IconButton } from '../../components/IconButton';
+import { Segmented } from '../../components/Segmented';
 import { Tabs, type TabItem } from '../../components/Tabs';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { Status } from '../../components/Status';
@@ -273,6 +276,7 @@ export function Members() {
       assignable={assignable}
       canManage={canManage}
       localMode={localMode}
+      unclaimed={caps.whoami !== null && !caps.whoami.provisioned}
       busy={busy}
       inviteEmail={inviteEmail}
       inviteRole={inviteRole}
@@ -340,40 +344,51 @@ export function Members() {
       </button>
     ) : undefined;
 
+  // D187 (the owner's pick "Hinweise A"): the page's notices fold into one "N Hinweise" chip beside the
+  // title. Each shows only while its condition holds (a notice that outlives its condition is furniture).
+  const hints: Hint[] = [];
+  if (caps.whoami !== null && !caps.whoami.provisioned) {
+    hints.push({ key: 'unclaimed', title: t('members.hintTitle.unclaimed'), body: t('members.unclaimed') });
+  }
+  if (caps.whoami !== null && caps.whoami.provisioned && !caps.whoami.isMember) {
+    hints.push({ key: 'notAMember', title: t('members.hintTitle.notAMember'), body: t('members.notAMember') });
+  }
+  /*
+    THE COST OF D50, SAID OUT LOUD ON THE SCREEN THAT CAN FIX IT. Provisioning seats the MCP agent as an
+    owner so that the first invite does not silently cut `till mcp` out of every write. The price is that
+    whoever reaches the MCP socket holds everything until somebody narrows it. It shows only while the
+    agent is still AT `owner`, and only to somebody who can act on it.
+  */
+  if (canManage && state.kind === 'ok' && state.members.some((m) => m.actorId === 'agent' && m.role === 'owner')) {
+    hints.push({ key: 'agentIsOwner', title: t('members.hintTitle.agentIsOwner'), body: t('members.agentIsOwner') });
+  }
+  /*
+    M03 invite (N4b), S4.2: locally there is no second sign-in, so a minted token is redeemable by nobody.
+    The notice links the Hosting journey; the invite row is disabled with the same sentence beside it.
+  */
+  if (canManage && localMode) {
+    hints.push({
+      key: 'goOnline',
+      title: t('members.hintTitle.goOnline'),
+      body: t('members.goOnline.notice'),
+      action: (
+        <Link className="link-inline" to="/operations">
+          {t('members.goOnline.link')}
+        </Link>
+      ),
+    });
+  }
+
   return (
     <section className="members" aria-labelledby="members-title">
       <SurfaceHeader
         title={t('members.title')}
         titleId="members-title"
         help={<SurfaceHelp surface="Members" />}
+        count={state.kind === 'ok' && tab === 'members' ? state.members.length : undefined}
+        hints={hints}
         actions={defineRole}
       />
-
-      {/*
-        THE ONE NOTICE THAT IS NOT AN ERROR. It says the true thing (nobody has claimed this
-        workspace) rather than the convenient one (you are the owner), and it says what the next
-        click will do, because inviting somebody is also the act of claiming ownership and an
-        operator should not discover that afterwards.
-      */}
-      {caps.whoami !== null && !caps.whoami.provisioned && (
-        <ActionFeedback tone="info" message={t('members.unclaimed')} />
-      )}
-      {caps.whoami !== null && caps.whoami.provisioned && !caps.whoami.isMember && (
-        <ActionFeedback tone="info" message={t('members.notAMember')} />
-      )}
-
-      {/*
-        THE COST OF D50, SAID OUT LOUD ON THE SCREEN THAT CAN FIX IT. Provisioning seats the MCP
-        agent as an owner so that the first invite does not silently cut `till mcp` out of every
-        write. The price is that whoever reaches the MCP socket holds everything until somebody
-        narrows it, and a price nobody is told about is a price nobody pays deliberately. It shows
-        only while the agent is still AT `owner`, and only to somebody who can act on it: a notice
-        that outlives the condition it describes is furniture, and one an operator cannot act on is
-        an accusation.
-      */}
-      {canManage && state.kind === 'ok' && state.members.some((m) => m.actorId === 'agent' && m.role === 'owner') && (
-        <ActionFeedback tone="info" message={t('members.agentIsOwner')} />
-      )}
 
       {feedback !== null && (
         <ActionFeedback
@@ -489,6 +504,7 @@ function MembersPanel({
   assignable,
   canManage,
   localMode,
+  unclaimed,
   busy,
   inviteEmail,
   inviteRole,
@@ -507,6 +523,8 @@ function MembersPanel({
   assignable: readonly RoleDto[];
   canManage: boolean;
   localMode: boolean;
+  /** Nobody has claimed the workspace yet: the first invite makes the inviter its owner. */
+  unclaimed: boolean;
   busy: boolean;
   inviteEmail: string;
   inviteRole: string;
@@ -523,7 +541,8 @@ function MembersPanel({
   const t = useT();
   const tStrict = useTStrict();
   const noticeId = useId();
-  const kindLegendId = useId();
+  /** D187 (Hinzufügen A): the member whose role is being changed, after its pencil was pressed. */
+  const [editingRole, setEditingRole] = useState<string | null>(null);
 
   const columns: DataTableColumn<MemberDto>[] = [
     {
@@ -545,16 +564,33 @@ function MembersPanel({
     {
       key: 'role',
       header: t('members.column.role'),
+      // D187 (Hinzufügen A): the role is a value; its pencil (on hover or focus) turns it into the picker.
       render: (member) =>
-        canManage ? (
+        canManage && editingRole === member.memberId ? (
           <Select
             className="members-role-select"
             value={member.role}
             disabled={busy}
             ariaLabel={t('members.roleLabel')}
-            onChange={(val) => onSetRole(member.memberId, val)}
+            onChange={(val) => {
+              setEditingRole(null);
+              if (val !== member.role) onSetRole(member.memberId, val);
+            }}
             options={assignable.map((role) => ({ value: role.id, label: roleLabel(role, tStrict) }))}
           />
+        ) : canManage ? (
+          <span className="members-role-value">
+            {roleLabel(roles.find((r) => r.id === member.role), tStrict, member.role)}
+            <span className="row-reveal">
+              <IconButton
+                icon="edit"
+                small
+                context={t('members.roleEdit', { name: personLabel(member, t) })}
+                disabled={busy}
+                onClick={() => setEditingRole(member.memberId)}
+              />
+            </span>
+          </span>
         ) : (
           <span className="members-role-text">
             {roleLabel(roles.find((r) => r.id === member.role), tStrict, member.role)}
@@ -578,113 +614,69 @@ function MembersPanel({
         </span>
       ),
     },
-    {
-      key: 'actions',
-      header: t('members.column.actions'),
-      headerHidden: true,
-      align: 'end',
-      render: (member) =>
-        canManage ? (
-          <button
-            type="button"
-            className="btn btn--secondary btn--sm"
-            disabled={busy}
-            onClick={() => onRevoke(member)}
-          >
-            {t('members.revoke')}
-          </button>
-        ) : null,
-    },
   ];
 
   return (
     <>
       {/*
-        M03 invite (N4b), S4.2: the go-online notice sits WITH the invite form, never above the
-        list. It corrects the expectation (locally there is no second sign-in, so a minted token is
-        redeemable by nobody) and links the Hosting journey. In local mode the invite fieldset below
-        is DISABLED with this notice as its stated reason (see the fieldset comment); the Rollen tab
-        stays open for preparing rolesets. Absent in served mode.
+        D187 (the owner's pick "Hinzufügen A"): the invite is ONE row above the table, its fields side by
+        side and sized to what they hold. What the click does, or why it cannot be done here, sits in the
+        (i) beside the button; the go-online notice with its link is in the header's Hinweise.
+        M03 S4.2 (friction ledger F-11): in LOCAL mode the row is DISABLED with that sentence as its
+        stated reason, because a token minted here is redeemable by nobody.
       */}
-      {canManage && localMode && (
-        <div id={noticeId}>
-          <ActionFeedback
-            tone="info"
-            role="note"
-            className="members-goonline"
-            message={
-              <>
-                {t('members.goOnline.notice')} <Link className="link-inline" to="/operations">{t('members.goOnline.link')}</Link>
-              </>
-            }
-          />
-        </div>
-      )}
       {canManage && (
         <form
-          className="members-invite panel"
+          className="members-invite"
           onSubmit={(e) => {
             e.preventDefault();
             onInvite();
           }}
         >
-          {/*
-            M03 S4.2, corrected in Phase 2c (friction ledger F-11): the engine mints a token on every
-            invite and cannot know the instance is local, so in LOCAL mode the form is DISABLED with
-            the notice above as its stated reason. A form that minted a code nobody could redeem was
-            an action shown and then refused; the Rollen tab stays open for preparing rolesets.
-          */}
-          <fieldset
-            className="members-invite-fields"
-            disabled={localMode}
-            aria-describedby={localMode ? noticeId : undefined}
-          >
-            <label className="members-field" htmlFor={inviteEmailId}>
-              {t('members.emailLabel')}
-            </label>
+          <fieldset className="members-invite-fields form-line" disabled={localMode} aria-describedby={localMode ? noticeId : undefined}>
             <input
               id={inviteEmailId}
-              className="field"
+              className="field members-invite-email"
               type="email"
               required
+              aria-label={t('members.emailLabel')}
               value={inviteEmail}
               placeholder={t('members.emailPlaceholder')}
               onChange={(e) => onInviteEmail(e.target.value)}
             />
-            <label className="members-field" htmlFor={inviteRoleId}>
-              {t('members.roleLabel')}
-            </label>
             <Select
               id={inviteRoleId}
+              className="members-invite-role"
               value={inviteRole}
               onChange={(val) => onInviteRole(val)}
               options={assignable.map((role) => ({ value: role.id, label: roleLabel(role, tStrict) }))}
               ariaLabel={t('members.roleLabel')}
             />
             {/* D123 / M03 V5: the kind, declared by the inviter (Person or Agent). One click each. */}
-            <span className="members-field" id={kindLegendId}>
-              {t('members.kindLabel')}
-            </span>
-            <div className="members-kind" role="radiogroup" aria-labelledby={kindLegendId}>
-              {(['human', 'agent'] as const).map((kind) => (
-                <label key={kind} className="members-kind-option">
-                  <input
-                    type="radio"
-                    name="member-kind"
-                    value={kind}
-                    checked={inviteKind === kind}
-                    onChange={() => onInviteKind(kind)}
-                  />
-                  <span>{t(`members.kind.${kind}`)}</span>
-                </label>
-              ))}
-            </div>
-            {/* K-08: inviting is not a money write, so it is the form's primary, never the accent. */}
-            <button type="submit" className="btn btn--primary" disabled={busy || inviteEmail === ''}>
+            <Segmented
+              label={t('members.kindLabel')}
+              value={inviteKind}
+              onChange={(kind) => onInviteKind(kind)}
+              options={(['human', 'agent'] as const).map((kind) => ({ value: kind, label: t(`members.kind.${kind}`) }))}
+            />
+            {/* K-08: inviting is not a money write, so it is never the accent. */}
+            <button type="submit" className="btn btn--secondary" disabled={busy || inviteEmail === ''}>
               {t('members.invite')}
             </button>
           </fieldset>
-          {inviteKind === 'agent' && !localMode && <p className="members-kind-hint">{t('members.kindHint.agent')}</p>}
+          {(() => {
+            const info = localMode ? t('members.goOnline.notice') : unclaimed ? t('members.unclaimed') : inviteKind === 'agent' ? t('members.kindHint.agent') : null;
+            return info === null ? null : (
+              <>
+                <IconButton icon="info" context={info} />
+                {localMode && (
+                  <span id={noticeId} className="visually-hidden">
+                    {info}
+                  </span>
+                )}
+              </>
+            );
+          })()}
         </form>
       )}
 
@@ -692,6 +684,12 @@ function MembersPanel({
         columns={columns}
         rows={[...members]}
         rowKey={(member) => member.memberId}
+        rowActions={
+          canManage
+            ? (member) => [{ key: 'revoke', label: t('members.revoke'), danger: true, disabled: busy, onSelect: () => onRevoke(member) }]
+            : undefined
+        }
+        rowActionsLabel={(member) => t('members.actionsFor', { name: personLabel(member, t) })}
         caption={t('members.list.aria')}
         emptyState={
           // In local mode the invite-CTA hint would contradict the go-online notice right above

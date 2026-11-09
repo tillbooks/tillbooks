@@ -42,8 +42,10 @@ import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { formatMoney, useT } from '../../i18n';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
+import { Field } from '../../components/Field';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { FilterBar } from '../../components/FilterBar';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { Status, type StatusKind } from '../../components/Status';
@@ -197,6 +199,11 @@ export function PurchaseVersions() {
   const { can } = useCapabilities();
 
   const [rows, setRows] = useState<PoSummary[]>([]);
+  const [search, setSearch] = useState('');
+  const shown = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return needle === '' ? rows : rows.filter((r) => `${r.number}`.toLowerCase().includes(needle));
+  }, [rows, search]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [denied, setDenied] = useState(false);
@@ -380,13 +387,20 @@ export function PurchaseVersions() {
 
   return (
     <div className="pov">
-      <SurfaceHeader title={t('poVersions.title')} help={<SurfaceHelp surface="PurchaseVersions" />} />
+      <SurfaceHeader title={t('poVersions.title')} help={<SurfaceHelp surface="PurchaseVersions" />} count={shown.length} />
+
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel={t('poVersions.search')}
+        searchPlaceholder={t('poVersions.search')}
+      />
 
       {failed && <ErrorBanner message={t('poVersions.error.transport')} onRetry={() => void load()} context="read" />}
 
       <DataTable
         columns={columns}
-        rows={rows}
+        rows={shown}
         rowKey={(r) => r.id}
         caption={t('poVersions.list.caption')}
         loading={loading}
@@ -435,10 +449,9 @@ export function PurchaseVersions() {
           {amendmentId !== null && (
             <div className="pov-amend" role="group" aria-label={t('poVersions.amend.title')}>
               <h3 className="pov-section-title">{t('poVersions.amend.title')}</h3>
-              <div className="pov-field">
-                <label htmlFor="pov-reason">{t('poVersions.amend.reason')}</label>
+              <Field label={t('poVersions.amend.reason')}>
                 <input id="pov-reason" className="field" value={reason} onChange={(e) => setReason(e.target.value)} />
-              </div>
+              </Field>
               {edits.map((e, i) => (
                 <div className="pov-edit-line" key={e.poLineId}>
                   <span className="pov-edit-desc">{e.description}</span>

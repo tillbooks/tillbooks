@@ -17,6 +17,7 @@ import { isErr, type Err } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
 import { EmptyState, NoWorkspaceState } from '../../components/states';
+import { Field } from '../../components/Field';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
@@ -271,6 +272,19 @@ export function ProcurementAnalytics() {
         title={t('procurement.analytics.title')}
         subtitle={t('procurement.analytics.subtitle')}
         help={<SurfaceHelp surface="ProcurementAnalytics" />}
+        /* D187 (Berichte A): the period sits in the sticky header's second row, the report beneath. */
+        toolbar={
+          report.needsPeriod ? (
+            <>
+              <Field label={t('procurement.analytics.from')}>
+                <input className="field" type="date" value={fromDraft} onChange={(e) => setFromDraft(e.target.value)} />
+              </Field>
+              <Field label={t('procurement.analytics.to')}>
+                <input className="field" type="date" value={toDraft} onChange={(e) => setToDraft(e.target.value)} />
+              </Field>
+            </>
+          ) : undefined
+        }
       />
 
       {/* The report list is the vertical Tabs (K-11): one view of the surface at a time, the chosen
@@ -283,19 +297,6 @@ export function ProcurementAnalytics() {
         onChange={setReportId}
       >
         <section className="procanalytics__main">
-          {report.needsPeriod && (
-            <div className="procanalytics__filters">
-              <label>
-                {t('procurement.analytics.from')}
-                <input className="field" type="date" value={fromDraft} onChange={(e) => setFromDraft(e.target.value)} />
-              </label>
-              <label>
-                {t('procurement.analytics.to')}
-                <input className="field" type="date" value={toDraft} onChange={(e) => setToDraft(e.target.value)} />
-              </label>
-            </div>
-          )}
-
           {totals.length > 0 && (
             <div className="procanalytics__totals" role="status">
               {totals.map((tt) => (

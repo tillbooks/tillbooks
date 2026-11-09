@@ -16,14 +16,16 @@
     "bucket": {
       "needs_reply": "Needs reply",
       "drafted": "Draft ready",
-      "done": "Done"
+      "done": "Done",
+      "label": "Stage"
     },
     "action": {
       "connect": "Connect a local mail store",
       "reindex": "Reindex",
       "open": "Open",
       "close": "Close",
-      "discard": "Cancel"
+      "discard": "Cancel",
+      "reindexContext": "Re-read the mail store"
     },
     "connect": {
       "no_password": "No password needed. TILL reads the mail store on this Mac; it never signs in to your provider.",
@@ -67,8 +69,7 @@
       "last": "Last"
     },
     "view": {
-      "label": "View",
-      "all": "All"
+      "label": "View"
     },
     "error": {
       "needs_mailstore": "No local mail store found.",
@@ -80,7 +81,12 @@
         "read": "This needs the \"Read the local mail index and threads\" right.",
         "write": "This needs the \"Connect a local mail store and write drafts\" right."
       }
-    }
+    },
+    "search": "Search threads",
+    "filter": {
+      "clear": "Clear filters"
+    },
+    "rowActions": "Actions for {title}"
   },
   "draft": {
     "pane": {

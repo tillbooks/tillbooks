@@ -75,7 +75,7 @@ export function WorkspacesPanel({ activeId, onNewWorkspace, onlyWhenPopulated = 
   if (onlyWhenPopulated && (state.kind !== 'ready' || state.workspaces.length === 0)) return null;
 
   return (
-    <section className="panel setup-panel" aria-labelledby={headingId}>
+    <section className="setup-panel" aria-labelledby={headingId}>
       <h2 id={headingId} className="setup-panel-title">
         {t('workspaces.title')}
       </h2>

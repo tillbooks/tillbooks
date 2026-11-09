@@ -39,6 +39,9 @@
       "stetigkeit": "The valuation method differs from the last run (consistency, OR 958c)."
     },
     "badge": { "low": "Low stock" },
+    "search": "Search item or location",
+    "emptyFiltered": "No stock matches this filter.",
+    "filter": { "clear": "Clear filters" },
     "empty": "No stock-tracked items.",
     "empty_cta": "Manage items",
     "toast": { "dismiss": "Dismiss" },

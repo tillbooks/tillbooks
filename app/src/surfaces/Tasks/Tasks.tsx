@@ -38,6 +38,8 @@ import { useT, formatDate } from '../../i18n';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { OverflowMenu } from '../../components/OverflowMenu';
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
 import { Status, type StatusKind } from '../../components/Status';
 import { useSeatNames } from '../../app/useSeatNames';
 import { Select } from '../../components/Select';
@@ -288,9 +290,8 @@ export function Tasks() {
   if (denied) return <PermissionDenied body={t('tasks.error.permissionDenied.read')} />;
 
   const editorFields = (value: Draft, onChange: (next: Draft) => void, idPrefix: string) => (
-    <div className="tasks-editor-fields">
-      <label className="tasks-field">
-        <span>{t('tasks.field.title')}</span>
+    <div className="form-stack">
+      <Field label={t('tasks.field.title')}>
         <input
           className="field"
           id={`${idPrefix}-title`}
@@ -299,9 +300,8 @@ export function Tasks() {
           onChange={(e) => onChange({ ...value, title: e.target.value })}
           required
         />
-      </label>
-      <label className="tasks-field">
-        <span>{t('tasks.field.assignee')}</span>
+      </Field>
+      <Field label={t('tasks.field.assignee')}>
         <input
           className="field"
           id={`${idPrefix}-assignee`}
@@ -310,21 +310,21 @@ export function Tasks() {
           placeholder={whoami?.actor ?? ''}
           onChange={(e) => onChange({ ...value, assigneeUserId: e.target.value })}
         />
-      </label>
-      <label className="tasks-field">
-        <span>{t('tasks.field.due')}</span>
-        <input className="field" id={`${idPrefix}-due`} type="date" value={value.dueAt} onChange={(e) => onChange({ ...value, dueAt: e.target.value })} />
-      </label>
-      <label className="tasks-field">
-        <span>{t('tasks.field.reminder')}</span>
-        <input
-          className="field"
-          id={`${idPrefix}-reminder`}
-          type="datetime-local"
-          value={value.reminderAt}
-          onChange={(e) => onChange({ ...value, reminderAt: e.target.value })}
-        />
-      </label>
+      </Field>
+      <div className="form-line">
+        <Field label={t('tasks.field.due')} size="date">
+          <input className="field" id={`${idPrefix}-due`} type="date" value={value.dueAt} onChange={(e) => onChange({ ...value, dueAt: e.target.value })} />
+        </Field>
+        <Field label={t('tasks.field.reminder')} size="name">
+          <input
+            className="field"
+            id={`${idPrefix}-reminder`}
+            type="datetime-local"
+            value={value.reminderAt}
+            onChange={(e) => onChange({ ...value, reminderAt: e.target.value })}
+          />
+        </Field>
+      </div>
     </div>
   );
 
@@ -335,11 +335,12 @@ export function Tasks() {
         <h2 id={`tasks-h-${bucket}`} className="tasks-section-title">
           {t(`tasks.bucket.${bucket}`)}
           <span className="tasks-count">{rows.length}</span>
+          {rows.length === 0 && (
+            // K-33: each bucket says what is not there, behind an (i) rather than as a sentence per bucket.
+            <IconButton icon="info" small context={t(`tasks.section.empty.${bucket}`)} />
+          )}
         </h2>
-        {rows.length === 0 ? (
-          // K-33: each bucket says what is not there, never a bare "Nichts hier."
-          <p className="tasks-section-empty">{t(`tasks.section.empty.${bucket}`)}</p>
-        ) : (
+        {rows.length === 0 ? null : (
           <ul className="tasks-rows">
             {rows.map((task) => {
               const live = task.status === 'open' || task.status === 'doing';
@@ -429,11 +430,10 @@ export function Tasks() {
                         void snooze(task.id);
                       }}
                     >
-                      <label className="tasks-field">
-                        <span>{t('tasks.snooze.until')}</span>
+                      <Field label={t('tasks.snooze.until')} size="name">
                         <input className="field" type="datetime-local" value={snoozeUntil} onChange={(e) => setSnoozeUntil(e.target.value)} required />
-                      </label>
-                      <div className="tasks-editor-actions">
+                      </Field>
+                      <div className="form-actions tasks-editor-actions">
                         <button type="submit" className="btn btn--primary btn--sm">
                           {t('tasks.action.snooze')}
                         </button>
@@ -456,7 +456,6 @@ export function Tasks() {
     <>
       {views.length > 0 && (
         <div className="tasks-view-picker">
-          <span>{t('tasks.view.label')}</span>
           <Select
             value={viewId}
             onChange={(val) => setViewId(val)}
@@ -481,6 +480,7 @@ export function Tasks() {
       <SurfaceHeader
         title={t('tasks.route.title')}
         titleId="tasks-title"
+        count={loading || failed ? undefined : tasks.length}
         help={<SurfaceHelp surface="Tasks" />}
         actions={headerActions}
       />
@@ -537,8 +537,7 @@ export function Tasks() {
           {writeError !== null && <ErrorBanner message={errorMessage(writeError)} />}
           {editorFields(draft, setDraft, editor.mode === 'create' ? 'create' : `edit-${editor.taskId}`)}
           {editor.mode === 'create' && (
-            <label className="tasks-field">
-              <span>{t('tasks.field.recurrence')}</span>
+            <Field label={t('tasks.field.recurrence')} size="short" className="tasks-recurrence">
               <input
                 className="field"
                 type="text"
@@ -546,7 +545,7 @@ export function Tasks() {
                 placeholder="FREQ=MONTHLY"
                 onChange={(e) => setDraft({ ...draft, recurrenceRule: e.target.value })}
               />
-            </label>
+            </Field>
           )}
         </DetailDrawer>
       )}

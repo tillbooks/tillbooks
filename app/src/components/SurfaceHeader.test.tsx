@@ -47,10 +47,13 @@ describe('SurfaceHeader', () => {
     expect(container.querySelector('.surface-header-subtitle')).toBeNull();
   });
 
-  it('hosts an inline help slot beside the title', () => {
+  it('hosts an inline help slot beside the title, outside the heading so its name stays the title (D187)', () => {
     renderHeader({ help: <button type="button">Hilfe</button> });
     const heading = screen.getByRole('heading', { level: 1 });
-    expect(heading).toContainElement(screen.getByRole('button', { name: 'Hilfe' }));
+    const help = screen.getByRole('button', { name: 'Hilfe' });
+    expect(heading).not.toContainElement(help);
+    expect(heading.parentElement).toContainElement(help);
+    expect(heading.textContent).not.toContain('Hilfe');
   });
 
   it('renders the actions slot, and omits the actions container when empty', () => {

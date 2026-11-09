@@ -15,7 +15,8 @@
  *
  * The saved-report list is the shared `DataTable` (frame overflow, sticky header, density and the five
  * states in one place); the page header and the create action are the shared `SurfaceHeader`; and both
- * dialogs (the builder and the schedule editor) are the shared `Modal`, which adds the focus trap,
+ * dialogs (the builder and the schedule editor) are the shared `DetailDrawer` (D187: a sheet from the right,
+ * the list stays in view), the delete confirm the shared `Modal`, which add the focus trap,
  * Escape and scrim the hand-rolled panels lacked. The per-surface CSS that duplicated the list table,
  * the header row and the dialog chrome is gone; what remains is genuinely F01-specific: the source and
  * retention notes, the run-success line, the column checklist, the cloud-tier note and the live
@@ -30,10 +31,12 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useI18n, useT, type Locale } from '../../i18n';
 import { CAP, useCan } from '../../lib/capabilities';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
+import { Field } from '../../components/Field';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { Modal } from '../../components/Modal';
+import { DetailDrawer } from '../../components/DetailDrawer';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
 import { Status } from '../../components/Status';
@@ -389,7 +392,7 @@ export function ReportBuilder() {
       )}
 
       {draft !== null && (
-        <Modal
+        <DetailDrawer
           open
           onClose={() => setDraft(null)}
           title={draft.editingId !== null ? t('reportBuilder.builder.editTitle') : t('reportBuilder.builder.title')}
@@ -410,31 +413,30 @@ export function ReportBuilder() {
             </>
           }
         >
-          <div className="rb-form">
-            <label className="rb-field">
-              <span>{t('reportBuilder.field.name')}</span>
+          <div className="rb-form form-stack">
+            <Field label={t('reportBuilder.field.name')}>
               <input className="field" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-            </label>
-            <div className="rb-field">
-              <span>{t('reportBuilder.field.source')}</span>
-              <Select
-                value={draft.source}
-                onChange={(val) => changeSource(val)}
-                options={sources.map((s) => ({ value: s.id, label: label(s.titleI18n, s.id, locale) }))}
-                ariaLabel={t('reportBuilder.field.source')}
-              />
-            </div>
-            <div className="rb-field">
-              <span>{t('reportBuilder.field.format')}</span>
-              <Select
-                value={draft.format}
-                onChange={(val) => setDraft({ ...draft, format: val })}
-                options={[
-                  { value: 'csv', label: 'CSV' },
-                  { value: 'pdf', label: 'PDF' },
-                ]}
-                ariaLabel={t('reportBuilder.field.format')}
-              />
+            </Field>
+            <div className="form-line">
+              <Field label={t('reportBuilder.field.source')}>
+                <Select
+                  value={draft.source}
+                  onChange={(val) => changeSource(val)}
+                  options={sources.map((s) => ({ value: s.id, label: label(s.titleI18n, s.id, locale) }))}
+                  ariaLabel={t('reportBuilder.field.source')}
+                />
+              </Field>
+              <Field label={t('reportBuilder.field.format')} size="short">
+                <Select
+                  value={draft.format}
+                  onChange={(val) => setDraft({ ...draft, format: val })}
+                  options={[
+                    { value: 'csv', label: 'CSV' },
+                    { value: 'pdf', label: 'PDF' },
+                  ]}
+                  ariaLabel={t('reportBuilder.field.format')}
+                />
+              </Field>
             </div>
 
             <ColumnChecklist source={sourceById.get(draft.source)} selected={draft.columns} onToggle={toggleColumn} t={t} locale={locale} />
@@ -479,7 +481,7 @@ export function ReportBuilder() {
               </div>
             )}
           </div>
-        </Modal>
+        </DetailDrawer>
       )}
 
       {scheduleReport !== undefined && (
@@ -621,7 +623,7 @@ function ScheduleEditor({ report, onClose, onSaved }: { report: SavedReport; onC
   };
 
   return (
-    <Modal
+    <DetailDrawer
       open
       onClose={onClose}
       title={t('reportBuilder.action.schedule')}
@@ -640,39 +642,48 @@ function ScheduleEditor({ report, onClose, onSaved }: { report: SavedReport; onC
         </>
       }
     >
-      <div className="rb-form">
-        <Select
-          value={freq}
-          onChange={(val) => setFreq(val as 'daily' | 'weekly' | 'monthly')}
-          options={[
-            { value: 'daily', label: t('reportBuilder.freq.daily') },
-            { value: 'weekly', label: t('reportBuilder.freq.weekly') },
-            { value: 'monthly', label: t('reportBuilder.freq.monthly') },
-          ]}
-          ariaLabel={t('reportBuilder.field.frequency')}
-        />
-        <input className="field" type="time" value={at} onChange={(e) => setAt(e.target.value)} aria-label={t('reportBuilder.field.time')} />
+      <div className="rb-form form-stack">
+        <Field label={t('reportBuilder.field.frequency')} size="short">
+          <Select
+            value={freq}
+            onChange={(val) => setFreq(val as 'daily' | 'weekly' | 'monthly')}
+            options={[
+              { value: 'daily', label: t('reportBuilder.freq.daily') },
+              { value: 'weekly', label: t('reportBuilder.freq.weekly') },
+              { value: 'monthly', label: t('reportBuilder.freq.monthly') },
+            ]}
+            ariaLabel={t('reportBuilder.field.frequency')}
+          />
+        </Field>
+        <Field label={t('reportBuilder.field.time')} size="date">
+          <input className="field" type="time" value={at} onChange={(e) => setAt(e.target.value)} aria-label={t('reportBuilder.field.time')} />
+        </Field>
         {/* The weekday by name (0 is Sunday, the engine's cron.ts), never a bare 0 to 6 number field. */}
         {freq === 'weekly' && (
-          <Select
-            value={String(weekday)}
-            onChange={(val) => setWeekday(Number(val))}
-            options={WEEKDAY_ORDER.map((d) => ({ value: String(d), label: t(`reportBuilder.weekday.${d}`) }))}
-            ariaLabel={t('reportBuilder.field.weekday')}
-          />
+          <Field label={t('reportBuilder.field.weekday')} size="short">
+            <Select
+              value={String(weekday)}
+              onChange={(val) => setWeekday(Number(val))}
+              options={WEEKDAY_ORDER.map((d) => ({ value: String(d), label: t(`reportBuilder.weekday.${d}`) }))}
+              ariaLabel={t('reportBuilder.field.weekday')}
+            />
+          </Field>
         )}
         {freq === 'monthly' && (
-          <input className="field" type="number" min={1} max={28} value={dayOfMonth} onChange={(e) => setDayOfMonth(Number(e.target.value))} aria-label={t('reportBuilder.field.dayOfMonth')} />
+          <Field label={t('reportBuilder.field.dayOfMonth')} size="code">
+            <input className="field" type="number" min={1} max={28} value={dayOfMonth} onChange={(e) => setDayOfMonth(Number(e.target.value))} aria-label={t('reportBuilder.field.dayOfMonth')} />
+          </Field>
         )}
-        <input className="field" value={recipients} onChange={(e) => setRecipients(e.target.value)} placeholder={t('reportBuilder.field.recipients')} aria-label={t('reportBuilder.field.recipients')} />
-        <p className="rb-cloud">{t('reportBuilder.delivery.cloud_tier')}</p>
+        <Field label={t('reportBuilder.field.recipients')} info={t('reportBuilder.delivery.cloud_tier')}>
+          <input className="field" value={recipients} onChange={(e) => setRecipients(e.target.value)} aria-label={t('reportBuilder.field.recipients')} />
+        </Field>
         {err !== null && (
           <p className="rb-error" role="alert">
             {err.error === 'invalid_schedule' ? t('reportBuilder.error.invalid_schedule') : t('reportBuilder.error.generic')}
           </p>
         )}
       </div>
-    </Modal>
+    </DetailDrawer>
   );
 }
 

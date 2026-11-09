@@ -59,7 +59,8 @@
       "period_locked": "That period is locked. Choose an open effective date.",
       "already_reversed": "This adjustment has already been reversed."
     },
-    "rowActions": "Actions for the adjustment of {item}"
+    "rowActions": "Actions for the adjustment of {item}",
+    "noReasonsLink": "Reason codes"
   },
   "help": {
     "Adjustments": {

@@ -22,6 +22,9 @@
  * keystroke filter `FilterBar` models.
  */
 
+import { IconButton } from '../../components/IconButton';
+import type { OverflowMenuItem } from '../../components/OverflowMenu';
+import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { useClient } from '../../lib/client-context';
@@ -252,6 +255,55 @@ export function Extensions() {
     return <NoWorkspaceState body={t('plugin.lede')} />;
   }
 
+  // D187 (List A): the plugins are a table; enabling, disabling, the plugin's own screen and the
+  // uninstall sit under the row's Mehr, uninstall last and destructive.
+  const installedColumns: DataTableColumn<PluginDto>[] = [
+    { key: 'name', header: t('plugin.col.name'), rowHeader: true, render: (plugin) => plugin.name },
+    {
+      key: 'status',
+      header: t('plugin.col.status'),
+      render: (plugin) => (
+        <>
+          {/* K-22: the shared Status (a drawn glyph plus the word), never ●/○/✕ dingbats. */}
+          <Status kind={pluginStatusKind(plugin.status)} label={t(`plugin.status.${plugin.status}`)} />
+          {plugin.status === 'incompatible' ? <span className="plugin-card__reason"> {compatReasonFor(plugin)}</span> : null}
+        </>
+      ),
+    },
+    { key: 'version', header: t('plugin.col.version'), render: (plugin) => t('plugin.card.version', { version: plugin.version }) },
+    {
+      key: 'capabilities',
+      header: t('plugin.col.capabilities'),
+      render: (plugin) => (
+        <span className="plugin-card__caps">
+          {t('plugin.card.capabilities', { count: plugin.capabilityCount })}
+          <IconButton
+            icon="info"
+            small
+            context={t('plugin.card.grantedOf', { granted: plugin.granted.length, requested: plugin.requested.length })}
+          />
+        </span>
+      ),
+    },
+  ];
+  const installedActions = (plugin: PluginDto): OverflowMenuItem[] => [
+    ...(plugin.status !== 'incompatible'
+      ? [
+          {
+            key: 'toggle',
+            label: plugin.status === 'installed' ? t('plugin.action.disable') : t('plugin.action.enable'),
+            disabled: !canManage || busy,
+            onSelect: () => onToggle(plugin),
+          },
+        ]
+      : []),
+    ...(plugin.capabilities.some((c) => c.kind === 'studio_screen') && plugin.status === 'installed'
+      ? [{ key: 'screen', label: t('plugin.action.viewScreen'), onSelect: () => setOpenScreen(plugin) }]
+      : []),
+    // K-08: the danger colour belongs to the confirmation, never to a resting button.
+    { key: 'uninstall', label: t('plugin.action.uninstall'), danger: true, disabled: !canManage || busy, onSelect: () => onUninstall(plugin) },
+  ];
+
   // The Installed tab's five states (loading / error / empty / list), rendered inside the Tabs panel.
   const installedPanel: ReactNode =
     installed.kind === 'loading' ? (
@@ -265,51 +317,36 @@ export function Extensions() {
     ) : installed.plugins.length === 0 ? (
       <EmptyState title={t('plugin.empty')} action={canManage ? { label: t('plugin.action.install'), onClick: () => fileInputRef.current?.click() } : undefined} />
     ) : (
-      <ul className="extensions__grid" aria-label={t('plugin.tab.installed')}>
-        {installed.plugins.map((plugin) => (
-          <li key={plugin.id} className="plugin-card">
-            <div className="plugin-card__head">
-              <h2 className="plugin-card__name">{plugin.name}</h2>
-              {/* K-22: the shared Status (a drawn glyph plus the word), never ●/○/✕ dingbats. */}
-              <Status kind={pluginStatusKind(plugin.status)} label={t(`plugin.status.${plugin.status}`)} className="plugin-card__status" />
-            </div>
-            <p className="plugin-card__meta">{t('plugin.card.version', { version: plugin.version })}</p>
-            <p className="plugin-card__meta">{t('plugin.card.capabilities', { count: plugin.capabilityCount })}</p>
-            <p className="plugin-card__meta">{t('plugin.card.grantedOf', { granted: plugin.granted.length, requested: plugin.requested.length })}</p>
-            {plugin.status === 'incompatible' ? <p className="plugin-card__reason">{compatReasonFor(plugin)}</p> : null}
-            <div className="plugin-card__actions">
-              {plugin.status !== 'incompatible' ? (
-                <button type="button" className="btn btn--secondary" disabled={!canManage || busy} onClick={() => onToggle(plugin)}>
-                  {plugin.status === 'installed' ? t('plugin.action.disable') : t('plugin.action.enable')}
-                </button>
-              ) : null}
-              {plugin.capabilities.some((c) => c.kind === 'studio_screen') && plugin.status === 'installed' ? (
-                <button type="button" className="btn btn--secondary" onClick={() => setOpenScreen(plugin)}>
-                  {t('plugin.action.viewScreen')}
-                </button>
-              ) : null}
-              {/* K-08: the danger colour belongs to the confirmation, never to a resting card button. */}
-              <button type="button" className="btn btn--secondary" disabled={!canManage || busy} onClick={() => onUninstall(plugin)}>
-                {t('plugin.action.uninstall')}
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+      <DataTable<PluginDto>
+        columns={installedColumns}
+        rows={[...installed.plugins]}
+        rowKey={(plugin) => plugin.id}
+        caption={t('plugin.tab.installed')}
+        rowActions={installedActions}
+        rowActionsLabel={(plugin) => t('plugin.rowActions', { name: plugin.name })}
+      />
     );
 
   // The Browse tab: a submit-to-apply registry search (an explicit Search button fires a network
   // lookup), so the shared FilterBar (a live keystroke filter, no submit) does not fit; kept bespoke.
+  const browseColumns: DataTableColumn<RegistryEntryDto>[] = [
+    { key: 'name', header: t('plugin.col.name'), rowHeader: true, render: (entry) => entry.name },
+    { key: 'publisher', header: t('plugin.col.publisher'), render: (entry) => entry.publisher },
+    { key: 'summary', header: t('plugin.col.summary'), render: (entry) => entry.summary },
+  ];
   const browsePanel: ReactNode = (
     <div className="extensions__browse">
       <div className="extensions__search">
-        <label htmlFor={searchId} className="extensions__search-label">
-          {t('plugin.registry.searchLabel')}
-        </label>
-        <input className="field" id={searchId} type="search" value={query} placeholder={t('plugin.registry.searchPlaceholder')} onChange={(e) => setQuery(e.target.value)} />
-        <button type="button" className="btn btn--secondary" disabled={busy} onClick={() => void runSearch()}>
-          {t('plugin.registry.search')}
-        </button>
+        <input
+          className="field"
+          id={searchId}
+          type="search"
+          aria-label={t('plugin.registry.searchLabel')}
+          value={query}
+          placeholder={t('plugin.registry.searchPlaceholder')}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <IconButton icon="search" name={t('plugin.registry.search')} context={t('plugin.tab.browse')} disabled={busy} onClick={() => void runSearch()} />
       </div>
       {browse.kind === 'loading' ? (
         <div className="extensions__grid">
@@ -330,15 +367,12 @@ export function Extensions() {
       ) : (
         <>
           {browse.kind === 'unreachable' ? <p className="extensions__stale" role="status">{t('plugin.registry.stale')}</p> : null}
-          <ul className="extensions__grid" aria-label={t('plugin.tab.browse')}>
-            {browse.entries.map((entry) => (
-              <li key={entry.registryRef} className="plugin-card">
-                <h2 className="plugin-card__name">{entry.name}</h2>
-                <p className="plugin-card__meta">{entry.publisher}</p>
-                <p className="plugin-card__meta">{entry.summary}</p>
-              </li>
-            ))}
-          </ul>
+          <DataTable<RegistryEntryDto>
+            columns={browseColumns}
+            rows={[...browse.entries]}
+            rowKey={(entry) => entry.registryRef}
+            caption={t('plugin.tab.browse')}
+          />
         </>
       )}
     </div>
@@ -372,10 +406,10 @@ export function Extensions() {
         titleId={titleId}
         subtitle={t('plugin.lede')}
         help={<SurfaceHelp surface="Extensions" />}
+        count={installed.kind === 'ok' ? installed.plugins.length : undefined}
+        hints={!canManage ? [{ key: 'permission', title: t('plugin.hintTitle.permission'), body: t('plugin.needsPermission') }] : []}
         actions={installAction}
       />
-
-      {!canManage ? <p className="lock-note">{t('plugin.needsPermission')}</p> : null}
 
       {feedback !== null ? (
         <p className={`extensions__feedback extensions__feedback--${feedback.tone}`} role={feedback.tone === 'error' ? 'alert' : 'status'}>

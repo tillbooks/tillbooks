@@ -122,7 +122,15 @@
       },
       "done": "New key set. Every other browser is signed out.",
       "failed": "That did not work. The current key still applies."
-    }
+    },
+    "hintTitle": {
+      "unclaimed": "Nobody owns this yet",
+      "notAMember": "Read only",
+      "agentIsOwner": "The MCP agent is an owner",
+      "goOnline": "Invitations need an online instance"
+    },
+    "roleEdit": "Role of {name}",
+    "actionsFor": "Actions for {name}"
   },
   "capability": {
     "read_books": "Read the books and reports",

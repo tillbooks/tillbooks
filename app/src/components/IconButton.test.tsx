@@ -203,6 +203,14 @@ describe('IconButton (Ruhig 3, D154)', () => {
       'Freigeben',
       'Vergleichen',
       'Verlauf',
+      'Hinzufügen',
+      'Importieren',
+      'Wiederherstellen',
+      'Einstellungen',
+      'Aktualisieren',
+      'Sortieren',
+      'Ordner öffnen',
+      'Teilen',
     ]);
     for (const { name } of Object.values(VOCABULARY)) {
       if (name === 'Ignorieren') continue;

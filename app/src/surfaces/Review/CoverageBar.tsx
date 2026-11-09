@@ -49,13 +49,37 @@ export function lockCondition(
   return reasons.length === 0 ? null : reasons.join(' ');
 }
 
-export function CoverageBar({ status, locked, canManagePeriods, approvingAll = false, onApproveAll, onLock }: CoverageBarProps) {
+/**
+ * D187 (Berichte A): the period's acts, "Alle freigeben" and "Periode sperren", sit in the page header's
+ * actions; the bar under it keeps the counts and the meter. The lock stays a worded button, never a glyph.
+ */
+export function CoverageActions({ status, locked, canManagePeriods, approvingAll = false, onApproveAll, onLock }: CoverageBarProps) {
+  const t = useT();
+  const clean = status.open === 0 && status.flagged === 0;
+  const canLock = !locked && clean && canManagePeriods;
+  const offerApproveAll = !locked && status.open > 0 && onApproveAll !== undefined;
+  if (!offerApproveAll && !canLock) return null;
+  return (
+    <>
+      {offerApproveAll && (
+        <button type="button" className="btn btn--secondary rv-action" disabled={approvingAll} onClick={onApproveAll}>
+          {approvingAll ? t('review.approveAll.working') : t('review.approveAll.action', { count: String(status.open) })}
+        </button>
+      )}
+      {canLock && (
+        <button type="button" className="btn btn--secondary rv-action" onClick={onLock}>
+          {t('review.lockPeriod')}
+        </button>
+      )}
+    </>
+  );
+}
+
+export function CoverageBar({ status, locked, canManagePeriods }: Pick<CoverageBarProps, 'status' | 'locked' | 'canManagePeriods'>) {
   const t = useT();
   const clean = status.open === 0 && status.flagged === 0;
   const pct = status.total === 0 ? 0 : Math.round((status.approved / status.total) * 100);
   const condition = lockCondition(t, { clean, locked, canManagePeriods });
-  const canLock = !locked && clean && canManagePeriods;
-  const offerApproveAll = !locked && status.open > 0 && onApproveAll !== undefined;
 
   return (
     <div className="rv-coverage panel" role="group" aria-label={t('review.coverage')}>
@@ -105,20 +129,6 @@ export function CoverageBar({ status, locked, canManagePeriods, approvingAll = f
         <span className="rv-meter-fill" style={{ width: `${pct}%` }} />
       </div>
 
-      {(offerApproveAll || canLock) && (
-        <div className="rv-coverage-lock">
-          {offerApproveAll && (
-            <button type="button" className="btn btn--secondary rv-action" disabled={approvingAll} onClick={onApproveAll}>
-              {approvingAll ? t('review.approveAll.working') : t('review.approveAll.action', { count: String(status.open) })}
-            </button>
-          )}
-          {canLock && (
-            <button type="button" className="btn btn--secondary rv-action" onClick={onLock}>
-              {t('review.lockPeriod')}
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }

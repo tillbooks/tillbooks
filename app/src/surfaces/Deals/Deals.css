@@ -183,9 +183,6 @@
    against both grounds in light and dark. */
 .deals-lost-form,
 .deals-activity {
-  background: var(--t-bg-soft);
-  border-radius: var(--t-radius-md);
-  padding: var(--t-space-2);
   display: flex;
   flex-direction: column;
   gap: var(--t-space-2);
@@ -345,3 +342,4 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
 }
+

@@ -4,7 +4,6 @@
   },
   "reasonCodes": {
     "title": "Korrekturgründe",
-    "new": "Neuer Grund",
     "edit": "Bearbeiten",
     "archive": "Archivieren",
     "rowActions": "Aktionen für {code}",
@@ -52,8 +51,7 @@
     },
     "empty": {
       "title": "Noch keine Korrekturgründe",
-      "hint": "Lege deinen ersten Korrekturgrund an, damit jede Bestandeskorrektur klassifiziert werden kann.",
-      "cta": "Grund anlegen"
+      "hint": "Lege deinen ersten Korrekturgrund an, damit jede Bestandeskorrektur klassifiziert werden kann."
     },
     "list": {
       "caption": "Katalog der Korrekturgründe"
@@ -63,7 +61,10 @@
     },
     "errors": {
       "duplicate_code": "Ein Korrekturgrund mit diesem Code besteht in diesem Arbeitsbereich bereits."
-    }
+    },
+    "search": "Korrekturgründe suchen",
+    "add": "Hinzufügen",
+    "addInfo": "Legt den Korrekturgrund mit dieser Kategorie an. Notizpflicht und Standard für Inventurdifferenzen stellst du beim Bearbeiten ein."
   },
   "help": {
     "ReasonCodes": {

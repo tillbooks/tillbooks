@@ -1,0 +1,85 @@
+/* HintsChip (D187, the owner's pick "Hinweise A"). A page's notices folded into one quiet chip beside
+   the title; the card opens under it on hover, focus or click. Only --t-* tokens. */
+
+.hints-chip-root {
+  position: relative;
+  display: inline-flex;
+}
+
+.hints-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 var(--t-space-1);
+  border: 0;
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-soft);
+  color: var(--t-text-dim);
+  font: inherit;
+  font-size: var(--t-font-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.hints-chip:hover,
+.hints-chip[aria-expanded='true'] {
+  color: var(--t-text);
+}
+
+.hints-card {
+  position: absolute;
+  top: calc(100% + var(--t-space-0-5));
+  left: 0;
+  z-index: var(--t-z-popover);
+  display: grid;
+  gap: var(--t-space-2);
+  width: max-content;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: var(--t-space-2);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  box-shadow: var(--t-shadow-overlay);
+  font-weight: 400;
+}
+
+.hints-card[hidden] {
+  display: none;
+}
+
+.hints-card-item {
+  display: grid;
+  gap: 2px;
+}
+
+.hints-card-title {
+  margin: 0;
+  font-size: var(--t-font-md);
+  font-weight: 600;
+  color: var(--t-text);
+}
+
+.hints-card-body {
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.hints-card-action {
+  margin-top: var(--t-space-0-5);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hints-card:not([hidden]) {
+    animation: hints-in var(--t-motion-reveal) var(--t-ease-out);
+  }
+
+  @keyframes hints-in {
+    from {
+      opacity: 0;
+      transform: translateY(-2px);
+    }
+  }
+}

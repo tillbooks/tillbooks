@@ -34,8 +34,11 @@ import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalTex
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
 import { Status } from '../../components/Status';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { FilterBar } from '../../components/FilterBar';
+import { IconButton } from '../../components/IconButton';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import './ReasonCodes.css';
@@ -120,6 +123,12 @@ export function ReasonCodes() {
   const [denied, setDenied] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
 
+  const [search, setSearch] = useState('');
+  const [addDraft, setAddDraft] = useState<{ code: string; name: string; category: Category }>({
+    code: '',
+    name: '',
+    category: 'shrinkage',
+  });
   const [drawer, setDrawer] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [writeError, setWriteError] = useState<Err | null>(null);
@@ -154,12 +163,6 @@ export function ReasonCodes() {
     void load();
   }, [load]);
 
-  const openCreate = useCallback(() => {
-    setWriteError(null);
-    setDraft(emptyDraft());
-    setDrawer(true);
-  }, []);
-
   const openEdit = useCallback((r: Reason) => {
     setWriteError(null);
     setDraft({
@@ -178,27 +181,16 @@ export function ReasonCodes() {
     if (workspaceId === null) return;
     setWriteError(null);
     const description = draft.description.trim() === '' ? undefined : draft.description.trim();
-    const res =
-      draft.id === null
-        ? await client.call('inventory_reason_create', {
-            workspaceId,
-            code: draft.code.trim(),
-            name: draft.name.trim(),
-            category: draft.category,
-            requiresNote: draft.requiresNote,
-            defaultForStocktake: draft.defaultForStocktake,
-            description,
-            idempotencyKey: newKey(),
-          })
-        : await client.call('inventory_reason_update', {
-            workspaceId,
-            id: draft.id,
-            name: draft.name.trim(),
-            description: description ?? null,
-            requiresNote: draft.requiresNote,
-            defaultForStocktake: draft.defaultForStocktake,
-            idempotencyKey: newKey(),
-          });
+    if (draft.id === null) return;
+    const res = await client.call('inventory_reason_update', {
+      workspaceId,
+      id: draft.id,
+      name: draft.name.trim(),
+      description: description ?? null,
+      requiresNote: draft.requiresNote,
+      defaultForStocktake: draft.defaultForStocktake,
+      idempotencyKey: newKey(),
+    });
     if (isErr(res.body)) {
       setWriteError(res.body);
       return;
@@ -206,6 +198,28 @@ export function ReasonCodes() {
     setDrawer(false);
     await load();
   }, [client, workspaceId, draft, load]);
+
+  /** The one-row add: the same `inventory_reason_create`, the other options keep their defaults. */
+  const add = useCallback(async () => {
+    if (workspaceId === null) return;
+    setWriteError(null);
+    const res = await client.call('inventory_reason_create', {
+      workspaceId,
+      code: addDraft.code.trim(),
+      name: addDraft.name.trim(),
+      category: addDraft.category,
+      requiresNote: false,
+      defaultForStocktake: false,
+      description: undefined,
+      idempotencyKey: newKey(),
+    });
+    if (isErr(res.body)) {
+      setWriteError(res.body);
+      return;
+    }
+    setAddDraft({ code: '', name: '', category: addDraft.category });
+    await load();
+  }, [client, workspaceId, addDraft, load]);
 
   const archive = useCallback(
     async (r: Reason) => {
@@ -223,20 +237,6 @@ export function ReasonCodes() {
 
   if (workspaceId === null) return <NoWorkspaceState body={t('reasonCodes.noWorkspace')} />;
   if (denied) return <PermissionDenied title={t('reasonCodes.title')} />;
-
-  // The show-archived toggle rides the SurfaceHeader actions beside the primary create action; there
-  // is no search row and inventing one is out of scope (D118 B2), so no FilterBar here.
-  const headerActions = (
-    <>
-      <label className="rc-check">
-        <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
-        <span>{t('reasonCodes.showArchived')}</span>
-      </label>
-      <button type="button" className="btn btn--primary" disabled={!canWrite} onClick={openCreate}>
-        {t('reasonCodes.new')}
-      </button>
-    </>
-  );
 
   // The list columns: text left, the category as plain text, the state as the shared Status (K-22).
   // An archived row dims via the rowClassName hook; its Status word still carries the state, so colour
@@ -273,6 +273,9 @@ export function ReasonCodes() {
         ]
       : [];
 
+  const needle = search.trim().toLowerCase();
+  const shown = needle === '' ? reasons : reasons.filter((r) => `${r.code} ${r.name}`.toLowerCase().includes(needle));
+
   const drawerFooter: ReactNode = (
     <>
       <button type="button" className="btn btn--secondary" onClick={() => setDrawer(false)}>
@@ -286,14 +289,65 @@ export function ReasonCodes() {
 
   return (
     <div className="rc">
-      <SurfaceHeader title={t('reasonCodes.title')} help={<SurfaceHelp surface="ReasonCodes" />} actions={headerActions} />
+      <SurfaceHeader title={t('reasonCodes.title')} help={<SurfaceHelp surface="ReasonCodes" />} count={shown.length} />
+
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel={t('reasonCodes.search')}
+        searchPlaceholder={t('reasonCodes.search')}
+        facets={[
+          {
+            key: 'archived',
+            label: t('reasonCodes.showArchived'),
+            options: [{ value: '1', label: t('reasonCodes.showArchived') }],
+            value: showArchived ? '1' : null,
+            onChange: (value) => setShowArchived(value !== null),
+          },
+        ]}
+      />
+
+      {canWrite && (
+        <form
+          className="form-line"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void add();
+          }}
+        >
+          <input
+            className="field rc-add-code"
+            aria-label={t('reasonCodes.form.code')}
+            placeholder={t('reasonCodes.form.code')}
+            value={addDraft.code}
+            onChange={(e) => setAddDraft({ ...addDraft, code: e.target.value })}
+          />
+          <input
+            className="field rc-add-name"
+            aria-label={t('reasonCodes.form.name')}
+            placeholder={t('reasonCodes.form.name')}
+            value={addDraft.name}
+            onChange={(e) => setAddDraft({ ...addDraft, name: e.target.value })}
+          />
+          <Select
+            value={addDraft.category}
+            onChange={(value) => setAddDraft({ ...addDraft, category: value as Category })}
+            options={CATEGORIES.map((c) => ({ value: c, label: t(`reasonCodes.category.${c}`) }))}
+            ariaLabel={t('reasonCodes.form.category')}
+          />
+          <button type="submit" className="btn btn--secondary" disabled={addDraft.code.trim() === '' || addDraft.name.trim() === ''}>
+            {t('reasonCodes.add')}
+          </button>
+          <IconButton icon="info" context={t('reasonCodes.addInfo')} />
+        </form>
+      )}
 
       {failed && <ErrorBanner context="read" message={t('reasonCodes.error.transport')} onRetry={() => void load()} />}
       {writeError && !drawer && <ErrorBanner error={writeError} message={localError(writeError)} />}
 
       <DataTable
         columns={columns}
-        rows={reasons}
+        rows={shown}
         rowKey={(r) => r.id}
         caption={t('reasonCodes.list.caption')}
         loading={loading}
@@ -307,7 +361,6 @@ export function ReasonCodes() {
           <EmptyState
             title={t('reasonCodes.empty.title')}
             hint={t('reasonCodes.empty.hint')}
-            action={canWrite ? { label: t('reasonCodes.empty.cta'), onClick: openCreate } : undefined}
           />
         }
       />
@@ -321,8 +374,8 @@ export function ReasonCodes() {
           footer={drawerFooter}
         >
           {writeError && <ErrorBanner error={writeError} message={localError(writeError)} />}
-          <div className="rc-field">
-            <label htmlFor="rc-code">{t('reasonCodes.form.code')}</label>
+          <div className="form-stack">
+          <Field label={t('reasonCodes.form.code')}>
             <input
               className="field"
               id="rc-code"
@@ -330,13 +383,11 @@ export function ReasonCodes() {
               disabled={draft.id !== null}
               onChange={(e) => setDraft({ ...draft, code: e.target.value })}
             />
-          </div>
-          <div className="rc-field">
-            <label htmlFor="rc-name">{t('reasonCodes.form.name')}</label>
+          </Field>
+          <Field label={t('reasonCodes.form.name')}>
             <input className="field" id="rc-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-          </div>
-          <div className="rc-field">
-            <label htmlFor="rc-category">{t('reasonCodes.form.category')}</label>
+          </Field>
+          <Field label={t('reasonCodes.form.category')}>
             <Select
               id="rc-category"
               value={draft.category}
@@ -345,7 +396,7 @@ export function ReasonCodes() {
               options={CATEGORIES.map((c) => ({ value: c, label: t(`reasonCodes.category.${c}`) }))}
               ariaLabel={t('reasonCodes.form.category')}
             />
-          </div>
+          </Field>
           <label className="rc-check">
             <input type="checkbox" checked={draft.requiresNote} onChange={(e) => setDraft({ ...draft, requiresNote: e.target.checked })} />
             <span>{t('reasonCodes.form.requiresNote')}</span>
@@ -358,9 +409,9 @@ export function ReasonCodes() {
             />
             <span>{t('reasonCodes.form.defaultForStocktake')}</span>
           </label>
-          <div className="rc-field">
-            <label htmlFor="rc-desc">{t('reasonCodes.form.description')}</label>
+          <Field label={t('reasonCodes.form.description')}>
             <input className="field" id="rc-desc" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+          </Field>
           </div>
         </DetailDrawer>
       )}

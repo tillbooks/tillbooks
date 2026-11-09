@@ -20,8 +20,8 @@ export const APPEARANCE_PREFS: readonly PrefDef[] = [
     area: APPEARANCE,
     label: { en: 'Colour scheme', 'de-CH': 'Farbschema' },
     description: {
-      en: 'Light, dark, or the same as your system (default), in which case TILL switches when your system does.',
-      'de-CH': 'Hell, dunkel oder wie dein System (Standard), dann wechselt TILL mit deinem System mit.',
+      en: 'Light, dark, or whatever your device is set to.',
+      'de-CH': 'Hell, dunkel oder wie dein Gerät gerade eingestellt ist.',
     },
     valueLabels: {
       light: { en: 'Light', 'de-CH': 'Hell' },
@@ -37,8 +37,8 @@ export const APPEARANCE_PREFS: readonly PrefDef[] = [
     area: APPEARANCE,
     label: { en: 'Density', 'de-CH': 'Dichte' },
     description: {
-      en: 'Comfortable (default) gives rows and fields more room; compact fits more on a screen.',
-      'de-CH': 'Komfortabel (Standard) gibt Zeilen und Feldern mehr Raum, kompakt zeigt mehr auf einem Bildschirm.',
+      en: 'Compact fits more rows on a screen; comfortable gives them more room.',
+      'de-CH': 'Kompakt zeigt mehr Zeilen auf einmal, Komfortabel lässt ihnen mehr Luft.',
     },
     valueLabels: {
       komfortabel: { en: 'Comfortable', 'de-CH': 'Komfortabel' },

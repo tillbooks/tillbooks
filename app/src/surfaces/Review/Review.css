@@ -109,14 +109,6 @@
   }
 }
 
-.rv-coverage-lock {
-  display: flex;
-  align-items: center;
-  gap: var(--t-space-1);
-  flex-wrap: wrap;
-  margin-left: auto;
-}
-
 /* The (i) at the end of the counts: why Periode sperren is not on the bar, as a hover and focus card
    (D152 rule 4). The ghost icon button keeps the counts line one line tall. */
 .rv-lock-info {
@@ -326,27 +318,15 @@
   line-height: var(--t-lh-body);
 }
 
-/* --- Export: three artifact rows --- */
-.ex-rows {
+/* --- Export (D187, the owner's pick "Berichte A"): one bar on top, the chosen export beneath --- */
+.ex-doc {
   display: flex;
   flex-direction: column;
-  gap: var(--t-space-2);
+  gap: var(--t-space-1);
+  max-width: 64ch;
 }
 
-.ex-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--t-space-2);
-  padding: var(--t-space-2);
-  flex-wrap: wrap;
-}
-
-.ex-row-main {
-  flex: 1 1 20rem;
-}
-
-.ex-row-title {
+.ex-doc-title {
   margin: 0;
   font-size: var(--t-font-lg);
   line-height: var(--t-lh-lg);
@@ -354,27 +334,17 @@
   color: var(--t-text);
 }
 
-.ex-row-desc {
-  margin: var(--t-space-0-5) 0 0;
+.ex-doc-desc,
+.ex-doc-note {
+  margin: 0;
   color: var(--t-text-dim);
   font-size: var(--t-font-body);
   line-height: var(--t-lh-body);
-  max-width: 60ch;
 }
 
-.ex-row-note {
-  margin: var(--t-space-0-5) 0 0;
-  color: var(--t-text-dim);
+.ex-doc-note {
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
-  max-width: 60ch;
-}
-
-.ex-row-controls {
-  display: flex;
-  align-items: center;
-  gap: var(--t-space-1);
-  flex-wrap: wrap;
 }
 
 .ex-format-static {

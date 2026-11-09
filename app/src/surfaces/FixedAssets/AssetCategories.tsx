@@ -19,10 +19,12 @@ import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
 import { CAP, useCapabilities } from '../../lib/capabilities';
 import { Select } from '../../components/Select';
+import { Field } from '../../components/Field';
 import { useWorkspaceId } from '../../app/workspace';
 import { formatMoney, useT } from '../../i18n';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { FilterBar } from '../../components/FilterBar';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
@@ -169,6 +171,11 @@ export function AssetCategories() {
   const { can } = useCapabilities();
 
   const [categories, setCategories] = useState<Category[]>([]);
+  const [search, setSearch] = useState('');
+  const shown = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return needle === '' ? categories : categories.filter((r) => `${r.code + ' ' + r.name}`.toLowerCase().includes(needle));
+  }, [categories, search]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
   const [showArchived, setShowArchived] = useState(false);
@@ -335,15 +342,28 @@ export function AssetCategories() {
         help={<SurfaceHelp surface="FixedAssets" />}
         actions={
           <>
-            <label className="fa-toggle">
-              <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
-              {t('assets.categories.showArchived')}
-            </label>
             <button type="button" className="btn btn--primary" onClick={openCreate} disabled={!canWrite}>
               {t('assets.categories.new')}
             </button>
           </>
         }
+        count={shown.length}
+      />
+
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel={t('assets.categories.search')}
+        searchPlaceholder={t('assets.categories.search')}
+        facets={[
+          {
+            key: 'archived',
+            label: t('assets.categories.showArchived'),
+            options: [{ value: '1', label: t('assets.categories.showArchived') }],
+            value: showArchived ? '1' : null,
+            onChange: (value) => setShowArchived(value !== null),
+          },
+        ]}
       />
 
       {failed ? (
@@ -351,7 +371,7 @@ export function AssetCategories() {
       ) : (
         <DataTable
           columns={columns}
-          rows={categories}
+          rows={shown}
           rowKey={(c) => c.id}
           caption={t('assets.categories.title')}
           loading={loading}
@@ -391,22 +411,19 @@ export function AssetCategories() {
         }
       >
         {writeError && <ErrorBanner error={writeError} />}
-        <div className="fa-field">
-            <label htmlFor="fa-code">{t('assets.categories.field.code')}</label>
-            <input className="field"
+        <Field label={t('assets.categories.field.code')} id="fa-code">
+          <input className="field"
               id="fa-code"
               value={draft.code}
               maxLength={20}
               disabled={drawer !== 'create'}
               onChange={(e) => setDraft({ ...draft, code: e.target.value })}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-name">{t('assets.categories.field.name')}</label>
+        </Field>
+          <Field label={t('assets.categories.field.name')} id="fa-name">
             <input className="field" id="fa-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-method">{t('assets.categories.field.method')}</label>
+          </Field>
+          <Field label={t('assets.categories.field.method')} id="fa-method">
             <Select
               id="fa-method"
               value={draft.depreciationMethod}
@@ -414,10 +431,9 @@ export function AssetCategories() {
               options={DEPRECIATION_METHODS.map((m) => ({ value: m, label: t(`assets.method.${m}`) }))}
               ariaLabel={t('assets.categories.field.method')}
             />
-          </div>
+          </Field>
           {draft.depreciationMethod !== 'none' && (
-            <div className="fa-field">
-              <label htmlFor="fa-life">{t('assets.categories.field.life')}</label>
+            <Field label={t('assets.categories.field.life')} id="fa-life">
               <input className="field"
                 id="fa-life"
                 type="number"
@@ -425,10 +441,13 @@ export function AssetCategories() {
                 value={draft.usefulLifeMonths}
                 onChange={(e) => setDraft({ ...draft, usefulLifeMonths: e.target.value })}
               />
-            </div>
+            </Field>
           )}
-          <div className="fa-field">
-            <label htmlFor="fa-residual">{t('assets.categories.field.residualPct')}</label>
+          <Field
+            label={t('assets.categories.field.residualPct')}
+            id="fa-residual"
+            info={t('assets.categories.field.residualHint')}
+          >
             <input className="field"
               id="fa-residual"
               type="number"
@@ -437,10 +456,8 @@ export function AssetCategories() {
               value={draft.residualValuePct}
               onChange={(e) => setDraft({ ...draft, residualValuePct: e.target.value })}
             />
-            <span className="fa-hint">{t('assets.categories.field.residualHint')}</span>
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-asset">{t('assets.categories.field.assetAccount')}</label>
+          </Field>
+          <Field label={t('assets.categories.field.assetAccount')} id="fa-asset">
             <Select
               id="fa-asset"
               value={draft.glAssetAccountId}
@@ -451,9 +468,8 @@ export function AssetCategories() {
               ]}
               ariaLabel={t('assets.categories.field.assetAccount')}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-accum">{t('assets.categories.field.accumAccount')}</label>
+          </Field>
+          <Field label={t('assets.categories.field.accumAccount')} id="fa-accum">
             <Select
               id="fa-accum"
               value={draft.glAccumDeprAccountId}
@@ -464,9 +480,8 @@ export function AssetCategories() {
               ]}
               ariaLabel={t('assets.categories.field.accumAccount')}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-expense">{t('assets.categories.field.expenseAccount')}</label>
+          </Field>
+          <Field label={t('assets.categories.field.expenseAccount')} id="fa-expense">
             <Select
               id="fa-expense"
               value={draft.glDeprExpenseAccountId}
@@ -477,9 +492,8 @@ export function AssetCategories() {
               ]}
               ariaLabel={t('assets.categories.field.expenseAccount')}
             />
-          </div>
-          <div className="fa-field">
-            <label htmlFor="fa-cc">{t('assets.categories.field.costCenter')}</label>
+          </Field>
+          <Field label={t('assets.categories.field.costCenter')} id="fa-cc">
             <Select
               id="fa-cc"
               value={draft.defaultCostCenterId}
@@ -490,7 +504,7 @@ export function AssetCategories() {
               ]}
               ariaLabel={t('assets.categories.field.costCenter')}
             />
-          </div>
+          </Field>
       </DetailDrawer>
 
       <Modal

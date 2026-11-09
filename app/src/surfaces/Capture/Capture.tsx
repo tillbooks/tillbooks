@@ -74,7 +74,7 @@ import { useBookAgain } from '../../components/BookAgain';
 import { FigureTrustLine } from '../../components/FigureTrust';
 import { STALE_FIGURE_ERRORS, confirmEntryOf, hasUnshowableText, engineFieldsOfRead, type ConfirmEntry } from '../../lib/expectedFigures';
 import { Select } from '../../components/Select';
-import { OverflowMenu } from '../../components/OverflowMenu';
+import { Field } from '../../components/Field';
 import { FileDrop } from '../../components/FileDrop';
 import { Status, type StatusKind } from '../../components/Status';
 import { AccountCombobox, Combobox, type ComboboxOption } from '../../components/AccountCombobox';
@@ -688,27 +688,8 @@ export function Capture() {
         header: t('capture.col.status'),
         render: (row) => <Status kind={captureStatusKind(row.status)} label={t(`capture.status.${row.status}`)} />,
       },
-      {
-        key: 'actions',
-        header: t('capture.action.more'),
-        headerHidden: true,
-        align: 'end',
-        render: (row) =>
-          row.status === 'needs_review' ? (
-            // Stop the row-open click from firing when the menu trigger is used: the overflow is an
-            // independent affordance living inside a clickable row.
-            <span className="capture__rowActions" onClick={(e) => e.stopPropagation()}>
-              <OverflowMenu
-                label={t('capture.action.more')}
-                items={[
-                  { key: 'discard', label: t('capture.action.discard'), onSelect: () => void onDiscard(row.id), danger: true },
-                ]}
-              />
-            </span>
-          ) : null,
-      },
     ],
-    [t, onDiscard],
+    [t],
   );
 
   if (workspaceId === null) return <NoWorkspaceState />;
@@ -733,6 +714,7 @@ export function Capture() {
       <SurfaceHeader
         title={t('capture.route.title')}
         titleId="capture-title"
+        count={loading || error !== null ? undefined : (rows ?? []).length}
         help={<SurfaceHelp surface="Capture" />}
         actions={dropAction}
       />
@@ -756,6 +738,12 @@ export function Capture() {
         onRetry={() => void load()}
         skeletonRows={4}
         onRowClick={(row) => select(row.id)}
+        rowActions={(row) =>
+          row.status === 'needs_review'
+            ? [{ key: 'discard', label: t('capture.action.discard'), onSelect: () => void onDiscard(row.id), danger: true }]
+            : []
+        }
+        rowActionsLabel={(row) => t('capture.rowActions', { row: formatDate(row.createdAt.slice(0, 10)) })}
         rowLabel={(row) => `${formatDate(row.createdAt.slice(0, 10))}, ${t(`capture.status.${row.status}`)}`}
         // K-24: the record open in the drawer is the current row (the selection pill), not a local
         // class with its own fill.
@@ -883,25 +871,20 @@ export function Capture() {
                     {t('capture.qr.found')}
                   </p>
                 ) : null}
-                <label className="capture__picker" htmlFor="capture-qr-text">
-                  <span>{t('capture.qr.label')}</span>
+                <Field label={t('capture.qr.label')} info={t('capture.qr.hint')}>
                   <textarea
                     id="capture-qr-text"
                     className="field capture__qrText"
                     rows={6}
                     spellCheck={false}
                     value={qrText}
-                    aria-describedby="capture-qr-hint"
                     aria-invalid={qrOutcome?.kind === 'errors'}
                     onChange={(event) => {
                       setQrText(event.target.value);
                       if (qrOutcome !== null) setQrOutcome(null);
                     }}
                   />
-                </label>
-                <p id="capture-qr-hint" className="capture__qrNote">
-                  {t('capture.qr.hint')}
-                </p>
+                </Field>
                 {qrOutcome !== null ? (
                   <div className="capture__qrOutcome" role={qrOutcome.kind === 'errors' ? 'alert' : 'status'}>
                     <p>
@@ -949,8 +932,7 @@ export function Capture() {
               {target === 'vendor_bill' && (
                 <div className="capture__pickers">
                   {vendorId === '' && (
-                    <label className="capture__picker" htmlFor="capture-vendor">
-                      <span>{t('capture.pick.vendor')}</span>
+                    <Field label={t('capture.pick.vendor')}>
                       <Combobox
                         id="capture-vendor"
                         ariaLabel={t('capture.pick.vendor')}
@@ -960,10 +942,9 @@ export function Capture() {
                         placeholder={t('capture.pick.vendorPlaceholder')}
                         noMatchLabel={t('capture.pick.noVendor')}
                       />
-                    </label>
+                    </Field>
                   )}
-                  <label className="capture__picker" htmlFor="capture-account">
-                    <span>{t('capture.pick.account')}</span>
+                  <Field label={t('capture.pick.account')}>
                     <AccountCombobox
                       id="capture-account"
                       ariaLabel={t('capture.pick.account')}
@@ -973,13 +954,12 @@ export function Capture() {
                       placeholder={t('capture.pick.accountPlaceholder')}
                       noMatchLabel={t('capture.pick.noAccount')}
                     />
-                  </label>
+                  </Field>
                   {/* Critic F3: the Vorsteuer, decided here and named below, never defaulted to nothing.
                       With no purchase codes at all there is nothing to pick and the bill books without
                       VAT, which the sentence states. */}
                   {taxCodes !== null && taxCodes.length > 0 && (
-                    <div className="capture__picker">
-                      <span>{t('capture.pick.tax')}</span>
+                    <Field label={t('capture.pick.tax')}>
                       <Select
                         id="capture-tax"
                         value={taxChoice}
@@ -997,7 +977,7 @@ export function Capture() {
                         ]}
                         ariaLabel={t('capture.pick.tax')}
                       />
-                    </div>
+                    </Field>
                   )}
                   {canCommitBill && (
                     <p className="capture__consequence">

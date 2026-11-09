@@ -141,7 +141,8 @@
         "read": "Dir fehlt die Berechtigung, Bankkonten zu sehen.",
         "post": "Dir fehlt die Berechtigung, den Eröffnungssaldo zu buchen."
       }
-    }
+    },
+    "search": "Konten suchen"
   },
   "channel": {
     "title": "Bankkanal",

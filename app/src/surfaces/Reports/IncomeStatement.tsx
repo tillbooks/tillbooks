@@ -49,6 +49,7 @@ import { Link } from 'react-router-dom';
 
 import { useT, formatMoney, formatDate } from '../../i18n';
 import { HelpHint } from '../../components/HelpHint';
+import { IconButton } from '../../components/IconButton';
 import { ChevronGlyph } from './glyphs';
 import type { IncomeStatementView } from './model';
 
@@ -108,13 +109,15 @@ export function IncomeStatement({ view, locale, onDrill }: IncomeStatementProps)
 
   return (
     <section className="rp-statement" aria-labelledby="rp-income-heading">
-      <h2 id="rp-income-heading" className="rp-statement-title">
-        {t('reports.heading.incomeStatement', {
-          from: formatDate(view.period.start),
-          to: formatDate(view.period.end),
-        })}
-      </h2>
-      <p className="rp-sign-note">{t('reports.incomeStatement.signNote')}</p>
+      <div className="rp-statement-head">
+        <h2 id="rp-income-heading" className="rp-statement-title">
+          {t('reports.heading.incomeStatement', {
+            from: formatDate(view.period.start),
+            to: formatDate(view.period.end),
+          })}
+        </h2>
+        <IconButton icon="info" small context={t('reports.incomeStatement.signNote')} />
+      </div>
       {view.comparative !== undefined && (
         <p className="rp-sign-note" data-testid="rp-archive-compare-note">
           {t('reports.comparative.prior', {

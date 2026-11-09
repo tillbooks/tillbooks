@@ -14,12 +14,10 @@
       "label": "Gewichtet"
     },
     "pipeline": {
-      "label": "Pipeline",
-      "first": "Standard"
+      "label": "Pipeline"
     },
     "view": {
-      "label": "Ansicht",
-      "all": "Alle Deals"
+      "label": "Ansicht"
     },
     "filter": {
       "showClosed": "Abgeschlossene anzeigen",

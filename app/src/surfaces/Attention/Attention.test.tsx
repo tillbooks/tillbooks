@@ -268,10 +268,9 @@ describe('Pendenzen: time, focus, marker, triage', () => {
     renderHub({ attention_list: ok(groupedOf([row('dunning_run', 'run_1')], { computedAt: '2026-10-21T08:21:00.000Z' })) });
     const refresh = await screen.findByRole('button', { name: 'Aktualisieren' });
     expect(refresh).toHaveAttribute('data-stand', 'Stand 10:21');
-    // The design judge: no line of its own at rest, the time is in the tooltip.
-    expect(screen.queryByText('Stand 10:21')).toBeNull();
+    // The design judge: no line of its own, the time lives in the refresh control's tooltip.
     await userEvent.hover(refresh);
-    expect(await screen.findByText('Aktualisieren · Stand 10:21')).toBeInTheDocument();
+    expect((await screen.findByText('Stand 10:21')).closest('[role="tooltip"]')).not.toBeNull();
   });
 
   it('nothing is current on arrival; Tab lands on the first row, the arrows move across sections; Enter opens', async () => {

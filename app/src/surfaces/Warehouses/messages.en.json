@@ -95,7 +95,8 @@
       "invalid_location_type": "That location type is not recognised.",
       "max_depth_exceeded": "The location hierarchy is too deep."
     },
-    "actionsFor": "Actions for warehouse {code}"
+    "actionsFor": "Actions for warehouse {code}",
+    "search": "Search warehouses"
   },
   "help": {
     "Warehouses": {

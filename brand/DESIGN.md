@@ -544,10 +544,12 @@ the law it sets. The system (`app/src/components/icons`, `IconButton`, the guard
 
 ### Icon vocabulary
 
-Twenty-three glyphs may stand alone on a button, and no others: D154's twelve, the five D177 added for
-the bank line (16.10.2026), the five D180 added for arranging the Übersicht in place (24.10.2026) and
-A41.5's Freigeben on the bank inbox row (owner, D184 point 7, 07.11.2026). Each means one thing everywhere, and its name is the button's accessible
-name and the first line of its tooltip.
+Thirty-three glyphs may stand alone on a button, and no others: D154's twelve, the five D177 added
+for the bank line (16.10.2026), the five D180 added for arranging the Übersicht in place (24.10.2026),
+A41.5's Freigeben on the bank inbox row (owner, D184 point 7, 07.11.2026), D186's Vergleichen and
+Verlauf for the key figures (owner, 09.11.2026) and the eight of the Ruhig sweep (owner, D187,
+09.11.2026). Each means one thing everywhere, and its name is the button's
+accessible name and the first line of its tooltip.
 
 | Glyph | Name | Means | Where |
 |---|---|---|---|
@@ -576,6 +578,14 @@ name and the first line of its tooltip.
 | two columns, short then tall | Vergleichen | Choose what a key figure is compared with | The key-figure settings (D186): opens Wie die Seite, Vorjahr, Vorperiode, Kein Vergleich, as a menu below it |
 | a rising line | Verlauf | Show or hide a key figure's twelve-month line | The key-figure settings (D186), pressed while the line shows |
 | check in a ring | Freigeben | Book a bank line as its row shows it, or approve the agent's Vorschlag on it | The bank inbox row only (A41.5, the owner's ruling D184 point 7): the one money commit that may be a glyph alone, because the row's own columns say what it books and how sure TILL is, its name says "Buchen" or "Vorschlag freigeben", and Stornieren undoes it. Never Fertig's bare check |
+| plus in a ring | Hinzufügen | Add a row or a position inside a form | Forms with repeating rows (D187). Never a surface's main create action: "Neue Buchung" keeps its word |
+| arrow into a page | Importieren | Bring a file in: CSV, camt, a bexio export | Headers (D187). The tooltip names the format |
+| clock turning back | Wiederherstellen | Restore a backup or an earlier state | First run and Sicherungen (D187) |
+| gear | Einstellungen | The settings of this page | Surface headers (D187). Never the theme's sun |
+| two arrows round | Aktualisieren | Fetch again: the bank, the rates | Headers (D187) |
+| arrow up beside arrow down | Sortieren | Change the order of a list | List headers (D187) |
+| folder | Ordner öffnen | Pick a file or a place on this device | Beside a path field (D187) |
+| three joined nodes | Teilen | Send a document to someone | Document headers (D187) |
 
 - **The one control is `IconButton`.** It takes a vocabulary key, a required `context` ("Beleg zu
   dieser Buchung"), and nothing else that changes its meaning. The name is its `aria-label`; the
@@ -585,7 +595,7 @@ name and the first line of its tooltip.
   Escape dismisses it wherever focus is. The tap that ends a long press does not act; a keyboard or
   screen-reader click always does. A touch tap opens no bubble, and only a hover-opened bubble takes
   the pointer, so a leftover bubble never catches the next tap.
-- **Everything else is an icon plus a word.** A glyph outside the twenty-two never stands alone; status
+- **Everything else is an icon plus a word.** A glyph outside the thirty-three never stands alone; status
   and disclosure glyphs sit beside words or inside a primitive that names itself.
 - **Money commits always keep their word:** Buchen, Ausstellen, Zahlung buchen, Periode sperren, and
   the one main action of a surface (Neue Buchung, Rechnung erfassen). The one exception is Freigeben on the bank
@@ -654,6 +664,78 @@ on hover or focus to be dismissible, hoverable and persistent
 ([Understanding 1.4.13](https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus)). And
 since few icons are universal, the vocabulary is closed and small, learnt through one meaning each,
 and every act that moves money or cannot be undone keeps its word.
+
+## The Ruhig sweep (D187, 09.11.2026)
+
+The owner's picks for carrying Ruhig 3 to every page. They are patterns a surface follows, not taste.
+
+### Form and heading rhythm
+
+| Between | px |
+|---|---|
+| A label and its field | 4 |
+| A field and its hint | 4 |
+| A field and the next field | 16 |
+| The last field and the buttons | 24 |
+| Two buttons | 16 |
+| A section and the heading below it | 32 |
+| A heading and its first field | 8 |
+| A panel's inner padding | 24 |
+
+- **Proximity is the rule behind the numbers:** the space above a heading is at least twice the space
+  below it, so a heading always belongs to what follows. A button never touches a field.
+- The rhythm lives in the shared classes (`.form-stack`, `.form-row`, `.form-actions`, `.field-hint`)
+  and the `Field` component; a surface does not restate it in pixels.
+- **One label style:** 13/18, weight 500, `--t-text-dim`, sentence case, above its field.
+
+### The one main act, then icons
+
+- **A surface leads with its one main act** (a field and its button, the list, the figure) and puts
+  the rarer acts in a row of icons below or beside it, each named on hover, each opening its small form
+  in place. The first run is the model: the company-name field with "Anlegen", then Backup
+  wiederherstellen, Datei öffnen and Demo ansehen as icons.
+- **Explanations live behind one (i).** A page shows its title and at most one short line; what TILL
+  found, what stays on the device, technical notes and how-to hints are Info cards (D152 rule 4).
+- **No helper captions nobody needs, and no "neu" badges.**
+
+### The collapsed menu
+
+- After a short rest (about 150 ms) on the icon strip, the whole menu slides open over the page with
+  its labels and its groups, and folds back when the pointer leaves; a quick pass does nothing. The
+  page under it never moves.
+- Before a ledger exists the strip is dimmed and says "Zuerst ein Hauptbuch einrichten" on hover.
+
+### Lists
+
+- The title with its count, then the icons (Suchen opens its field in place, Filter carries the count
+  of what is on, Info), then the one primary action in words.
+- Row actions appear on hover or focus, always on the selected row and always on touch.
+- A status is a glyph and a word, never a word in a box.
+
+### Dropdowns
+
+- **A dropdown opens below its trigger and never covers the chosen option.** The shared `Select` is the
+  one dropdown; a native `<select>` (the macOS popup that lays the list over the field) does not appear
+  in the Studio. It flips up only when there is no room below.
+
+### The seven screen types (second round, D187 points 7 to 13)
+
+Every page is one of these types and follows its picked pattern. The shared component named in
+brackets is the only way to build it.
+
+| Type | Pattern | Built with |
+|---|---|---|
+| List | Title with count; search, then active filters as removable chips and "+ Filter"; one primary action in words; row actions appear on hover (always on touch) | `SurfaceHeader count`, `FilterBar facets`, `DataTable rowActions` |
+| Create and edit | A sheet from the right, the list stays in view; fields sized to what they hold, side by side where they belong together, small group headings; one primary in the footer | `DetailDrawer`, `Field size`, `.form-line` |
+| Adding small things | One row above the table, fields side by side; a value in a row changes through its pencil on hover | `.form-line`, `.row-reveal` |
+| Settings | One column of rows under small group headings; one visible line per setting; "Standard" only while changed | `SettingGroup`, `SettingRow` |
+| Reports and export | A sticky bar: title, what and format, the one action; under it the period and filters; the result beneath; statutory lines visible | `SurfaceHeader actions` and `toolbar` |
+| Work through items | One list; a row opens in place to show its detail | `DataTable expand` |
+| Notices | Folded into one "N Hinweise" chip beside the title; money and filing warnings stay beside their button | `SurfaceHeader hints` |
+
+A field is never wider than what it holds: `Field size` is `code`, `date`, `amount`, `short`, `name`
+(the default) or `full` (a text area or a long address only).
+
 
 ## Motion
 

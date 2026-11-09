@@ -39,7 +39,7 @@
 
 .inbox-section-title {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.5rem;
   font-size: var(--t-font-lg);
   line-height: var(--t-lh-lg);
@@ -209,4 +209,20 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+.inbox-prefs-group {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.inbox-section-heading,
+.inbox-prefs-group-title {
+  margin: 0;
+  font: inherit;
+}
+
+.inbox-prefs-group-title {
+  font-weight: 600;
 }

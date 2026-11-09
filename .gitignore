@@ -48,3 +48,6 @@ packaging/mcpb/build/
 packaging/macos/build/
 # The .icns is committed (the build copies it); its .iconset is a transient iconutil input.
 packaging/macos/TILL.iconset/
+
+# A symlinked build output (a worktree pointing at another dist) is never tracked; dist/ above only matches a directory.
+/dist

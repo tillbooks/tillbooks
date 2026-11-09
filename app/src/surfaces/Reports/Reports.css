@@ -129,18 +129,7 @@
 
 /* --- toolbar (the tabs are the shared Tabs) ---------------------------------------------------- */
 
-.rp-toolbar {
-  display: flex;
-  gap: var(--t-space-2);
-  flex-wrap: wrap;
-  align-items: flex-end;
-}
-
-/* A field label over its control; the controls are the shared `.field` and Select (K-15). */
-.rp-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-0-5);
+.rp-field-label {
   font-size: var(--t-font-sm);
   line-height: var(--t-lh-sm);
   font-weight: 500;
@@ -516,4 +505,11 @@
 
 .rp-pending {
   min-height: 200px;
+}
+
+/* A statement's title with its (i) beside it: the explanation lives behind the icon (D187). */
+.rp-statement-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
 }

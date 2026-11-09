@@ -124,7 +124,7 @@ function renderPage(transport: Transport, workspaceId: string | null = 'ws_test'
   );
 }
 
-const row = (key: string) => document.querySelector(`li[data-key="${key}"]`) as HTMLElement;
+const row = (key: string) => document.querySelector(`.setting-row[data-key="${key}"]`) as HTMLElement;
 
 beforeEach(() => {
   resetPrefsModuleForTests();
@@ -165,17 +165,19 @@ describe('Meine Einstellungen (D178 point 7)', () => {
     expect(screen.getByRole('region', { name: 'Probe' })).toBeInTheDocument();
     const theme = within(row('appearance.theme'));
     expect(theme.getByRole('radio', { name: 'Wie das System' })).toHaveAttribute('aria-checked', 'true');
-    expect(theme.getByText('Standard')).toBeInTheDocument();
-    expect(theme.getByText('Gilt in jedem Arbeitsbereich.')).toBeInTheDocument();
-    expect(theme.queryByRole('button', { name: 'Farbschema zurücksetzen' })).toBeNull();
-    expect(within(row('probe.rows')).getByText('Gilt nur in diesem Arbeitsbereich.')).toBeInTheDocument();
+    // D187 (Einstellungen A): at its default a row offers no "Standard"; the page's own line says it is
+    // yours, so only a setting that holds in this workspace alone says so after its explanation.
+    expect(theme.queryByRole('button', { name: 'Standard' })).toBeNull();
+    expect(row('appearance.theme')).not.toHaveTextContent('Gilt in jedem Arbeitsbereich.');
+    expect(row('probe.rows')).toHaveTextContent('Gilt nur in diesem Arbeitsbereich.');
     // A structured preference is named, not shown as JSON, and offers its reset.
     const order = within(row('probe.order'));
     // One line of state ("Angepasst" or "Standard"), never "Standard: Standard" for a json value.
     expect(order.getByText('Angepasst')).toBeInTheDocument();
     expect(order.queryByText(/^Standard:/)).toBeNull();
-    expect(order.getByRole('button', { name: 'Reihenfolge zurücksetzen' })).toBeInTheDocument();
-    expect(within(appearance).getByRole('button', { name: 'Darstellung: alle zurücksetzen' })).toBeDisabled();
+    expect(order.getByRole('button', { name: 'Standard' })).toBeInTheDocument();
+    // A group with nothing changed offers no "Alle zurücksetzen".
+    expect(within(appearance).queryByRole('button', { name: 'Darstellung: alle zurücksetzen' })).toBeNull();
   });
 
   it('a choice applies at once through prefs_set, then names the default and offers the reset', async () => {
@@ -190,8 +192,9 @@ describe('Meine Einstellungen (D178 point 7)', () => {
       ]),
     );
     const theme = within(row('appearance.theme'));
-    expect(await theme.findByText('Standard: Wie das System')).toBeInTheDocument();
-    await userEvent.click(theme.getByRole('button', { name: 'Farbschema zurücksetzen' }));
+    // "Standard" appears once the value is not the default, and its tooltip names the default.
+    expect(await theme.findByText('Zurück auf den Standard: Wie das System')).toBeInTheDocument();
+    await userEvent.click(theme.getByRole('button', { name: 'Standard' }));
     await waitFor(() => expect(theme.getByRole('radio', { name: 'Wie das System' })).toHaveAttribute('aria-checked', 'true'));
     expect(e.calls.at(-1)).toEqual({ action: 'prefs_reset', input: { workspaceId: 'ws_test', key: 'appearance.theme' } });
   });

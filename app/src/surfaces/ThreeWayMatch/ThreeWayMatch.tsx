@@ -19,7 +19,7 @@
  * (K-22); the open exception is the current-row pill instead of a background wash (K-24); sizes are
  * tokens (K-37). The amount-at-risk figure and its formatting are untouched.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useMemo, useCallback, useEffect, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
@@ -28,6 +28,7 @@ import { useT } from '../../i18n';
 import { EmptyState, NoWorkspaceState } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { FilterBar } from '../../components/FilterBar';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { ThreeWayMatchPanel, MATCH_STATUS_KIND } from './ThreeWayMatchPanel';
@@ -53,6 +54,11 @@ export function ThreeWayMatch() {
 
   const [exceptions, setExceptions] = useState<Exception[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState('');
+  const shown = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return needle === '' ? exceptions : exceptions.filter((r) => `${names[r.supplierId] ?? r.supplierId}`.toLowerCase().includes(needle));
+  }, [exceptions, search, names]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Err | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -105,11 +111,18 @@ export function ThreeWayMatch() {
 
   return (
     <div className="twm-surface">
-      <SurfaceHeader title={t('procurement.match.exceptions')} help={<SurfaceHelp surface="ThreeWayMatch" />} />
+      <SurfaceHeader title={t('procurement.match.exceptions')} help={<SurfaceHelp surface="ThreeWayMatch" />} count={shown.length} />
+
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel={t('procurement.match.search')}
+        searchPlaceholder={t('procurement.match.search')}
+      />
 
       <DataTable
         columns={columns}
-        rows={exceptions}
+        rows={shown}
         rowKey={(r) => r.billId}
         caption={t('procurement.match.exceptions')}
         loading={loading}

@@ -18,9 +18,7 @@
       "body": "You do not have permission to see personnel data here."
     },
     "action": {
-      "add": "Add employee",
-      "save": "Save",
-      "cancel": "Cancel"
+      "add": "Add employee"
     },
     "employee": {
       "name": "Name",
@@ -69,6 +67,9 @@
       "reason_required": "A reason is required to reject or reverse a claim.",
       "claim_reimbursed": "This claim has already been paid out. Reverse the payment first (under Payments), then the claim.",
       "already_reversed": "This claim has already been reversed."
+    },
+    "hintTitle": {
+      "readonly": "Read only"
     }
   },
   "spesen": {
@@ -88,7 +89,7 @@
       "reverse": "Reverse"
     },
     "reverseDialog": {
-      "title": "Reverse the expense claim \u201c{title}\u201d?",
+      "title": "Reverse the expense claim “{title}”?",
       "body": "TILL books a correcting entry that takes the approval back. The original booking stays visible, and the claim is closed as reversed. For a corrected claim, you start a new one.",
       "reason": "Reason",
       "cancel": "Cancel",

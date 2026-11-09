@@ -18,9 +18,7 @@
       "body": "Du hast keine Berechtigung, Personaldaten zu sehen."
     },
     "action": {
-      "add": "Mitarbeitende hinzufügen",
-      "save": "Speichern",
-      "cancel": "Abbrechen"
+      "add": "Mitarbeitende hinzufügen"
     },
     "employee": {
       "name": "Name",
@@ -69,6 +67,9 @@
       "reason_required": "Für eine Ablehnung oder Stornierung ist ein Grund erforderlich.",
       "claim_reimbursed": "Diese Abrechnung ist bereits ausbezahlt. Du musst zuerst die Auszahlung stornieren (unter Zahlungen), dann die Abrechnung.",
       "already_reversed": "Diese Abrechnung ist bereits storniert."
+    },
+    "hintTitle": {
+      "readonly": "Nur lesen"
     }
   },
   "spesen": {

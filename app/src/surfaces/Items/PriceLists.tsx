@@ -35,6 +35,8 @@ import { useT, useTStrict, formatMoney, formatDate } from '../../i18n';
 import { EmptyState, ErrorBanner, PermissionDenied, Skeleton } from '../../components/states';
 import { OverflowMenu } from '../../components/OverflowMenu';
 import { Select } from '../../components/Select';
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
 import { ConfirmDialog } from '../Accounts/ConfirmDialog';
 import type { Err } from '../../lib/client';
 import {
@@ -304,15 +306,13 @@ export function PriceLists({ workspaceId, items, baseCurrency, canManage }: Pric
       {error !== null && <ErrorBanner error={error} message={scopeTakenMessage(error, lists ?? [], t)} />}
 
       {canManage && (
-      <div className="pricelists-create panel">
-        <h2 className="item-drawer-title">{t('pricelists.action.create')}</h2>
+      <div className="pricelists-create form-stack">
+        <h2 className="form-section-title">{t('pricelists.action.create')}</h2>
         <div className="item-row2">
-          <label className="item-field-inner">
-            <span className="item-field-label">{t('item.name')}</span>
+          <Field label={t('item.name')}>
             <input className="field" value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <div className="item-field-inner">
-            <span className="item-field-label">{t('pricelists.scopeLabel')}</span>
+          </Field>
+          <Field label={t('pricelists.scopeLabel')}>
             <Select
               value={scope}
               onChange={(value) => {
@@ -327,12 +327,9 @@ export function PriceLists({ workspaceId, items, baseCurrency, canManage }: Pric
               ]}
               ariaLabel={t('pricelists.scopeLabel')}
             />
-          </div>
+          </Field>
         </div>
-        <div className="item-field-inner">
-          <span className="item-field-label">
-            {scope === 'contact' ? t('pricelists.scope.contact') : t('pricelists.scope.segment')}
-          </span>
+        <Field label={scope === 'contact' ? t('pricelists.scope.contact') : t('pricelists.scope.segment')}>
           {scope === 'contact' && contactsReadable ? (
             <Select
               value={scopeValue}
@@ -356,12 +353,11 @@ export function PriceLists({ workspaceId, items, baseCurrency, canManage }: Pric
             <input
               className="field"
               value={scopeValue}
-              aria-label={scope === 'contact' ? t('pricelists.scope.contact') : t('pricelists.scope.segment')}
               onChange={(e) => setScopeValue(e.target.value)}
             />
           )}
-        </div>
-        <div className="pricelists-action">
+        </Field>
+        <div className="pricelists-action form-actions">
           <button
             type="button"
             className="btn btn--primary"
@@ -372,9 +368,11 @@ export function PriceLists({ workspaceId, items, baseCurrency, canManage }: Pric
             {t('pricelists.action.create')}
           </button>
           {createBlocked !== null && (
-            <span id={`${noteId}-create`} className="item-field-hint">
-              {createBlocked}
-            </span>
+            <IconButton
+              icon="info"
+              small
+              context={<span id={`${noteId}-create`}>{createBlocked}</span>}
+            />
           )}
         </div>
       </div>
@@ -385,7 +383,7 @@ export function PriceLists({ workspaceId, items, baseCurrency, canManage }: Pric
         // anlegen" would be the same control twice on one screen.
         <EmptyState title={t('pricelists.empty')} hint={t('pricelists.emptyHint')} />
       ) : (
-        <ul className="item-list panel">
+        <ul className="item-list">
           {lists.map((list) => (
             <li key={list.id} className="item-row">
               {/* The list whose prices show below is the CURRENT row (K-22): announced, and the pill. */}
@@ -430,13 +428,12 @@ export function PriceLists({ workspaceId, items, baseCurrency, canManage }: Pric
       )}
 
       {selected !== null && (
-        <div className="pricelists-prices panel">
-          <h2 className="item-drawer-title">{t('pricelists.prices')}</h2>
+        <div className="pricelists-prices form-stack">
+          <h2 className="form-section-title">{t('pricelists.prices')}</h2>
           {canManage && (
           <>
           <div className="item-row2">
-            <div className="item-field-inner">
-              <span className="item-field-label">{t('pricelists.item')}</span>
+            <Field label={t('pricelists.item')}>
               <Select
                 value={priceItemId}
                 onChange={(value) => setPriceItemId(value)}
@@ -446,9 +443,8 @@ export function PriceLists({ workspaceId, items, baseCurrency, canManage }: Pric
                 ]}
                 ariaLabel={t('pricelists.item')}
               />
-            </div>
-            <label className="item-field-inner">
-              <span className="item-field-label">{t('item.field.sales_price')}</span>
+            </Field>
+            <Field label={t('item.field.sales_price')}>
               <input
                 className="field item-num"
                 inputMode="decimal"
@@ -456,10 +452,9 @@ export function PriceLists({ workspaceId, items, baseCurrency, canManage }: Pric
                 value={priceAmount}
                 onChange={(e) => setPriceAmount(e.target.value)}
               />
-            </label>
+            </Field>
           </div>
-          <label className="item-field-inner">
-            <span className="item-field-label">{t('pricelists.field.valid_from')}</span>
+          <Field label={t('pricelists.field.valid_from')}>
             {/*
               A real date picker (D15/C1): the engine takes the bare ISO day and refuses anything else
               rather than coercing it, so the browser's own picker is both the correct input and the
@@ -471,8 +466,8 @@ export function PriceLists({ workspaceId, items, baseCurrency, canManage }: Pric
               value={validFrom}
               onChange={(e) => setValidFrom(e.target.value)}
             />
-          </label>
-          <div className="pricelists-action">
+          </Field>
+          <div className="pricelists-action form-actions">
             <button
               type="button"
               className="btn btn--secondary"
@@ -483,16 +478,18 @@ export function PriceLists({ workspaceId, items, baseCurrency, canManage }: Pric
               {t('pricelists.action.setPrice')}
             </button>
             {addPriceBlocked !== null && (
-              <span id={`${noteId}-price`} className="item-field-hint">
-                {addPriceBlocked}
-              </span>
+              <IconButton
+                icon="info"
+                small
+                context={<span id={`${noteId}-price`}>{addPriceBlocked}</span>}
+              />
             )}
           </div>
           </>
           )}
 
           {prices.length === 0 ? (
-            <p className="item-field-hint">{t('pricelists.emptyPrices')}</p>
+            <p className="field-hint">{t('pricelists.emptyPrices')}</p>
           ) : (
             <ul className="item-list">
               {prices.map((p) => {
@@ -526,11 +523,10 @@ export function PriceLists({ workspaceId, items, baseCurrency, canManage }: Pric
         </div>
       )}
 
-      <div className="pricelists-resolve panel">
-        <h2 className="item-drawer-title">{t('pricelists.resolve')}</h2>
+      <div className="pricelists-resolve form-stack">
+        <h2 className="form-section-title">{t('pricelists.resolve')}</h2>
         <div className="item-row2">
-          <div className="item-field-inner">
-            <span className="item-field-label">{t('pricelists.item')}</span>
+          <Field label={t('pricelists.item')}>
             <Select
               value={resolveItemId}
               onChange={(value) => setResolveItemId(value)}
@@ -540,9 +536,8 @@ export function PriceLists({ workspaceId, items, baseCurrency, canManage }: Pric
               ]}
               ariaLabel={t('pricelists.item')}
             />
-          </div>
-          <div className="item-field-inner">
-            <span className="item-field-label">{t('pricelists.scope.contact')}</span>
+          </Field>
+          <Field label={t('pricelists.scope.contact')}>
             {contactsReadable ? (
               <Select
                 value={resolveContactId}
@@ -558,13 +553,12 @@ export function PriceLists({ workspaceId, items, baseCurrency, canManage }: Pric
               <input
                 className="field"
                 value={resolveContactId}
-                aria-label={t('pricelists.scope.contact')}
                 onChange={(e) => setResolveContactId(e.target.value)}
               />
             )}
-          </div>
+          </Field>
         </div>
-        <div className="pricelists-action">
+        <div className="pricelists-action form-actions">
           <button
             type="button"
             className="btn btn--secondary"
@@ -575,9 +569,11 @@ export function PriceLists({ workspaceId, items, baseCurrency, canManage }: Pric
             {t('pricelists.action.resolve')}
           </button>
           {previewBlocked !== null && (
-            <span id={`${noteId}-resolve`} className="item-field-hint">
-              {previewBlocked}
-            </span>
+            <IconButton
+              icon="info"
+              small
+              context={<span id={`${noteId}-resolve`}>{previewBlocked}</span>}
+            />
           )}
         </div>
         {resolveResult !== null && (

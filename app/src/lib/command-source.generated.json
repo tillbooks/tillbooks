@@ -3188,7 +3188,7 @@
     {
       "name": "export_journal",
       "kind": "read",
-      "reqCount": 1,
+      "reqCount": 0,
       "hasComplexInput": false,
       "capabilities": [
         "export",
@@ -3215,7 +3215,7 @@
     {
       "name": "export_statements",
       "kind": "read",
-      "reqCount": 1,
+      "reqCount": 0,
       "hasComplexInput": false,
       "capabilities": [
         "export",

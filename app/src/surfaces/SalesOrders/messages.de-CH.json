@@ -83,7 +83,8 @@
     "unknownItem": "Unbekannter Artikel",
     "rowOpen": "Auftrag {row} öffnen",
     "emptyHint": "Aufträge erscheinen hier, sobald du einen anlegst oder eine Offerte umwandelst.",
-    "emptyBackordersHint": "Jeder Auftrag ist vollständig geliefert."
+    "emptyBackordersHint": "Jeder Auftrag ist vollständig geliefert.",
+    "search": "Aufträge suchen"
   },
   "dn": {
     "action": {

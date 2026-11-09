@@ -1193,7 +1193,8 @@ describe('A07: the header is the shared SurfaceHeader primitive', () => {
     // The surface root keeps its own namespace class; the header is now the shared primitive, whose
     // class `SurfaceHeader.css` declares. `vr-head`, `surface` and `surface-head` are all gone.
     expect([...root.classList]).toEqual(['vr']);
-    expect([...head.classList]).toEqual(['surface-header']);
+    // D187 (Berichte A): the period picker rides the header's toolbar row, so the header also carries it.
+    expect([...head.classList]).toEqual(['surface-header', 'surface-header--toolbar']);
     expect(/\.surface-header[\s,{]/.test(surfaceHeaderCss)).toBe(true);
     // The retired bespoke classes are no longer declared or named on this surface.
     expect(/\.vr-head[\s,{]/.test(vatReturnCss)).toBe(false);

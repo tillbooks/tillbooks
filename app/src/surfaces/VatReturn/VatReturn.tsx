@@ -43,8 +43,7 @@ import { useT, formatMoney } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { OverflowMenu } from '../../components/OverflowMenu';
-import { Tooltip } from '../../components/Tooltip';
-import { InfoGlyph } from '../../components/states/glyphs';
+import { IconButton } from '../../components/IconButton';
 import { EmptyState, ErrorBanner, NoWorkspaceState, Skeleton } from '../../components/states';
 import { useCan, CAP } from '../../lib/capabilities';
 import { EntryDrawer } from '../Journal/EntryDrawer';
@@ -375,22 +374,24 @@ function VatReturnSurface() {
               })
         }
         help={<SurfaceHelp surface="VatReturn" />}
+        toolbar={
+          <PeriodPicker
+            periods={periods}
+            loading={periodsLoading}
+            failed={periodsFailed}
+            selected={selected}
+            onSelect={(label) => {
+              // A drill still loading for the period being left must not open under the new one.
+              drillToken.current += 1;
+              setSelected(label);
+              setExpanded(null);
+              setDrill(null);
+            }}
+            onRetry={() => void loadPeriods()}
+          />
+        }
         actions={
           <>
-            <PeriodPicker
-              periods={periods}
-              loading={periodsLoading}
-              failed={periodsFailed}
-              selected={selected}
-              onSelect={(label) => {
-                // A drill still loading for the period being left must not open under the new one.
-                drillToken.current += 1;
-                setSelected(label);
-                setExpanded(null);
-                setDrill(null);
-              }}
-              onRetry={() => void loadPeriods()}
-            />
             {/* `.btn--secondary` and NOT `.btn--primary`, per owner decision W3: this applies an
                 irreversible A03 hard lock, and the solid accent fill belongs to the export beside it. */}
             {filingInHeader && (
@@ -433,11 +434,13 @@ function VatReturnSurface() {
           <LockGlyph className="vr-filed-glyph" />
           <span className="vr-filed-title">{t('vat.return.filedBanner', { period: periodTitle(period.label) })}</span>
           <span className="vr-filed-info">
-            <Tooltip placement="bottom" content={`${t('vat.return.filedRecomputed')} ${t('vat.return.filedCorrection')}`}>
-              <button type="button" className="btn btn--ghost btn--icon btn--sm" aria-label={t('vat.return.filedInfo')}>
-                <InfoGlyph size={16} />
-              </button>
-            </Tooltip>
+            <IconButton
+              icon="info"
+              small
+              placement="bottom"
+              name={t('vat.return.filedInfo')}
+              context={`${t('vat.return.filedRecomputed')} ${t('vat.return.filedCorrection')}`}
+            />
           </span>
         </p>
       )}

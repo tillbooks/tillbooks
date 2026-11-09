@@ -453,11 +453,11 @@ describe('Uebersicht: the tile wall states', () => {
 });
 
 describe('Uebersicht: the daily doors (F-05)', () => {
-  it('Buchen and Sichern are always-visible header links into the composer and the backup panel', async () => {
+  it('Neue Buchung and Sichern are always-visible header links into the composer and the backup panel', async () => {
     renderSurface(happyCanned());
     await screen.findByText("CHF 12'500.00");
     const doors = screen.getByRole('group', { name: 'Häufige Aktionen' });
-    expect(within(doors).getByRole('link', { name: 'Buchen' })).toHaveAttribute('href', '/journal?new=1');
+    expect(within(doors).getByRole('link', { name: 'Neue Buchung' })).toHaveAttribute('href', '/journal?new=1');
     expect(within(doors).getByRole('link', { name: 'Sichern' })).toHaveAttribute('href', '/operations#data-title');
     // An established workspace offers no demo door: a demo is for looking before the books exist.
     expect(within(doors).queryByRole('button', { name: /Demo ausprobieren/ })).toBeNull();

@@ -7,10 +7,14 @@
     "noWorkspace": "Wähle einen Mandanten, um Chargen und Seriennummern zu verwalten.",
     "listLabel": "Verfolgbare Artikel",
     "detailLabel": "Artikel-Verfolgung",
-    "selectHint": "Wähle einen Artikel.",
+    "search": "Artikel suchen",
+    "emptyFiltered": "Keine Artikel für diesen Filter.",
+    "filter": { "clear": "Filter zurücksetzen" },
+    "expandLabel": "Details zu {name}",
     "modeLabel": "Verfolgungsmodus",
     "notTracked": "Dieser Artikel wird nicht per Charge oder Seriennummer verfolgt. Wähle oben einen Modus, um zu starten.",
     "col": {
+      "item": "Artikel",
       "actions": "Aktionen"
     },
     "cancel": "Abbrechen",

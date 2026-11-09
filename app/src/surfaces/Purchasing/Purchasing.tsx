@@ -35,13 +35,15 @@ import { useT, formatMoney, formatDate } from '../../i18n';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
+import { Field } from '../../components/Field';
+import { FilterBar } from '../../components/FilterBar';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { OverflowMenu } from '../../components/OverflowMenu';
 import { Status, type StatusKind } from '../../components/Status';
 import { Tabs } from '../../components/Tabs';
-import { CloseGlyph } from '../../components/icons';
+import { IconButton } from '../../components/IconButton';
 import { SupplierScorecard } from './SupplierScorecard';
 import './Purchasing.css';
 
@@ -165,6 +167,10 @@ export function Purchasing() {
   const [failed, setFailed] = useState(false);
   const [denied, setDenied] = useState(false);
   const [writeError, setWriteError] = useState<Err | null>(null);
+
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [supplierFilter, setSupplierFilter] = useState<string | null>(null);
 
   const [creating, setCreating] = useState(false);
   const [supplierId, setSupplierId] = useState('');
@@ -299,6 +305,52 @@ export function Purchasing() {
 
   const drawerOpen = creating || openId !== null;
 
+  // D187 List A: the search and the two facets narrow the orders; the other tabs take the search only.
+  const needle = search.trim().toLocaleLowerCase();
+  const shownPos = pos.filter(
+    (po) =>
+      (needle === '' ||
+        po.number.toLocaleLowerCase().includes(needle) ||
+        (contacts.get(po.supplierContactId) ?? '').toLocaleLowerCase().includes(needle)) &&
+      (statusFilter === null || po.status === statusFilter) &&
+      (supplierFilter === null || po.supplierContactId === supplierFilter),
+  );
+  const shownOpenLines = openLines.filter(
+    (l) => needle === '' || l.poNumber.toLocaleLowerCase().includes(needle) || itemName(l.itemId).toLocaleLowerCase().includes(needle),
+  );
+  const clearFilters = () => {
+    setSearch('');
+    setStatusFilter(null);
+    setSupplierFilter(null);
+  };
+  const ordersFilter = (
+    <FilterBar
+      searchValue={search}
+      onSearchChange={setSearch}
+      searchLabel={t('po.search')}
+      searchPlaceholder={t('po.search')}
+      facets={[
+        {
+          key: 'status',
+          label: t('po.field.status'),
+          options: (['draft', 'sent', 'received', 'closed', 'cancelled'] as const).map((s) => ({ value: s, label: statusLabel(s) })),
+          value: statusFilter,
+          onChange: setStatusFilter,
+        },
+        {
+          key: 'supplier',
+          label: t('po.field.supplier'),
+          options: [...contacts.entries()].map(([id, name]) => ({ value: id, label: name })),
+          value: supplierFilter,
+          onChange: setSupplierFilter,
+        },
+      ]}
+    />
+  );
+  const searchOnly = (
+    <FilterBar searchValue={search} onSearchChange={setSearch} searchLabel={t('po.search')} searchPlaceholder={t('po.search')} />
+  );
+
   const openColumns: DataTableColumn<OpenLine>[] = [
     { key: 'number', header: t('po.field.number'), render: (l) => l.poNumber },
     { key: 'item', header: t('po.field.item'), render: (l) => itemName(l.itemId) },
@@ -332,7 +384,7 @@ export function Purchasing() {
 
   return (
     <section className="po" aria-labelledby="po-title">
-      <SurfaceHeader title={t('po.title')} titleId="po-title" help={<SurfaceHelp surface="Purchasing" />} actions={headerActions} />
+      <SurfaceHeader title={t('po.title')} titleId="po-title" help={<SurfaceHelp surface="Purchasing" />} actions={headerActions} count={tab === 'orders' && !loading ? shownPos.length : undefined} />
 
       {!drawerOpen && writeError !== null && <ErrorBanner message={errorMessage(writeError)} />}
       {failed && <ErrorBanner context="read" message={t('po.error.transport')} onRetry={() => void load()} />}
@@ -343,12 +395,17 @@ export function Purchasing() {
         label={t('po.title')}
         tabs={(['orders', 'open', 'prices', 'scorecard'] as Tab[]).map((tabId) => ({ id: tabId, label: t(`po.tab.${tabId}`) }))}
         activeId={tab}
-        onChange={(id) => setTab(id as Tab)}
+        onChange={(id) => {
+          setTab(id as Tab);
+          setSearch('');
+        }}
       >
       {tab === 'orders' ? (
+        <>
+        {ordersFilter}
         <DataTable
           columns={poColumns}
-          rows={pos}
+          rows={shownPos}
           rowKey={(po) => po.id}
           caption={t('po.list.caption')}
           loading={loading}
@@ -356,6 +413,9 @@ export function Purchasing() {
           rowLabel={(po) => po.number}
           isRowCurrent={(po) => po.id === openId}
           emptyState={
+            pos.length > 0 ? (
+              <EmptyState title={t('po.emptyFiltered')} filtered={{ onClear: clearFilters, clearLabel: t('po.filter.clear') }} />
+            ) : (
             <EmptyState
               title={t('po.empty')}
               {...(canWrite
@@ -372,19 +432,24 @@ export function Purchasing() {
                   }
                 : {})}
             />
+            )
           }
         />
+        </>
       ) : tab === 'open' ? (
+        <>
+        {searchOnly}
         <DataTable
           columns={openColumns}
-          rows={openLines}
+          rows={shownOpenLines}
           rowKey={(l) => l.lineId}
           caption={t('po.open.caption')}
           loading={loading}
           emptyState={<EmptyState title={t('po.emptyOpen')} />}
         />
+        </>
       ) : tab === 'prices' ? (
-        <SupplierPrices prices={prices} contacts={contacts} items={items} t={t} canWrite={canWrite} itemName={itemName} write={write} loading={loading} />
+        <SupplierPrices search={search} searchBar={searchOnly} prices={prices} contacts={contacts} items={items} t={t} canWrite={canWrite} itemName={itemName} write={write} loading={loading} />
       ) : (
         <SupplierScorecard contacts={contacts} />
       )}
@@ -416,8 +481,7 @@ export function Purchasing() {
               void create();
             }}
           >
-            <div className="po-field">
-              <span>{t('po.field.supplier')}</span>
+            <Field label={t('po.field.supplier')} size="name">
               <Select
                 value={supplierId}
                 onChange={setSupplierId}
@@ -427,7 +491,7 @@ export function Purchasing() {
                 ]}
                 ariaLabel={t('po.field.supplier')}
               />
-            </div>
+            </Field>
             <fieldset className="po-lines">
               <legend>{t('po.field.lines')}</legend>
               {lines.map((line, index) => (
@@ -471,9 +535,7 @@ export function Purchasing() {
                     }}
                   />
                   {lines.length > 1 && (
-                    <button type="button" className="btn btn--ghost btn--sm btn--icon" aria-label={t('po.action.removeLine')} onClick={() => setLines(lines.filter((_, i) => i !== index))}>
-                      <CloseGlyph size={16} aria-hidden="true" />
-                    </button>
+                    <IconButton icon="remove" small name={t('po.action.removeLine')} context={t('po.action.addLine')} onClick={() => setLines(lines.filter((_, i) => i !== index))} />
                   )}
                 </div>
               ))}
@@ -602,8 +664,7 @@ function PoDetailDrawer(props: DetailProps) {
             props.onReceipt();
           }}
         >
-          <div className="po-field">
-            <span>{t('po.field.location')}</span>
+          <Field label={t('po.field.location')} size="name">
             <Select
               value={props.receiptLocation}
               onChange={props.setReceiptLocation}
@@ -613,7 +674,7 @@ function PoDetailDrawer(props: DetailProps) {
               ]}
               ariaLabel={t('po.field.location')}
             />
-          </div>
+          </Field>
           {detail.lines
             .filter((l) => l.openQty > 0)
             .map((l) => (
@@ -667,6 +728,8 @@ function PoDetailDrawer(props: DetailProps) {
 }
 
 interface PricesProps {
+  search: string;
+  searchBar: ReactNode;
   prices: PriceRow[];
   contacts: Map<string, string>;
   items: ItemOpt[];
@@ -678,7 +741,14 @@ interface PricesProps {
 }
 
 function SupplierPrices(props: PricesProps) {
-  const { prices, contacts, items, t, canWrite, itemName, write, loading } = props;
+  const { prices, contacts, items, t, canWrite, itemName, write, loading, search, searchBar } = props;
+  const needle = search.trim().toLocaleLowerCase();
+  const shownPrices = prices.filter(
+    (p) =>
+      needle === '' ||
+      (contacts.get(p.supplierContactId) ?? '').toLocaleLowerCase().includes(needle) ||
+      itemName(p.itemId).toLocaleLowerCase().includes(needle),
+  );
   const [supplierId, setSupplierId] = useState('');
   const [itemId, setItemId] = useState('');
   const [price, setPrice] = useState('');
@@ -717,7 +787,7 @@ function SupplierPrices(props: PricesProps) {
     <>
       {canWrite && (
         <form
-          className="po-editor"
+          className="form-line"
           aria-label={t('po.action.addPrice')}
           onSubmit={(e) => {
             e.preventDefault();
@@ -745,12 +815,13 @@ function SupplierPrices(props: PricesProps) {
           <input className="field" type="text" inputMode="decimal" aria-label={t('po.field.price')} placeholder="90.00" value={price} onChange={(e) => setPrice(e.target.value)} />
           <input className="field" type="date" aria-label={t('po.field.validFrom')} value={validFrom} onChange={(e) => setValidFrom(e.target.value)} />
           <input className="field" type="number" min="0" aria-label={t('po.field.leadTime')} value={leadTime} onChange={(e) => setLeadTime(e.target.value)} />
-          <button type="submit" className="btn btn--primary btn--sm">
+          <button type="submit" className="btn btn--secondary">
             {t('po.action.addPrice')}
           </button>
         </form>
       )}
-      <DataTable columns={columns} rows={prices} rowKey={(p) => p.id} caption={t('po.prices.caption')} loading={loading} emptyState={<EmptyState title={t('po.emptyPrices')} />} />
+      {searchBar}
+      <DataTable columns={columns} rows={shownPrices} rowKey={(p) => p.id} caption={t('po.prices.caption')} loading={loading} emptyState={<EmptyState title={t('po.emptyPrices')} />} />
     </>
   );
 }

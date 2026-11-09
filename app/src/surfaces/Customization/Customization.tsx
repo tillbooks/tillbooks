@@ -18,6 +18,9 @@
  * That is the whole point of draft-by-default, and hiding it here would make the mechanism invisible
  * to the only person who can act on it.
  */
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
+import { DetailDrawer } from '../../components/DetailDrawer';
 import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 
 import { useClient } from '../../lib/client-context';
@@ -312,6 +315,7 @@ export function Customization() {
   const kindSelectId = useId();
   const typeSelectId = useId();
   const titleId = useId();
+  const formId = useId();
 
   const [tab, setTab] = useState<Tab>('fields');
   const [entityKind, setEntityKind] = useState<string>('contact');
@@ -462,24 +466,6 @@ export function Customization() {
       header: t('customization.fields.typeLabel'),
       render: (def) => t(`customization.fields.type.${def.type}`),
     },
-    {
-      key: 'actions',
-      header: t('customization.actionsColumn'),
-      headerHidden: true,
-      align: 'end',
-      render: (def) =>
-        canManageFields ? (
-          <button
-            type="button"
-            className="btn btn--secondary btn--sm"
-            disabled={busy}
-            aria-label={`${t('customization.fields.archive')}: ${labelFor(def, locale)}`}
-            onClick={() => void runFieldAction('archive_field', def.fieldDefId)}
-          >
-            {t('customization.fields.archive')}
-          </button>
-        ) : null,
-    },
   ];
 
   const viewColumns: DataTableColumn<SavedViewDto>[] = [
@@ -490,107 +476,12 @@ export function Customization() {
       render: (view) =>
         view.shared ? t('customization.views.shared') : t('customization.views.personal'),
     },
-    {
-      key: 'actions',
-      header: t('customization.actionsColumn'),
-      headerHidden: true,
-      align: 'end',
-      // A shared view needs the capability; a personal one is the caller's own, so the control is
-      // offered for it either way and the engine still has the final say.
-      render: (view) =>
-        !view.shared || canManageViews ? (
-          <button
-            type="button"
-            className="btn btn--secondary btn--sm"
-            disabled={busy}
-            aria-label={`${t('customization.views.delete')}: ${view.name}`}
-            onClick={() => void deleteView(view.viewId)}
-          >
-            {t('customization.views.delete')}
-          </button>
-        ) : null,
-    },
   ];
 
   const fieldsPanel = (
     <div className="customization__panel">
       {panelBody(
         <>
-          {/* K-08: "Feld definieren" is the header's one primary (at its natural width, never a bar
-              across the panel); the draft form opens here. */}
-          {canManageFields ? (
-            draft === null ? null : (
-              <form
-                className="customization__form"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void submitDraft();
-                }}
-              >
-                <label htmlFor={keyInputId}>
-                  <span>{t('customization.fields.key')}</span>
-                  <input
-                    className="field"
-                    id={keyInputId}
-                    value={draft.key}
-                    onChange={(e) => setDraft({ ...draft, key: e.currentTarget.value })}
-                    required
-                  />
-                </label>
-                <label>
-                  <span>{t('customization.fields.labelDe')}</span>
-                  <input
-                    className="field"
-                    value={draft.labelDe}
-                    onChange={(e) => setDraft({ ...draft, labelDe: e.currentTarget.value })}
-                    required
-                  />
-                </label>
-                <label>
-                  <span>{t('customization.fields.labelEn')}</span>
-                  <input
-                    className="field"
-                    value={draft.labelEn}
-                    onChange={(e) => setDraft({ ...draft, labelEn: e.currentTarget.value })}
-                    required
-                  />
-                </label>
-                <label htmlFor={typeSelectId}>
-                  <span>{t('customization.fields.typeLabel')}</span>
-                  <Select
-                    id={typeSelectId}
-                    value={draft.type}
-                    onChange={(val) => setDraft({ ...draft, type: val })}
-                    options={FIELD_TYPES.map((type) => ({
-                      value: type,
-                      label: t(`customization.fields.type.${type}`),
-                    }))}
-                    ariaLabel={t('customization.fields.typeLabel')}
-                  />
-                </label>
-                {draft.type === 'select' || draft.type === 'multiselect' ? (
-                  <label>
-                    <span>{t('customization.fields.options')}</span>
-                    <input
-                      className="field"
-                      value={draft.options}
-                      onChange={(e) => setDraft({ ...draft, options: e.currentTarget.value })}
-                      required
-                    />
-                  </label>
-                ) : null}
-                <div className="customization__form-actions">
-                  <button type="submit" className="btn btn--primary" disabled={busy}>
-                    {t('customization.fields.save')}
-                  </button>
-                  <button type="button" className="btn btn--secondary" onClick={() => setDraft(null)} disabled={busy}>
-                    {t('customization.cancel')}
-                  </button>
-                </div>
-              </form>
-            )
-          ) : null}
-
           {draftDefs.length > 0 ? (
             <div className="customization__drafts">
               {draftDefs.map((def) => (
@@ -612,14 +503,14 @@ export function Customization() {
                   {canManageFields ? (
                     <span className="customization__draft-actions">
                       {/* Approving a schema change is not a money write: a secondary, never the accent. */}
-                      <button
-                        type="button"
-                        className="btn btn--secondary btn--sm"
+                      <IconButton
+                        icon="approve"
+                        small
                         disabled={busy}
+                        name={t('customization.fields.confirm')}
+                        context={labelFor(def, locale)}
                         onClick={() => void runFieldAction('confirm_field', def.fieldDefId)}
-                      >
-                        {t('customization.fields.confirm')}
-                      </button>
+                      />
                       <button
                         type="button"
                         className="btn btn--secondary btn--sm"
@@ -647,6 +538,20 @@ export function Customization() {
               columns={fieldColumns}
               rows={liveDefs as FieldDefDto[]}
               rowKey={(def) => def.fieldDefId}
+              rowActions={
+                canManageFields
+                  ? (def) => [
+                      {
+                        key: 'archive',
+                        label: t('customization.fields.archive'),
+                        danger: true,
+                        disabled: busy,
+                        onSelect: () => void runFieldAction('archive_field', def.fieldDefId),
+                      },
+                    ]
+                  : undefined
+              }
+              rowActionsLabel={(def) => t('customization.rowActions', { name: labelFor(def, locale) })}
             />
           ) : null}
 
@@ -705,6 +610,14 @@ export function Customization() {
             columns={viewColumns}
             rows={views as SavedViewDto[]}
             rowKey={(view) => view.viewId}
+            // A shared view needs the capability; a personal one is the caller's own, so the verb is
+            // offered for it either way and the engine still has the final say.
+            rowActions={(view) =>
+              !view.shared || canManageViews
+                ? [{ key: 'delete', label: t('customization.views.delete'), danger: true, disabled: busy, onSelect: () => void deleteView(view.viewId) }]
+                : []
+            }
+            rowActionsLabel={(view) => t('customization.rowActions', { name: view.name })}
             emptyState={<EmptyState title={t('customization.views.empty')} />}
           />
         </>,
@@ -719,17 +632,9 @@ export function Customization() {
         titleId={titleId}
         subtitle={t('customization.lede')}
         help={<SurfaceHelp surface="Customization" />}
-        actions={
-          tab === 'fields' && canManageFields && draft === null && state.kind === 'ok' ? (
-            <button type="button" className="btn btn--primary" onClick={openDraft}>
-              {t('customization.fields.create')}
-            </button>
-          ) : undefined
-        }
-      />
-
-      <label className="customization__kind" htmlFor={kindSelectId}>
-        <span>{t('customization.entityKind')}</span>
+        count={tab === 'fields' && state.kind === 'ok' ? liveDefs.length : undefined}
+        toolbar={
+      <Field label={t('customization.entityKind')} size="name">
         <Select
           id={kindSelectId}
           value={entityKind}
@@ -743,7 +648,16 @@ export function Customization() {
           }))}
           ariaLabel={t('customization.entityKind')}
         />
-      </label>
+      </Field>
+        }
+        actions={
+          tab === 'fields' && canManageFields && draft === null && state.kind === 'ok' ? (
+            <button type="button" className="btn btn--primary" onClick={openDraft}>
+              {t('customization.fields.create')}
+            </button>
+          ) : undefined
+        }
+      />
 
       {/*
         A FAILURE IS ANNOUNCED ASSERTIVELY, a success politely. One element carried `role="status"`
@@ -768,6 +682,84 @@ export function Customization() {
           { id: 'views', label: t('customization.views.title'), panel: viewsPanel },
         ]}
       />
+
+      {draft !== null && canManageFields && (
+        <DetailDrawer
+          open
+          onClose={() => setDraft(null)}
+          title={t('customization.fields.create')}
+          closeLabel={t('customization.cancel')}
+          footer={
+            <>
+              <button type="button" className="btn btn--secondary" onClick={() => setDraft(null)} disabled={busy}>
+                {t('customization.cancel')}
+              </button>
+              <button type="submit" form={formId} className="btn btn--primary" disabled={busy}>
+                {t('customization.fields.save')}
+              </button>
+            </>
+          }
+        >
+          <form
+            id={formId}
+            className="customization__form form-stack"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submitDraft();
+            }}
+          >
+            <Field label={t('customization.fields.key')} size="name">
+              <input
+                className="field"
+                id={keyInputId}
+                value={draft.key}
+                onChange={(e) => setDraft({ ...draft, key: e.currentTarget.value })}
+                required
+              />
+            </Field>
+            <div className="form-line">
+              <Field label={t('customization.fields.labelDe')} size="name">
+                <input
+                  className="field"
+                  value={draft.labelDe}
+                  onChange={(e) => setDraft({ ...draft, labelDe: e.currentTarget.value })}
+                  required
+                />
+              </Field>
+              <Field label={t('customization.fields.labelEn')} size="name">
+                <input
+                  className="field"
+                  value={draft.labelEn}
+                  onChange={(e) => setDraft({ ...draft, labelEn: e.currentTarget.value })}
+                  required
+                />
+              </Field>
+            </div>
+            <Field label={t('customization.fields.typeLabel')} size="short">
+              <Select
+                id={typeSelectId}
+                value={draft.type}
+                onChange={(val) => setDraft({ ...draft, type: val })}
+                options={FIELD_TYPES.map((type) => ({
+                  value: type,
+                  label: t(`customization.fields.type.${type}`),
+                }))}
+                ariaLabel={t('customization.fields.typeLabel')}
+              />
+            </Field>
+            {draft.type === 'select' || draft.type === 'multiselect' ? (
+              <Field label={t('customization.fields.options')} size="full">
+                <input
+                  className="field"
+                  value={draft.options}
+                  onChange={(e) => setDraft({ ...draft, options: e.currentTarget.value })}
+                  required
+                />
+              </Field>
+            ) : null}
+          </form>
+        </DetailDrawer>
+      )}
     </section>
   );
 }

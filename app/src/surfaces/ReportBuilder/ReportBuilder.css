@@ -9,7 +9,6 @@
 .rb-form {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
 }
 /* A second line in a list cell: the retention note, the delivery note, a Status. Dim, never faded
    (K-36), and never a badge (K-22). */
@@ -21,11 +20,6 @@
 }
 .rb-confirm-body {
   margin: 0;
-}
-.rb-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
 }
 .rb-columns {
   display: flex;
@@ -60,9 +54,4 @@
 }
 .rb-error {
   color: var(--t-danger);
-}
-.rb-cloud {
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-  color: var(--t-text-dim);
 }

@@ -7,13 +7,15 @@
  * can change, via `update_account` plus the A05 `account_set_tax_default` control for the VAT default.
  * A `duplicate_number` rejection surfaces inline on the number field, never as a stack trace.
  */
-import { useId, useState } from 'react';
+import { useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
 import { isErr } from '../../lib/client';
 import { useT } from '../../i18n';
 import { ErrorBanner } from '../../components/states';
 import { DetailDrawer } from '../../components/DetailDrawer';
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
 import { Select } from '../../components/Select';
 import { useCan, CAP } from '../../lib/capabilities';
 import type { Err } from '../../lib/client';
@@ -48,8 +50,6 @@ export function AccountDrawer({
 }: AccountDrawerProps) {
   const t = useT();
   const client = useClient();
-  // Prefixes the field-level error id (the drawer's own title id is owned by DetailDrawer).
-  const fieldPrefix = useId();
   /**
    * The VAT default is the ONE control in this drawer that is not `manage_chart`: in EDIT mode it
    * rides the dedicated A05 verb `account_set_tax_default`, which the engine gates on
@@ -162,71 +162,53 @@ export function AccountDrawer({
         </>
       }
     >
-      <div className="acc-form">
+      <div className="acc-form form-stack">
         {formError !== null && <ErrorBanner error={formError} />}
 
-        <div className="acc-field">
-          <label className="acc-field-inner">
-            <span className="acc-field-label">{t('account.number')}</span>
-            <input
-              className="field acc-input t-num"
-              value={number}
-              disabled={frozen}
-              inputMode="numeric"
-              aria-invalid={numberError !== null}
-              aria-describedby={numberError !== null ? `${fieldPrefix}-num-err` : undefined}
-              onChange={(event) => setNumber(event.target.value)}
-            />
-          </label>
-          {numberError !== null && (
-            <span id={`${fieldPrefix}-num-err`} className="acc-field-error" role="alert">
-              {numberError}
-            </span>
-          )}
-        </div>
+        <Field label={t('account.number')} error={numberError ?? undefined} size="code">
+          <input
+            className="field acc-input t-num"
+            value={number}
+            disabled={frozen}
+            inputMode="numeric"
+            onChange={(event) => setNumber(event.target.value)}
+          />
+        </Field>
 
-        <div className="acc-field">
-          <label className="acc-field-inner">
-            <span className="acc-field-label">{t('account.name')}</span>
-            <input
-              className="field acc-input"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </label>
-        </div>
+        <Field label={t('account.name')}>
+          <input
+            className="field acc-input"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </Field>
 
-        <div className="acc-field">
-          <div className="acc-field-inner">
-            <span className="acc-field-label">{t('account.typeLabel')}</span>
-            <Select
-              value={type}
-              disabled={frozen}
-              onChange={(value) => setType(value as AccountType)}
-              options={ACCOUNT_TYPES.map((value) => ({ value, label: t(`account.type.${value}`) }))}
-              ariaLabel={t('account.typeLabel')}
-            />
-          </div>
-          {typeMismatch && !frozen && (
-            <span className="acc-field-warn">{t('account.warn.typeMismatch')}</span>
-          )}
-        </div>
+        <Field
+          label={t('account.typeLabel')}
+          size="short"
+          hint={typeMismatch && !frozen ? t('account.warn.typeMismatch') : undefined}
+        >
+          <Select
+            value={type}
+            disabled={frozen}
+            onChange={(value) => setType(value as AccountType)}
+            options={ACCOUNT_TYPES.map((value) => ({ value, label: t(`account.type.${value}`) }))}
+            ariaLabel={t('account.typeLabel')}
+          />
+        </Field>
 
         {(mode === 'create' || canSetVatDefault) && (
-          <div className="acc-field">
-            <div className="acc-field-inner">
-              <span className="acc-field-label">{t('account.vatDefault')}</span>
-              <Select
-                value={vatDefault ?? ''}
-                onChange={(value) => setVatDefault(value)}
-                options={[
-                  { value: '', label: t('account.vatNone') },
-                  ...vatCodes.map((code) => ({ value: code.code, label: code.label })),
-                ]}
-                ariaLabel={t('account.vatDefault')}
-              />
-            </div>
-          </div>
+          <Field label={t('account.vatDefault')}>
+            <Select
+              value={vatDefault ?? ''}
+              onChange={(value) => setVatDefault(value)}
+              options={[
+                { value: '', label: t('account.vatNone') },
+                ...vatCodes.map((code) => ({ value: code.code, label: code.label })),
+              ]}
+              ariaLabel={t('account.vatDefault')}
+            />
+          </Field>
         )}
 
         <label className="acc-checkbox">
@@ -239,20 +221,21 @@ export function AccountDrawer({
         </label>
 
         {frozen && (
-          <label className="acc-checkbox">
-            <input
-              type="checkbox"
-              checked={statementIsVoucher}
-              aria-describedby="acc-statement-voucher-hint"
-              onChange={(event) => setStatementIsVoucher(event.target.checked)}
-            />
-            <span>{t('account.statementIsVoucher')}</span>
-          </label>
-        )}
-        {frozen && (
-          <p id="acc-statement-voucher-hint" className="acc-hint">
-            {t('account.statementIsVoucherHint')}
-          </p>
+          <span className="acc-checkbox">
+            <label className="acc-checkbox">
+              <input
+                type="checkbox"
+                checked={statementIsVoucher}
+                aria-describedby="acc-statement-voucher-hint"
+                onChange={(event) => setStatementIsVoucher(event.target.checked)}
+              />
+              <span>{t('account.statementIsVoucher')}</span>
+            </label>
+            <span id="acc-statement-voucher-hint" className="visually-hidden">
+              {t('account.statementIsVoucherHint')}
+            </span>
+            <IconButton icon="info" small context={t('account.statementIsVoucherHint')} />
+          </span>
         )}
       </div>
     </DetailDrawer>

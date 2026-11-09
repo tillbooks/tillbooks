@@ -7211,12 +7211,23 @@ export const READ_SCENARIOS = {
   // leaves the workspace (to the tax authority's working papers, to the annual accounts), so "it
   // succeeds on real data, answers identically twice, and moves nothing" is the verb's contract
   // rather than a formality. Neither embeds a timestamp, which is what makes the identical-answer
-  // half hold by construction rather than by the fixture's pinned clock. `export_statements` has no
-  // row because it only packages two calls into A08's own `exportStatement`, which the standing
-  // rules and A08's suites already cover.
+  // half hold by construction rather than by the fixture's pinned clock. D190 drives every form the
+  // journal takes: the period, a range that is not one (it writes a scope record), and a filtered
+  // extract over a range, so the account lookup and the filter clauses are held to the same rules.
+  // `export_statements` gets a row for the range alone (D190), the one input it now resolves itself;
+  // the figures are still two calls into A08's own `exportStatement`, which A08's suites cover.
   export_journal: (fx) => {
     fx.call('post_entry', manualPost(fx.accId, 'xj-seed'));
-    return { workspaceId: fx.workspaceId, period: '2026-03', format: 'csv' };
+    return [
+      { workspaceId: fx.workspaceId, period: '2026-03', format: 'csv' },
+      { workspaceId: fx.workspaceId, from: '2026-02-15', to: '2026-03-20', format: 'csv' },
+      { workspaceId: fx.workspaceId, from: '2026-02-15', to: '2026-03-20', account: '6500', source: 'manual', status: 'posted' },
+    ];
+  },
+
+  export_statements: (fx) => {
+    fx.call('post_entry', manualPost(fx.accId, 'xs-seed'));
+    return { workspaceId: fx.workspaceId, from: '2026-02-15', to: '2026-03-20', format: 'csv' };
   },
 
   export_vat: (fx) => {
@@ -7860,8 +7871,9 @@ function seedForecastWorld(fx, prefix) {
  * really-stored note, and `hausbuch_notes` over a stored counterparty note; both pure reads, proven inert.
  * N02 (D183) adds `belegeingang_status` (+1, ONE HUNDRED AND THIRTY-SIX): pure SELECTs over the scan row,
  * the settings and the waiting captures, proven inert over a book with a capture waiting.
+ * D190 adds `export_statements` over a date range (+1): two calls into A08's renderer, proven inert.
  */
-export const READ_SCENARIO_FLOOR = 137;
+export const READ_SCENARIO_FLOOR = 138;
 
 /**
  * THE ONE BLESSED READ-VERB WRITER (D96), and nothing else.

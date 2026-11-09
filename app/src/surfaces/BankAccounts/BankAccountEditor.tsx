@@ -46,13 +46,14 @@ import { useT } from '../../i18n';
 import { ErrorBanner, Skeleton, refusalText } from '../../components/states';
 import { Select } from '../../components/Select';
 import { HelpHint } from '../../components/HelpHint';
+import { IconButton } from '../../components/IconButton';
 import { BankDrawer } from './BankDrawer';
 import { OpeningBalanceStep } from './OpeningBalanceStep';
 import {
   assetAccounts,
   groupIban,
-  ibanErrorKey,
   looksLikeQrIban,
+  ibanErrorKey,
   normalizeIban,
   openingAccountId,
   openingAccountState,
@@ -391,9 +392,12 @@ export function BankAccountEditor({
             </div>
 
             <div className="form-row">
-              <label className="field-label-row" htmlFor="bank-ledger-account">
-                {t('bank.ledgerAccount.label')}
-              </label>
+              <span className="field-label-row">
+                <label htmlFor="bank-ledger-account">{t('bank.ledgerAccount.label')}</label>
+                {currency !== baseCurrency && baseCurrency !== '' && !unseededChart && (
+                  <IconButton icon="info" small context={t('bank.ledgerAccount.foreignHint')} />
+                )}
+              </span>
               {chartFailed ? (
                 <ErrorBanner message={t('bank.error.chart')} onRetry={() => void loadChart()} />
               ) : chart === null ? (
@@ -457,9 +461,6 @@ export function BankAccountEditor({
                 booking two currencies through 1020 is a real if untidy choice and A19 does not
                 forbid it.
               */}
-              {currency !== baseCurrency && baseCurrency !== '' && !unseededChart && (
-                <p className="field-hint">{t('bank.ledgerAccount.foreignHint')}</p>
-              )}
             </div>
           </div>
 

@@ -150,6 +150,11 @@ function parseArtifact(value: unknown): ExportArtifact | null {
 export interface ExportResult {
   artifacts: ExportArtifact[];
   empty: boolean;
+  /**
+   * The engine's notice, or null: `empty_period`, `empty_extract` (a filtered journal with no match,
+   * D190) or `range_not_whole_months` (statements cut mid-month, D190).
+   */
+  notice: string | null;
 }
 
 /** Parse a single-artifact export (`export_journal`, `export_vat`). Null on a shape miss. */
@@ -158,7 +163,7 @@ export function parseSingleArtifact(body: unknown): ExportResult | null {
   if (record === null) return null;
   const artifact = parseArtifact(record.artifact);
   if (artifact === null) return null;
-  return { artifacts: [artifact], empty: record.empty === true };
+  return { artifacts: [artifact], empty: record.empty === true, notice: str(record.notice) };
 }
 
 /** Parse the statements pair (`export_statements`): one artifact per statement. Null on a shape miss. */
@@ -174,7 +179,7 @@ export function parseArtifactPair(body: unknown): ExportResult | null {
     artifacts.push(artifact);
   }
   if (artifacts.length === 0) return null;
-  return { artifacts, empty: record.empty === true };
+  return { artifacts, empty: record.empty === true, notice: str(record.notice) };
 }
 
 /** Decode the engine's base64 artifact into a Blob the browser saves under the engine's own name. */
@@ -217,3 +222,133 @@ export function currentMonth(now: Date = new Date()): string {
 export function currentYear(now: Date = new Date()): string {
   return String(now.getFullYear());
 }
+
+// --- D190: the export range, the MWST period, the journal source filter ------------------------
+
+/** An inclusive ISO date range, `YYYY-MM-DD` both ends. */
+export interface DateRange {
+  from: string;
+  to: string;
+}
+
+/** The quick picks that fill the range; `custom` is any other range (no pick shows as chosen). */
+export type RangeShape = 'month' | 'quarter' | 'year' | 'custom';
+
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** A real calendar date `YYYY-MM-DD` (rejects `2026-02-30`). */
+export function isIsoDate(value: string): boolean {
+  const m = ISO_DATE.exec(value);
+  if (m === null) return false;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+function lastDay(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** The months `first..last` (1-based, inclusive) of `year` as a range. */
+function monthsRange(year: number, first: number, last: number): DateRange {
+  return { from: `${year}-${pad(first)}-01`, to: `${year}-${pad(last)}-${pad(lastDay(year, last))}` };
+}
+
+/** The whole month, quarter or year that contains `anchor` (an ISO date). */
+export function rangeOfShape(shape: Exclude<RangeShape, 'custom'>, anchor: string): DateRange {
+  const year = Number(anchor.slice(0, 4));
+  const month = Number(anchor.slice(5, 7));
+  if (shape === 'year') return monthsRange(year, 1, 12);
+  if (shape === 'quarter') {
+    const first = Math.floor((month - 1) / 3) * 3 + 1;
+    return monthsRange(year, first, first + 2);
+  }
+  return monthsRange(year, month, month);
+}
+
+/** Which quick pick a range is exactly, or `custom`. */
+export function shapeOfRange(range: DateRange): RangeShape {
+  if (!isIsoDate(range.from) || !isIsoDate(range.to)) return 'custom';
+  for (const shape of ['month', 'quarter', 'year'] as const) {
+    const whole = rangeOfShape(shape, range.from);
+    if (whole.from === range.from && whole.to === range.to) return shape;
+  }
+  return 'custom';
+}
+
+/** Today as `YYYY-MM-DD`, in the viewer's own calendar (not UTC). */
+export function isoToday(now: Date = new Date()): string {
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/**
+ * The range a deep link opens on (F-07 and D190): `?period=YYYY-MM` is that month, `?period=YYYY` that
+ * year; anything else (or nothing) is the current month.
+ */
+export function rangeFromLink(period: string | null, now: Date = new Date()): DateRange {
+  if (period !== null && /^\d{4}-(0[1-9]|1[0-2])$/.test(period)) return rangeOfShape('month', `${period}-01`);
+  if (period !== null && /^\d{4}$/.test(period)) return rangeOfShape('year', `${period}-01-01`);
+  return rangeOfShape('month', isoToday(now));
+}
+
+/** The MWST period kinds `export_vat` takes (its labels stay fixed, D190: no range for MWST). */
+export type VatGranularity = 'quarter' | 'half' | 'month' | 'year';
+
+/** The parts of a MWST period the picker holds. */
+export interface VatPeriodParts {
+  year: string;
+  quarter: string;
+  half: string;
+  month: string;
+}
+
+/** The label `export_vat` parses: `YYYY-Qn`, `YYYY-Hn`, `YYYY-MM` or `YYYY`. */
+export function vatPeriodValue(granularity: VatGranularity, parts: VatPeriodParts): string {
+  if (granularity === 'quarter') return `${parts.year}-${parts.quarter}`;
+  if (granularity === 'half') return `${parts.year}-${parts.half}`;
+  if (granularity === 'month') return parts.month;
+  return parts.year;
+}
+
+/** The quarter (`Q1`..`Q4`) of a `YYYY-MM` month. */
+export function quarterOf(month: string): string {
+  return `Q${Math.floor((Number(month.slice(5, 7)) - 1) / 3) + 1}`;
+}
+
+/** The half-year (`H1`, `H2`) of a `YYYY-MM` month. */
+export function halfOf(month: string): string {
+  return Number(month.slice(5, 7)) <= 6 ? 'H1' : 'H2';
+}
+
+/**
+ * The journal "Quelle" values the export filter offers: a MIRROR of `VALID_SOURCES` in
+ * `src/core/ledger/postEntry.ts`, in its order (the Journal surface keeps the same mirror). Kept in step
+ * by `test/review/export-source-mirror.test.mjs`. Each value has a `journal.source.<value>` label.
+ */
+export const EXPORT_SOURCES = [
+  'manual',
+  'invoice',
+  'payment',
+  'import',
+  'agent',
+  'reversal',
+  'close',
+  'fx',
+  'purchase',
+  'dunning',
+  'credit_note',
+  'camt',
+  'stock',
+  'landed_cost',
+  'expense_claim',
+  'asset_acquisition',
+  'asset_depreciation',
+  'asset_disposal',
+  'inventory_valuation',
+  'accrual',
+  'provision',
+  'vat_settlement',
+] as const;

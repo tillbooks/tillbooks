@@ -34,8 +34,7 @@
       "dataPolicy": "Daten",
       "guard": "Schutz",
       "lastRefresh": "Zuletzt aktualisiert",
-      "size": "Grösse",
-      "actions": "Aktionen"
+      "size": "Grösse"
     },
     "policy": {
       "synthetic": "Synthetisch",

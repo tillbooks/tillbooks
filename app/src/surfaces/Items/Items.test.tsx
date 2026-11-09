@@ -211,7 +211,8 @@ describe('Items, five states', () => {
   it('surfaces archived rows, muted, when "show archived" is toggled', async () => {
     renderItems(happyCanned());
     await screen.findByText('Beratung');
-    await userEvent.click(screen.getByLabelText('Archivierte anzeigen'));
+    await userEvent.click(screen.getByRole('button', { name: 'Filter hinzufügen' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Archivierte anzeigen' }));
     // The catalog is the shared DataTable now (D118 B2), so a row is a <tr>. The archived row reads
     // muted: its name steps down to the faint ink (`item-name--muted`), and it carries the tag.
     const nameEl = await screen.findByText('Altprodukt');

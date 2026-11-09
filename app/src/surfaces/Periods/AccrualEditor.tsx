@@ -36,6 +36,7 @@ import { isErr, type Err } from '../../lib/client';
 import { useCapabilities, CAP } from '../../lib/capabilities';
 import { useT, formatDate, formatMoney } from '../../i18n';
 import { ErrorBanner, Skeleton } from '../../components/states';
+import { Field } from '../../components/Field';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
 import { Modal, type ModalRole } from '../../components/Modal';
@@ -761,23 +762,19 @@ export function AccrualEditor({ workspaceId, periodEnd, canPost }: AccrualEditor
               </div>
             )}
 
-            <label className="period-field" htmlFor={amountFieldId}>
-              {t('accruals.amount')} ({currency})
-            </label>
-            <input
+            <Field
+              label={`${t('accruals.amount')} (${currency})`}
               id={amountFieldId}
-              className="field"
-              inputMode="decimal"
-              value={amountText}
-              onChange={(e) => setAmountText(e.target.value)}
-              aria-invalid={fieldError?.field === 'amount' ? true : undefined}
-              aria-describedby={fieldError?.field === 'amount' ? errorId : undefined}
-            />
-            {fieldError?.field === 'amount' && (
-              <p id={errorId} className="accrual-field-error" role="alert">
-                {fieldError.text}
-              </p>
-            )}
+              className="period-field"
+              error={fieldError?.field === 'amount' ? fieldError.text : undefined}
+            >
+              <input
+                className="field"
+                inputMode="decimal"
+                value={amountText}
+                onChange={(e) => setAmountText(e.target.value)}
+              />
+            </Field>
 
             {drawer === 'provision' && (
               <div className="period-field">
@@ -823,28 +820,23 @@ export function AccrualEditor({ workspaceId, periodEnd, canPost }: AccrualEditor
               </p>
             )}
 
-            <label className="period-field" htmlFor={descriptionFieldId}>
-              {t('accruals.description')}
-            </label>
-            <input
+            <Field
+              label={t('accruals.description')}
               id={descriptionFieldId}
-              className="field"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              aria-invalid={fieldError?.field === 'description' ? true : undefined}
-              aria-describedby={fieldError?.field === 'description' ? errorId : undefined}
-            />
-            {fieldError?.field === 'description' && (
-              <p id={errorId} className="accrual-field-error" role="alert">
-                {fieldError.text}
-              </p>
-            )}
+              className="period-field"
+              error={fieldError?.field === 'description' ? fieldError.text : undefined}
+            >
+              <input
+                className="field"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </Field>
 
             {drawer === 'accrual' && (
-              <label className="period-field">
-                {t('accruals.sourceRef')}
+              <Field label={t('accruals.sourceRef')} className="period-field">
                 <input className="field" value={sourceRef} onChange={(e) => setSourceRef(e.target.value)} />
-              </label>
+              </Field>
             )}
 
             {fieldError?.field === 'form' && (
@@ -960,10 +952,9 @@ export function AccrualEditor({ workspaceId, periodEnd, canPost }: AccrualEditor
             {t('accruals.amount')} ({currency})
             <input className="field" inputMode="decimal" value={releaseAmountText} onChange={(e) => setReleaseAmountText(e.target.value)} />
           </label>
-          <label className="period-field">
-            {t('provisions.releaseDate')}
+          <Field label={t('provisions.releaseDate')} className="period-field">
             <input className="field" type="date" value={releaseDate} onChange={(e) => setReleaseDate(e.target.value)} />
-          </label>
+          </Field>
           <div className="period-field">
             {t('provisions.targetAccount')}
             <Select

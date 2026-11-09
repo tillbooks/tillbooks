@@ -43,8 +43,7 @@ import { useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useT, useTRich, formatMoney } from '../../i18n';
-import { Tooltip } from '../../components/Tooltip';
-import { InfoGlyph } from '../../components/states/glyphs';
+import { IconButton } from '../../components/IconButton';
 import { CheckGlyph, ChevronGlyph, WarnGlyph } from './glyphs';
 import type { Bridge } from './model';
 
@@ -93,11 +92,7 @@ export function Abstimmung({ bridge, currency, onInvestigate }: AbstimmungProps)
         {bridge.kind === 'match' && <CheckGlyph className="vr-recon-glyph" />}
         <span className="vr-recon-verdict">{verdict}</span>
         <span className="vr-recon-info">
-          <Tooltip placement="bottom" content={explain}>
-            <button type="button" className="btn btn--ghost btn--icon btn--sm" aria-label={t('vat.return.recon.info')}>
-              <InfoGlyph size={16} />
-            </button>
-          </Tooltip>
+          <IconButton icon="info" small placement="bottom" name={t('vat.return.recon.info')} context={explain} />
         </span>
         {bridge.kind === 'noAccount' && (
           <Link className="link-inline" to="/accounts">{t('vat.return.recon.noAccountCta')}</Link>

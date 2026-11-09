@@ -30,12 +30,6 @@
 
 /* --- toolbar ----------------------------------------------------------------------------------- */
 
-.pay-toolbar {
-  display: flex;
-  gap: var(--t-space-1);
-  align-items: center;
-}
-
 /* --- the list (the shared DataTable, K-26) ------------------------------------------------------ */
 
 /* Money right-aligns and uses tabular numerals: a figure that shifts as it updates is not trusted. */
@@ -136,6 +130,12 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--t-space-2);
+}
+
+.pay-wb-titlerow {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
 }
 
 .pay-wb-title {

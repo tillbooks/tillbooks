@@ -27,6 +27,7 @@ import type { SVGProps } from 'react';
 import { useT, formatDate } from '../../i18n';
 import { ErrorBanner, refusalText } from '../../components/states';
 import { FileDrop } from '../../components/FileDrop';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import { Status, type StatusKind } from '../../components/Status';
 import type { Err } from '../../lib/client';
@@ -261,7 +262,7 @@ export function SignSection({
 
       {canWrite && formOpen && (
         <form
-          className="files-field sign-form"
+          className="form-stack sign-form"
           onSubmit={(event) => {
             event.preventDefault();
             if (signerId === '') return;
@@ -277,70 +278,67 @@ export function SignSection({
             setExpiresAt('');
           }}
         >
-          <label className="files-label" htmlFor="sign-signer">
-            {t('sign.form.signer')}
-          </label>
           {/* A contact without an email is offered DISABLED with the reason in the label: the engine
              would refuse it (`signer_email_missing`), and hiding it would make the picker look like
              the register lost a contact. */}
-          <Select
-            id="sign-signer"
-            className="field"
-            value={signerId}
-            onChange={(val) => setSignerId(val)}
-            options={[
-              { value: '', label: t('sign.form.signerPlaceholder') },
-              ...contacts.map((contact) => ({
-                value: contact.id,
-                label:
-                  contact.email === null || contact.email === ''
-                    ? `${contact.name} (${t('sign.form.noEmail')})`
-                    : contact.name,
-                disabled: contact.email === null || contact.email === '',
-              })),
-            ]}
-            ariaLabel={t('sign.form.signer')}
-          />
+          <Field id="sign-signer" label={t('sign.form.signer')}>
+            <Select
+              className="field"
+              value={signerId}
+              onChange={(val) => setSignerId(val)}
+              options={[
+                { value: '', label: t('sign.form.signerPlaceholder') },
+                ...contacts.map((contact) => ({
+                  value: contact.id,
+                  label:
+                    contact.email === null || contact.email === ''
+                      ? `${contact.name} (${t('sign.form.noEmail')})`
+                      : contact.name,
+                  disabled: contact.email === null || contact.email === '',
+                })),
+              ]}
+              ariaLabel={t('sign.form.signer')}
+            />
+          </Field>
 
-          <label className="files-label" htmlFor="sign-level">
-            {t('sign.form.level')}
-          </label>
-          <Select
-            id="sign-level"
-            className="field"
-            value={level}
-            onChange={(val) => setLevel(val)}
-            options={[
-              { value: 'ses', label: t('sign.level.ses') },
-              { value: 'qes', label: t('sign.level.qes') },
-            ]}
-            ariaLabel={t('sign.form.level')}
-          />
           {/* The statutory boundary, stated per selected level (spec §3): never colour, never a
-              tooltip-only fact. */}
-          <p className="files-muted sign-level-hint">{level === 'qes' ? t('sign.hint.qes') : t('sign.hint.ses')}</p>
+              tooltip-only fact. It stays the field's hint, in place. */}
+          <Field
+            id="sign-level"
+            label={t('sign.form.level')}
+            hint={level === 'qes' ? t('sign.hint.qes') : t('sign.hint.ses')}
+          >
+            <Select
+              className="field"
+              value={level}
+              onChange={(val) => setLevel(val)}
+              options={[
+                { value: 'ses', label: t('sign.level.ses') },
+                { value: 'qes', label: t('sign.level.qes') },
+              ]}
+              ariaLabel={t('sign.form.level')}
+            />
+          </Field>
 
-          <label className="files-label" htmlFor="sign-message">
-            {t('sign.form.message')}
-          </label>
-          <input
-            id="sign-message"
-            type="text"
-            className="field"
-            value={message}
-            onChange={(event) => setMessage(event.target.value)}
-          />
+          <Field label={t('sign.form.message')}>
+            <input
+              id="sign-message"
+              type="text"
+              className="field"
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+            />
+          </Field>
 
-          <label className="files-label" htmlFor="sign-expires">
-            {t('sign.form.expires')}
-          </label>
-          <input
-            id="sign-expires"
-            type="date"
-            className="field"
-            value={expiresAt}
-            onChange={(event) => setExpiresAt(event.target.value)}
-          />
+          <Field label={t('sign.form.expires')}>
+            <input
+              id="sign-expires"
+              type="date"
+              className="field"
+              value={expiresAt}
+              onChange={(event) => setExpiresAt(event.target.value)}
+            />
+          </Field>
 
           <div className="sign-form-actions">
             <button type="submit" className="btn btn--secondary btn--sm" disabled={signerId === '' || busy}>

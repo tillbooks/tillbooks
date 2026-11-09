@@ -29,6 +29,7 @@ import { RECURRING_INTERVALS } from '../../../../src/core/recurring/enums';
 import { TaxCodePicker } from '../Vat/TaxCodePicker';
 import type { VatCode } from '../Vat/types';
 import { Modal } from '../../components/Modal';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import { refusalText } from '../../components/states';
 
@@ -150,6 +151,7 @@ export function RecurringEditor({
   const maxId = useId();
   const dueDaysId = useId();
   const autoIssueId = useId();
+  const autoIssueHintId = useId();
   const autoIssueConfirmId = useId();
   const notesId = useId();
 
@@ -167,15 +169,14 @@ export function RecurringEditor({
 
   return (
     <form
-      className="recurring__form"
+      className="recurring__form form-stack"
       onSubmit={(e) => {
         e.preventDefault();
         onSave(value);
       }}
     >
       <div className="recurring__formGrid">
-        <label htmlFor={nameId}>
-          <span>{t('recurring.form.name')}</span>
+        <Field label={t('recurring.form.name')} id={nameId}>
           <input
             className="field"
             id={nameId}
@@ -183,10 +184,9 @@ export function RecurringEditor({
             onChange={(e) => set({ name: e.currentTarget.value })}
             placeholder={t('recurring.form.namePlaceholder')}
           />
-        </label>
+        </Field>
 
-        <label htmlFor={contactFieldId}>
-          <span>{t('recurring.form.customer')}</span>
+        <Field label={t('recurring.form.customer')} id={contactFieldId} error={customerError ? t('recurring.error.needs_customer') : undefined}>
           <Select
             id={contactFieldId}
             value={value.contactId}
@@ -198,12 +198,7 @@ export function RecurringEditor({
             invalid={customerError}
             ariaLabel={t('recurring.form.customer')}
           />
-          {customerError ? (
-            <span className="recurring__fieldError" role="alert">
-              {t('recurring.error.needs_customer')}
-            </span>
-          ) : null}
-        </label>
+        </Field>
       </div>
 
       <fieldset className="recurring__lines">
@@ -212,8 +207,7 @@ export function RecurringEditor({
           // Index-keyed is safe here: rows are only appended and removed at a known index.
           // eslint-disable-next-line react/no-array-index-key
           <div className="recurring__lineRow" key={index}>
-            <label>
-              <span>{t('recurring.form.lineDescription')}</span>
+            <Field label={t('recurring.form.lineDescription')}>
               {/* F-03 (J3.8): the description is no longer typed on top of the name. Left blank, the
                   position carries the series name (the placeholder says so, and the save applies it),
                   so a one-position retainer costs one name, not two. */}
@@ -223,18 +217,16 @@ export function RecurringEditor({
                 placeholder={line.description === '' && value.name.trim() !== '' ? value.name.trim() : t('recurring.form.lineDescriptionPlaceholder')}
                 onChange={(e) => setLine(index, { description: e.currentTarget.value })}
               />
-            </label>
-            <label>
-              <span>{t('recurring.form.lineQuantity')}</span>
+            </Field>
+            <Field label={t('recurring.form.lineQuantity')}>
               <input
                 className="field"
                 inputMode="decimal"
                 value={line.quantity}
                 onChange={(e) => setLine(index, { quantity: e.currentTarget.value })}
               />
-            </label>
-            <label>
-              <span>{t('recurring.form.linePrice')}</span>
+            </Field>
+            <Field label={t('recurring.form.linePrice')}>
               <input
                 className="field"
                 inputMode="decimal"
@@ -242,7 +234,7 @@ export function RecurringEditor({
                 value={line.unitPrice}
                 onChange={(e) => setLine(index, { unitPrice: e.currentTarget.value })}
               />
-            </label>
+            </Field>
             <div className="recurring__lineVat">
               <TaxCodePicker
                 id={`recurring-vat-${index}`}
@@ -283,8 +275,7 @@ export function RecurringEditor({
       </fieldset>
 
       <div className="recurring__formGrid">
-        <label htmlFor={intervalId}>
-          <span>{t('recurring.form.interval')}</span>
+        <Field label={t('recurring.form.interval')} id={intervalId}>
           <Select
             id={intervalId}
             value={value.interval}
@@ -295,11 +286,10 @@ export function RecurringEditor({
             }))}
             ariaLabel={t('recurring.form.interval')}
           />
-        </label>
+        </Field>
 
         {value.interval === 'custom' ? (
-          <label htmlFor={customDaysId}>
-            <span>{t('recurring.form.customDays')}</span>
+          <Field label={t('recurring.form.customDays')} id={customDaysId}>
             <input
               className="field"
               id={customDaysId}
@@ -307,11 +297,10 @@ export function RecurringEditor({
               value={value.customDays}
               onChange={(e) => set({ customDays: e.currentTarget.value })}
             />
-          </label>
+          </Field>
         ) : null}
 
-        <label htmlFor={anchorId}>
-          <span>{t('recurring.form.anchorDate')}</span>
+        <Field label={t('recurring.form.anchorDate')} id={anchorId}>
           <input
             className="field"
             id={anchorId}
@@ -320,10 +309,9 @@ export function RecurringEditor({
             value={value.anchorDate}
             onChange={(e) => set({ anchorDate: e.currentTarget.value })}
           />
-        </label>
+        </Field>
 
-        <label htmlFor={endId}>
-          <span>{t('recurring.form.endDate')}</span>
+        <Field label={t('recurring.form.endDate')} id={endId} error={endDateError ? t('recurring.error.end_before_anchor') : undefined}>
           <input
             className="field"
             id={endId}
@@ -332,15 +320,9 @@ export function RecurringEditor({
             value={value.endDate}
             onChange={(e) => set({ endDate: e.currentTarget.value })}
           />
-          {endDateError ? (
-            <span className="recurring__fieldError" role="alert">
-              {t('recurring.error.end_before_anchor')}
-            </span>
-          ) : null}
-        </label>
+        </Field>
 
-        <label htmlFor={maxId}>
-          <span>{t('recurring.form.maxOccurrences')}</span>
+        <Field label={t('recurring.form.maxOccurrences')} id={maxId}>
           <input
             className="field"
             id={maxId}
@@ -348,10 +330,9 @@ export function RecurringEditor({
             value={value.maxOccurrences}
             onChange={(e) => set({ maxOccurrences: e.currentTarget.value })}
           />
-        </label>
+        </Field>
 
-        <label htmlFor={dueDaysId}>
-          <span>{t('recurring.form.dueDays')}</span>
+        <Field label={t('recurring.form.dueDays')} id={dueDaysId}>
           <input
             className="field"
             id={dueDaysId}
@@ -359,13 +340,14 @@ export function RecurringEditor({
             value={value.dueDays}
             onChange={(e) => set({ dueDays: e.currentTarget.value })}
           />
-        </label>
+        </Field>
       </div>
 
       <label className="recurring__autoIssue" htmlFor={autoIssueId}>
         <input
           type="checkbox"
           id={autoIssueId}
+          aria-describedby={autoIssueHintId}
           checked={value.autoIssue}
           onChange={(e) => {
             // OFF-to-ON is the one transition that arms unattended posting, so it asks first
@@ -376,7 +358,9 @@ export function RecurringEditor({
         />
         <span>{t('recurring.form.autoIssue')}</span>
       </label>
-      <p className="recurring__hint">{t('recurring.form.autoIssueHint')}</p>
+      <p id={autoIssueHintId} className="recurring__hint">
+        {t('recurring.form.autoIssueHint')}
+      </p>
 
       <Modal
         open={confirmAutoIssue}
@@ -410,8 +394,7 @@ export function RecurringEditor({
         <p id={autoIssueConfirmId}>{t('recurring.form.autoIssueConfirm')}</p>
       </Modal>
 
-      <label htmlFor={notesId}>
-        <span>{t('recurring.form.notes')}</span>
+      <Field label={t('recurring.form.notes')} id={notesId}>
         <textarea
           className="field"
           id={notesId}
@@ -419,7 +402,7 @@ export function RecurringEditor({
           value={value.notes}
           onChange={(e) => set({ notes: e.currentTarget.value })}
         />
-      </label>
+      </Field>
 
       {otherError ? (
         <p className="recurring__fieldError" role="alert">

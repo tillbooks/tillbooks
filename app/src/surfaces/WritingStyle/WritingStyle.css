@@ -32,17 +32,6 @@
   max-width: 72ch;
 }
 
-.voice-profile,
-.voice-empty,
-.voice-models {
-  background: var(--t-bg-elev);
-  border: 1px solid var(--t-border);
-  border-radius: var(--t-radius-md);
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
 
 .voice-stale {
   margin: 0;
@@ -105,12 +94,6 @@
   gap: 0.25rem;
 }
 
-.voice-models h2 {
-  margin: 0;
-  font-size: var(--t-font-lg);
-  line-height: var(--t-lh-lg);
-}
-
 .voice-model-list {
   list-style: none;
   margin: 0;
@@ -159,3 +142,4 @@
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
 }
+

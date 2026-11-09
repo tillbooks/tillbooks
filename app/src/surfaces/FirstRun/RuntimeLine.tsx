@@ -17,6 +17,7 @@ import { useClient } from '../../lib/client-context';
 import { isErr } from '../../lib/client';
 import { useT } from '../../i18n';
 import { ChevronRightGlyph } from '../../components/icons';
+import { IconButton } from '../../components/IconButton';
 
 interface Scheduler {
   enabled: boolean;
@@ -84,10 +85,11 @@ export function RuntimeLine() {
   return (
     <div className="runtime-line" role="status">
       <p className="runtime-line-mode">
-        <ChevronRightGlyph className="runtime-line-glyph" size={14} />
+        <ChevronRightGlyph className="runtime-line-glyph" size={16} />
         {t('runtime.mode.label', { mode: modeLabel })}
+        {/* D187: the scheduler's state is words on demand, one (i) on the line, not a second line. */}
+        <IconButton icon="info" small context={scheduler} />
       </p>
-      <p className="runtime-line-scheduler">{scheduler}</p>
       {status.mode === 'agent_session' && (
         <p className="runtime-line-caveat">{t('runtime.residency.caveat')}</p>
       )}

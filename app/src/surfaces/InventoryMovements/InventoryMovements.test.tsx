@@ -82,7 +82,7 @@ function renderSurface(canned: Canned, asked?: Array<{ action: string; input: Re
 describe('InventoryMovements, the append-only ledger surface', () => {
   it('renders an item, its on-hand and a movement row with running balance', async () => {
     renderSurface(baseCanned());
-    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Bewegungen von Widget:/ }));
     // The on-hand is the pure SUM the engine returned, shown in the detail header.
     await waitFor(() => expect(screen.getByText('10', { selector: '.im-onhand strong' })).toBeInTheDocument());
     // The receipt row renders with its type badge and signed quantity.
@@ -99,7 +99,7 @@ describe('InventoryMovements, the append-only ledger surface', () => {
     });
     renderSurface(canned);
     // D152 rule 5: the item opens by the person's act.
-    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Bewegungen von Widget:/ }));
     const name = await screen.findByText('Anna Muster');
     expect(name).toHaveAttribute('title', de.invMovements.actorTooltip.replace('{id}', 'studio'));
     // The raw id is not the visible label any more.
@@ -114,7 +114,7 @@ describe('InventoryMovements, the append-only ledger surface', () => {
     canned.list_members = reject('permission_denied');
     renderSurface(canned);
     // D152 rule 5: the item opens by the person's act.
-    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Bewegungen von Widget:/ }));
     await waitFor(() => expect(screen.getByText('Studio auf diesem Gerät')).toBeInTheDocument());
     expect(screen.queryByText('studio')).toBeNull();
   });
@@ -127,7 +127,7 @@ describe('InventoryMovements, the append-only ledger surface', () => {
     canned.inventory_movement_list = ok({ items: [MOVEMENT({ unitCostMinor: 3600 })], total: 1, limit: 200, offset: 0 });
     renderSurface(canned);
     // D152 rule 5: the item opens by the person's act.
-    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Bewegungen von Widget:/ }));
     expect(await screen.findByText('CHF 36.00')).toBeInTheDocument();
     // The exact defect: the bare integer must not be on screen as the cost.
     expect(screen.queryByText('3600')).not.toBeInTheDocument();
@@ -138,7 +138,7 @@ describe('InventoryMovements, the append-only ledger surface', () => {
     canned.inventory_movement_list = ok({ items: [MOVEMENT({ unitCostMinor: null })], total: 1, limit: 200, offset: 0 });
     renderSurface(canned);
     // D152 rule 5: the item opens by the person's act.
-    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Bewegungen von Widget:/ }));
     // A null cost stays a dash, never "CHF 0.00" (absent is not zero).
     await waitFor(() => expect(screen.queryByText('CHF 0.00')).not.toBeInTheDocument());
   });
@@ -150,7 +150,7 @@ describe('InventoryMovements, the append-only ledger surface', () => {
     renderSurface(canned, asked);
 
     // D152 rule 5: the item opens by the person's act.
-    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Bewegungen von Widget:/ }));
     await userEvent.click(screen.getByRole('button', { name: de.invMovements.record }));
     const dialog = await screen.findByRole('dialog', { name: de.invMovements.form.recordTitle });
     expect(dialog).toBeInTheDocument();
@@ -173,7 +173,7 @@ describe('InventoryMovements, the append-only ledger surface', () => {
     renderSurface(canned);
 
     // D152 rule 5: the item opens by the person's act.
-    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Bewegungen von Widget:/ }));
     await userEvent.click(screen.getByRole('button', { name: de.invMovements.record }));
     await screen.findByRole('dialog', { name: de.invMovements.form.recordTitle });
     // Switch to an issue so the negative-sign path is exercised, then submit.
@@ -193,7 +193,7 @@ describe('InventoryMovements, the append-only ledger surface', () => {
     renderSurface(canned);
 
     // D152 rule 5: the item opens by the person's act.
-    await userEvent.click(await screen.findByRole('button', { name: 'Widget' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Bewegungen von Widget:/ }));
     await userEvent.click(screen.getByRole('button', { name: de.invMovements.record }));
     await screen.findByRole('dialog', { name: de.invMovements.form.recordTitle });
     await userEvent.type(screen.getByLabelText(de.invMovements.form.qty), '1');
@@ -210,7 +210,7 @@ describe('InventoryMovements, the append-only ledger surface', () => {
     canned.list_items = reject('permission_denied', {}, 403);
     renderSurface(canned);
     await waitFor(() => expect(screen.queryByRole('button', { name: de.invMovements.record })).not.toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: 'Widget' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Bewegungen von Widget:/ })).not.toBeInTheDocument();
   });
 });
 
@@ -220,9 +220,9 @@ describe('InventoryMovements, a list never opens itself (D152 rules 5 and 3)', (
   it('selects nothing on load: no current item, one quiet line, no ledger read, and no grey write buttons', async () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     const { container } = renderSurface(two(), asked);
-    await screen.findByRole('button', { name: 'Gadget' });
+    await screen.findByRole('button', { name: /^Bewegungen von Gadget:/ });
     expect(container.querySelector('[aria-current="true"]')).toBeNull();
-    expect(screen.getByText(de.invMovements.selectHint)).toBeInTheDocument();
+    // D187 (Arbeitsflächen B): a row opens in place, so there is no detail pane asking for a pick.
     // Rule 3: both writes act on the open item, so they are absent (not disabled) until one is open.
     expect(screen.queryByRole('button', { name: de.invMovements.record })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: de.invMovements.transfer })).not.toBeInTheDocument();
@@ -231,22 +231,23 @@ describe('InventoryMovements, a list never opens itself (D152 rules 5 and 3)', (
 
   it('opens the item a deep link names (?focus=)', async () => {
     renderSurface(two(), undefined, '/inventory-movements?focus=it_2');
-    const item = await screen.findByRole('button', { name: 'Gadget' });
-    await waitFor(() => expect(item).toHaveAttribute('aria-current', 'true'));
-    expect(await screen.findByRole('heading', { name: 'Gadget' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Widget' })).not.toHaveAttribute('aria-current');
+    const item = await screen.findByRole('button', { name: /^Bewegungen von Gadget:/ });
+    await waitFor(() => expect(item.closest('tr')).toHaveAttribute('aria-current', 'true'));
+    // The row opens in place: its own name is the row, its ledger and writes open under it.
+    expect(await screen.findByRole('button', { name: de.invMovements.record })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Bewegungen von Widget:/ }).closest('tr')).not.toHaveAttribute('aria-current');
   });
 
   it('a click opens the ledger with both writes enabled, a second click closes it', async () => {
     renderSurface(two());
-    const widget = await screen.findByRole('button', { name: 'Widget' });
+    const widget = await screen.findByRole('button', { name: /^Bewegungen von Widget:/ });
     await userEvent.click(widget);
-    expect(widget).toHaveAttribute('aria-current', 'true');
+    expect(widget.closest('tr')).toHaveAttribute('aria-current', 'true');
     expect(await screen.findByRole('button', { name: de.invMovements.record })).not.toBeDisabled();
     expect(screen.getByRole('button', { name: de.invMovements.transfer })).not.toBeDisabled();
     expect(await screen.findByText('+10')).toBeInTheDocument();
     await userEvent.click(widget);
-    await waitFor(() => expect(screen.getByText(de.invMovements.selectHint)).toBeInTheDocument());
+    await waitFor(() => expect(widget.closest('tr')).not.toHaveAttribute('aria-current'));
     expect(screen.queryByRole('button', { name: de.invMovements.record })).not.toBeInTheDocument();
   });
 });

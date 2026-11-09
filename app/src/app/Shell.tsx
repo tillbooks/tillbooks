@@ -46,6 +46,10 @@ import { RailStatusMenu } from './RailStatusMenu';
 import { IdentityChip, IdentityGate, ServedShellGate } from './identity';
 import { TenantRouteReset, WorkspaceResolver, useWorkspaceId } from './workspace';
 
+/** D187: how long a pointer rests on the collapsed strip before the whole menu slides open. A quick pass
+ *  across it on the way to the page opens nothing. */
+const PEEK_DELAY_MS = 150;
+
 /** The rail-head trigger that opens the command palette. Shows the platform's own modifier hint. */
 function PaletteTrigger() {
   const t = useT();
@@ -258,14 +262,32 @@ function Frame() {
   const { pathname } = useLocation();
   const preWorkspace = useWorkspaceId() === null && pathname === '/first-run';
   const iconMode = (collapsed || preWorkspace) && !isNarrow;
-  const railWidthPx = iconMode ? RAIL_ICON_WIDTH : width;
+  // D187, the owner's option B: a pointer that RESTS on the collapsed strip (PEEK_DELAY_MS) slides the
+  // whole menu open over the page, labels and groups, and it folds back when the pointer leaves. The
+  // page under it never moves: a 56px spacer keeps the strip's place while the rail floats. Only a
+  // mouse or a pen peeks; a keyboard keeps the strip's own flyouts, so focus never lands in a tree that
+  // is swapped under it. Not before a ledger exists (the strip is locked then) and never on a phone.
+  const canPeek = collapsed && !preWorkspace && !isNarrow;
+  const [peek, setPeek] = useState(false);
+  const peekTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!canPeek) setPeek(false);
+  }, [canPeek]);
+  useEffect(() => () => window.clearTimeout(peekTimer.current), []);
+  const peeking = canPeek && peek;
+  const showIcons = iconMode && !peeking;
+  const railWidthPx = showIcons ? RAIL_ICON_WIDTH : width;
   // Inline width drives BOTH modes on desktop; on a narrow viewport the drawer's CSS width wins, so
   // no inline width is set there.
   const railStyle = isNarrow ? undefined : { width: `${railWidthPx}px`, flexBasis: `${railWidthPx}px` };
   const railClassName = [
     'rail',
     drawerOpen ? 'rail--open' : '',
-    iconMode ? 'rail--icon' : '',
+    showIcons ? 'rail--icon' : '',
+    // While collapsed on a desktop the rail floats over a fixed 56px spacer, open or not, so its width
+    // can slide both ways without ever moving the page.
+    canPeek ? 'rail--floating' : '',
+    peeking ? 'rail--peek' : '',
     resizing ? 'rail--resizing' : '',
   ]
     .filter(Boolean)
@@ -301,15 +323,37 @@ function Frame() {
         className={railClassName}
         style={railStyle}
         aria-label={t('nav.label')}
+        onPointerEnter={(event) => {
+          if (!canPeek || (event.pointerType !== 'mouse' && event.pointerType !== 'pen')) return;
+          window.clearTimeout(peekTimer.current);
+          peekTimer.current = window.setTimeout(() => setPeek(true), PEEK_DELAY_MS);
+        }}
+        onPointerLeave={(event) => {
+          window.clearTimeout(peekTimer.current);
+          // A menu the person opened inside the floating rail (the environment pill, the switcher) keeps
+          // it open until that menu closes; otherwise it folds back at once.
+          const nav = event.currentTarget;
+          if (nav.querySelector('[aria-expanded="true"]') !== null && nav.contains(document.activeElement)) return;
+          setPeek(false);
+        }}
+        onBlur={(event) => {
+          if (peeking && !event.currentTarget.contains(event.relatedTarget as Node | null) && !event.currentTarget.matches(':hover')) {
+            setPeek(false);
+          }
+        }}
         onKeyDown={(event) => {
           // The menu editor and the flyouts close themselves on Escape first (and say so).
+          if (event.key === 'Escape' && peeking && !event.defaultPrevented) {
+            setPeek(false);
+            return;
+          }
           if (event.key === 'Escape' && drawerOpen && !event.defaultPrevented) {
             event.preventDefault();
             closeDrawer();
           }
         }}
       >
-        {iconMode ? (
+        {showIcons ? (
           <>
             {/* A4 icon mode: an expand affordance, then the icon strip, then the theme toggle. The
                 head text, switcher and palette label do not fit 56px, so they yield to Cmd/Ctrl+K and
@@ -328,8 +372,19 @@ function Frame() {
             </div>
             {/* K-05: inert before the first workspace; the icons stay as the product's outline. */}
             <div className="rail-nav" inert={preWorkspace} data-pre-workspace={preWorkspace ? '' : undefined}>
-              <IconRail onNavigate={() => setDrawerOpen(false)} />
+              <IconRail onNavigate={() => setDrawerOpen(false)} hoverFlyouts={!canPeek} />
             </div>
+            {/* D187: the locked strip says why it does not react, on hover, instead of nothing. It sits
+                outside the inert column so the pointer can reach it; a screen reader hears the same
+                sentence once, from the visually hidden copy. */}
+            {preWorkspace && (
+              <div className="rail-locked">
+                <span className="rail-locked-tip" aria-hidden="true">
+                  {t('nav.locked')}
+                </span>
+                <span className="visually-hidden">{t('nav.locked')}</span>
+              </div>
+            )}
             <div className="rail-footer rail-footer--icon">
               {/* M01: the signed-in-identity chip, its own CapabilitiesProvider because it renders
                   outside <main>'s provider. Icon-only here; silent in local mode. */}
@@ -400,6 +455,8 @@ function Frame() {
           </>
         )}
       </nav>
+      {/* D187: while the collapsed rail floats, this keeps the strip's 56px so the page never moves. */}
+      {canPeek && <div className="rail-peek-spacer" aria-hidden="true" />}
       {/* A4: the hand-rolled window splitter (D2: no resize library). A desktop affordance, so it is
           not rendered while the rail is the hamburger drawer, nor on the inert pre-workspace rail. */}
       {!isNarrow && !preWorkspace && (

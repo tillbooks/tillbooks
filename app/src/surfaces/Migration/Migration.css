@@ -859,3 +859,53 @@
 .open-items-refusal { color: var(--t-danger); }
 .open-items-ack { display: flex; gap: 0.5rem; align-items: center; }
 .open-items-denied { color: var(--t-text-dim); }
+
+/* D187 (owner review): the Einführungsprojekt keeps its layout, but its heading sits on its own text
+   and the create row stops gluing labels to fields. Each label stands over its control, the controls
+   are as wide as what they hold, and the button lines up with them. */
+.impl-project > h2 {
+  margin: 0;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+}
+
+.impl-project > p {
+  margin: calc(var(--t-space-1) * -1) 0 0;
+  max-width: 70ch;
+  color: var(--t-text-dim);
+}
+
+.impl-create {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--t-space-1) var(--t-space-2);
+}
+
+.impl-create > label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.impl-create > label > .field {
+  width: 10rem;
+}
+
+.impl-create > label > .field[type='date'] {
+  width: 9.5rem;
+}
+
+.impl-create > label > :not(.field) {
+  min-width: 9rem;
+}
+
+.impl-create > .impl-disabled-reason,
+.impl-create > .impl-error {
+  flex-basis: 100%;
+}

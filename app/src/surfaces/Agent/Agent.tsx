@@ -19,6 +19,7 @@
  *    `list_agent_sessions`): the runtime mode and endpoint, a copy-paste client config, and the
  *    recently connected clients.
  */
+import { IconButton } from '../../components/IconButton';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -639,11 +640,11 @@ function Berechtigungen() {
       {/* Every figure's window, on the same screen as every figure it governs (row 7.3). */}
       <p className="agent-trust-window">
         {t('agent.trust.window', { from: dateOf(trust.window.from), to: dateOf(trust.window.to) })}
+        {/* Row 10.1 (the statutory-export note) sits behind the (i) beside the window (D187). */}
+        <IconButton icon="info" small context={t('agent.trust.statutoryNote')} />
       </p>
       <TrustGroup heading={t('agent.queue.group.geld')} rows={geld} {...groupProps} />
       <TrustGroup heading={t('agent.queue.group.system')} rows={system} {...groupProps} />
-      {/* Row 10.1: the trace is never offered as a statutory export, and the surface says where that lives. */}
-      <p className="agent-trust-statutory">{t('agent.trust.statutoryNote')}</p>
     </div>
   );
 }
@@ -760,9 +761,11 @@ function Verbindung() {
 
   return (
     <div className="agent-connect">
-      <p className="agent-connect-intro">{t('agent.connect.intro')}</p>
       {modeLabel !== null && (
-        <p className="agent-connect-mode">{t('runtime.mode.label', { mode: modeLabel })}</p>
+        <p className="agent-connect-mode">
+          {t('runtime.mode.label', { mode: modeLabel })}
+          <IconButton icon="info" small context={t('agent.connect.intro')} />
+        </p>
       )}
 
       <section className="agent-connect-section">
@@ -780,12 +783,16 @@ function Verbindung() {
       </section>
 
       <section className="agent-connect-section">
-        <h2 className="agent-group-head">{t('agent.connect.config.heading')}</h2>
-        {snippet.kind === 'memory' ? (
-          <p className="agent-connect-hint">{t('agent.connect.config.memory')}</p>
-        ) : (
+        <div className="agent-head-row">
+          <h2 className="agent-group-head">{t('agent.connect.config.heading')}</h2>
+          <IconButton
+            icon="info"
+            small
+            context={snippet.kind === 'memory' ? t('agent.connect.config.memory') : `${t('agent.connect.config.hint')} ${t('agent.connect.config.approve')}`}
+          />
+        </div>
+        {snippet.kind === 'memory' ? null : (
           <>
-            <p className="agent-connect-hint">{t('agent.connect.config.hint')}</p>
             <div className="agent-connect-config">
               <pre className="agent-connect-code">
                 <code>{snippet.json}</code>
@@ -797,7 +804,6 @@ function Verbindung() {
                 {t('agent.connect.config.samePath')} <code className="agent-connect-url">{snippet.dbPath}</code>
               </p>
             )}
-            <p className="agent-connect-hint">{t('agent.connect.config.approve')}</p>
           </>
         )}
       </section>

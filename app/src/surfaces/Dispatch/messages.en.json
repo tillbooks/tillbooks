@@ -52,8 +52,6 @@
       "reason": "Reason",
       "empty": "No dispatches yet.",
       "emptyHint": "As soon as an invoice, quote or reminder is sent, a row appears here.",
-      "filterLabel": "Filter by outcome",
-      "filterAll": "All outcomes",
       "outcome": {
         "sent": "sent",
         "degraded": "not transmitted",
@@ -73,7 +71,9 @@
         "smtp": "Email",
         "cloud_relay": "Cloud relay",
         "artifact_only": "Artifact (local)"
-      }
+      },
+      "search": "Search recipients",
+      "filterClear": "Clear filters"
     }
   },
   "nav": {

@@ -18,7 +18,6 @@
       "commit": "Commit",
       "discard": "Discard",
       "reextract": "Extract again",
-      "more": "More",
       "back": "Back",
       "commitAndPost": "Commit and post"
     },
@@ -178,7 +177,8 @@
       "one": "Fits the bank line of {date}, {amount}",
       "open": "Open the bank line",
       "several": "Fits {count} bank lines"
-    }
+    },
+    "rowActions": "Actions for receipt of {row}"
   },
   "help": {
     "Capture": {

@@ -18,6 +18,8 @@ import { isErr } from '../../lib/client';
 import { useCan, CAP } from '../../lib/capabilities';
 import { useIdempotencyKey } from '../../lib/idempotency';
 import { useT } from '../../i18n';
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
 import { Select } from '../../components/Select';
 import type { DunningConfigView, DunningLevelConfig } from './model';
 
@@ -134,13 +136,14 @@ export function ConfigPanel({
 
   return (
     <div className="dunning-config" data-testid="dunning-config">
-      <p className="dunning-dim">{t('dunning.config.hint')}</p>
       <div className="dunning-config-grid" role="group" aria-label={t('dunning.config.title')}>
         {drafts.map((draft, i) => (
-          <fieldset key={i} className="dunning-config-level">
-            <legend>{t(`dunning.level${i + 1}`)}</legend>
-            <label>
-              <span>{t('dunning.daysOverdue')}</span>
+          <fieldset key={i} className="dunning-config-level form-stack">
+            <legend>
+              {t(`dunning.level${i + 1}`)}
+              {i === 0 && <IconButton icon="info" small context={t('dunning.config.hint')} />}
+            </legend>
+            <Field label={t('dunning.daysOverdue')}>
               <input
                 className="field"
                 type="number"
@@ -149,12 +152,11 @@ export function ConfigPanel({
                 onChange={(e) => setDraft(i, { daysOverdue: e.target.value })}
                 disabled={!canManage}
               />
-            </label>
+            </Field>
             {/* K-60: the minimum spacing since the PREVIOUS letter. Level 1 has no previous level,
                 so it is gated by its days-overdue threshold alone and shows no spacing control. */}
             {i > 0 && (
-              <label>
-                <span>{t('dunning.minInterval')}</span>
+              <Field label={t('dunning.minInterval')} info={t('dunning.config.intervalHint')}>
                 <input
                   className="field"
                   type="number"
@@ -163,10 +165,9 @@ export function ConfigPanel({
                   onChange={(e) => setDraft(i, { minIntervalDays: e.target.value })}
                   disabled={!canManage}
                 />
-              </label>
+              </Field>
             )}
-            <label>
-              <span>{t('dunning.fee')}</span>
+            <Field label={t('dunning.fee')} hint={t('dunning.config.feeHint')}>
               <input
                 className="field"
                 type="text"
@@ -175,12 +176,11 @@ export function ConfigPanel({
                 onChange={(e) => setDraft(i, { fee: e.target.value })}
                 disabled={!canManage}
               />
-            </label>
+            </Field>
             {/* A positive fee BOOKS, so it needs its income account; the VAT needs nothing here,
                 it follows the chased invoice automatically (D69). */}
             {(toMinor(draft.fee) ?? 0) > 0 && (
-              <div className="dunning-config-field">
-                <span>{t('dunning.feeAccount')}</span>
+              <Field label={t('dunning.feeAccount')}>
                 <Select
                   value={draft.feeIncomeAccountId}
                   onChange={(value) => setDraft(i, { feeIncomeAccountId: value })}
@@ -191,7 +191,7 @@ export function ConfigPanel({
                   disabled={!canManage}
                   ariaLabel={t('dunning.feeAccount')}
                 />
-              </div>
+              </Field>
             )}
             <label className="dunning-config-check">
               <input
@@ -203,8 +203,7 @@ export function ConfigPanel({
               <span>{t('dunning.interestNote')}</span>
             </label>
             {draft.showInterest && (
-              <label>
-                <span>{t('dunning.interestRate')}</span>
+              <Field label={t('dunning.interestRate')} hint={t('dunning.config.interestHint')}>
                 <input
                   className="field"
                   type="text"
@@ -213,14 +212,11 @@ export function ConfigPanel({
                   onChange={(e) => setDraft(i, { interestPercent: e.target.value })}
                   disabled={!canManage}
                 />
-              </label>
+              </Field>
             )}
           </fieldset>
         ))}
       </div>
-      <p className="dunning-dim">{t('dunning.config.intervalHint')}</p>
-      <p className="dunning-dim">{t('dunning.config.feeHint')}</p>
-      <p className="dunning-dim">{t('dunning.config.interestHint')}</p>
       {error !== null && (
         <p className="dunning-error" role="alert">
           {error}

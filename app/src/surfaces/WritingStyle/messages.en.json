@@ -16,7 +16,8 @@
     },
     "account": {
       "label": "Mail account",
-      "missing": "Connect a local mail store on the Correspondence page first. TILL learns your style from mail you have already sent."
+      "missing": "Connect a local mail store on the Correspondence page first. TILL learns your style from mail you have already sent.",
+      "desc": "Which mailbox TILL learns your style from."
     },
     "field": {
       "exemplars": "Examples used",
@@ -47,6 +48,9 @@
         "read": "You do not have permission to view the writing style.",
         "write": "You do not have permission to change the writing style."
       }
+    },
+    "group": {
+      "profile": "Style profile"
     }
   },
   "runtime": {

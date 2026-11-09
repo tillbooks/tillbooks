@@ -25,11 +25,9 @@ import { WorkspaceProvider } from '../../app/workspace';
 import { CapabilitiesProvider } from '../../lib/CapabilitiesProvider';
 import { SyncHosting } from './SyncHosting';
 import shell from '../../i18n/de-CH.json';
-import ops from './messages.de-CH.json';
 
 // The panel's copy lives in the shell locale (i18n/de-CH.json). Assert against it directly.
 const S = shell.sync;
-const J = ops.journey;
 
 type CannedHandler = (input: Record<string, unknown>) => RestResponse | Promise<RestResponse>;
 type Canned = Record<string, RestResponse | CannedHandler>;
@@ -126,19 +124,15 @@ describe('SyncHosting (M02 Sync & hosting panel)', () => {
     expect(screen.getByText('ep_2026_abc')).toBeInTheDocument();
   });
 
-  it('POSTURE AT REST (D152): the dial label is the one-line state; the posture sentence sits in the (i) card beside it', async () => {
+  it('POSTURE AT REST (D187): the posture sentence is visible beside the dial, not behind an (i)', async () => {
     const { container } = render(tree({ get_sync_contract: contractOff() }));
     const posture = await screen.findByText(S.state.off.body);
-    // In the (i) card, not on the working surface: no paragraph carries it at rest.
-    const card = posture.closest('[role="tooltip"]') as HTMLElement;
-    expect(card).not.toBeNull();
-    expect(card).not.toHaveClass('is-open');
-    expect(container.querySelector('p.sync-posture')).toBeNull();
-    // The (i) sits on the dial's line and names the card as its description.
+    expect(posture.closest('[role="tooltip"]')).toBeNull();
     const row = container.querySelector('.sync-dial-row') as HTMLElement;
-    expect(within(row).getByRole('switch')).toBeInTheDocument();
-    const trigger = within(row).getByRole('button', { name: J.publishing.infoLabel });
-    expect(trigger).toHaveAccessibleDescription(S.state.off.body);
+    const dial = within(row).getByRole('switch');
+    expect(dial).toBeInTheDocument();
+    const setting = dial.closest('.setting-row') as HTMLElement;
+    expect(setting).toHaveAccessibleDescription(S.state.off.body);
   });
 
   it('ON POSTURE never claims connectivity: no "connected" word, only "available"', async () => {

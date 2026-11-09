@@ -22,7 +22,7 @@
  * the same confirm and the same `close_year` call with the same payload as before, and nothing in it
  * is disabled at rest because its confirm appears only once a year is chosen.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
@@ -34,6 +34,7 @@ import { useCalendarFormat } from '../../lib/format';
 import { EmptyState, NoWorkspaceState, PermissionDenied } from '../../components/states';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { OverflowMenu, type OverflowMenuItem } from '../../components/OverflowMenu';
+import { Field } from '../../components/Field';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { ActionFeedback } from '../../components/ActionFeedback';
 import { Modal } from '../../components/Modal';
@@ -513,6 +514,7 @@ function PeriodsSurface(props: PeriodsProps) {
 
   // The lock grid columns. Text left, no numeric/money column (a period-lock read carries no figure),
   // so there is no `footer` total to render. The reopen/unlock verb is the row's overflow (K-21).
+  const monthFormId = useId();
   const lockColumns: DataTableColumn<PeriodLock>[] = [
     {
       key: 'period',
@@ -589,13 +591,61 @@ function PeriodsSurface(props: PeriodsProps) {
         // The direct seal, behind the header's overflow (owner, 04.10.2026): the guided close is the
         // visible door, and this is the way past it. Hidden, never shown-then-refused, for an actor
         // who may not manage periods (A24); the engine gates `close_year` whatever this renders.
-        actions={
-          canManage ? (
-            <OverflowMenu
-              label={t('period.moreActions')}
-              items={[{ key: 'direct-close', label: t('period.directClose'), onSelect: () => setDirectOpen(true) }]}
+        toolbar={
+          <form
+            id={monthFormId}
+            className="period-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (monthValid && !noWorkspace) setConfirmMonth(monthInput);
+            }}
+          >
+          {/* D15/C1: a real month picker, not a text box that silently demands ISO. The browser
+              renders it in the user's own locale, so a Swiss user gets Swiss order for free, while
+              `value` stays `YYYY-MM` for the engine. The placeholder and pattern are inert in a
+              supporting browser and only surface in Safari/Firefox, where the control degrades to
+              plain text and the user needs the format spelled out. */}
+          <Field label={t('period.monthLabel')} className="period-field">
+            <input
+              type="month"
+              className="field"
+              pattern="\d{4}-\d{2}"
+              placeholder={t('period.monthPlaceholder')}
+              value={monthInput}
+              onChange={(e) => setMonthInput(e.target.value)}
             />
-          ) : undefined
+          </Field>
+          </form>
+        }
+        actions={
+          <>
+            {/* The one visible year-close door (D152 rule 3): the guided close, which ends in the seal. It
+                lands in the open run when there is one (its year in the label), else on the checklist
+                list with the year-close Start dialog open on the year to close. */}
+            <Link
+              className="btn btn--secondary period-year-close"
+              to={yearRuns[0] !== undefined ? `/checklisten?run=${encodeURIComponent(yearRuns[0].runId)}` : guidedStart}
+              data-testid="period-year-close"
+            >
+              {yearRuns[0] !== undefined ? t('period.yearCloseFor', { year: yearRuns[0].year }) : t('period.yearClose')}
+            </Link>
+
+            <button
+              type="submit"
+              form={monthFormId}
+              className="btn btn--primary"
+              disabled={!monthValid || noWorkspace || busy}
+            >
+              {t('period.closeMonth')}
+            </button>
+
+            {canManage ? (
+              <OverflowMenu
+                label={t('period.moreActions')}
+                items={[{ key: 'direct-close', label: t('period.directClose'), onSelect: () => setDirectOpen(true) }]}
+              />
+            ) : null}
+          </>
         }
       />
 
@@ -628,51 +678,6 @@ function PeriodsSurface(props: PeriodsProps) {
           )}
         </ActionFeedback>
       )}
-
-      <div className="periods-actions panel">
-        <form
-          className="period-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (monthValid && !noWorkspace) setConfirmMonth(monthInput);
-          }}
-        >
-          <label className="period-field">
-            {t('period.monthLabel')}
-            {/* D15/C1: a real month picker, not a text box that silently demands ISO. The browser
-                renders it in the user's own locale, so a Swiss user gets Swiss order for free,
-                while `value` stays `YYYY-MM` for the engine. The placeholder and pattern are
-                inert in a supporting browser and only surface in Safari/Firefox, where the
-                control degrades to plain text and the user needs the format spelled out. */}
-            <input
-              type="month"
-              className="field"
-              pattern="\d{4}-\d{2}"
-              placeholder={t('period.monthPlaceholder')}
-              value={monthInput}
-              onChange={(e) => setMonthInput(e.target.value)}
-            />
-          </label>
-          <button
-            type="submit"
-            className="btn btn--primary"
-            disabled={!monthValid || noWorkspace || busy}
-          >
-            {t('period.closeMonth')}
-          </button>
-        </form>
-
-        {/* The one visible year-close door (D152 rule 3): the guided close, which ends in the seal. It
-            lands in the open run when there is one (its year in the label), else on the checklist
-            list with the year-close Start dialog open on the year to close. */}
-        <Link
-          className="btn btn--secondary period-year-close"
-          to={yearRuns[0] !== undefined ? `/checklisten?run=${encodeURIComponent(yearRuns[0].runId)}` : guidedStart}
-          data-testid="period-year-close"
-        >
-          {yearRuns[0] !== undefined ? t('period.yearCloseFor', { year: yearRuns[0].year }) : t('period.yearClose')}
-        </Link>
-      </div>
 
       {monthValid && workspaceId !== null && (
         <MonthChecklist workspaceId={workspaceId} period={monthInput} locked={monthLocked} />

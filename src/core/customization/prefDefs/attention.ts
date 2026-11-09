@@ -21,8 +21,8 @@ export const ATTENTION_PREFS: readonly PrefDef[] = [
     area: ATTENTION,
     label: { en: 'Group Pendenzen', 'de-CH': 'Pendenzen gruppieren' },
     description: {
-      en: 'By area (default, the bank first) or by kind: approve, to do, notes.',
-      'de-CH': 'Nach Bereich (Standard, die Bank zuerst) oder nach Art: genehmigen, erledigen, Hinweise.',
+      en: 'Sorts your open items by area (bank, sales and so on) or by kind (approve, do, notes).',
+      'de-CH': 'Ordnet deine offenen Punkte nach Bereich (Bank, Verkauf und so weiter) oder nach Art (freigeben, erledigen, Hinweise).',
     },
     valueLabels: {
       by_area: { en: 'By area', 'de-CH': 'Nach Bereich' },

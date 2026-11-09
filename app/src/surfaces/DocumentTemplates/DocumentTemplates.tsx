@@ -19,7 +19,9 @@
  * gates are the Studio convenience over `whoami` (fail-open); the engine is the real gate, and the
  * pre-disabled controls carry the reason as a `.lock-note` beside them, never a hover-only title.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
+import { useCallback, useEffect, useId, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
@@ -32,6 +34,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { Select } from '../../components/Select';
 import { Tabs } from '../../components/Tabs';
 import { Segmented } from '../../components/Segmented';
+import { DetailDrawer } from '../../components/DetailDrawer';
 import { Status } from '../../components/Status';
 import { FileDrop } from '../../components/FileDrop';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
@@ -138,6 +141,7 @@ function editorOf(template: Template): Editor {
 
 export function DocumentTemplates() {
   const t = useT();
+  const formId = useId();
   const client = useClient();
   const workspaceId = useWorkspaceId();
   const { can } = useCapabilities();
@@ -386,19 +390,22 @@ export function DocumentTemplates() {
 
   const editorPanel = editor !== null && (
     <form
-      className="doctpl-editor"
+      id={formId}
+      className="doctpl-editor form-stack"
       onSubmit={(e) => {
         e.preventDefault();
         void save();
       }}
     >
-      <label className="doctpl-field">
-        <span>{t('docTemplate.name')}</span>
+      <Field label={t('docTemplate.name')} size="name">
         <input className="field" type="text" value={editor.name} onChange={(e) => setEditor({ ...editor, name: e.target.value })} />
-      </label>
+      </Field>
 
       <fieldset className="doctpl-field">
-        <legend>{t('docTemplate.logo')}</legend>
+        <legend>
+          {t('docTemplate.logo')}
+          <IconButton icon="info" small context={t('docTemplate.logoNote')} />
+        </legend>
         {editor.logoFileId !== null && editor.pendingLogo === null && (
           <p className="doctpl-muted">{t('docTemplate.logoCurrent')}</p>
         )}
@@ -411,7 +418,6 @@ export function DocumentTemplates() {
           label={t('docTemplate.uploadLogo')}
           onFiles={(files) => pickLogo(files[0])}
         />
-        <p className="doctpl-muted">{t('docTemplate.logoNote')}</p>
       </fieldset>
 
       <fieldset className="doctpl-field">
@@ -455,21 +461,22 @@ export function DocumentTemplates() {
           />{' '}
           {t('docTemplate.languageMode.perContactLang')}
         </label>
-        <div className="doctpl-field">
-          <span>{t('docTemplate.fixedLocale')}</span>
+        <Field label={t('docTemplate.fixedLocale')} size="short">
           <Select
             value={editor.fixedLocale}
             onChange={(val) => setEditor({ ...editor, fixedLocale: val })}
             options={LOCALES.map((locale) => ({ value: locale, label: t(`docTemplate.localeName.${locale}`) }))}
             ariaLabel={t('docTemplate.fixedLocale')}
           />
-        </div>
+        </Field>
       </fieldset>
 
       {kind !== 'dunning_run' && (
         <fieldset className="doctpl-field">
-          <legend>{t('docTemplate.columns')}</legend>
-          <p className="doctpl-muted">{t('docTemplate.columnsNote')}</p>
+          <legend>
+            {t('docTemplate.columns')}
+            <IconButton icon="info" small context={t('docTemplate.columnsNote')} />
+          </legend>
           {COLUMNS.map((column) => (
             <label key={column} className="doctpl-check">
               <input
@@ -489,15 +496,6 @@ export function DocumentTemplates() {
           ))}
         </fieldset>
       )}
-
-      <div className="doctpl-actions">
-        <button type="submit" className="btn btn--primary" disabled={!canManage || busy || editor.name.trim() === ''}>
-          {t('docTemplate.save')}
-        </button>
-        <button type="button" className="btn btn--secondary" disabled={busy} onClick={() => setEditor(null)}>
-          {t('docTemplate.cancel')}
-        </button>
-      </div>
     </form>
   );
 
@@ -531,11 +529,11 @@ export function DocumentTemplates() {
     setFooterLocale('de-CH');
   };
 
-  // K-08: the header's one primary; while the editor is open its own save is, so "Neu" steps down.
+  // D187: the header's one primary opens the editor sheet from the right.
   const newTemplate = (
     <button
       type="button"
-      className={editor === null ? 'btn btn--primary' : 'btn btn--secondary'}
+      className="btn btn--primary"
       disabled={!canManage || busy}
       onClick={openNew}
     >
@@ -549,12 +547,9 @@ export function DocumentTemplates() {
         title={t('docTemplate.title')}
         titleId="doctpl-title"
         help={<SurfaceHelp surface="DocumentTemplates" />}
-        actions={
-          <>
-            {newTemplate}
-            {!canManage && <p className="lock-note">{t('docTemplate.needsPermission')}</p>}
-          </>
-        }
+        count={loading || failed ? undefined : ofKind.length}
+        hints={!canManage ? [{ key: 'permission', title: t('docTemplate.hintTitle.permission'), body: t('docTemplate.needsPermission') }] : []}
+        actions={newTemplate}
       />
       {/* The statutory line, in place: what a template can NEVER change. */}
       <p className="doctpl-lede">{t('docTemplate.lede')}</p>
@@ -577,22 +572,41 @@ export function DocumentTemplates() {
           <Skeleton rows={4} height={36} labelKey="docTemplate.loading" />
         ) : failed ? null : (
           <div className="doctpl-body">
-            <div className="doctpl-main">
-              {active.length === 0 && editor === null ? (
-                <EmptyState
-                  title={t('docTemplate.empty')}
-                  hint={t('docTemplate.emptyHint')}
-                  action={canManage ? { label: t('docTemplate.create'), onClick: openNew } : undefined}
-                />
-              ) : (
-                list
-              )}
-              {editorPanel}
-            </div>
-            {previewPane}
+            {active.length === 0 && editor === null ? (
+              <EmptyState
+                title={t('docTemplate.empty')}
+                hint={t('docTemplate.emptyHint')}
+                action={canManage ? { label: t('docTemplate.create'), onClick: openNew } : undefined}
+              />
+            ) : (
+              list
+            )}
           </div>
         )}
       </Tabs>
+
+      {editor !== null && (
+        <DetailDrawer
+          open
+          width="wide"
+          onClose={() => setEditor(null)}
+          title={editor.templateId === null ? t('docTemplate.new') : editor.name || t('docTemplate.title')}
+          closeLabel={t('docTemplate.cancel')}
+          footer={
+            <>
+              <button type="button" className="btn btn--secondary" disabled={busy} onClick={() => setEditor(null)}>
+                {t('docTemplate.cancel')}
+              </button>
+              <button type="submit" form={formId} className="btn btn--primary" disabled={!canManage || busy || editor.name.trim() === ''}>
+                {t('docTemplate.save')}
+              </button>
+            </>
+          }
+        >
+          {editorPanel}
+          {previewPane}
+        </DetailDrawer>
+      )}
     </section>
   );
 }

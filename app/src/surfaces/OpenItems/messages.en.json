@@ -18,9 +18,8 @@
     "noDueDate": "no date",
     "noOverdue": "not overdue",
     "noCustomer": "No customer",
+    "search": "Search open items",
     "filter": {
-      "allCurrencies": "All currencies",
-      "allCustomers": "All customers",
       "customerById": "Customer {id}"
     },
     "column": {

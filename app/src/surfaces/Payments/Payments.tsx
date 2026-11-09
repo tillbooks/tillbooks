@@ -25,7 +25,7 @@
  * whole row opens the payment in a drawer (its allocations, its journal entry, its reversal), and the
  * other verbs sit behind the row's one overflow. The only verb left on the row itself is "Zuweisen" on
  * a payment still carrying a Guthaben, beside the amount it would assign: a credit is never a dead
- * label. The direction is a Segmented control (K-11): three sibling values of one list, not tabs.
+ * label. D187 Listen A: the direction is a FilterBar facet, and "Zuweisen" on a Guthaben sits in the row's overflow.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -41,7 +41,7 @@ import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
 import { bankLineHref } from './PaymentError';
-import { Segmented } from '../../components/Segmented';
+import { FilterBar, type FilterFacet } from '../../components/FilterBar';
 import { Status } from '../../components/Status';
 import { useCan, CAP } from '../../lib/capabilities';
 import { asArray, allocationSummary, type Payment } from './model';
@@ -85,6 +85,7 @@ export function Payments() {
   // without being able to move money.
   const canAdvise = useCan(CAP.portalManage);
 
+  const [search, setSearch] = useState('');
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Err | null>(null);
@@ -195,7 +196,19 @@ export function Payments() {
     [client, workspaceId, load],
   );
 
-  const isFiltered = tab !== 'all';
+  const needle = search.trim().toLowerCase();
+  const isFiltered = tab !== 'all' || needle !== '';
+  const shown =
+    needle === '' ? payments : payments.filter((p) => (p.counterparty?.name ?? '').toLowerCase().includes(needle));
+  const facets: FilterFacet[] = [
+    {
+      key: 'direction',
+      label: t('payment.column.direction'),
+      options: (['incoming', 'outgoing'] as const).map((value) => ({ value, label: t(`payment.direction.${value}`) })),
+      value: tab === 'all' ? null : tab,
+      onChange: (value) => setParam('direction', value),
+    },
+  ];
   const expanded = expandedId === null ? null : (payments.find((p) => p.id === expandedId) ?? null);
 
   /**
@@ -209,6 +222,10 @@ export function Payments() {
     if (payment.status === 'reversed') return [];
     const bankLineId = payment.bankLineId ?? null;
     return [
+      // A Guthaben is never a dead label: the assignment is a verb of the row, beside its amount note.
+      ...(canPay && payment.onAccountMinor > 0
+        ? [{ key: 'allocate', label: t('payment.allocate'), onSelect: () => openAllocate(payment.id) }]
+        : []),
       ...(canAdvise && payment.direction === 'outgoing'
         ? [{ key: 'advice', label: t('payment.createAdvice'), onSelect: () => void createAdvice(payment) }]
         : []),
@@ -265,18 +282,6 @@ export function Payments() {
             <span className="pay-credit t-money">
               {t('payment.onAccount.chip', { amount: formatMoney(payment.onAccountMinor, payment.currency) })}
             </span>
-            {canPay && (
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  openAllocate(payment.id);
-                }}
-              >
-                {t('payment.allocate')}
-              </button>
-            )}
           </span>
         );
       },
@@ -302,6 +307,7 @@ export function Payments() {
       <SurfaceHeader
         title={t('payment.title')}
         titleId="pay-title"
+        count={error === null && !loading ? shown.length : undefined}
         help={<SurfaceHelp surface="Payments" />}
         actions={
           canPay ? (
@@ -312,15 +318,13 @@ export function Payments() {
         }
       />
 
-      {/* K-11: the direction is three sibling values of one list, so a Segmented control. */}
-      <div className="pay-toolbar">
-        <Segmented<Tab>
-          label={t('payment.column.direction')}
-          options={TABS.map((value) => ({ value, label: t(`payment.direction.${value}`) }))}
-          value={tab}
-          onChange={(value) => setParam('direction', value === 'all' ? null : value)}
-        />
-      </div>
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel={t('payment.searchList')}
+        searchPlaceholder={t('payment.searchList')}
+        facets={facets}
+      />
 
       {error !== null && (
         <ErrorBanner message={t('payment.error.transport')} onRetry={() => void load()} />
@@ -329,7 +333,7 @@ export function Payments() {
       {error === null && (
         <DataTable<Payment>
           columns={columns}
-          rows={payments}
+          rows={shown}
           rowKey={(payment) => payment.id}
           caption={t('payment.caption')}
           loading={loading}
@@ -358,7 +362,7 @@ export function Payments() {
               <EmptyState
                 title={t('payment.empty.filtered')}
                 hint={t('payment.empty.filteredHint')}
-                filtered={{ onClear: () => setParam('direction', null), clearLabel: t('payment.resetFilter') }}
+                filtered={{ onClear: () => { setSearch(''); setParam('direction', null); }, clearLabel: t('payment.resetFilter') }}
               />
             ) : (
               <EmptyState

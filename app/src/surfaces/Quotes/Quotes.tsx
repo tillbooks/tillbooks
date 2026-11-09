@@ -39,13 +39,15 @@ import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatMoney, formatDate } from '../../i18n';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
+import { Field } from '../../components/Field';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { Select } from '../../components/Select';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { Status, type StatusKind } from '../../components/Status';
-import { CloseGlyph } from '../../components/icons';
+import { IconButton } from '../../components/IconButton';
+import { FilterBar, type FilterFacet } from '../../components/FilterBar';
 import './Quotes.css';
 
 /** A fresh key per write, so a retry after a transport failure is a retry and not a second write. */
@@ -156,6 +158,8 @@ export function Quotes() {
   const [views, setViews] = useState<SavedView[]>([]);
   const [viewId, setViewId] = useState('');
   const [showSuperseded, setShowSuperseded] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [denied, setDenied] = useState(false);
@@ -335,36 +339,52 @@ export function Quotes() {
   ];
 
   // The saved-view picker, the show-superseded toggle and the create action ride the SurfaceHeader.
-  const headerActions = (
-    <>
-      {views.length > 0 && (
-        <div className="quotes-picker">
-          <span>{t('quotes.savedView')}</span>
-          <Select
-            value={viewId}
-            onChange={setViewId}
-            options={[
-              { value: '', label: t('quotes.view.all') },
-              ...views.map((view) => ({ value: view.id, label: view.name })),
-            ]}
-            ariaLabel={t('quotes.savedView')}
-          />
-        </div>
-      )}
-      <label className="quotes-toggle">
-        <input type="checkbox" checked={showSuperseded} onChange={(e) => setShowSuperseded(e.target.checked)} />
-        <span>{t('quotes.filter.showSuperseded')}</span>
-      </label>
-      {canWrite && (
-        <button type="button" className="btn btn--primary" onClick={openCreate}>
-          {t('quotes.action.create')}
-        </button>
-      )}
-    </>
-  );
+  const headerActions = canWrite ? (
+    <button type="button" className="btn btn--primary" onClick={openCreate}>
+      {t('quotes.action.create')}
+    </button>
+  ) : undefined;
 
-  // The detail drawer's pinned action row, assembled per status. Empty (a terminal record with no
-  // write right) leaves the foot off; the header close control still closes the drawer.
+  const shownQuotes = quotes.filter((q) => {
+    if (statusFilter !== null && (q.expired ? 'expired' : q.status) !== statusFilter) return false;
+    const needle = search.trim().toLowerCase();
+    if (needle === '') return true;
+    return (q.number ?? '').toLowerCase().includes(needle) || contactName(q.contactId).toLowerCase().includes(needle);
+  });
+  const facets: FilterFacet[] = [
+    ...(views.length > 0
+      ? [
+          {
+            key: 'view',
+            label: t('quotes.savedView'),
+            options: views.map((view) => ({ value: view.id, label: view.name })),
+            value: viewId === '' ? null : viewId,
+            onChange: (value: string | null) => setViewId(value ?? ''),
+          } satisfies FilterFacet,
+        ]
+      : []),
+    {
+      key: 'status',
+      label: t('quotes.field.status'),
+      options: Object.keys(STATUS_KIND).map((status) => ({ value: status, label: t(`quotes.status.${status}`) })),
+      value: statusFilter,
+      onChange: setStatusFilter,
+    },
+    {
+      key: 'superseded',
+      label: t('quotes.filter.showSuperseded'),
+      options: [{ value: '1', label: t('quotes.filter.showSuperseded') }],
+      value: showSuperseded ? '1' : null,
+      onChange: (value) => setShowSuperseded(value !== null),
+    },
+  ];
+  const clearFilters = () => {
+    setSearch('');
+    setStatusFilter(null);
+    setViewId('');
+    setShowSuperseded(false);
+  };
+
   const detailActions: ReactNode[] = [];
   if (selected !== undefined && canWrite) {
     if (selected.status === 'draft' && canSend) {
@@ -443,6 +463,7 @@ export function Quotes() {
       <SurfaceHeader
         title={t('quotes.route.title')}
         titleId="quotes-title"
+        count={loading || failed ? undefined : shownQuotes.length}
         help={<SurfaceHelp surface="Quotes" />}
         actions={headerActions}
       />
@@ -450,9 +471,21 @@ export function Quotes() {
       {failed && <ErrorBanner message={t('quotes.error.transport')} onRetry={() => void load()} />}
 
       {!failed && (
+        <FilterBar
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchLabel={t('quotes.search')}
+          searchPlaceholder={t('quotes.search')}
+          onClear={clearFilters}
+          clearLabel={t('quotes.filter.clear')}
+          facets={facets}
+        />
+      )}
+
+      {!failed && (
         <DataTable
           columns={columns}
-          rows={quotes}
+          rows={shownQuotes}
           rowKey={(q) => q.id}
           caption={t('quotes.route.title')}
           loading={loading}
@@ -496,8 +529,7 @@ export function Quotes() {
               void create();
             }}
           >
-            <div className="quotes-field">
-              <span>{t('quotes.field.contact')}</span>
+            <Field label={t('quotes.field.contact')}>
               <Select
                 value={draft.contactId}
                 onChange={(value) => setDraft({ ...draft, contactId: value })}
@@ -507,16 +539,15 @@ export function Quotes() {
                 ]}
                 ariaLabel={t('quotes.field.contact')}
               />
-            </div>
-            <label className="quotes-field">
-              <span>{t('quotes.field.valid_until')}</span>
+            </Field>
+            <Field label={t('quotes.field.valid_until')} size="date">
               <input
                 type="date"
                 className="field"
                 value={draft.validUntil}
                 onChange={(e) => setDraft({ ...draft, validUntil: e.target.value })}
               />
-            </label>
+            </Field>
             <fieldset className="quotes-lines">
               <legend>{t('quotes.field.lineDesc')}</legend>
               {draft.lines.map((line, index) => (
@@ -547,14 +578,13 @@ export function Quotes() {
                     }}
                   />
                   {draft.lines.length > 1 && (
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--icon btn--sm"
-                      aria-label={t('quotes.action.removeLine')}
+                    <IconButton
+                      icon="remove"
+                      small
+                      name={t('quotes.action.removeLine')}
+                      context={String(index + 1)}
                       onClick={() => setDraft({ ...draft, lines: draft.lines.filter((_, i) => i !== index) })}
-                    >
-                      <CloseGlyph aria-hidden="true" />
-                    </button>
+                    />
                   )}
                 </div>
               ))}
@@ -614,22 +644,21 @@ export function Quotes() {
 
           {decliningId === selected.id && (
             <form
-              className="quotes-decline-form"
+              className="quotes-decline-form form-line"
               aria-label={t('quotes.action.decline')}
               onSubmit={(e) => {
                 e.preventDefault();
                 void doDecline(selected.id);
               }}
             >
-              <label className="quotes-field">
-                <span>{t('quotes.decline.reason')}</span>
+              <Field label={t('quotes.decline.reason')}>
                 <input
                   type="text"
                   className="field"
                   value={declineReason}
                   onChange={(e) => setDeclineReason(e.target.value)}
                 />
-              </label>
+              </Field>
               {/* The drawer's footer holds the view's one primary; this inline confirm is secondary. */}
               <div className="quotes-form-actions">
                 <button type="submit" className="btn btn--secondary btn--sm">

@@ -239,3 +239,14 @@
 .impl-roster-blocker, .impl-roster-days { color: var(--t-text-dim); font-size: var(--t-font-md); line-height: var(--t-lh-md); }
 .impl-roster-hidden { color: var(--t-text-dim); font-style: italic; }
 .impl-roster-empty { color: var(--t-text-dim); margin: 0; }
+
+/* D187: a panel title with its (i) beside it. */
+.diag-panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+.diag-panel {
+  padding: 0;
+}

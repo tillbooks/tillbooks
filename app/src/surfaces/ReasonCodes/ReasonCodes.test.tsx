@@ -82,10 +82,9 @@ describe('ReasonCodes, the adjustment reason catalog', () => {
     renderSurface(canned, asked);
 
     await screen.findByText('SCHWUND');
-    await userEvent.click(screen.getByRole('button', { name: de.reasonCodes.new }));
     await userEvent.type(screen.getByLabelText(de.reasonCodes.form.code), 'BESCHAED');
     await userEvent.type(screen.getByLabelText(de.reasonCodes.form.name), 'Beschädigung');
-    await userEvent.click(screen.getByRole('button', { name: de.reasonCodes.save }));
+    await userEvent.click(screen.getByRole('button', { name: de.reasonCodes.add }));
 
     await waitFor(() => expect(asked.some((a) => a.action === 'inventory_reason_create')).toBe(true));
     const call = asked.find((a) => a.action === 'inventory_reason_create');
@@ -100,10 +99,9 @@ describe('ReasonCodes, the adjustment reason catalog', () => {
     renderSurface(canned);
 
     await screen.findByText('SCHWUND');
-    await userEvent.click(screen.getByRole('button', { name: de.reasonCodes.new }));
     await userEvent.type(screen.getByLabelText(de.reasonCodes.form.code), 'SCHWUND');
     await userEvent.type(screen.getByLabelText(de.reasonCodes.form.name), 'Schwund');
-    await userEvent.click(screen.getByRole('button', { name: de.reasonCodes.save }));
+    await userEvent.click(screen.getByRole('button', { name: de.reasonCodes.add }));
 
     expect(await screen.findByText(de.reasonCodes.errors.duplicate_code)).toBeInTheDocument();
   });

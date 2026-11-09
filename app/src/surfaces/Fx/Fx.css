@@ -61,30 +61,27 @@
   gap: var(--t-space-2);
 }
 
-.fx-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-0-5);
+.fx-addrate-fields .field,
+.fx-reval-controls .field {
   min-width: 0;
 }
 
-.fx-field-label {
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-  color: var(--t-text-dim);
+.fx-addrate-fields .fx-currency {
+  width: 5rem;
 }
 
-.fx-field .field {
-  min-width: 7rem;
+.fx-addrate-fields .fx-rate-input {
+  width: 8rem;
 }
 
-.fx-addrate-submit {
-  align-self: flex-end;
+.fx-addrate-fields .fx-date-input {
+  width: 9.5rem;
 }
 
-/* The rate-quote note tells the operator which way the pair is quoted, so it carries essential
-   meaning on a money-path input and must clear AA: it sits on --t-text-dim, not the sub-AA faint
-   step the design law reserves for text with no meaning (DESIGN.md). */
+.fx-addrate-fields {
+  align-items: flex-end;
+}
+
 .fx-addrate-hint {
   margin: 0;
   font-size: var(--t-font-sm);
@@ -253,7 +250,8 @@
     align-items: stretch;
   }
 
-  .fx-field .field {
+  .fx-addrate-fields .field,
+  .fx-reval-controls .field {
     min-width: 0;
     width: 100%;
   }

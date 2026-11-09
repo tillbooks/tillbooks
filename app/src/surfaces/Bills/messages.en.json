@@ -89,9 +89,8 @@
       "body": "You have not recorded a vendor yet.",
       "action": "Create a contact"
     },
+    "search": "Search bills",
     "filter": {
-      "allStatuses": "All",
-      "allVendors": "All vendors",
       "vendorById": "Vendor {id}"
     },
     "reconciliation": {

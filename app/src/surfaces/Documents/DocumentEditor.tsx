@@ -23,6 +23,7 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate, formatMoney } from '../../i18n';
 import { ErrorBanner, Skeleton } from '../../components/states';
 import { OverflowMenu } from '../../components/OverflowMenu';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import { CloseGlyph } from '../../components/icons';
 import { ActionFeedback } from '../../components/ActionFeedback';
@@ -1025,9 +1026,8 @@ function DocumentEditorBody({ onStatusChanged, forcedType }: DocumentEditorProps
 
       <div className="documents-editor-meta">
         {forcedType === undefined && (
-          <div className="documents-field">
+          <Field className="documents-field" label={t('document.column.type')}>
             {/* A10-G10: the visible label reads the column word, matching the accessible name. */}
-            <span>{t('document.column.type')}</span>
             <Select
               value={type}
               onChange={(value) => {
@@ -1038,7 +1038,7 @@ function DocumentEditorBody({ onStatusChanged, forcedType }: DocumentEditorProps
               ariaLabel={t('document.column.type')}
               disabled={docId !== null || createPending}
             />
-          </div>
+          </Field>
         )}
         <div className="documents-field documents-customer">
           <span>{t('document.editor.customer')}</span>
@@ -1110,8 +1110,7 @@ function DocumentEditorBody({ onStatusChanged, forcedType }: DocumentEditorProps
             </>
           )}
         </div>
-        <label className="documents-field">
-          <span>{t('document.editor.date')}</span>
+        <Field className="documents-field" label={t('document.editor.date')}>
           <input className="field"
             type="date"
             value={date}
@@ -1122,7 +1121,7 @@ function DocumentEditorBody({ onStatusChanged, forcedType }: DocumentEditorProps
             }}
             aria-label={t('document.editor.date')}
           />
-        </label>
+        </Field>
         {/* M11-M13: the currency, and what it costs. The picker owns the QR consequence and the
             rate readout; the editor only owns what the choice means for issuing. */}
         <CurrencyPicker
@@ -1333,8 +1332,7 @@ function DocumentEditorBody({ onStatusChanged, forcedType }: DocumentEditorProps
         </>
       )}
 
-      <label className="documents-field documents-field--wide">
-        <span>{t('document.editor.notes')}</span>
+      <Field className="documents-field documents-field--wide" label={t('document.editor.notes')}>
         <input className="field"
           type="text"
           value={notes}
@@ -1345,7 +1343,7 @@ function DocumentEditorBody({ onStatusChanged, forcedType }: DocumentEditorProps
           }}
           aria-label={t('document.editor.notes')}
         />
-      </label>
+      </Field>
 
       {showIssue && (
         <IssueDialog

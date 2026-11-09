@@ -18,9 +18,8 @@
     "noDueDate": "kein Datum",
     "noOverdue": "nicht überfällig",
     "noCustomer": "Ohne Kunde",
+    "search": "Offene Posten suchen",
     "filter": {
-      "allCurrencies": "Alle Währungen",
-      "allCustomers": "Alle Kunden",
       "customerById": "Kunde {id}"
     },
     "column": {

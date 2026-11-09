@@ -5,7 +5,7 @@
   "inventory": {
     "alerts": {
       "title": "Bestand & Alarme",
-      "subtitle": "Eine reine Lese-Ansicht über das ganze Lager: Alarme, Bestandsposition, tiefe Bestände, Bewertungsabweichung, Ladenhüter, Inventuren und Nachbestell-Kandidaten, je ein strukturierter Aufruf.",
+      "search": "Im Bericht suchen",
       "reportsLabel": "Auswertungen",
       "noWorkspace": "Wähle einen Mandanten, um die Lager-Alarme zu sehen.",
       "emptyTitle": "Nichts anzuzeigen",

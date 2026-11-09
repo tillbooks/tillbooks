@@ -524,7 +524,7 @@ describe('the Belegeingang queue', () => {
   it('DISCARD: the row overflow action calls capture_discard', async () => {
     const seen: string[] = [];
     renderCapture({ list_captures: QUEUE_ONE, get_capture: DETAIL_WITH_FIELDS, capture_discard: ok({ captureId: 'cap1', status: 'discarded' }) }, { route: '/capture-inbox', seen });
-    const more = await screen.findByRole('button', { name: 'Mehr' });
+    const more = await screen.findByRole('button', { name: /Aktionen für Beleg vom/ });
     await userEvent.click(more);
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Verwerfen' }));
     await waitFor(() => expect(seen).toContain('capture_discard'));

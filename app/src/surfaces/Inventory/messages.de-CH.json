@@ -39,6 +39,9 @@
       "stetigkeit": "Die Bewertungsmethode weicht vom letzten Lauf ab (Stetigkeit, OR 958c)."
     },
     "badge": { "low": "Bestand niedrig" },
+    "search": "Artikel oder Lagerort suchen",
+    "emptyFiltered": "Keine Bestände für diesen Filter.",
+    "filter": { "clear": "Filter zurücksetzen" },
     "empty": "Keine lagergeführten Artikel.",
     "empty_cta": "Artikel verwalten",
     "toast": { "dismiss": "Schliessen" },

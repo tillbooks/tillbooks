@@ -7,6 +7,8 @@
     "lede": "Recurring invoices, set up once: TILL creates each due period as a draft for review, or issues it automatically if you chose that.",
     "noWorkspaceHint": "Open a set of books first, then you will see its recurring invoices here.",
     "needsPermission": "This needs the “Issue” permission.",
+    "search": "Search schedules",
+    "rowActions": "Actions for {name}",
     "new": "New schedule",
     "saved": "The schedule is saved.",
     "paused": "The schedule is paused.",
@@ -35,7 +37,6 @@
       "amount": "Amount (net)",
       "nextRun": "Next invoice",
       "status": "Status",
-      "controls": "Controls",
       "period": "Period",
       "outcome": "Outcome",
       "document": "Document"

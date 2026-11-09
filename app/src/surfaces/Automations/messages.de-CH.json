@@ -98,7 +98,10 @@
       "retry": "Nachholen",
       "retried": "Die Ausführung wurde nachgeholt."
     },
-    "rowActions": "Aktionen für {name}"
+    "rowActions": "Aktionen für {name}",
+    "hintTitle": {
+      "permission": "Berechtigung"
+    }
   },
   "help": {
     "Automations": {

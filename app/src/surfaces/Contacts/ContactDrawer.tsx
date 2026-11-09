@@ -34,6 +34,8 @@ import { DetailDrawer } from '../../components/DetailDrawer';
 import { ErrorBanner, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { ActionFeedback } from '../../components/ActionFeedback';
 import { OverflowMenu } from '../../components/OverflowMenu';
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
 import { Select } from '../../components/Select';
 import { Status, type StatusKind } from '../../components/Status';
 import { Tabs } from '../../components/Tabs';
@@ -258,7 +260,7 @@ function ConsentToggle({
 
   return (
     <section className="ct-subsection">
-      <h3 className="ct-subsection-title">{t('contact.consent.title')}</h3>
+      <SubsectionTitle title={t('contact.consent.title')} info={t('contact.consent.note')} />
       {error !== null && <ErrorBanner error={error} />}
       <label className="ct-consent-row">
         <input
@@ -269,8 +271,17 @@ function ConsentToggle({
         />
         <span>{t('contact.consent.toggle')}</span>
       </label>
-      <p className="ct-field-hint">{t('contact.consent.note')}</p>
     </section>
+  );
+}
+
+/** A subsection title; an explanation sits behind an (i) beside it, never as a caption under it. */
+function SubsectionTitle({ title, info }: { title: string; info?: string }) {
+  return (
+    <div className="ct-subsection-head">
+      <h3 className="ct-subsection-title">{title}</h3>
+      {info === undefined ? null : <IconButton icon="info" small context={info} />}
+    </div>
   );
 }
 
@@ -329,15 +340,10 @@ function TagEditor({
       )}
       {canManage && (
         <>
-          <div className="ct-field-row">
-            <label className="ct-field-inner">
-              <span className="ct-field-label">{t('contact.segments.add')}</span>
-              <input
-                className="field"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-              />
-            </label>
+          <div className="ct-field-row ct-field-row--act">
+            <Field label={t('contact.segments.add')} info={t('contact.segments.addHint')}>
+              <input className="field" value={draft} onChange={(event) => setDraft(event.target.value)} />
+            </Field>
             <button
               type="button"
               className="btn btn--secondary"
@@ -347,8 +353,6 @@ function TagEditor({
               {t('contact.segments.addAction')}
             </button>
           </div>
-          {/* D15: a disabled primary action states WHY it is disabled, inline, not sitting dead. */}
-          {draft.trim() === '' && <span className="ct-field-hint">{t('contact.segments.addHint')}</span>}
         </>
       )}
     </section>
@@ -508,9 +512,8 @@ function RecurrenceField({
   const selectValue = showAdvanced ? 'custom' : derivedKey;
 
   return (
-    <div className="ct-field-inner">
-      <div className="ct-field-inner">
-        <span className="ct-field-label">{t('contact.tasks.field.recurrence')}</span>
+    <div className="form-stack">
+      <Field label={t('contact.tasks.field.recurrence')}>
         <Select
           id={`${idPrefix}-recurrence`}
           value={selectValue}
@@ -534,23 +537,20 @@ function RecurrenceField({
           ]}
           ariaLabel={t('contact.tasks.field.recurrence')}
         />
-      </div>
+      </Field>
       {showAdvanced && (
-        <>
-          <label className="ct-field-inner">
-            <span className="ct-field-label">{t('contact.tasks.recurrence.advancedLabel')}</span>
-            <input
-              id={`${idPrefix}-recurrence-advanced`}
-              className="field"
-              value={value}
-              placeholder="FREQ=WEEKLY;INTERVAL=2;BYDAY=MO"
-              onChange={(event) => onChange(event.target.value)}
-            />
-          </label>
-          {/* Hint sits OUTSIDE the label (the surface's convention), so the field's accessible name
-              stays exactly its label and does not absorb the example text. */}
-          <span className="ct-field-hint">{t('contact.tasks.recurrence.advancedHint')}</span>
-        </>
+        <Field
+          label={t('contact.tasks.recurrence.advancedLabel')}
+          hint={t('contact.tasks.recurrence.advancedHint')}
+        >
+          <input
+            id={`${idPrefix}-recurrence-advanced`}
+            className="field"
+            value={value}
+            placeholder="FREQ=WEEKLY;INTERVAL=2;BYDAY=MO"
+            onChange={(event) => onChange(event.target.value)}
+          />
+        </Field>
       )}
     </div>
   );
@@ -706,9 +706,8 @@ function ContactTasksSection({
   );
 
   const editorFields = (value: TaskDraft, onChange: (next: TaskDraft) => void, idPrefix: string) => (
-    <div className="ct-task-editor-fields">
-      <label className="ct-field-inner">
-        <span className="ct-field-label">{t('contact.tasks.field.title')}</span>
+    <div className="ct-task-editor-fields form-stack">
+      <Field label={t('contact.tasks.field.title')} info={t('contact.tasks.titleHint')}>
         <input
           id={`${idPrefix}-title`}
           className="field"
@@ -716,9 +715,8 @@ function ContactTasksSection({
           onChange={(event) => onChange({ ...value, title: event.target.value })}
           required
         />
-      </label>
-      <label className="ct-field-inner">
-        <span className="ct-field-label">{t('contact.tasks.field.assignee')}</span>
+      </Field>
+      <Field label={t('contact.tasks.field.assignee')}>
         <input
           id={`${idPrefix}-assignee`}
           className="field"
@@ -726,9 +724,8 @@ function ContactTasksSection({
           placeholder={whoami?.actor ?? ''}
           onChange={(event) => onChange({ ...value, assigneeUserId: event.target.value })}
         />
-      </label>
-      <label className="ct-field-inner">
-        <span className="ct-field-label">{t('contact.tasks.field.due')}</span>
+      </Field>
+      <Field label={t('contact.tasks.field.due')}>
         <input
           id={`${idPrefix}-due`}
           className="field"
@@ -736,9 +733,8 @@ function ContactTasksSection({
           value={value.dueAt}
           onChange={(event) => onChange({ ...value, dueAt: event.target.value })}
         />
-      </label>
-      <label className="ct-field-inner">
-        <span className="ct-field-label">{t('contact.tasks.field.reminder')}</span>
+      </Field>
+      <Field label={t('contact.tasks.field.reminder')}>
         <input
           id={`${idPrefix}-reminder`}
           className="field"
@@ -746,7 +742,7 @@ function ContactTasksSection({
           value={value.reminderAt}
           onChange={(event) => onChange({ ...value, reminderAt: event.target.value })}
         />
-      </label>
+      </Field>
     </div>
   );
 
@@ -807,8 +803,6 @@ function ContactTasksSection({
               {t('contact.tasks.action.discard')}
             </button>
           </div>
-          {/* D15: a disabled primary action says WHAT is missing rather than sitting dead. */}
-          {draft.title.trim() === '' && <span className="ct-field-hint">{t('contact.tasks.titleHint')}</span>}
         </form>
       )}
 
@@ -954,8 +948,7 @@ function ContactTasksSection({
                       void snooze(task.id);
                     }}
                   >
-                    <label className="ct-field-inner">
-                      <span className="ct-field-label">{t('contact.tasks.snoozeUntil')}</span>
+                    <Field label={t('contact.tasks.snoozeUntil')}>
                       <input
                         className="field"
                         type="datetime-local"
@@ -963,7 +956,7 @@ function ContactTasksSection({
                         onChange={(event) => setSnoozeUntil(event.target.value)}
                         required
                       />
-                    </label>
+                    </Field>
                     {/* US-E03.5 boundary: snoozing past the deadline is allowed, but the UI warns once. */}
                     {snoozePastDue && <span className="ct-field-hint">{t('contact.tasks.warnReminderAfterDue')}</span>}
                     <div className="ct-task-editor-actions">
@@ -1055,25 +1048,23 @@ function TimelineTab({ contact, workspaceId }: { contact: Contact; workspaceId: 
       {canManage && (
         <section className="ct-subsection">
           <h3 className="ct-subsection-title">{t('contact.timeline.log')}</h3>
-          <div className="ct-field-row">
-            <div className="ct-field-inner">
-              <span className="ct-field-label">{t('contact.timeline.kind')}</span>
+          <div className="form-stack">
+            <Field label={t('contact.timeline.kind')}>
               <Select
                 value={kind}
                 onChange={(value) => setKind(value as ActivityKind)}
                 options={ACTIVITY_KINDS.map((k) => ({ value: k, label: t(`contact.activity.${k}`) }))}
                 ariaLabel={t('contact.timeline.kind')}
               />
-            </div>
+            </Field>
+            <Field label={t('contact.timeline.body')} info={t('contact.timeline.bodyHint')}>
+              <textarea
+                className="field ct-textarea"
+                value={body}
+                onChange={(event) => setBody(event.target.value)}
+              />
+            </Field>
           </div>
-          <label className="ct-field-inner">
-            <span className="ct-field-label">{t('contact.timeline.body')}</span>
-            <textarea
-              className="field ct-textarea"
-              value={body}
-              onChange={(event) => setBody(event.target.value)}
-            />
-          </label>
           <button
             type="button"
             className="btn btn--primary"
@@ -1082,8 +1073,6 @@ function TimelineTab({ contact, workspaceId }: { contact: Contact; workspaceId: 
           >
             {t('contact.timeline.logAction')}
           </button>
-          {/* D15: the reason the primary action is disabled, stated inline, not left to guesswork. */}
-          {body.trim() === '' && <span className="ct-field-hint">{t('contact.timeline.bodyHint')}</span>}
         </section>
       )}
 
@@ -1238,7 +1227,7 @@ function PortalTab({ contact, workspaceId }: { contact: Contact; workspaceId: st
       {/* The one-time link, surfaced once with a copy affordance (aria-label, keyboard-reachable). */}
       {oneTimeLink !== null && (
         <section className="ct-subsection">
-          <h3 className="ct-subsection-title">{t('portal.link.once')}</h3>
+          <SubsectionTitle title={t('portal.link.once')} info={t('portal.link.draftNote')} />
           <div className="ct-field-row">
             <input className="field" readOnly value={oneTimeLink} aria-label={t('portal.link.once')} />
             <button
@@ -1250,8 +1239,6 @@ function PortalTab({ contact, workspaceId }: { contact: Contact; workspaceId: st
               {t('portal.link.copy')}
             </button>
           </div>
-          {/* D157: the link is a draft until it is activated; say so where it is handed out. */}
-          <span className="ct-field-hint">{t('portal.link.draftNote')}</span>
         </section>
       )}
 
@@ -1259,15 +1246,14 @@ function PortalTab({ contact, workspaceId }: { contact: Contact; workspaceId: st
       {canManage && (
         <section className="ct-subsection">
           <h3 className="ct-subsection-title">{t('portal.action.create')}</h3>
-          <label className="ct-field-inner">
-            <span className="ct-field-label">{t('portal.field.expiresAt')}</span>
+          <Field label={t('portal.field.expiresAt')} info={t('portal.field.expiresAtHint')}>
             <input
               type="date"
               className="field"
               value={expiresAt}
               onChange={(event) => setExpiresAt(event.target.value)}
             />
-          </label>
+          </Field>
           <label className="ct-checkbox">
             <input type="checkbox" checked={allInvoices} onChange={(event) => setAllInvoices(event.target.checked)} />
             <span>{t('portal.scope.all_invoices')}</span>
@@ -1281,7 +1267,6 @@ function PortalTab({ contact, workspaceId }: { contact: Contact; workspaceId: st
           >
             {t('portal.action.create')}
           </button>
-          {expiresAt === '' && <span className="ct-field-hint">{t('portal.field.expiresAtHint')}</span>}
         </section>
       )}
 
@@ -1301,7 +1286,7 @@ function PortalTab({ contact, workspaceId }: { contact: Contact; workspaceId: st
                 <Status kind={PORTAL_STATUS_KIND[g.status]} label={t(`portal.status.${g.status}`)} />
                 <span className="ct-portal-expiry t-num">{formatCalendar(g.expiresAt)}</span>
                 {/* D157: a draft opens nothing; the row says so in words, not only by its status. */}
-                {g.status === 'draft' && <span className="ct-field-hint">{t('portal.status.draftHint')}</span>}
+                {g.status === 'draft' && <IconButton icon="info" small context={t('portal.status.draftHint')} />}
                 {/* OP4/P9: the OSS core mints the artifact and stops; every grant is local-only here. */}
                 {!g.hosted && <span className="ct-portal-hosting">{t('portal.not_hosted')}</span>}
                 {canManage && g.status === 'draft' && (
@@ -1408,10 +1393,12 @@ function AnonymiseAction({
         />
       )}
       <p className="ct-confirm-text">{t('contact.anonymise.warning', { word: expected })}</p>
-      <label className="ct-field-inner">
-        <span className="ct-field-label">{t('contact.anonymise.typeLabel', { word: expected })}</span>
+      <Field
+        label={t('contact.anonymise.typeLabel', { word: expected })}
+        info={t('contact.anonymise.typeHint', { word: expected })}
+      >
         <input className="field" value={typed} onChange={(event) => setTyped(event.target.value)} />
-      </label>
+      </Field>
       <div className="ct-confirm-actions">
         <button type="button" className="btn btn--secondary" onClick={() => setOpen(false)}>
           {t('contact.cancel')}
@@ -1425,8 +1412,6 @@ function AnonymiseAction({
           {t('contact.action.anonymise')}
         </button>
       </div>
-      {/* D15 again: the disabled action says what is missing, it does not just refuse to work. */}
-      {!matches && <span className="ct-field-hint">{t('contact.anonymise.typeHint', { word: expected })}</span>}
     </div>
   );
 }

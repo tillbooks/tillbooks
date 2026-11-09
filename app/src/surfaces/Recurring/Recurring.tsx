@@ -39,7 +39,11 @@ import {
   sharedRefusalKey,
 } from '../../components/states';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
+import { IconButton } from '../../components/IconButton';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { FilterBar, type FilterFacet } from '../../components/FilterBar';
+import { DetailDrawer } from '../../components/DetailDrawer';
+import type { OverflowMenuItem } from '../../components/OverflowMenu';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { SavedViewPicker, type SavedViewDto } from '../Customization/SavedViewPicker';
 import {
@@ -143,6 +147,8 @@ function templateTotalMinor(lines: readonly ScheduleLineDto[]): number {
 
 export function Recurring() {
   const t = useT();
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const client = useClient();
   const workspaceId = useWorkspaceId();
   const caps = useCapabilities();
@@ -442,43 +448,36 @@ export function Recurring() {
         </>
       ),
     },
-    {
-      key: 'controls',
-      header: t('recurring.col.controls'),
-      render: (schedule) =>
-        schedule.status !== 'ended' ? (
-          <span className="recurring__controls">
-            <button type="button" disabled={!canIssue || busy} onClick={() => startEdit(schedule)}>
-              {t('recurring.action.edit')}
-            </button>
-            {schedule.status === 'active' ? (
-              <button
-                type="button"
-                disabled={!canIssue || busy}
-                onClick={() => void control('pause_recurring_schedule', schedule.id)}
-              >
-                {t('recurring.action.pause')}
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={!canIssue || busy}
-                onClick={() => void control('resume_recurring_schedule', schedule.id)}
-              >
-                {t('recurring.action.resume')}
-              </button>
-            )}
-            <button
-              type="button"
-              disabled={!canIssue || busy}
-              onClick={() => void control('end_recurring_schedule', schedule.id)}
-            >
-              {t('recurring.action.end')}
-            </button>
-          </span>
-        ) : null,
-    },
   ];
+
+  // D187 Listen A: the verbs of a row sit behind its overflow, end last. Disabled (never absent) for an
+  // actor without `issue`, with the reason stated once in prose under the title.
+  const rowActions = (schedule: ScheduleDto): OverflowMenuItem[] =>
+    schedule.status === 'ended'
+      ? []
+      : [
+          { key: 'edit', label: t('recurring.action.edit'), disabled: !canIssue || busy, onSelect: () => startEdit(schedule) },
+          schedule.status === 'active'
+            ? {
+                key: 'pause',
+                label: t('recurring.action.pause'),
+                disabled: !canIssue || busy,
+                onSelect: () => void control('pause_recurring_schedule', schedule.id),
+              }
+            : {
+                key: 'resume',
+                label: t('recurring.action.resume'),
+                disabled: !canIssue || busy,
+                onSelect: () => void control('resume_recurring_schedule', schedule.id),
+              },
+          {
+            key: 'end',
+            label: t('recurring.action.end'),
+            disabled: !canIssue || busy,
+            danger: true,
+            onSelect: () => void control('end_recurring_schedule', schedule.id),
+          },
+        ];
 
   // The per-schedule run history, on the same DataTable: period, outcome (glyph AND text) and the
   // link into the produced document (A10's screen takes over there).
@@ -510,13 +509,65 @@ export function Recurring() {
     return <NoWorkspaceState body={t('recurring.noWorkspaceHint')} />;
   }
 
+  const needle = search.trim().toLowerCase();
+  const shown =
+    state.kind !== 'ok'
+      ? []
+      : state.schedules.filter(
+          (schedule) =>
+            (statusFilter === null || schedule.status === statusFilter) &&
+            (needle === '' || `${displayName(schedule)} ${customerName(schedule)}`.toLowerCase().includes(needle)),
+        );
+  const facets: FilterFacet[] = [
+    {
+      key: 'status',
+      label: t('recurring.col.status'),
+      options: ['active', 'paused', 'ended'].map((status) => ({ value: status, label: t(`recurring.status.${status}`) })),
+      value: statusFilter,
+      onChange: setStatusFilter,
+    },
+  ];
+
   return (
     <section className="recurring">
       <SurfaceHeader
         title={t('recurring.title')}
-        subtitle={t('recurring.lede')}
-        help={<SurfaceHelp surface="Recurring" />}
+        count={state.kind === 'ok' ? shown.length : undefined}
+        actions={
+          state.kind === 'ok' ? (
+            <>
+              <button
+                type="button"
+                className="btn btn--secondary"
+                disabled={!canIssue || busy}
+                onClick={() => void tickNow()}
+              >
+                {t('recurring.tick.now')}
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={!canIssue}
+                onClick={() => {
+                  setEditorError(null);
+                  // F-03 (J3.8): a new series starts next month unless told otherwise.
+                  setEditing({ scheduleId: null, value: { ...EMPTY_EDITOR, anchorDate: nextFirstOfMonth(new Date()) } });
+                }}
+              >
+                {t('recurring.new')}
+              </button>
+            </>
+          ) : undefined
+        }
+        help={
+          <>
+            <SurfaceHelp surface="Recurring" />
+            <IconButton icon="info" small context={t('recurring.lede')} />
+          </>
+        }
       />
+
+      {!canIssue ? <p className="lock-note">{t('recurring.needsPermission')}</p> : null}
 
       {feedback !== null ? (
         <p
@@ -537,29 +588,13 @@ export function Recurring() {
         <ErrorBanner error={state.error} onRetry={() => void load()} />
       ) : (
         <div className="recurring__panel">
-          <div className="recurring__actions">
-            {editing === null ? (
-              <button
-                type="button"
-                className="btn btn--primary"
-                disabled={!canIssue}
-                onClick={() => {
-                  setEditorError(null);
-                  // F-03 (J3.8): a new series starts next month unless told otherwise.
-                  setEditing({ scheduleId: null, value: { ...EMPTY_EDITOR, anchorDate: nextFirstOfMonth(new Date()) } });
-                }}
-              >
-                {t('recurring.new')}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="btn btn--secondary"
-              disabled={!canIssue || busy}
-              onClick={() => void tickNow()}
-            >
-              {t('recurring.tick.now')}
-            </button>
+          <FilterBar
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchLabel={t('recurring.search')}
+            searchPlaceholder={t('recurring.search')}
+            facets={facets}
+          >
             {state.views.length > 0 ? (
               <SavedViewPicker
                 views={state.views}
@@ -571,26 +606,34 @@ export function Recurring() {
                 onSelect={setSavedViewId}
               />
             ) : null}
-            {!canIssue ? <p className="lock-note">{t('recurring.needsPermission')}</p> : null}
-          </div>
+          </FilterBar>
 
-          {editing !== null ? (
-            <RecurringEditor
-              contacts={state.contacts}
-              taxCodes={state.taxCodes}
-              initial={editing.value}
-              busy={busy}
-              errorCode={editorError}
-              onSave={(value) => void saveEditor(value)}
-              onCancel={() => setEditing(null)}
-            />
-          ) : null}
+          <DetailDrawer
+            open={editing !== null}
+            onClose={() => setEditing(null)}
+            title={editing?.scheduleId === null ? t('recurring.new') : t('recurring.action.edit')}
+            closeLabel={t('recurring.history.close')}
+          >
+            {editing !== null ? (
+              <RecurringEditor
+                contacts={state.contacts}
+                taxCodes={state.taxCodes}
+                initial={editing.value}
+                busy={busy}
+                errorCode={editorError}
+                onSave={(value) => void saveEditor(value)}
+                onCancel={() => setEditing(null)}
+              />
+            ) : null}
+          </DetailDrawer>
 
           <DataTable
             columns={columns}
-            rows={[...state.schedules]}
+            rows={shown}
             rowKey={(schedule) => schedule.id}
             caption={t('recurring.title')}
+            rowActions={rowActions}
+            rowActionsLabel={(schedule) => t('recurring.rowActions', { name: displayName(schedule) })}
             // Ended is a resolved state somebody chose, not a fault, so the row is dimmed (never an
             // alarm colour); the glyph and words already carry the status for a screen reader.
             rowClassName={(schedule) => (schedule.status === 'ended' ? 'recurring-row--ended' : undefined)}

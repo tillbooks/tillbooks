@@ -20,13 +20,6 @@
   gap: var(--t-space-2);
 }
 
-.valrun-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--t-space-1);
-  flex-wrap: wrap;
-}
-
 .valrun-draft {
   display: flex;
   flex-direction: column;

@@ -33,7 +33,7 @@
  * A22-specific. No `FilterBar`: this surface has no search/filter row, and the period-end picker is a
  * revaluation control, not a surface-level filter.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
@@ -42,6 +42,8 @@ import { useIdempotencyKey } from '../../lib/idempotency';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate, formatMoney } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { EmptyState, ErrorBanner, NoWorkspaceState, Skeleton } from '../../components/states';
@@ -121,6 +123,7 @@ export function Fx() {
   // The key is the exact question the write sends, so a re-click of an UNCHANGED add is one write and
   // a changed value is a new one (see `useIdempotencyKey`). `baseCurrency` here is the FOREIGN
   // currency; the ledger base is the quote side the engine fills in.
+  const quoteNoteId = useId();
   const addKey = useIdempotencyKey({ workspaceId, baseCurrency: addCurrency.toUpperCase(), rate: addRate.trim(), asOf: addAsOf });
 
   const submitRate = useCallback(async () => {
@@ -271,8 +274,13 @@ export function Fx() {
     <section className="fx">
       <SurfaceHeader
         title={t('fx.title')}
-        subtitle={t('fx.subtitle')}
-        help={<SurfaceHelp surface="Fx" />}
+        count={ratesLoading ? undefined : rates.length}
+        help={
+          <>
+            <SurfaceHelp surface="Fx" />
+            <IconButton icon="info" small context={t('fx.subtitle')} />
+          </>
+        }
       />
 
       {/* ================= RATES ================= */}
@@ -290,44 +298,46 @@ export function Fx() {
             }}
           >
             <div className="fx-addrate-fields">
-              <label className="fx-field">
-                <span className="fx-field-label">{t('fx.currency')}</span>
+              <Field label={t('fx.currency')} size="code">
                 <input
-                  className="field"
+                  className="field fx-currency"
                   value={addCurrency}
                   onChange={(e) => setAddCurrency(e.target.value.toUpperCase().slice(0, 3))}
                   placeholder="EUR"
                   maxLength={3}
                   autoCapitalize="characters"
-                  aria-label={t('fx.currency')}
                 />
-              </label>
-              <label className="fx-field">
-                <span className="fx-field-label">{t('fx.rate')}</span>
+              </Field>
+              <Field label={t('fx.rate')} size="amount">
                 <input
-                  className="field fx-num"
+                  className="field fx-num fx-rate-input"
                   value={addRate}
                   onChange={(e) => setAddRate(e.target.value)}
                   inputMode="decimal"
                   placeholder="0.9520"
-                  aria-label={t('fx.rate')}
+                  aria-describedby={quoteNoteId}
                 />
-              </label>
-              <label className="fx-field">
-                <span className="fx-field-label">{t('fx.date')}</span>
+              </Field>
+              <Field label={t('fx.date')} size="date">
                 <input
-                  className="field"
+                  className="field fx-date-input"
                   type="date"
                   value={addAsOf}
                   onChange={(e) => setAddAsOf(e.target.value)}
-                  aria-label={t('fx.date')}
                 />
-              </label>
-              <button type="submit" className="btn btn--secondary btn--sm fx-addrate-submit" disabled={!addReady || addPending}>
+              </Field>
+              <button
+                type="submit"
+                className="btn btn--secondary"
+                disabled={!addReady || addPending}
+                aria-describedby={quoteNoteId}
+              >
                 {addPending ? t('fx.adding') : t('fx.addRate')}
               </button>
             </div>
-            <p className="fx-addrate-hint">{t('fx.rateQuoteNote', { base: currency })}</p>
+            <p id={quoteNoteId} className="fx-addrate-hint">
+              {t('fx.rateQuoteNote', { base: currency })}
+            </p>
             {addError !== null && (
               <div className="fx-inline-error">
                 <ErrorBanner error={addError} />
@@ -361,8 +371,7 @@ export function Fx() {
         </div>
 
         <div className="fx-reval-controls">
-          <label className="fx-field">
-            <span className="fx-field-label">{t('fx.periodEnd')}</span>
+          <Field label={t('fx.periodEnd')}>
             <input
               className="field"
               type="date"
@@ -375,7 +384,7 @@ export function Fx() {
               }}
               aria-label={t('fx.periodEnd')}
             />
-          </label>
+          </Field>
           <button type="button" className="btn btn--secondary btn--sm" onClick={() => void compute()} disabled={computeLoading}>
             {computeLoading ? t('fx.computing') : t('fx.compute')}
           </button>

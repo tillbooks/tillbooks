@@ -71,9 +71,6 @@
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--t-space-2);
-  padding: var(--t-space-2);
-  background: var(--t-bg-elev);
-  border-radius: var(--t-radius-md);
 }
 
 /* The controls are the shared `.field` and `Select` (K-15), so they follow the density toggle. */
@@ -111,9 +108,6 @@
   flex-direction: column;
   align-items: flex-start;
   gap: var(--t-space-2);
-  padding: var(--t-space-3);
-  background: var(--t-bg-elev);
-  border-radius: var(--t-radius-md);
 }
 
 .pay-cp-result-head {
@@ -126,16 +120,6 @@
   margin: 0;
   font-size: var(--t-font-body);
   line-height: var(--t-lh-body);
-}
-
-.pay-cp-transmit-note {
-  margin: 0;
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  color: var(--t-text-dim);
-  background: var(--t-bg-soft);
-  border-radius: var(--t-radius-sm);
-  padding: var(--t-space-2);
 }
 
 .pay-cp-paid {
@@ -374,6 +358,16 @@
 .pay-plan-assumption-list {
   margin: 0;
   padding-left: var(--t-space-4);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* A36 / D-A36.11, restored by the D187 money critic: TILL transmits nothing, so what to do with the
+   file stays on the page as plain dim text (no box: one surface layer). */
+.pay-cp-transmit-note {
+  margin: 0;
+  max-width: 60ch;
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
   color: var(--t-text-dim);

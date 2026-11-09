@@ -500,3 +500,10 @@
   max-width: 60ch;
   color: var(--t-text);
 }
+
+/* A section title with its (i) beside it. */
+.vat-subtitle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}

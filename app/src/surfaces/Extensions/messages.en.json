@@ -1,9 +1,16 @@
 {
-  "nav": { "extensions": "Extensions" },
+  "nav": {
+    "extensions": "Extensions"
+  },
   "plugin": {
-    "panel": { "title": "Extensions" },
+    "panel": {
+      "title": "Extensions"
+    },
     "lede": "Third-party extensions add tools, screens, report sources and automation actions to TILL. Each runs in an isolated frame with only the permissions you grant, any network access is fenced by its host rather than by TILL, and none can open a second path to your ledger.",
-    "tab": { "installed": "Installed", "browse": "Browse" },
+    "tab": {
+      "installed": "Installed",
+      "browse": "Browse"
+    },
     "action": {
       "install": "Install",
       "browse": "Browse",
@@ -19,7 +26,9 @@
       "disabled": "Disabled",
       "incompatible": "Incompatible"
     },
-    "incompatible": { "reason": "Requires core version {range}, installed is {version}." },
+    "incompatible": {
+      "reason": "Requires core version {range}, installed is {version}."
+    },
     "card": {
       "version": "Version {version}",
       "capabilities": "{count} capabilities",
@@ -34,7 +43,10 @@
       "compatWarning": "This extension is not compatible with the current core version and will install disabled.",
       "cancel": "Cancel"
     },
-    "screen": { "title": "{name} panel", "sandboxNote": "This panel runs in an isolated frame that cannot read the rest of the Studio. It stays empty until a host serves its content, and any network access is fenced by that host, not by this panel." },
+    "screen": {
+      "title": "{name} panel",
+      "sandboxNote": "This panel runs in an isolated frame that cannot read the rest of the Studio. It stays empty until a host serves its content, and any network access is fenced by that host, not by this panel."
+    },
     "empty": "No extensions installed.",
     "registry": {
       "empty": "No extension registry connected.",
@@ -48,7 +60,9 @@
       "stale": "Showing the last known results."
     },
     "needsPermission": "This needs the \"install and manage extensions\" permission.",
-    "confirm": { "uninstall": "Uninstall {name}? Its settings will be removed." },
+    "confirm": {
+      "uninstall": "Uninstall {name}? Its settings will be removed."
+    },
     "error": {
       "manifest_checksum_failed": "This extension file failed its integrity check and was not installed.",
       "invalid_manifest": "This file is not a valid extension.",
@@ -68,6 +82,18 @@
       "enabled": "The extension is enabled.",
       "disabled": "The extension is disabled.",
       "uninstalled": "The extension is uninstalled."
+    },
+    "rowActions": "Actions for {name}",
+    "col": {
+      "name": "Name",
+      "status": "Status",
+      "version": "Version",
+      "capabilities": "Capabilities",
+      "publisher": "Publisher",
+      "summary": "Summary"
+    },
+    "hintTitle": {
+      "permission": "Permission"
     }
   },
   "help": {

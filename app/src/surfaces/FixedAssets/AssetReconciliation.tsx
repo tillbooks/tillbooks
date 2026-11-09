@@ -224,18 +224,20 @@ export function AssetReconciliation() {
             {t('assets.reconciliation.runCheck')}
           </button>
         }
+        toolbar={
+          <>
+            <label htmlFor="fa-recon-period">{t('assets.reconciliation.period')}</label>
+            <input
+              className="field"
+              id="fa-recon-period"
+              type="month"
+              value={period}
+              aria-label={t('assets.reconciliation.period')}
+              onChange={(e) => setPeriod(e.target.value)}
+            />
+          </>
+        }
       />
-
-      <div className="fa-filters">
-        <label htmlFor="fa-recon-period">{t('assets.reconciliation.period')}</label>
-        <input className="field"
-          id="fa-recon-period"
-          type="month"
-          value={period}
-          aria-label={t('assets.reconciliation.period')}
-          onChange={(e) => setPeriod(e.target.value)}
-        />
-      </div>
 
       {check.kind === 'balanced' && (
         <div className="fa-recon-check fa-recon-ok" role="status">

@@ -53,24 +53,6 @@
   background: var(--t-bg-soft);
 }
 
-/* --- toolbar and filters ------------------------------------------------------------------------- */
-
-.bills-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--t-space-2);
-  align-items: center;
-}
-
-.bills-filter {
-  display: flex;
-  align-items: center;
-  gap: var(--t-space-1);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  color: var(--t-text-dim);
-}
-
 /* --- the summary line: the open total, and the mismatch beside it (D152) ------------------------ */
 
 /* The total and the reconciliation statement share one line, as on the OP-Liste: one status, one place. */
@@ -168,7 +150,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--t-space-2);
-  align-items: end;
+  align-items: start;
 }
 
 @media (max-width: 480px) {
@@ -190,10 +172,6 @@
   color: var(--t-text-dim);
 }
 
-.bill-field .field {
-  width: 100%;
-}
-
 /* What an empty field will store, said under it (a cleared Fällig). */
 .bill-hint {
   font-size: var(--t-font-sm);
@@ -210,6 +188,7 @@
 
 /* Brutto/Netto sits beside the Betrag at the field's height; the question is the hidden legend. */
 .bill-toggle {
+  align-self: end;
   display: flex;
   align-items: center;
   gap: var(--t-space-2);

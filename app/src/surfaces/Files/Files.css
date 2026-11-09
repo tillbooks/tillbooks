@@ -349,3 +349,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* D187: a field with its act beside it, a gap apart, never touching. */
+.files-field--act {
+  flex-direction: row;
+  align-items: flex-end;
+  gap: var(--t-space-2);
+}
+
+.files-field--act > .form-row {
+  flex: 1 1 auto;
+}

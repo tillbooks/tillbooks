@@ -75,6 +75,9 @@
       "fifo": "FIFO",
       "standard_cost": "Standard cost"
     },
+    "search": "Search cut-off or method",
+    "emptyFiltered": "No runs match this filter.",
+    "filter": { "clear": "Clear filters" },
     "rowActions": "Actions for the run as of {asOf}"
   },
   "help": {

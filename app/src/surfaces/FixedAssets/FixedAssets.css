@@ -275,3 +275,10 @@
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+
+/* A sub-heading with its (i) beside it. */
+.fa-subtitle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}

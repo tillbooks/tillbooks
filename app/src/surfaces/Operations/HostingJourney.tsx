@@ -35,8 +35,7 @@ import { ErrorBanner, Skeleton } from '../../components/states';
 import { LockGlyph } from '../../components/states/glyphs';
 import { StatusNeutralGlyph, StatusSuccessGlyph } from '../../components/icons';
 import { HelpHint } from '../../components/HelpHint';
-import { Tooltip } from '../../components/Tooltip';
-import { InfoGlyph } from '../../components/states/glyphs';
+import { IconButton } from '../../components/IconButton';
 import { Modal } from '../../components/Modal';
 import { docsUrl } from '../../lib/guidance';
 
@@ -144,7 +143,6 @@ export function HostingJourney({ workspaceId }: { workspaceId: string }) {
   const served = (whoami?.identitySource ?? 'local_client') === 'served_subject';
   const hintId = useId();
   const retireBodyId = useId();
-  const modelId = useId();
 
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [target, setTarget] = useState<Rung | null>(null);
@@ -446,7 +444,7 @@ export function HostingJourney({ workspaceId }: { workspaceId: string }) {
           steps={steps}
           footer={
             <div className="hosting-checklist-foot">
-              <p className="diag-prose diag-prose-dim">{t('journey.step.manual_note')}</p>
+              <IconButton icon="info" small context={t('journey.step.manual_note')} />
               <button
                 type="button"
                 className="btn btn--ghost"
@@ -505,23 +503,10 @@ export function HostingJourney({ workspaceId }: { workspaceId: string }) {
           hears the model before it reaches the first choice. */}
       <div className="hosting-head">
         <h3 className="diag-subtitle">{t('journey.hosting.title')}</h3>
-        <span className="hosting-info">
-          <Tooltip
-            placement="bottom"
-            content={
-              <span id={modelId} className="hosting-model">
-                {t('journey.hosting.model')}
-              </span>
-            }
-          >
-            <button type="button" className="btn btn--ghost btn--icon hosting-info-trigger" aria-label={t('journey.hosting.modelLabel')}>
-              <InfoGlyph size={16} />
-            </button>
-          </Tooltip>
-        </span>
+        <IconButton icon="info" small placement="bottom" name={t('journey.hosting.modelLabel')} context={t('journey.hosting.model')} />
       </div>
       {actionError !== null && <ErrorBanner error={actionError} />}
-      <div className="hosting-rungs" role="radiogroup" aria-label={t('journey.hosting.title')} aria-describedby={modelId}>
+      <div className="hosting-rungs" role="radiogroup" aria-label={t('journey.hosting.title')} aria-description={t('journey.hosting.model')}>
         {rungs.map(({ rung, disabled }) => {
           const isCurrent = rung === current;
           const selected = target === null ? isCurrent : target === rung;
@@ -542,8 +527,8 @@ export function HostingJourney({ workspaceId }: { workspaceId: string }) {
                   {isCurrent && <span className="hosting-rung-now"> ({t('journey.hosting.rung.current')})</span>}
                   {disabled && <span className="hosting-rung-soon"> {t('journey.hosting.rung.managed.soon')}</span>}
                 </span>
-                <span className="hosting-rung-hint">{t(`journey.hosting.rung.${rung}.hint`)}</span>
               </button>
+              <IconButton icon="info" small context={t(`journey.hosting.rung.${rung}.hint`)} />
               {rung === 'selfhost' && (
                 <>
                   {/* D119 posture 2 (Phase 3 landed the image): the rung leads with the compose

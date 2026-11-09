@@ -87,7 +87,7 @@ function renderSurface(canned: Canned, asked?: Array<{ action: string; input: Re
 
 /** D152 rule 5: a session opens by the person's act. Click it in the list, as the person would. */
 async function openSession(type: string = de.cycleCounts.type.full) {
-  await userEvent.click(await screen.findByRole('button', { name: new RegExp(`^${type}`) }));
+  await userEvent.click(await screen.findByRole('row', { name: new RegExp(`^${type}`) }));
 }
 
 describe('CycleCounts, the stocktake surface', () => {
@@ -231,20 +231,22 @@ describe('CycleCounts, a list never opens itself (D152 rules 5 and 2)', () => {
   it('selects nothing on load: no current session, no detail, no report read, the list takes the width', async () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     const { container } = renderSurface(two(), asked);
-    await screen.findByRole('button', { name: new RegExp(`^${de.cycleCounts.type.cycle}`) });
+    await screen.findByRole('row', { name: new RegExp(`^${de.cycleCounts.type.cycle}`) });
     expect(container.querySelector('[aria-current="true"]')).toBeNull();
     expect(screen.queryByRole('region', { name: de.cycleCounts.detailLabel })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: de.cycleCounts.commit })).not.toBeInTheDocument();
-    expect(container.querySelector('.cc-split--solo')).not.toBeNull();
+    for (const toggle of screen.getAllByRole('button', { name: /^Details zu / })) {
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    }
     expect(asked.some((a) => a.action === 'inventory_stocktake_report')).toBe(false);
   });
 
   it('opens the session a deep link names (?focus=)', async () => {
     renderSurface(two(), undefined, '/cycle-counts?focus=cyc_2');
-    const item = await screen.findByRole('button', { name: new RegExp(`^${de.cycleCounts.type.cycle}`) });
+    const item = await screen.findByRole('row', { name: new RegExp(`^${de.cycleCounts.type.cycle}`) });
     await waitFor(() => expect(item).toHaveAttribute('aria-current', 'true'));
     expect(await screen.findByRole('region', { name: de.cycleCounts.detailLabel })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: new RegExp(`^${de.cycleCounts.type.full}`) })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('row', { name: new RegExp(`^${de.cycleCounts.type.full}`) })).not.toHaveAttribute('aria-current');
   });
 
   it('a click opens an open session with its actions, a second click closes it', async () => {

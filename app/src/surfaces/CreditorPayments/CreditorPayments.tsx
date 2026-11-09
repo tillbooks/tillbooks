@@ -38,6 +38,7 @@ import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DataTable, type DataTableColumn, type DataTableSelection } from '../../components/DataTable';
 import { Modal } from '../../components/Modal';
 import { Select } from '../../components/Select';
+import { Field } from '../../components/Field';
 import { Provenance } from '../../components/Provenance';
 import { Status, type StatusKind } from '../../components/Status';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton } from '../../components/states';
@@ -466,6 +467,7 @@ function CreditorPaymentsView() {
       <SurfaceHeader
         title={t('pay.title')}
         titleId="pay-cp-title"
+        count={view === 'run' && !loading && batch === null ? items.length : undefined}
         help={<SurfaceHelp surface="CreditorPayments" />}
       />
 
@@ -537,8 +539,7 @@ function CreditorPaymentsView() {
                   )}
 
                   <div className="pay-cp-batchbar">
-                    <div className="pay-cp-field">
-                      <span>{t('pay.debtorAccount')}</span>
+                    <Field label={t('pay.debtorAccount')} className="pay-cp-field">
                       {/* Critic F4: no account at all, or none in the batch's currency (no silent
                           any-currency default); either way the act waits for a deliberate pick. */}
                       <Select
@@ -558,16 +559,15 @@ function CreditorPaymentsView() {
                         ]}
                         ariaLabel={t('pay.debtorAccount')}
                       />
-                    </div>
-                    <label className="pay-cp-field">
-                      <span>{t('pay.executionDate')}</span>
+                    </Field>
+                    <Field label={t('pay.executionDate')} className="pay-cp-field">
                       <input
                         type="date"
                         className="field"
                         value={executionDate}
                         onChange={(e) => setExecutionDate(e.target.value)}
                       />
-                    </label>
+                    </Field>
                     <div className="pay-cp-total">
                       <span>{t('pay.selectedTotal')}</span>
                       <strong className="t-money">{formatMoney(totalMinor, selectedCurrency)}</strong>
@@ -605,7 +605,7 @@ function CreditorPaymentsView() {
               )}
 
               {batch !== null && (
-                <div className="pay-cp-result panel">
+                <div className="pay-cp-result">
                   <div className="pay-cp-result-head">
                     {/* The validity and the batch state are the shared Status word (K-22): a glyph from the
                         set plus the word, never a dingbat, never colour alone. */}
@@ -723,24 +723,25 @@ function CreditorPaymentsView() {
           </>
         }
       >
-        <label className="pay-cp-field">
-          <span>{t('pay.valueDate')}</span>
-          <input
-            type="date"
-            className="field"
-            value={valueDate}
-            onChange={(e) => setValueDate(e.target.value)}
-          />
-        </label>
-        <label className="pay-cp-checkline">
-          <input
-            type="checkbox"
-            checked={confirmChecked}
-            onChange={(e) => setConfirmChecked(e.target.checked)}
-          />
-          <span>{t('pay.markPaid.confirmLabel')}</span>
-        </label>
-        {markError !== null && <ErrorBanner error={markError} />}
+        <div className="form-stack">
+          <Field label={t('pay.valueDate')}>
+            <input
+              type="date"
+              className="field"
+              value={valueDate}
+              onChange={(e) => setValueDate(e.target.value)}
+            />
+          </Field>
+          <label className="pay-cp-checkline">
+            <input
+              type="checkbox"
+              checked={confirmChecked}
+              onChange={(e) => setConfirmChecked(e.target.checked)}
+            />
+            <span>{t('pay.markPaid.confirmLabel')}</span>
+          </label>
+          {markError !== null && <ErrorBanner error={markError} />}
+        </div>
       </Modal>
 
       {/* F8: capturing a vendor's IBAN so a fresh-workspace row is not a dead end. A plain dialog. */}
@@ -765,8 +766,8 @@ function CreditorPaymentsView() {
           </>
         }
       >
-        <label className="pay-cp-field">
-          <span>{t('pay.profile.ibanLabel')}</span>
+        <div className="form-stack">
+        <Field label={t('pay.profile.ibanLabel')}>
           <input
             type="text"
             className="field"
@@ -777,8 +778,9 @@ function CreditorPaymentsView() {
             placeholder="CH.. / QR-IBAN"
             onChange={(e) => setProfileIban(e.target.value)}
           />
-        </label>
+        </Field>
         {profileError !== null && <ErrorBanner error={profileError} />}
+        </div>
       </Modal>
 
       {view === 'run' && items.length > 0 && (

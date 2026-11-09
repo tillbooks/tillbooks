@@ -150,7 +150,7 @@
     },
     "doors": {
       "label": "Häufige Aktionen",
-      "book": "Buchen",
+      "book": "Neue Buchung",
       "backup": "Sichern",
       "demo": "Demo ausprobieren",
       "demoBusy": "Demo wird erstellt"

@@ -50,6 +50,13 @@ async function chooseOption(comboName: string, value: string): Promise<void> {
 }
 
 describe('RecurringEditor: the auto-issue confirm (D78)', () => {
+  it('says at rest what the checkbox does, and the checkbox is described by it', () => {
+    renderEditor();
+    const hint = screen.getByText(de.recurring.form.autoIssueHint);
+    expect(hint).toBeVisible();
+    expect(screen.getByRole('checkbox', { name: MESSAGES.autoIssue })).toHaveAccessibleDescription(de.recurring.form.autoIssueHint);
+  });
+
   it('the OFF-to-ON flip asks first, naming the consequence, and the box stays off meanwhile', async () => {
     renderEditor();
     const box = screen.getByRole('checkbox', { name: MESSAGES.autoIssue });

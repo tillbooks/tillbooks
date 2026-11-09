@@ -79,7 +79,8 @@
       "invalid_amount": "The amount must be a positive figure.",
       "allocation_residual": "The allocation did not distribute the full total."
     },
-    "moreActions": "More actions for voucher {number}"
+    "moreActions": "More actions for voucher {number}",
+    "search": "Search cost vouchers"
   },
   "help": {
     "LandedCosts": {

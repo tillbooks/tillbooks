@@ -87,12 +87,42 @@
     "error": "Der Export konnte nicht erstellt werden.",
     "retry": "Nochmals versuchen",
     "journal": "Journal",
-    "journalDesc": "Jede gebuchte Zeile der Periode als locale-neutrale CSV, die sich sauber wieder importieren lässt.",
+    "journalDesc": "Jede gebuchte Zeile des Zeitraums als locale-neutrale CSV, die sich sauber wieder importieren lässt.",
     "statements": "Abschlüsse",
-    "statementsDesc": "Bilanz und Erfolgsrechnung, je eine Datei.",
+    "statementsDesc": "Bilanz per Bis-Datum und Erfolgsrechnung über den Zeitraum, je eine Datei.",
     "vat": "MWST-Zahlen",
     "vatDesc": "Die Zahlen der MWST-Abrechnung, eine Zeile pro Ziffer.",
-    "vatWorkingPaper": "Ein Arbeitspapier, das du neben den Jahresabschluss legst, nicht die Upload-Datei für die ESTV (das ist die eCH-0217-Datei auf dem MWST-Bildschirm)."
+    "vatWorkingPaper": "Ein Arbeitspapier, das du neben den Jahresabschluss legst, nicht die Upload-Datei für die ESTV (das ist die eCH-0217-Datei auf dem MWST-Bildschirm).",
+    "kindLabel": "Was",
+    "emptyExtract": "Keine Buchung passt zu diesen Filtern. Die Datei enthält nur die Titelzeilen.",
+    "badRange": "Prüfe Von und Bis: beide ein Datum, Von nicht nach Bis.",
+    "unknownAccount": "Das Konto {account} gibt es in diesem Workspace nicht.",
+    "notWholeMonths": "Der Zeitraum beginnt oder endet mitten im Monat. Abgrenzungen zum Monatsende fehlen womöglich in Bilanz und Erfolgsrechnung.",
+    "range": {
+      "label": "Zeitraum",
+      "from": "Von",
+      "to": "Bis",
+      "month": "Monat",
+      "quarter": "Quartal",
+      "year": "Jahr"
+    },
+    "vatPeriod": {
+      "granularity": "MWST-Periode",
+      "quarter": "Quartal",
+      "half": "Halbjahr",
+      "month": "Monat",
+      "year": "Jahr",
+      "yearLabel": "Jahr",
+      "monthLabel": "Monat",
+      "quarterLabel": "Welches Quartal",
+      "halfLabel": "Welches Halbjahr"
+    },
+    "filter": {
+      "account": "Konto",
+      "accountPlaceholder": "Konto-Nr.",
+      "source": "Quelle",
+      "clear": "Filter entfernen"
+    }
   },
   "help": {
     "Review": {

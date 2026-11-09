@@ -36,6 +36,7 @@ import { formatItemParams, itemSubtitle, itemTitle, queueName } from './itemText
 import { Amount } from './Amount';
 import { pickAction, reasonSentence, rowConsequence, visibleOptions, type DecisionOption } from './RowDecision';
 import { REMAINDER_KIND, type Item } from './model';
+import { Field } from '../../components/Field';
 
 /** The meta line's separator. Non-breaking spaces: the meta line is a flex row, which trims plain ones. */
 const SEP = ' · ';
@@ -281,27 +282,26 @@ export function AttentionRow({
       </div>
       {confirming !== null && (
         <div className="att-row-confirm" role="group" aria-label={t(confirming.labelKey)}>
-          <label className="att-row-confirm-label" htmlFor={reasonFieldId}>
-            {t('attention.act.reasonLabel')}
-          </label>
-          <input
-            id={reasonFieldId}
-            className="field"
-            type="text"
-            value={reason}
-            placeholder={t(confirming.reasonPlaceholderKey ?? 'attention.act.reasonPlaceholder')}
-            disabled={locked}
-            onChange={(e) => setReason(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                if (confirming.confirmLabelKey === undefined || reason.trim() !== '') commit(confirming);
-              } else if (e.key === 'Escape') {
-                setConfirming(null);
-              }
-            }}
-          />
-          <div className="att-row-confirm-actions">
+          <Field label={t('attention.act.reasonLabel')}>
+            <input
+              id={reasonFieldId}
+              className="field"
+              type="text"
+              value={reason}
+              placeholder={t(confirming.reasonPlaceholderKey ?? 'attention.act.reasonPlaceholder')}
+              disabled={locked}
+              onChange={(e) => setReason(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (confirming.confirmLabelKey === undefined || reason.trim() !== '') commit(confirming);
+                } else if (e.key === 'Escape') {
+                  setConfirming(null);
+                }
+              }}
+            />
+          </Field>
+          <div className="form-actions att-row-confirm-actions">
             <button
               type="button"
               className={confirming.role === 'danger' ? 'btn btn--danger btn--sm' : 'btn btn--secondary btn--sm'}

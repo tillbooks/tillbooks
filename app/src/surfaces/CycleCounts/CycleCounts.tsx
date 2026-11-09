@@ -45,6 +45,7 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import { ActionFeedback } from '../../components/ActionFeedback';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
@@ -53,6 +54,7 @@ import { Modal } from '../../components/Modal';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeletonHold, refusalText } from '../../components/states';
 import { OverflowMenu } from '../../components/OverflowMenu';
+import { FilterBar } from '../../components/FilterBar';
 import { Status, type StatusKind } from '../../components/Status';
 import { formatCalendar } from '../../lib/format';
 import './CycleCounts.css';
@@ -206,6 +208,10 @@ export function CycleCounts() {
   const [failed, setFailed] = useState(false);
   const [denied, setDenied] = useState(false);
   const [writeError, setWriteError] = useState<Err | null>(null);
+
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
 
   const [createDrawer, setCreateDrawer] = useState(false);
   const [createDraft, setCreateDraft] = useState<CreateDraft>(emptyCreate);
@@ -545,11 +551,35 @@ export function CycleCounts() {
   if (workspaceId === null) return <NoWorkspaceState body={t('cycleCounts.noWorkspace')} />;
   if (denied) return <PermissionDenied title={t('cycleCounts.title')} />;
 
+  // D187 List A: the search and the two facets narrow the sessions.
+  const needle = search.trim().toLocaleLowerCase();
+  const shownSessions = sessions.filter(
+    (sn) =>
+      (needle === '' ||
+        t(`cycleCounts.type.${sn.type}`).toLocaleLowerCase().includes(needle) ||
+        formatCalendar(sn.freezeAt).toLocaleLowerCase().includes(needle)) &&
+      (statusFilter === null || sn.status === statusFilter) &&
+      (typeFilter === null || sn.type === typeFilter),
+  );
+  const clearFilters = () => {
+    setSearch('');
+    setStatusFilter(null);
+    setTypeFilter(null);
+  };
+  const sessionColumns: DataTableColumn<SessionSummary>[] = [
+    { key: 'type', header: t('cycleCounts.form.type'), render: (sn) => <span className="cc-li-type">{t(`cycleCounts.type.${sn.type}`)}</span> },
+    { key: 'status', header: t('cycleCounts.col.status'), render: (sn) => <Status kind={SESSION_KIND[sn.status] ?? 'neutral'} label={t(`cycleCounts.status.${sn.status}`)} /> },
+    { key: 'freeze', header: t('cycleCounts.freeze'), render: (sn) => formatCalendar(sn.freezeAt) },
+    { key: 'progress', header: t('cycleCounts.progress'), numeric: true, render: (sn) => `${sn.progressPct}%` },
+    { key: 'lines', header: t('cycleCounts.lineCount', { n: '' }).trim(), numeric: true, headerHidden: true, render: (sn) => t('cycleCounts.lineCount', { n: sn.totalLines }) },
+  ];
+
   return (
     <div className="cc">
       <SurfaceHeader
         title={t('cycleCounts.title')}
         help={<SurfaceHelp surface="CycleCounts" />}
+        count={showSkeleton ? undefined : shownSessions.length}
         actions={
           <button
             type="button"
@@ -590,34 +620,51 @@ export function CycleCounts() {
             : {})}
         />
       ) : (
-        <div className={selected === null ? 'cc-split cc-split--solo' : 'cc-split'}>
-          <section className="cc-pane" aria-label={t('cycleCounts.listLabel')}>
-            <ul className="cc-list">
-              {sessions.map((s) => (
-                <li key={s.id}>
-                  {/* A list row: the open session is current (K-17, K-22), the pill, announced. */}
-                  <button
-                    type="button"
-                    className="cc-list-item"
-                    onClick={() => choose(selectedId === s.id ? null : s.id)}
-                    aria-current={s.id === selectedId ? 'true' : undefined}
-                  >
-                    <span className="cc-li-main">
-                      <span className="cc-li-type">{t(`cycleCounts.type.${s.type}`)}</span>
-                      <Status kind={SESSION_KIND[s.status] ?? 'neutral'} label={t(`cycleCounts.status.${s.status}`)} />
-                    </span>
-                    <span className="cc-li-sub">
-                      {formatCalendar(s.freezeAt)} · {s.progressPct}% · {t('cycleCounts.lineCount', { n: s.totalLines })}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          {selected !== null && (
-          <section className="cc-pane cc-detail" aria-label={t('cycleCounts.detailLabel')}>
-            {detail === null ? null : (
+        <>
+          <FilterBar
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchLabel={t('cycleCounts.search')}
+            searchPlaceholder={t('cycleCounts.search')}
+            facets={[
+              {
+                key: 'status',
+                label: t('cycleCounts.col.status'),
+                options: (['open', 'review', 'committed', 'cancelled'] as const).map((st) => ({ value: st, label: t(`cycleCounts.status.${st}`) })),
+                value: statusFilter,
+                onChange: setStatusFilter,
+              },
+              {
+                key: 'type',
+                label: t('cycleCounts.form.type'),
+                options: SESSION_TYPES.map((ty) => ({ value: ty, label: t(`cycleCounts.type.${ty}`) })),
+                value: typeFilter,
+                onChange: setTypeFilter,
+              },
+            ]}
+          />
+          <DataTable
+            columns={sessionColumns}
+            rows={shownSessions}
+            rowKey={(sn) => sn.id}
+            caption={t('cycleCounts.listLabel')}
+            isRowCurrent={(sn) => sn.id === selectedId}
+            rowLabel={(sn) => `${t(`cycleCounts.type.${sn.type}`)} ${formatCalendar(sn.freezeAt)}`}
+            emptyState={
+              <EmptyState
+                title={t('cycleCounts.emptyFiltered')}
+                filtered={{ onClear: clearFilters, clearLabel: t('cycleCounts.filter.clear') }}
+              />
+            }
+            // D187 Work through items B: the session opens in place under its row (count entry and
+            // variance review need the table's full width); a deep link (`?focus=`) opens it the same way.
+            expand={{
+              openKey: selectedId,
+              onOpenChange: (key) => choose(key),
+              label: (sn) => t('cycleCounts.expandLabel', { type: t(`cycleCounts.type.${sn.type}`), date: formatCalendar(sn.freezeAt) }),
+              render: () =>
+                selected === null || detail === null ? null : (
+                  <section className="cc-detail" aria-label={t('cycleCounts.detailLabel')}>
               <>
                 <div className="cc-detail-head">
                   <div>
@@ -632,6 +679,14 @@ export function CycleCounts() {
                   {/* D152 rule 2: the session's actions exist only while it is open or in review.
                       A committed or cancelled session shows none (they used to sit there disabled),
                       and the approve appears only while lines actually wait for it. */}
+                  {/* The commit's precondition stays beside it (round-2 critic): lines over the threshold
+                      need an approval before Buchen, so the sentence is visible in the open session. */}
+                  {detail.session.reviewRequiredLines > 0 && (
+                    <ActionFeedback
+                      tone="info"
+                      message={t('cycleCounts.reviewBanner', { n: detail.session.reviewRequiredLines })}
+                    />
+                  )}
                   {isOpenLike && (
                   <div className="cc-actions">
                     {detail.session.reviewRequiredLines > 0 && (
@@ -658,12 +713,6 @@ export function CycleCounts() {
                   )}
                 </div>
 
-                {detail.session.reviewRequiredLines > 0 && (
-                  <ActionFeedback
-                    tone="info"
-                    message={t('cycleCounts.reviewBanner', { n: detail.session.reviewRequiredLines })}
-                  />
-                )}
                 {detail.session.status === 'committed' && (
                   <ActionFeedback
                     tone="success"
@@ -686,10 +735,11 @@ export function CycleCounts() {
                   emptyState={<p className="cc-muted">{t('cycleCounts.noLines')}</p>}
                 />
               </>
-            )}
-          </section>
-          )}
-        </div>
+                  </section>
+                ),
+            }}
+          />
+        </>
       )}
 
       <DetailDrawer
@@ -709,8 +759,8 @@ export function CycleCounts() {
         }
       >
         {writeError && <ErrorBanner error={writeError} message={localError(writeError)} />}
-        <div className="cc-field">
-          <label htmlFor="cc-type">{t('cycleCounts.form.type')}</label>
+        <div className="form-stack">
+        <Field label={t('cycleCounts.form.type')} size="short">
           <Select
             id="cc-type"
             value={createDraft.type}
@@ -718,26 +768,25 @@ export function CycleCounts() {
             options={SESSION_TYPES.map((ty) => ({ value: ty, label: t(`cycleCounts.type.${ty}`) }))}
             ariaLabel={t('cycleCounts.form.type')}
           />
-        </div>
-        <div className="cc-field">
-          <label htmlFor="cc-freeze">{t('cycleCounts.form.freeze')}</label>
+        </Field>
+        <Field label={t('cycleCounts.form.freeze')} size="date">
           <input id="cc-freeze" className="field" type="date" value={createDraft.freezeAt} onChange={(e) => setCreateDraft({ ...createDraft, freezeAt: e.target.value })} />
-        </div>
+        </Field>
         <label className="cc-check">
           <input type="checkbox" checked={createDraft.blindCount} onChange={(e) => setCreateDraft({ ...createDraft, blindCount: e.target.checked })} />
           <span>{t('cycleCounts.form.blind')}</span>
         </label>
-        <div className="cc-field">
-          <label htmlFor="cc-qt">{t('cycleCounts.form.qtyThreshold')}</label>
+        <div className="form-line">
+        <Field label={t('cycleCounts.form.qtyThreshold')} size="code">
           <input id="cc-qt" className="field" type="number" min="0" value={createDraft.varianceQtyThreshold} onChange={(e) => setCreateDraft({ ...createDraft, varianceQtyThreshold: e.target.value })} />
-        </div>
-        <div className="cc-field">
-          <label htmlFor="cc-pt">{t('cycleCounts.form.pctThreshold')}</label>
+        </Field>
+        <Field label={t('cycleCounts.form.pctThreshold')} size="code">
           <input id="cc-pt" className="field" type="number" min="0" value={createDraft.variancePctThreshold} onChange={(e) => setCreateDraft({ ...createDraft, variancePctThreshold: e.target.value })} />
+        </Field>
         </div>
-        <div className="cc-field">
-          <label htmlFor="cc-notes">{t('cycleCounts.form.notes')}</label>
+        <Field label={t('cycleCounts.form.notes')} size="name">
           <input id="cc-notes" className="field" value={createDraft.notes} onChange={(e) => setCreateDraft({ ...createDraft, notes: e.target.value })} />
+        </Field>
         </div>
       </DetailDrawer>
 

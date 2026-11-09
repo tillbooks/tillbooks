@@ -106,6 +106,7 @@ function IconEntryRow({
   onClose,
   onNavigate,
   badge,
+  hoverFlyouts = true,
 }: {
   entry: IconEntry;
   light: EntryLight;
@@ -114,6 +115,8 @@ function IconEntryRow({
   onClose: () => void;
   onNavigate: (path: string) => void;
   badge?: AttentionBadgeState;
+  /** D187: false while the whole menu slides open on hover (the Shell's peek); focus still opens them. */
+  hoverFlyouts?: boolean;
 }) {
   const t = useT();
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -155,8 +158,11 @@ function IconEntryRow({
     <div
       ref={wrapRef}
       className="rail-icon-entry"
-      onMouseEnter={openFlyout}
-      onMouseLeave={onClose}
+      onMouseEnter={hoverFlyouts ? openFlyout : undefined}
+      onMouseLeave={hoverFlyouts ? onClose : undefined}
+      // D187 fix: after a click on a link icon the pointer is still there but mouseenter will not fire
+      // again, so its label never came back. Moving over the icon brings it back.
+      onMouseMove={hoverFlyouts && entry.kind === 'link' && !open ? openFlyout : undefined}
       onFocus={openFlyout}
       onBlur={onWrapBlur}
       onKeyDown={onWrapKeyDown}
@@ -172,8 +178,9 @@ function IconEntryRow({
         aria-haspopup={entry.kind === 'group' ? true : undefined}
         aria-expanded={entry.kind === 'group' ? open : undefined}
         onClick={() => {
+          // D187 fix: a click on a group icon OPENS its flyout. It used to toggle, so the flyout the
+          // hover (or the focus the click itself gave) had just opened closed under the click.
           if (entry.kind === 'link') onNavigate(entry.path);
-          else if (open) onClose();
           else openFlyout();
         }}
       >
@@ -220,7 +227,7 @@ function AttentionIconEntryRow(props: Omit<Parameters<typeof IconEntryRow>[0], '
 
 /** The collapsed rail body: the favourites, then the menu's icons, with their flyouts. Exactly one
  *  flyout is open at a time. Choosing a destination navigates and dismisses the drawer. */
-export function IconRail({ onNavigate }: { onNavigate?: () => void }) {
+export function IconRail({ onNavigate, hoverFlyouts = true }: { onNavigate?: () => void; hoverFlyouts?: boolean }) {
   const t = useT();
   const location = useLocation();
   const navigate = useNavigate();
@@ -281,6 +288,7 @@ export function IconRail({ onNavigate }: { onNavigate?: () => void }) {
       onOpen: () => setOpenId(entry.key),
       onClose: () => setOpenId((current) => (current === entry.key ? null : current)),
       onNavigate: go,
+      hoverFlyouts,
     };
     return entry.kind === 'link' && entry.path === ATTENTION_PATH ? (
       <AttentionIconEntryRow key={entry.key} {...props} />

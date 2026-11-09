@@ -335,6 +335,7 @@ describe('the QR-IBAN completeness note (INV-6)', () => {
     );
     // An incompleteness, not a failure: A18 does not exist yet, so shouting would invent urgency.
     expect(note.closest('[role="status"]')).not.toBeNull();
+    expect(note).toBeVisible();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     // Its action is not a second "Konto hinzufügen" forty pixels from the primary.
     expect(screen.getByRole('button', { name: 'Normale IBAN erfassen' })).toBeInTheDocument();
@@ -383,11 +384,12 @@ describe('the QR-IBAN completeness note (INV-6)', () => {
       });
 
       await screen.findByText(/Du hast eine QR-IBAN/);
-      await userEvent.click(screen.getByRole('button', { name: 'Nicht mehr anzeigen' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Nicht mehr anzeigen' }));
       expect(screen.queryByText(/Du hast eine QR-IBAN/)).not.toBeInTheDocument();
 
       // The register grew a QR-IBAN the dismissal never covered.
-      await userEvent.click(screen.getByLabelText('Archivierte anzeigen'));
+      await userEvent.click(screen.getByRole('button', { name: 'Filter hinzufügen' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Archivierte anzeigen' }));
       expect(await screen.findByText(/Du hast eine QR-IBAN/)).toBeInTheDocument();
     });
 
@@ -406,15 +408,17 @@ describe('the QR-IBAN completeness note (INV-6)', () => {
       });
 
       await screen.findByText(/Du hast eine QR-IBAN/);
-      await userEvent.click(screen.getByRole('button', { name: 'Nicht mehr anzeigen' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Nicht mehr anzeigen' }));
 
-      await userEvent.click(screen.getByLabelText('Archivierte anzeigen'));
+      await userEvent.click(screen.getByRole('button', { name: 'Filter hinzufügen' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Archivierte anzeigen' }));
       await screen.findByText('Raiffeisen EUR');
       // A complete register has nothing to suppress, so the dismissal is forgotten rather than
       // banked against the next time the register breaks.
       expect(window.localStorage.getItem('till.bank.qrNoteDismissed.ws_test')).toBeNull();
 
-      await userEvent.click(screen.getByLabelText('Archivierte anzeigen'));
+      // The facet is a chip now: its x lifts the filter again.
+      await userEvent.click(screen.getByRole('button', { name: /Entfernen/ }));
       expect(await screen.findByText(/Du hast eine QR-IBAN/)).toBeInTheDocument();
     });
 
@@ -423,9 +427,10 @@ describe('the QR-IBAN completeness note (INV-6)', () => {
       renderBank({ ...HAPPY, list_bank_accounts: () => ok(qrOnlyFixture) });
 
       await screen.findByText(/Du hast eine QR-IBAN/);
-      await userEvent.click(screen.getByRole('button', { name: 'Nicht mehr anzeigen' }));
-      await userEvent.click(screen.getByLabelText('Archivierte anzeigen'));
-      await waitFor(() => expect(screen.getByLabelText('Archivierte anzeigen')).toBeChecked());
+        await userEvent.click(screen.getByRole('button', { name: 'Nicht mehr anzeigen' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Filter hinzufügen' }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Archivierte anzeigen' }));
+      await waitFor(() => expect(screen.getByRole('button', { name: /Entfernen/ })).toBeInTheDocument());
       expect(screen.queryByText(/Du hast eine QR-IBAN/)).not.toBeInTheDocument();
     });
   });
@@ -492,7 +497,8 @@ describe('the row overflow, and what governs it', () => {
     expect(listSpy.mock.calls[0][0]).toMatchObject({ workspaceId: 'ws_test' });
     expect(listSpy.mock.calls[0][0].includeArchived).toBeUndefined();
 
-    await userEvent.click(screen.getByLabelText('Archivierte anzeigen'));
+    await userEvent.click(screen.getByRole('button', { name: 'Filter hinzufügen' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Archivierte anzeigen' }));
     await waitFor(() => expect(listSpy.mock.calls.length).toBeGreaterThan(1));
     expect(listSpy.mock.calls[listSpy.mock.calls.length - 1][0]).toMatchObject({
       includeArchived: true,

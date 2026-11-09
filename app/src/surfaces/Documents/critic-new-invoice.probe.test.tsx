@@ -355,7 +355,7 @@ describe('PROBE a11y: the populated Neue Rechnung (terms (i), currency (i), QR h
     await userEvent.click(screen.getByLabelText('Einzelpreis 1'));
     await userEvent.paste('150');
     await screen.findByLabelText('QR-Bereitschaft');
-    const triggers = Array.from(container.querySelectorAll('.documents-info-trigger'));
+    const triggers = Array.from(container.querySelectorAll('.documents-info .icon-button'));
     expect(triggers.length).toBeGreaterThanOrEqual(3);
     for (const b of triggers) {
       expect(b).toHaveAccessibleName();

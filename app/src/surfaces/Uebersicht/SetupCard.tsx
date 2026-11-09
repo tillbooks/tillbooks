@@ -26,6 +26,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useWorkspaceId } from '../../app/workspace';
+import { IconButton } from '../../components/IconButton';
 import { useCapabilities } from '../../lib/capabilities';
 import { useClient } from '../../lib/client-context';
 import { isErr } from '../../lib/client';
@@ -200,11 +201,11 @@ export function SetupCard({ tiles }: { tiles: readonly DashboardTileView[] }) {
         <h2 id="setup-card-title" className="setup-card-title">
           {t('dashboard.setup.title')}
         </h2>
+        <IconButton icon="info" small context={t('dashboard.setup.lead')} />
         <button type="button" className="setup-card-dismiss" onClick={dismiss}>
           {t('dashboard.setup.dismiss')}
         </button>
       </div>
-      <p className="setup-card-lead">{t('dashboard.setup.lead')}</p>
       <ol className="setup-card-steps">
         {SETUP_STEPS.map((step) => {
           const isDone = done[step.done];

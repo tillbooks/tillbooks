@@ -39,12 +39,11 @@ import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { Tabs, type TabItem } from '../../components/Tabs';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
-import { Select } from '../../components/Select';
+import { FilterBar, type FilterFacet } from '../../components/FilterBar';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import { Segmented } from '../../components/Segmented';
 import { Status, type StatusKind } from '../../components/Status';
-import { Tooltip } from '../../components/Tooltip';
-import { InfoGlyph } from '../Bank/glyphs';
+import { IconButton } from '../../components/IconButton';
 import { dispatchDefaultText } from '../../../../src/core/customization/dispatchDefaults.js';
 import { formatCalendar } from '../../lib/format';
 import './Dispatch.css';
@@ -188,6 +187,7 @@ export function Dispatch() {
   const [bodyText, setBodyText] = useState('');
   const [preview, setPreview] = useState<Preview | null>(null);
   const [outcomeFilter, setOutcomeFilter] = useState<'' | Outcome>('');
+  const [logSearch, setLogSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [denied, setDenied] = useState(false);
@@ -387,13 +387,24 @@ export function Dispatch() {
   const canReset = savedSlot !== undefined || !subjectIsStandard || !bodyIsStandard;
   /** The (i) beside a heading: an icon button whose one-sentence explanation is its tooltip (D152 rule 4). */
   const info = (label: string, text: string) => (
-    <Tooltip content={text} placement="bottom">
-      <button type="button" className="btn btn--ghost btn--icon btn--sm dispatch-info" aria-label={label}>
-        <InfoGlyph size={16} />
-      </button>
-    </Tooltip>
+    <IconButton icon="info" small name={label} context={text} placement="bottom" />
   );
-  const visibleRows = outcomeFilter === '' ? rows : rows.filter((r) => r.outcome === outcomeFilter);
+
+  const logNeedle = logSearch.trim().toLowerCase();
+  const visibleRows = rows.filter(
+    (r) =>
+      (outcomeFilter === '' || r.outcome === outcomeFilter) &&
+      (logNeedle === '' || (r.recipientEmail ?? '').toLowerCase().includes(logNeedle)),
+  );
+  const logFacets: FilterFacet[] = [
+    {
+      key: 'outcome',
+      label: t('dispatch.log.result'),
+      options: OUTCOMES.map((o) => ({ value: o, label: t(`dispatch.log.outcome.${OUTCOME_KEY[o]}`) })),
+      value: outcomeFilter === '' ? null : outcomeFilter,
+      onChange: (value) => setOutcomeFilter((value ?? '') as '' | Outcome),
+    },
+  ];
 
   const textsTab = (
     <div className="dispatch-body">
@@ -570,18 +581,18 @@ export function Dispatch() {
 
   const logTab = (
     <div className="dispatch-main">
-      <div className="dispatch-filter">
-        <span>{t('dispatch.log.filterLabel')}</span>
-        <Select
-          value={outcomeFilter}
-          onChange={(val) => setOutcomeFilter(val as '' | Outcome)}
-          options={[
-            { value: '', label: t('dispatch.log.filterAll') },
-            ...OUTCOMES.map((o) => ({ value: o, label: t(`dispatch.log.outcome.${OUTCOME_KEY[o]}`) })),
-          ]}
-          ariaLabel={t('dispatch.log.filterLabel')}
-        />
-      </div>
+      <FilterBar
+        searchValue={logSearch}
+        onSearchChange={setLogSearch}
+        searchLabel={t('dispatch.log.search')}
+        searchPlaceholder={t('dispatch.log.search')}
+        onClear={() => {
+          setLogSearch('');
+          setOutcomeFilter('');
+        }}
+        clearLabel={t('dispatch.log.filterClear')}
+        facets={logFacets}
+      />
       <DataTable
         columns={logColumns}
         rows={visibleRows}
@@ -607,6 +618,7 @@ export function Dispatch() {
       <SurfaceHeader
         title={t('dispatch.title')}
         titleId="dispatch-title"
+        count={tab === 'log' && !loading && !failed ? visibleRows.length : undefined}
         help={<SurfaceHelp surface="Dispatch" />}
       />
       {failed && <ErrorBanner context="read" onRetry={() => void load()} />}

@@ -19,71 +19,11 @@
   gap: var(--t-space-2);
 }
 
-.ls-split {
-  display: grid;
-  grid-template-columns: minmax(220px, 300px) 1fr;
-  gap: var(--t-space-2);
-  align-items: start;
-}
-
-@media (max-width: 720px) {
-  .ls-split {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* A pane is the elevated panel on the page, never a hairline box (K-09). */
-.ls-pane {
-  border: 1px solid transparent;
-  border-radius: var(--t-radius-md);
-  background: var(--t-bg-elev);
-  padding: var(--t-space-1);
-}
-
 .ls-detail {
-  padding: var(--t-space-2);
+  padding: var(--t-space-1) 0;
   display: flex;
   flex-direction: column;
   gap: var(--t-space-2);
-}
-
-/* The item navigation list (the master pane): a single-column pick-one list, not a tabular grid, so
-   it stays bespoke rather than adopting DataTable. */
-.ls-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-/* An item is a 32px list row with a transparent 1px border, where the focus cue lands (K-10); the
-   current one is the tinted pill (K-17). */
-.ls-list-item {
-  width: 100%;
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-  gap: var(--t-space-1);
-  padding: 0 var(--t-space-1);
-  border: 1px solid transparent;
-  background: none;
-  border-radius: var(--t-radius-sm);
-  cursor: pointer;
-  text-align: left;
-  color: inherit;
-  font: inherit;
-  transition: background-color var(--t-motion-hover) var(--t-ease-out);
-}
-
-.ls-list-item:hover {
-  background: var(--t-bg-soft);
-}
-
-.ls-list-item[aria-current='true'] {
-  background: var(--t-accent-soft);
-  color: var(--t-accent);
 }
 
 .ls-item-name {

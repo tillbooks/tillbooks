@@ -33,10 +33,10 @@ import { isErr } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatMoney, formatDate } from '../../i18n';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeletonHold } from '../../components/states';
+import { Field } from '../../components/Field';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { Status, type StatusKind } from '../../components/Status';
-import { Select } from '../../components/Select';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { FilterBar } from '../../components/FilterBar';
 import { OverflowMenu } from '../../components/OverflowMenu';
@@ -186,9 +186,10 @@ export function Projects() {
 
   // The header is the one block every state shares, so it is rendered once here and reused by the
   // early returns below rather than copy-pasted into each of them (SurfaceHeader, D118 B2).
-  const header = (actions?: ReactNode) => (
+  const header = (actions?: ReactNode, count?: number) => (
     <SurfaceHeader
       title={t('project.route.title')}
+      count={count}
       help={<SurfaceHelp surface="Projects" />}
       actions={actions}
     />
@@ -315,7 +316,7 @@ export function Projects() {
 
   return (
     <div className="projects">
-      {header(createButton)}
+      {header(createButton, hasProjects ? rows.length : undefined)}
 
       {rowError !== null && <ErrorBanner error={rowError} />}
 
@@ -338,20 +339,16 @@ export function Projects() {
               }}
               clearLabel={t('project.clearSearch')}
               active={search.trim() !== '' || statusFilter !== ''}
-            >
-              <div className="projects-status-filter">
-                <span className="visually-hidden">{t('project.list.statusFilter')}</span>
-                <Select
-                  value={statusFilter}
-                  onChange={(val) => setStatusFilter(val as '' | ProjectStatus)}
-                  options={[
-                    { value: '', label: t('project.list.allStatuses') },
-                    ...PROJECT_STATUSES.map((s) => ({ value: s, label: t(`project.status.${s}`) })),
-                  ]}
-                  ariaLabel={t('project.list.statusFilter')}
-                />
-              </div>
-            </FilterBar>
+              facets={[
+                {
+                  key: 'status',
+                  label: t('project.list.statusFilter'),
+                  options: PROJECT_STATUSES.map((s) => ({ value: s, label: t(`project.status.${s}`) })),
+                  value: statusFilter === '' ? null : statusFilter,
+                  onChange: (value) => setStatusFilter((value ?? '') as '' | ProjectStatus),
+                },
+              ]}
+            />
 
             <DataTable
               columns={columns}
@@ -698,24 +695,21 @@ function ProjectDetail({
 
         {adding && (
           <form
-            className="projects-phase-form"
+            className="projects-phase-form form-line"
             onSubmit={(e) => {
               e.preventDefault();
               void addPhase();
             }}
           >
-            <label className="projects-field">
-              <span>{t('project.phase.name')}</span>
+            <Field label={t('project.phase.name')} size="name">
               <input className="field" type="text" value={phaseName} onChange={(e) => setPhaseName(e.target.value)} required />
-            </label>
-            <label className="projects-field">
-              <span>{t('project.phase.budget')}</span>
+            </Field>
+            <Field label={t('project.phase.budget')} size="amount">
               <input className="field" type="text" inputMode="decimal" value={phaseBudget} onChange={(e) => setPhaseBudget(e.target.value)} />
-            </label>
-            <label className="projects-field">
-              <span>{t('project.phase.milestone')}</span>
+            </Field>
+            <Field label={t('project.phase.milestone')} size="date">
               <input className="field" type="date" value={phaseMilestone} onChange={(e) => setPhaseMilestone(e.target.value)} />
-            </label>
+            </Field>
             <div className="projects-phase-form-actions">
               <button type="button" className="btn btn--secondary btn--sm" onClick={() => setAdding(false)}>
                 {t('project.phase.cancel')}

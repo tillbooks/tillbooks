@@ -368,12 +368,11 @@ describe('Journal, Quelle filter reaches engine-only sources', () => {
     await waitFor(() => expect(calls.filter((c) => c.action === 'list_journal').length).toBe(1));
     expect(calls[calls.findIndex((c) => c.action === 'list_journal')].input.source).toBeUndefined();
 
+    // D187: a facet is offered under "+ Filter"; open it the way a person does.
+    await userEvent.click(screen.getByRole('button', { name: 'Add a filter' }));
     // The option is present under its translated label, not the raw key.
-    const sourceSelect = screen.getByRole('combobox', { name: 'Source' });
-    await userEvent.click(sourceSelect);
-    const purchaseOption = screen.getByRole('option', { name: 'Vendor bill' });
+    const purchaseOption = screen.getByRole('menuitem', { name: /Vendor bill/ });
     expect(purchaseOption).toBeInTheDocument();
-    expect(purchaseOption).toHaveAttribute('data-value', 'purchase');
 
     await userEvent.click(purchaseOption);
 
@@ -1515,7 +1514,7 @@ describe('Journal, the Belegnummer (D178 point 2)', () => {
   it('filters by number: the typed value reaches list_journal as number, trimmed, and clears with the rest', async () => {
     const { calls } = renderJournal({ list_journal: { status: 200, body: { ok: true, entries: [] } } });
     await waitFor(() => expect(calls.filter((c) => c.action === 'list_journal').length).toBe(1));
-    await userEvent.type(screen.getByRole('textbox', { name: 'Voucher no.' }), ' 118 ');
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Voucher no.' }), ' 118 ');
     await waitFor(() => expect([...calls].reverse().find((c) => c.action === 'list_journal')?.input.number).toBe('118'));
     // A filtered miss reads as "no match", with the way back.
     expect(await screen.findByText('No entries match these filters.')).toBeInTheDocument();
@@ -1565,6 +1564,17 @@ describe('Journal, the Belegnummer (D178 point 2)', () => {
     expect(await screen.findByRole('dialog', { name: 'View entry' })).toBeInTheDocument();
   });
 
+  it('D187: a set facet shows as a chip after the search, and removing it reads the whole journal again', async () => {
+    const { calls } = renderJournal({ list_journal: { status: 200, body: { ok: true, entries: [] } } });
+    await waitFor(() => expect(calls.filter((c) => c.action === 'list_journal').length).toBe(1));
+    await userEvent.click(screen.getByRole('button', { name: 'Add a filter' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /Posted/ }));
+    expect(screen.getByRole('button', { name: 'Change Status' })).toBeInTheDocument();
+    await waitFor(() => expect([...calls].reverse().find((c) => c.action === 'list_journal')?.input.status).toBe('posted'));
+    await userEvent.click(screen.getByRole('button', { name: /Remove/ }));
+    await waitFor(() => expect([...calls].reverse().find((c) => c.action === 'list_journal')?.input.status).toBeUndefined());
+  });
+
   it('de-CH: the column and the filter say Beleg-Nr.', async () => {
     renderJournal(
       { list_journal: { status: 200, body: { ok: true, entries: [postedEntry({ number: '7' })] } } },
@@ -1572,6 +1582,6 @@ describe('Journal, the Belegnummer (D178 point 2)', () => {
     );
     const table = await screen.findByRole('table');
     expect(within(table).getByRole('columnheader', { name: 'Beleg-Nr.' })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Beleg-Nr.' })).toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: 'Beleg-Nr.' })).toBeInTheDocument();
   });
 });

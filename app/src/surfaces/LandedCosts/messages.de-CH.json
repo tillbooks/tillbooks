@@ -79,7 +79,8 @@
       "invalid_amount": "Der Betrag muss eine positive Zahl sein.",
       "allocation_residual": "Die Zuteilung hat nicht das gesamte Total verteilt."
     },
-    "moreActions": "Weitere Aktionen für Beleg {number}"
+    "moreActions": "Weitere Aktionen für Beleg {number}",
+    "search": "Nebenkosten suchen"
   },
   "help": {
     "LandedCosts": {

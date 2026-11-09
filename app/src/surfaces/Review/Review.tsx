@@ -53,7 +53,7 @@ import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../
 import { useCan, CAP } from '../../lib/capabilities';
 import { COMMIT_TARGET_CLASS, commitAck, prefersReducedMotion, useCommitAck } from '../../lib/motion';
 import { PeriodField } from './PeriodField';
-import { CoverageBar } from './CoverageBar';
+import { CoverageActions, CoverageBar } from './CoverageBar';
 import { LockDialog } from './LockDialog';
 import { CheckGlyph, CommentGlyph, FlagGlyph } from './glyphs';
 import { LockGlyph } from '../../components/states/glyphs';
@@ -599,7 +599,7 @@ export function Review() {
         title={t('review.title')}
         titleId="review-title"
         help={<SurfaceHelp surface="Review" />}
-        actions={
+        toolbar={
           <PeriodField
             granularity={granularity}
             month={month}
@@ -608,6 +608,21 @@ export function Review() {
             onMonth={setMonth}
             onYear={setYear}
           />
+        }
+        actions={
+          status !== null && !loading && !failed && status.total > 0 ? (
+            <CoverageActions
+              status={status}
+              locked={locked}
+              canManagePeriods={canManagePeriods}
+              approvingAll={approvingAll}
+              onApproveAll={() => setConfirmingAll(true)}
+              onLock={() => {
+                setLockFailed(false);
+                setConfirming(true);
+              }}
+            />
+          ) : undefined
         }
       />
 
@@ -631,17 +646,7 @@ export function Review() {
       )}
 
       {status !== null && !loading && !failed && status.total > 0 && (
-        <CoverageBar
-          status={status}
-          locked={locked}
-          canManagePeriods={canManagePeriods}
-          approvingAll={approvingAll}
-          onApproveAll={() => setConfirmingAll(true)}
-          onLock={() => {
-            setLockFailed(false);
-            setConfirming(true);
-          }}
-        />
+        <CoverageBar status={status} locked={locked} canManagePeriods={canManagePeriods} />
       )}
 
       {approveAllFailed > 0 && (

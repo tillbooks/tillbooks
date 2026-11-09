@@ -1,0 +1,94 @@
+/* SettingRow, SettingGroup (D187, the owner's pick "Einstellungen A"). One calm column: the name and
+   its one-line explanation on the left, the control on the right, a hairline between rows, a small
+   heading over each group. Only --t-* tokens. */
+
+.setting-group {
+  display: grid;
+  max-width: 860px;
+}
+
+.setting-group + .setting-group {
+  margin-top: var(--t-space-4);
+}
+
+.setting-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-2);
+  min-height: 28px;
+}
+
+.setting-group-title {
+  margin: 0;
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 600;
+  color: var(--t-text-dim);
+}
+
+.setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-4);
+  padding-block: var(--t-space-2);
+  border-bottom: 1px solid var(--t-border);
+}
+
+.setting-row-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.setting-row-name {
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 500;
+  color: var(--t-text);
+}
+
+.setting-row-desc {
+  margin: 0;
+  max-width: 52ch;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+.setting-row-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+/* "Standard" shows only while the value differs from the default: a quiet word, not an icon. */
+.setting-row-reset {
+  height: 28px;
+  padding: 0 var(--t-space-1);
+  border: 0;
+  border-radius: var(--t-radius-sm);
+  background: none;
+  color: var(--t-text-dim);
+  font: inherit;
+  font-size: var(--t-font-sm);
+  cursor: pointer;
+}
+
+.setting-row-reset:hover {
+  color: var(--t-text);
+  background: var(--t-bg-soft);
+}
+
+@media (max-width: 767px) {
+  .setting-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .setting-row-control {
+    justify-content: flex-start;
+  }
+}

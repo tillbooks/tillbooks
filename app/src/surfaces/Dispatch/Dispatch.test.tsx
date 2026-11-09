@@ -348,7 +348,7 @@ describe('Dispatch', () => {
       const trigger = screen.getByRole('button', { name: label });
       expect(trigger).toHaveAccessibleDescription(hint);
       const tip = document.getElementById(trigger.getAttribute('aria-describedby') ?? '');
-      expect(tip).toHaveAttribute('role', 'tooltip');
+      expect(tip?.closest('[role="tooltip"]')).not.toBeNull();
       // Hidden at rest: the hint is reachable, not shown.
       expect(tip).not.toHaveClass('is-open');
     }
@@ -430,8 +430,8 @@ describe('Dispatch', () => {
     // The outcome filter narrows the table client-side: no failed rows exist, so the table gives
     // way to the named empty state. (The select's own option labels remain, so the assertion is on
     // the TABLE's absence, not on label text.)
-    await user.click(screen.getByLabelText(de.dispatch.log.filterLabel));
-    await user.click(screen.getAllByRole('option').find((o) => o.getAttribute('data-value') === 'failed')!);
+    await user.click(screen.getByRole('button', { name: 'Filter hinzufügen' }));
+    await user.click(screen.getByRole('menuitem', { name: new RegExp(de.dispatch.log.outcome.failed) }));
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.getByText(de.dispatch.log.empty)).toBeInTheDocument();
   });

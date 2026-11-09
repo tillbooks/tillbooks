@@ -31,14 +31,14 @@ connects to the TILL Studio running on your own machine:
 Start the Studio first, in a terminal, and leave it running:
 
 ```bash
-npx -y tillbooks@1.0.0-beta.3 up
+npx -y tillbooks@1.0.0-beta.4 up
 ```
 
 `npx` downloads the `tillbooks` package from the npm registry (registry.npmjs.org) the first time.
 The Studio listens on 127.0.0.1 only, so nothing outside your computer can reach it. You need
 Node.js 22 or newer on macOS or Linux.
 
-In Cursor, `mcp.json` starts the server itself over stdio (`npx -y tillbooks@1.0.0-beta.3 mcp`), so
+In Cursor, `mcp.json` starts the server itself over stdio (`npx -y tillbooks@1.0.0-beta.4 mcp`), so
 there the Studio is only needed to see and approve drafts.
 
 ## Use it
@@ -47,7 +47,7 @@ Ask your agent to set up a company, post an entry, draft an invoice or prepare t
 To see and approve its drafts, start the Studio in a terminal:
 
 ```bash
-npx -y tillbooks@1.0.0-beta.3 up
+npx -y tillbooks@1.0.0-beta.4 up
 ```
 
 It opens at `http://127.0.0.1:8788` and listens on your own machine only.

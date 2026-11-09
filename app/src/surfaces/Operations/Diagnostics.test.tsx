@@ -110,6 +110,12 @@ function reports(count: number) {
 
 const CAPTURE_LABEL = 'Fehlerdetails auf diesem Computer aufzeichnen';
 const CLEAR = 'Jetzt löschen';
+const MORE = 'Weitere Aktionen';
+/** D187: Clear now sits under the panel's Mehr menu. */
+async function openClear() {
+  await userEvent.click(await screen.findByRole('button', { name: MORE }));
+  await userEvent.click(await screen.findByRole('menuitem', { name: CLEAR }));
+}
 
 afterEach(() => {
   document.documentElement.removeAttribute('data-theme');
@@ -141,7 +147,7 @@ describe('Diagnostics panel: the five states', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('/tmp/till/diagnostics.jsonl');
     // The way out of an unreadable journal is to erase it, and it stays reachable.
-    expect(screen.getByRole('button', { name: CLEAR })).toBeEnabled();
+    expect(screen.getByRole('button', { name: MORE })).toBeEnabled();
   });
 
   it('renders the padlock without diagnostics.read, and Clear now stays live', async () => {
@@ -152,10 +158,10 @@ describe('Diagnostics panel: the five states', () => {
     renderPanel(client);
     expect(await screen.findByText(/Löschen kannst du sie trotzdem/)).toBeInTheDocument();
     // The switch is absent rather than drawn in a position the refused read cannot confirm.
-    expect(screen.queryByLabelText(CAPTURE_LABEL)).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: CAPTURE_LABEL })).toBeNull();
 
     // Erasing your own data is never a privilege: the confirm path works from inside the padlock.
-    await userEvent.click(screen.getByRole('button', { name: CLEAR }));
+    await openClear();
     await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: CLEAR }));
     await waitFor(() => expect(calls.some(([action]) => action === 'clear_diagnostics')).toBe(true));
   });
@@ -181,7 +187,7 @@ describe('Diagnostics panel: the two empty states are two distinct facts', () =>
     expect(await screen.findByText('TILL zeichnet keine Fehlerdetails auf.')).toBeInTheDocument();
     expect(screen.queryByText('Seit dem Einschalten wurden keine Fehler aufgezeichnet.')).toBeNull();
     // The switch is the next action from this state, and it is a real checkbox sitting right there.
-    expect(screen.getByLabelText(CAPTURE_LABEL)).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: CAPTURE_LABEL })).not.toBeChecked();
   });
 
   it('says nothing has been recorded since you turned it on when capture is on', async () => {
@@ -189,7 +195,7 @@ describe('Diagnostics panel: the two empty states are two distinct facts', () =>
     renderPanel(client);
     expect(await screen.findByText('Seit dem Einschalten wurden keine Fehler aufgezeichnet.')).toBeInTheDocument();
     expect(screen.queryByText('TILL zeichnet keine Fehlerdetails auf.')).toBeNull();
-    expect(screen.getByLabelText(CAPTURE_LABEL)).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: CAPTURE_LABEL })).toBeChecked();
   });
 });
 
@@ -197,7 +203,7 @@ describe('Diagnostics panel: the opt-in', () => {
   it('is a real labelled checkbox whose hint states the deletion before the click', async () => {
     const { client } = makeClient({ get_diagnostics: diagnostics() });
     renderPanel(client);
-    const box = await screen.findByLabelText(CAPTURE_LABEL);
+    const box = await screen.findByRole('checkbox', { name: CAPTURE_LABEL });
     expect(box).toHaveAttribute('type', 'checkbox');
     const hint = document.getElementById(box.getAttribute('aria-describedby') ?? '');
     expect(hint).toHaveTextContent('Beim Ausschalten wird das bereits Aufgezeichnete gelöscht.');
@@ -206,11 +212,11 @@ describe('Diagnostics panel: the opt-in', () => {
   it('renders the fixed what-gets-recorded disclosure in the product', async () => {
     const { client } = makeClient({ get_diagnostics: diagnostics() });
     renderPanel(client);
-    expect(await screen.findByText('Was aufgezeichnet wird')).toBeInTheDocument();
-    expect(screen.getByText(/Der Fehlercode, welche Aktion fehlgeschlagen ist/)).toBeInTheDocument();
-    expect(screen.getByText(/^Nie: Beträge, Namen, Kontonummern/)).toBeInTheDocument();
-    expect(screen.getByText('TILL verschlüsselt diese Dateien nicht. Auf einem Mac schützt FileVault sie.')).toBeInTheDocument();
-    expect(screen.getByText(/gehören zu diesem Computerkonto/)).toBeInTheDocument();
+    // D187: the disclosure rides in the (i) beside the panel title, one tooltip, all four sentences.
+    const tip = (await screen.findByText(/^Diese Einstellungen und Dateien gehören zu diesem Computerkonto/)).textContent ?? '';
+    expect(tip).toContain('Was aufgezeichnet wird: Der Fehlercode, welche Aktion fehlgeschlagen ist');
+    expect(tip).toMatch(/Nie: Beträge, Namen, Kontonummern/);
+    expect(tip).toContain('TILL verschlüsselt diese Dateien nicht. Auf einem Mac schützt FileVault sie.');
     // A capped log that presents as complete is a lie by omission.
     expect(screen.getByText('Die letzten 20 Fehler werden aufbewahrt.')).toBeInTheDocument();
   });
@@ -221,7 +227,7 @@ describe('Diagnostics panel: the opt-in', () => {
       set_diagnostics: { status: 200, body: { ok: true, capture: true } },
     });
     renderPanel(client);
-    await userEvent.click(await screen.findByLabelText(CAPTURE_LABEL));
+    await userEvent.click(await screen.findByRole('checkbox', { name: CAPTURE_LABEL }));
     await waitFor(() => {
       expect(calls).toContainEqual(['set_diagnostics', { workspaceId: 'ws_test', capture: true }]);
     });
@@ -236,11 +242,11 @@ describe('Diagnostics panel: the opt-in', () => {
       },
     });
     renderPanel(client);
-    await userEvent.click(await screen.findByLabelText(CAPTURE_LABEL));
+    await userEvent.click(await screen.findByRole('checkbox', { name: CAPTURE_LABEL }));
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('TILL konnte nicht in /tmp/till/config.json schreiben, daher bleibt die Einstellung aus.');
     // The failure mode of a privacy control is the private one.
-    expect(screen.getByLabelText(CAPTURE_LABEL)).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: CAPTURE_LABEL })).not.toBeChecked();
   });
 
   it('reports a corrupt config as read-as-defaults and left untouched', async () => {
@@ -257,7 +263,7 @@ describe('Diagnostics panel: Clear now', () => {
       clear_diagnostics: { status: 200, body: { ok: true, entries: [] } },
     });
     renderPanel(client);
-    await userEvent.click(await screen.findByRole('button', { name: CLEAR }));
+    await openClear();
 
     const dialog = screen.getByRole('alertdialog');
     expect(within(dialog).getByText('Aufgezeichnete Fehler löschen?')).toBeInTheDocument();
@@ -274,11 +280,11 @@ describe('Diagnostics panel: Clear now', () => {
       clear_diagnostics: { status: 200, body: { ok: true, entries: [] } },
     });
     renderPanel(client);
-    await userEvent.click(await screen.findByRole('button', { name: CLEAR }));
+    await openClear();
     await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Abbrechen' }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
 
-    await userEvent.click(screen.getByRole('button', { name: CLEAR }));
+    await openClear();
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(calls.some(([action]) => action === 'clear_diagnostics')).toBe(false);
@@ -411,7 +417,7 @@ describe('Diagnostics panel: accessibility', () => {
       await screen.findByText('Berichte 1 bis 20 von 25');
       expect(await axe(container)).toHaveNoViolations();
 
-      await userEvent.click(screen.getByRole('button', { name: CLEAR }));
+      await openClear();
       expect(screen.getByRole('alertdialog')).toBeInTheDocument();
       expect(await axe(container)).toHaveNoViolations();
     });

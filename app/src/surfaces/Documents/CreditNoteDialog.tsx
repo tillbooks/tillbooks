@@ -25,6 +25,7 @@ import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatMoney } from '../../i18n';
+import { Field } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { ErrorBanner } from '../../components/states';
 // The ENGINE's own apportionment (pure leaf module, the RecurringEditor enum-import precedent):
@@ -343,10 +344,9 @@ export function CreditNoteDialog({
             </label>
           )}
 
-          <label className="documents-field">
-            <span>{t('creditNote.reason')}</span>
+          <Field className="documents-field" label={t('creditNote.reason')}>
             <input className="field" value={reason} onChange={(e) => setReason(e.target.value)} />
-          </label>
+          </Field>
 
           {/* The live NET preview. The amount arm additionally shows its engine-derived gross
               above (D78); on the exhausting credit D67/D71 can still move the booked VAT off the

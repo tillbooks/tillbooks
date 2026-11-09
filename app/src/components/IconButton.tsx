@@ -10,7 +10,7 @@
  * The tooltip is the shared `Tooltip`: it opens on hover, on keyboard focus and on a 450ms long press
  * on touch (which then does not also click), and closes on Escape, blur or pointer leave.
  */
-import { useId, type ButtonHTMLAttributes } from 'react';
+import { useId, type ButtonHTMLAttributes, type ReactNode } from 'react';
 
 import { VOCABULARY, type VocabularyIcon } from './icons/vocabulary';
 import type { IconSize } from './icons/base';
@@ -25,8 +25,10 @@ type NativeButton = Omit<
 export interface IconButtonProps extends NativeButton {
   /** The vocabulary key. Its name becomes the accessible name. */
   icon: VocabularyIcon;
-  /** What the act applies to, in a few words: the tooltip's second line and the description. */
-  context: string;
+  /** What the act applies to, in a few words: the tooltip's second line and the description. An Info (i)
+   *  may carry rich content (a figure in its money format, a short list): plain content only, never a
+   *  link or a button (a tooltip holds no interactive content). D187. */
+  context: ReactNode;
   /**
    * The accessible name and the tooltip's first line, when the act is more specific than the
    * vocabulary word: the check that saves a named view says "Ansicht speichern", not "Fertig" (D180).

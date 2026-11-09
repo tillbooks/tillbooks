@@ -1,92 +1,270 @@
-/**
- * M00 first-run flow. Three equal doors on a responsive grid, the one panel treatment (the elevated
- * ground on the page, no border: the hairline is earned, not issued), one typeface, no invented
- * accent (the doors are neutral; the one primary action carries the accent the button system owns).
- * The page wears the shared SurfaceHeader (K-07) and sits in <main>'s own inset, like every surface.
- * The runtime line sits quiet at the foot.
- */
+/* M00 first run, rebuilt for the Ruhig sweep (D187, the owner's pick 09.11.2026): the one main act on
+   top (a name and "Anlegen"), the rarer doors as icons below it, each opening its small form in place,
+   and every explanation behind an (i). One calm column, on the D187 form rhythm. */
 
 .firstrun {
   display: flex;
   flex-direction: column;
   gap: var(--t-space-3);
-  max-width: 64rem;
+  width: 100%;
+  max-width: 36rem;
+  margin: 0 auto;
+  padding-top: clamp(var(--t-space-3), 10vh, var(--t-space-8));
 }
 
+/* The main act: the field and its button in one bordered row, the input borderless inside it, so the
+   pair reads as one control and the button can never drift away from (or onto) its field. */
+.firstrun-combo {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  padding: var(--t-space-0-5);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border-strong);
+  border-radius: var(--t-radius-md);
+  transition: border-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.firstrun-combo:focus-within {
+  border-color: var(--t-focus-border);
+  box-shadow: var(--t-focus-ring);
+}
+
+.firstrun-combo-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--t-control-h);
+  padding: 0 var(--t-space-1);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--t-text);
+  font: inherit;
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+}
+
+.firstrun-combo-input::placeholder {
+  color: var(--t-text-faint);
+}
+
+/* The combo carries the focus cue for its input, so the input's own halo would double it. */
+.firstrun-combo-input:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.firstrun-combo--main {
+  padding: var(--t-space-1);
+}
+
+/* The rarer doors: icons in a row under the main act; the open one keeps the soft raise. */
+.firstrun-alts {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  margin-top: calc(var(--t-space-1) * -1);
+}
+
+.firstrun-alts .is-on {
+  background: var(--t-bg-soft);
+  color: var(--t-text);
+}
+
+.firstrun-alts-sep {
+  width: 1px;
+  height: var(--t-space-3);
+  margin: 0 var(--t-space-1);
+  background: var(--t-border);
+}
+
+/* An open door: its form in place beneath the row, sliding in (the D122 Reveal moment). */
+.firstrun-panel {
+  animation: firstrun-reveal var(--t-motion-reveal) var(--t-ease-out);
+}
+
+@keyframes firstrun-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(var(--t-travel));
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.firstrun-panel-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.firstrun-adopt-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.firstrun-pickline {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  flex-wrap: wrap;
+}
+
+.firstrun-adopt-file {
+  margin: 0;
+  color: var(--t-text-dim);
+  overflow-wrap: anywhere;
+}
+
+/* The restore door's pick list (F-06, J7.2): one row per bundle, the radio on the left, a bundle from
+   another generation named and disabled rather than hidden. Rows, not boxes: the hover is a soft fill. */
+.firstrun-picklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.firstrun-pick {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: var(--t-control-h);
+  padding: 0 var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  cursor: pointer;
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.firstrun-pick:hover {
+  background: var(--t-bg-soft);
+}
+
+.firstrun-pick:has(input:checked) {
+  background: var(--t-accent-soft);
+}
+
+.firstrun-pick:has(input:disabled) {
+  cursor: default;
+}
+
+.firstrun-pick input {
+  accent-color: var(--t-accent);
+}
+
+.firstrun-pick-text {
+  display: flex;
+  flex-direction: column;
+  padding-block: var(--t-space-0-5);
+  font-variant-numeric: tabular-nums;
+}
+
+.firstrun-pick--incompatible .firstrun-pick-main,
+.firstrun-pick-note {
+  color: var(--t-text-dim);
+}
+
+.firstrun-pick-note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.firstrun-pick-note > .tooltip-wrap {
+  margin-block: calc((32px - var(--t-lh-sm)) / -2);
+}
+
+.firstrun-picklist-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+  padding-left: var(--t-space-1);
+}
+
+.firstrun-picklist-foot:empty {
+  display: none;
+}
+
+/* D161.2: a restore whose portal links wait for a hand-over says so before it leaves. */
+.firstrun-restore-notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+}
+
+.firstrun-restore-notice p {
+  margin: 0;
+}
+
+/* The foot: the runtime line, one quiet line. */
+.firstrun-foot {
+  margin-top: var(--t-space-3);
+}
+
+.runtime-line {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--t-space-2);
+  row-gap: var(--t-space-0-5);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.runtime-line-mode,
+.runtime-line-caveat {
+  margin: 0;
+}
+
+.runtime-line-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+/* The (i) on the line gives back its share of the line height (a 32px target on a 16px line). */
+.runtime-line-mode > .tooltip-wrap {
+  margin-block: calc((32px - var(--t-lh-sm)) / -2);
+}
+
+.runtime-line-glyph {
+  margin-right: var(--t-space-0-5);
+  vertical-align: text-bottom;
+}
+
+/* M03: in a cloud agent session the residency caveat is text a person reads, never a tooltip. */
+.runtime-line-caveat {
+  flex-basis: 100%;
+  max-width: 60ch;
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+/* D166 point 8: the adopted book is not reachable. One calm page: what happened, three choices, the
+   picker or the forget confirmation beneath them. */
 .firstrun-intro {
   display: flex;
   flex-direction: column;
   gap: var(--t-space-1);
-  max-width: 60ch;
 }
 
 .firstrun-lead {
   margin: 0;
   color: var(--t-text-dim);
-}
-
-.firstrun-doors {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  gap: var(--t-space-2);
-}
-
-.firstrun-door {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-2);
-  padding: var(--t-space-3);
-  border-radius: var(--t-radius-md);
-  background: var(--t-bg-elev);
-}
-
-.firstrun-door-title {
-  margin: 0;
-  font-size: var(--t-font-lg);
-  line-height: var(--t-lh-lg);
-}
-
-.firstrun-door-hint {
-  margin: 0;
-  color: var(--t-text-dim);
-  max-width: 40ch;
-}
-
-.firstrun-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-1);
-}
-
-/* D166 point 8: the adopt door. A field (or, inside TILL.app, the native picker and the picked file's
-   name) over the one action, like the other two doors; no command block, nothing to copy. */
-.firstrun-adopt-form {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--t-space-2);
-}
-
-.firstrun-adopt-form > .firstrun-field {
-  align-self: stretch;
-}
-
-.firstrun-adopt-pick {
-  align-self: flex-start;
-}
-
-.firstrun-adopt-file {
-  margin: 0;
   overflow-wrap: anywhere;
 }
 
-.firstrun-adopt-path-hint {
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-}
-
-/* D166 point 8: the adopted book is not reachable. The three choices in one row (wrapping on a
-   narrow viewport); the picker or the forget confirmation opens beneath them on the door ground. */
 .firstrun-unavailable-actions {
   display: flex;
   flex-wrap: wrap;
@@ -94,11 +272,14 @@
 }
 
 .firstrun-unavailable-panel {
-  max-width: 32rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
 }
 
-.firstrun-intro .firstrun-lead {
-  overflow-wrap: anywhere;
+.firstrun-door-hint {
+  margin: 0;
+  color: var(--t-text-dim);
 }
 
 /* After an adopt: one calm sentence while TILL restarts onto the book, nothing to press. */
@@ -111,112 +292,4 @@
   margin: 0;
   font-size: var(--t-font-xl);
   line-height: var(--t-lh-xl);
-}
-
-/* F-05: the demo line under the doors. Prose-weight, wraps on a narrow viewport, the hint dimmer. */
-.firstrun-demo {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--t-space-1);
-  margin: 0;
-  color: var(--t-text);
-}
-
-.firstrun-demo-hint {
-  color: var(--t-text-dim);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-}
-
-.firstrun-foot {
-  border-top: 1px solid var(--t-border);
-  padding-top: var(--t-space-2);
-}
-
-.runtime-line {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-1);
-  color: var(--t-text-dim);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-}
-
-.runtime-line-mode {
-  margin: 0;
-}
-
-.runtime-line-glyph {
-  margin-right: var(--t-space-0-5);
-  vertical-align: text-bottom;
-}
-
-.runtime-line-scheduler,
-.runtime-line-caveat {
-  margin: 0;
-}
-
-.runtime-line-caveat {
-  max-width: 60ch;
-  color: var(--t-text);
-}
-
-/* --- M03 journey (N4a): the pre-commitment residency lead -------------------------------------- */
-
-.firstrun-residency {
-  color: var(--t-text-dim);
-  margin: 0;
-}
-
-/* The restore door's pick list (F-06, J7.2): the bundles this machine can see, one radio each, the
-   typed path behind the last option. A bundle from another generation stays visible and named,
-   disabled rather than hidden. */
-.firstrun-picklist {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-1);
-  margin: 0 0 var(--t-space-2);
-  padding: 0;
-  border: 0;
-}
-
-.firstrun-picklist legend {
-  padding: 0;
-  margin-bottom: var(--t-space-1);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  color: var(--t-text-dim);
-}
-
-.firstrun-pick {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--t-space-1);
-  font-size: var(--t-font-body);
-  line-height: var(--t-lh-body);
-}
-
-.firstrun-pick input {
-  margin-top: 3px;
-}
-
-.firstrun-pick-text {
-  display: flex;
-  flex-direction: column;
-}
-
-.firstrun-pick--incompatible .firstrun-pick-main,
-.firstrun-pick-note {
-  color: var(--t-text-dim);
-}
-
-.firstrun-pick-note {
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-}
-
-.firstrun-generation,
-.firstrun-verified {
-  margin: 0 0 var(--t-space-1);
 }

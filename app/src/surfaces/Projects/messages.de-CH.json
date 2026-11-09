@@ -52,7 +52,6 @@
       "searchLabel": "Projekte durchsuchen",
       "search": "Suchen (Code oder Name)",
       "statusFilter": "Nach Status filtern",
-      "allStatuses": "Alle Status",
       "rowActions": "Aktionen für {name}",
       "subprojectOf": "Unterprojekt von {code}"
     },

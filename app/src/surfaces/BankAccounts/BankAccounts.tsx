@@ -65,6 +65,7 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatMoney, formatDate } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { FilterBar } from '../../components/FilterBar';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
@@ -140,6 +141,7 @@ export function BankAccounts() {
   const canPost = useCan(CAP.post);
 
   const showArchived = params.get('archived') === '1';
+  const [search, setSearch] = useState('');
   const editingId = params.get('account');
   const creating = params.get('new') === '1';
   const openingFor = params.get('opening');
@@ -411,29 +413,25 @@ export function BankAccounts() {
   if (workspaceId === null) return <NoWorkspaceState />;
   if (denied) return <PermissionDenied body={t('bank.error.permissionDenied.read')} />;
 
+  const needle = search.trim().toLowerCase();
+  const shownAccounts =
+    needle === ''
+      ? accounts
+      : accounts.filter((account) => account.name.toLowerCase().includes(needle) || account.iban.toLowerCase().replace(/\s/g, '').includes(needle.replace(/\s/g, '')));
+
   return (
     <section className="bank" aria-labelledby="bank-title">
       <SurfaceHeader
         title={t('bank.title')}
         titleId="bank-title"
         help={<SurfaceHelp surface="BankAccounts" />}
+        count={loading || failed ? undefined : shownAccounts.length}
         actions={
-          <>
-            <label className="bank-toggle" htmlFor="bank-show-archived">
-              <input
-                id="bank-show-archived"
-                type="checkbox"
-                checked={showArchived}
-                onChange={(event) => setParam('archived', event.target.checked ? '1' : null)}
-              />
-              <span>{t('bank.showArchived')}</span>
-            </label>
-            {canManage && (
-              <button type="button" className="btn btn--primary" onClick={() => setParam('new', '1')}>
-                {t('bank.add')}
-              </button>
-            )}
-          </>
+          canManage ? (
+            <button type="button" className="btn btn--primary" onClick={() => setParam('new', '1')}>
+              {t('bank.add')}
+            </button>
+          ) : undefined
         }
       />
 
@@ -461,6 +459,22 @@ export function BankAccounts() {
           </div>
         </div>
       )}
+
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel={t('bank.search')}
+        searchPlaceholder={t('bank.search')}
+        facets={[
+          {
+            key: 'archived',
+            label: t('bank.showArchived'),
+            options: [{ value: '1', label: t('bank.showArchived') }],
+            value: showArchived ? '1' : null,
+            onChange: (value) => setParam('archived', value === null ? null : '1'),
+          },
+        ]}
+      />
 
       {gapDone !== null && (
         <div className="bank-undo" role="status">
@@ -497,7 +511,7 @@ export function BankAccounts() {
       ) : (
         <DataTable
           columns={columns}
-          rows={accounts}
+          rows={shownAccounts}
           rowKey={(account) => account.id}
           caption={t('bank.title')}
           loading={loading}

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { act, render, screen, within } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { axe } from 'jest-axe';
@@ -159,6 +159,41 @@ describe('Shell rail: the collapsible tree (D118 A1)', () => {
     // The single-pointer, non-dragging alternative to the splitter (WCAG 2.5.7) lives here now.
     await userEvent.click(screen.getByRole('menuitem', { name: 'Navigation einklappen' }));
     expect(document.querySelector('.rail--icon')).not.toBeNull();
+  });
+
+  it('D187 option B: a pointer resting on the collapsed strip slides the whole menu open, and leaving folds it back', async () => {
+    await renderShell();
+    await userEvent.click(screen.getByRole('button', { name: /Lokal, keine Verbindung/ }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Navigation einklappen' }));
+    const rail = document.getElementById('studio-rail') as HTMLElement;
+    expect(rail).toHaveClass('rail--icon', 'rail--floating');
+    // The page keeps the strip's place while the rail floats.
+    expect(document.querySelector('.rail-peek-spacer')).not.toBeNull();
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        fireEvent.pointerEnter(rail, { pointerType: 'mouse' });
+      });
+      // Not yet: a quick pass across the strip opens nothing.
+      expect(rail).not.toHaveClass('rail--peek');
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    // The open rail mounts the full chrome (the switcher, the tree), whose reads land asynchronously.
+    await settle();
+    expect(rail).toHaveClass('rail--peek');
+    expect(rail).not.toHaveClass('rail--icon');
+    // The real tree, with its labels.
+    expect(within(rail).getByRole('tree')).toBeInTheDocument();
+    act(() => {
+      fireEvent.pointerLeave(rail, { pointerType: 'mouse' });
+    });
+    await settle();
+    expect(rail).not.toHaveClass('rail--peek');
+    expect(rail).toHaveClass('rail--icon');
   });
 
   it('opens "Menü anpassen" from the status pill menu, the second door to the menu editor (D178)', async () => {

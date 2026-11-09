@@ -106,7 +106,8 @@
     },
     "value": {
       "none": "none"
-    }
+    },
+    "moreLabel": "More actions"
   },
   "feedback": {
     "kind": {
@@ -254,6 +255,7 @@
       "ok": "Valid: {entries} entries, balanced. Schema generation {generation}.",
       "unbalanced": "Checked, but not balanced: {entries} entries. Do not restore this backup.",
       "failed": "The check failed. Try again."
-    }
+    },
+    "rowActions": "Actions for backup {kind}, {date}"
   }
 }

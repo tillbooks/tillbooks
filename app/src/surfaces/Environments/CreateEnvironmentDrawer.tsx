@@ -5,6 +5,7 @@
  * an idempotency key. `policy=copy` is Phase B, so it is shown, disabled, and points at the Refresh
  * action on an existing environment (finding #8: a copy never silently resolves to a raw default).
  */
+import { Field } from '../../components/Field';
 import { useId, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
@@ -118,8 +119,6 @@ export function CreateEnvironmentDrawer({
         </>
       }
     >
-      <p className="env-dialog-lead">{t('env.create_dialog.lead')}</p>
-
       {error !== null && (
         <p className="env-dialog-error" role="alert">
           {error}
@@ -127,9 +126,12 @@ export function CreateEnvironmentDrawer({
       )}
 
       {plan === null ? (
-        <div className="env-form">
-          <label className="env-field" htmlFor={nameId}>
-            <span className="env-field-label">{t('env.create_dialog.name.label')}</span>
+        <div className="env-form form-stack">
+          <Field
+            label={t('env.create_dialog.name.label')}
+            info={`${t('env.create_dialog.lead')} ${t('env.create_dialog.name.hint')}`}
+            error={collision ? t('env.error.environment_exists', { name: trimmed }) : undefined}
+          >
             <input
               id={nameId}
               className="field"
@@ -138,9 +140,7 @@ export function CreateEnvironmentDrawer({
               placeholder={t('env.create_dialog.name.placeholder')}
               autoComplete="off"
             />
-            <span className="env-field-hint">{t('env.create_dialog.name.hint')}</span>
-            {collision && <span className="env-field-hint env-field-hint--warn">{t('env.error.environment_exists', { name: trimmed })}</span>}
-          </label>
+          </Field>
 
           <fieldset className="env-field">
             <legend className="env-field-label">{t('env.create_dialog.policy.label')}</legend>
@@ -160,18 +160,14 @@ export function CreateEnvironmentDrawer({
           </fieldset>
 
           {policy === 'synthetic' && (
-            <label className="env-field">
-              <span className="env-field-label">{t('env.create_dialog.seed.label')}</span>
+            <Field label={t('env.create_dialog.seed.label')} info={t('env.create_dialog.seed.hint')}>
               <input className="field" value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="seeblick" autoComplete="off" />
-              <span className="env-field-hint">{t('env.create_dialog.seed.hint')}</span>
-            </label>
+            </Field>
           )}
 
-          <label className="env-field">
-            <span className="env-field-label">{t('env.create_dialog.codeChannel.label')}</span>
+          <Field label={t('env.create_dialog.codeChannel.label')} info={t('env.create_dialog.codeChannel.hint')}>
             <input className="field" value={codeChannel} onChange={(e) => setCodeChannel(e.target.value)} placeholder={trimmed || 'develop'} autoComplete="off" />
-            <span className="env-field-hint">{t('env.create_dialog.codeChannel.hint')}</span>
-          </label>
+          </Field>
 
           <fieldset className="env-field">
             <legend className="env-field-label">{t('env.create_dialog.runtime.label')}</legend>

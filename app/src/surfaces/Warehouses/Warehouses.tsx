@@ -41,8 +41,10 @@ import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeleto
 import { OverflowMenu } from '../../components/OverflowMenu';
 import { Status } from '../../components/Status';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { FilterBar } from '../../components/FilterBar';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { Modal } from '../../components/Modal';
@@ -211,6 +213,7 @@ export function Warehouses() {
   const [tree, setTree] = useState<LocationNode[]>([]);
   const [balance, setBalance] = useState<BalanceRow[]>([]);
   const [showArchived, setShowArchived] = useState(false);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   // K-34: the table's own skeleton, never before 200ms and never for less than 300ms once shown.
   const showSkeleton = useSkeletonHold(loading);
@@ -516,12 +519,12 @@ export function Warehouses() {
     { key: 'qty', header: t('warehouses.balance.col.qty'), numeric: true, render: (r) => r.qty },
   ];
 
+  const needle = search.trim().toLowerCase();
+  const shownWarehouses =
+    needle === '' ? warehouses : warehouses.filter((w) => `${w.code} ${w.name}`.toLowerCase().includes(needle));
+
   const headerActions = (
     <>
-      <label className="wh-toggle">
-        <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
-        {t('warehouses.showArchived')}
-      </label>
       <button type="button" className="btn btn--primary" onClick={openWhCreate} disabled={!canWrite}>
         {t('warehouses.newWarehouse')}
       </button>
@@ -534,6 +537,23 @@ export function Warehouses() {
         title={t('warehouses.title')}
         help={<SurfaceHelp surface="Warehouses" />}
         actions={headerActions}
+        count={shownWarehouses.length}
+      />
+
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel={t('warehouses.search')}
+        searchPlaceholder={t('warehouses.search')}
+        facets={[
+          {
+            key: 'archived',
+            label: t('warehouses.showArchived'),
+            options: [{ value: '1', label: t('warehouses.showArchived') }],
+            value: showArchived ? '1' : null,
+            onChange: (value) => setShowArchived(value !== null),
+          },
+        ]}
       />
 
       {failed && (
@@ -560,7 +580,7 @@ export function Warehouses() {
           <section className="wh-pane" aria-label={t('warehouses.listLabel')}>
             <DataTable
               columns={warehouseColumns}
-              rows={warehouses}
+              rows={shownWarehouses}
               rowKey={(w) => w.id}
               caption={t('warehouses.listLabel')}
               onRowClick={(w) => choose(selectedId === w.id ? null : w.id)}
@@ -670,8 +690,8 @@ export function Warehouses() {
           }
         >
           {writeError && <ErrorBanner error={writeError} message={localError(writeError)} />}
-          <div className="wh-field">
-            <label htmlFor="wh-code">{t('warehouses.field.code')}</label>
+          <div className="form-stack">
+          <Field label={t('warehouses.field.code')} size="code">
             <input
               id="wh-code"
               className="field"
@@ -680,18 +700,16 @@ export function Warehouses() {
               disabled={whDrawer !== 'create'}
               onChange={(e) => setWhDraft({ ...whDraft, code: e.target.value })}
             />
-          </div>
-          <div className="wh-field">
-            <label htmlFor="wh-name">{t('warehouses.field.name')}</label>
+          </Field>
+          <Field label={t('warehouses.field.name')}>
             <input id="wh-name" className="field" value={whDraft.name} onChange={(e) => setWhDraft({ ...whDraft, name: e.target.value })} />
-          </div>
-          <div className="wh-field">
-            <label htmlFor="wh-city">{t('warehouses.field.city')}</label>
+          </Field>
+          <Field label={t('warehouses.field.city')} size="short">
             <input id="wh-city" className="field" value={whDraft.city} onChange={(e) => setWhDraft({ ...whDraft, city: e.target.value })} />
-          </div>
-          <div className="wh-field">
-            <label htmlFor="wh-desc">{t('warehouses.field.description')}</label>
+          </Field>
+          <Field label={t('warehouses.field.description')}>
             <input id="wh-desc" className="field" value={whDraft.description} onChange={(e) => setWhDraft({ ...whDraft, description: e.target.value })} />
+          </Field>
           </div>
         </DetailDrawer>
       )}
@@ -714,8 +732,8 @@ export function Warehouses() {
           }
         >
           {writeError && <ErrorBanner error={writeError} message={localError(writeError)} />}
-          <div className="wh-field">
-            <label htmlFor="loc-code">{t('warehouses.locations.field.code')}</label>
+          <div className="form-stack">
+          <Field label={t('warehouses.locations.field.code')} size="code">
             <input
               id="loc-code"
               className="field"
@@ -724,13 +742,11 @@ export function Warehouses() {
               disabled={locDrawer !== 'create'}
               onChange={(e) => setLocDraft({ ...locDraft, code: e.target.value })}
             />
-          </div>
-          <div className="wh-field">
-            <label htmlFor="loc-name">{t('warehouses.locations.field.name')}</label>
+          </Field>
+          <Field label={t('warehouses.locations.field.name')}>
             <input id="loc-name" className="field" value={locDraft.name} onChange={(e) => setLocDraft({ ...locDraft, name: e.target.value })} />
-          </div>
-          <div className="wh-field">
-            <label htmlFor="loc-type">{t('warehouses.locations.field.type')}</label>
+          </Field>
+          <Field label={t('warehouses.locations.field.type')} size="short">
             <Select
               id="loc-type"
               value={locDraft.locationType}
@@ -741,10 +757,9 @@ export function Warehouses() {
               ]}
               ariaLabel={t('warehouses.locations.field.type')}
             />
-          </div>
+          </Field>
           {locDrawer === 'create' && (
-            <div className="wh-field">
-              <label htmlFor="loc-parent">{t('warehouses.locations.field.parent')}</label>
+            <Field label={t('warehouses.locations.field.parent')}>
               <Select
                 id="loc-parent"
                 value={locDraft.parentId}
@@ -759,11 +774,11 @@ export function Warehouses() {
                 ]}
                 ariaLabel={t('warehouses.locations.field.parent')}
               />
-            </div>
+            </Field>
           )}
-          <div className="wh-field">
-            <label htmlFor="loc-desc">{t('warehouses.locations.field.description')}</label>
+          <Field label={t('warehouses.locations.field.description')}>
             <input id="loc-desc" className="field" value={locDraft.description} onChange={(e) => setLocDraft({ ...locDraft, description: e.target.value })} />
+          </Field>
           </div>
         </DetailDrawer>
       )}

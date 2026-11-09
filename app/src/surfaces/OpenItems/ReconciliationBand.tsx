@@ -32,9 +32,9 @@ import { useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useT, useTRich, formatMoney } from '../../i18n';
-import { Tooltip } from '../../components/Tooltip';
-import { InfoGlyph } from '../../components/states/glyphs';
-import { CheckGlyph, ChevronGlyph, WarnGlyph } from './glyphs';
+import { AlertGlyph, CheckGlyph } from '../../components/states/glyphs';
+import { ChevronRightGlyph } from '../../components/icons';
+import { IconButton } from '../../components/IconButton';
 
 export interface ReconciledLineProps {
   /** True when the caller is showing a narrowed set, which moves the statement onto its own line. */
@@ -48,7 +48,7 @@ export function ReconciledLine({ filtered, workspaceBaseTotalOpenMinor, baseCurr
   const t = useT();
   return (
     <p className={`oi-reconciled${filtered ? ' oi-reconciled--own-line' : ''}`}>
-      <CheckGlyph className="oi-reconciled-glyph" aria-label={t('openItems.reconciled.glyph')} />
+      <CheckGlyph size={14} className="oi-reconciled-glyph" role="img" aria-hidden={false} aria-label={t('openItems.reconciled.glyph')} />
       <span>
         {filtered
           ? t('openItems.reconciled.filteredTotal', {
@@ -101,16 +101,19 @@ export function ReconciliationBand({
   return (
     <>
       <p className="oi-mismatch" role="status">
-        <WarnGlyph className="oi-mismatch-glyph" aria-hidden="true" focusable="false" />
+        <AlertGlyph size={14} className="oi-mismatch-glyph" aria-hidden="true" focusable="false" />
         <span className="oi-mismatch-title">
           {tRich('openItems.mismatch.short', {
             difference: <span className="t-money">{formatMoney(differenceMinor, baseCurrency)}</span>,
           })}
         </span>
         <span className="oi-mismatch-info">
-          <Tooltip
+          <IconButton
+            icon="info"
+            small
             placement="bottom"
-            content={
+            name={t('openItems.mismatch.info')}
+            context={
               <span className="oi-mismatch-explain">
                 {tRich('openItems.mismatch.title', {
                   difference: <span className="t-money">{formatMoney(differenceMinor, baseCurrency)}</span>,
@@ -121,11 +124,7 @@ export function ReconciliationBand({
                 })}
               </span>
             }
-          >
-            <button type="button" className="btn btn--ghost btn--icon btn--sm" aria-label={t('openItems.mismatch.info')}>
-              <InfoGlyph size={16} />
-            </button>
-          </Tooltip>
+          />
         </span>
         <button
           type="button"
@@ -135,7 +134,7 @@ export function ReconciliationBand({
           aria-controls={moreId}
           onClick={() => setOpen(!open)}
         >
-          <ChevronGlyph className="oi-mismatch-chevron" size={16} />
+          <ChevronRightGlyph className="oi-mismatch-chevron" size={16} />
         </button>
       </p>
       <div id={moreId} className="oi-mismatch-more" hidden={!open}>

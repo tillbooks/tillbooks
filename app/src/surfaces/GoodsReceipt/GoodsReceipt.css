@@ -10,8 +10,9 @@
    mono movement cell, the over-receipt/issue markers, the audit trail, the hold panel and the
    label-stacked drawer form fields the DetailDrawer hosts.
 
-   There is no FilterBar: this surface has no search or filter row (only the receipt list and a
-   "new receipt" action), and the B2 rule is not to invent a search row that never existed.
+   D187 (the Ruhig sweep): the list is one DataTable with a search and status facets, and a receipt
+   opens IN PLACE under its row (Work through items B), so the master-detail split and its panes are
+   gone.
 
    Round 2 (D137): the open receipt is DataTable's current-row pill and the over-delivery a Status word
    in its row, so both inset edges are gone (K-24); every state is a Status word, the dingbats with
@@ -24,34 +25,8 @@
   gap: var(--t-space-2);
 }
 
-.gr-split {
-  display: grid;
-  grid-template-columns: minmax(240px, 320px) 1fr;
-  gap: var(--t-space-2);
-  align-items: start;
-}
-
-/* D152 rule 5: until a receipt is opened there is no detail pane, so the list takes the width. */
-.gr-split--solo {
-  grid-template-columns: 1fr;
-}
-
-@media (max-width: 720px) {
-  .gr-split {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* A pane is the elevated panel on the page, never a hairline box (K-09). */
-.gr-pane {
-  border: 1px solid transparent;
-  border-radius: var(--t-radius-md);
-  background: var(--t-bg-elev);
-  padding: var(--t-space-1);
-}
-
 .gr-detail {
-  padding: var(--t-space-2);
+  padding: var(--t-space-1) 0;
   display: flex;
   flex-direction: column;
   gap: var(--t-space-2);
@@ -159,16 +134,3 @@
   color: var(--t-text-dim);
 }
 
-/* The drawer form fields the shared DetailDrawer hosts. The controls themselves are the shared
-   `.field` class (global.css); this is only the label-stacked layout around them. */
-.gr-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-0-5);
-}
-
-.gr-field label {
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  color: var(--t-text-dim);
-}

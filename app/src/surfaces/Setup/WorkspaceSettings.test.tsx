@@ -52,8 +52,8 @@ function renderSection(routes: Record<string, Route>, caps: Capabilities = ALLOW
 const listed = (settings: SettingView[]): RestResponse => ({ status: 200, body: recordedOk({ ok: true, settings }) });
 
 async function openEdit() {
-  await screen.findByRole('group', { name: 'Checklisten' });
-  const li = document.querySelector('li[data-key="checklists.attention_window_days"]') as HTMLElement;
+  await screen.findByRole('region', { name: 'Checklisten' });
+  const li = document.querySelector('[data-key="checklists.attention_window_days"]') as HTMLElement;
   await userEvent.click(within(li).getByRole('button', { name: 'Bearbeiten' }));
   return screen.getByRole('dialog');
 }
@@ -61,16 +61,17 @@ async function openEdit() {
 describe('WorkspaceSettings (D172)', () => {
   it('groups by owning capability and shows the value in force and whether it is the default', async () => {
     renderSection({ settings_list: listed([SEED]) });
-    const group = await screen.findByRole('group', { name: 'Checklisten' });
+    const group = await screen.findByRole('region', { name: 'Checklisten' });
     expect(within(group).getByText('14 Tage')).toBeInTheDocument();
-    expect(within(group).getByText('Standard')).toBeInTheDocument();
+    // "Standard" shows only while the value is changed (D187).
+    expect(within(group).queryByText('Standard')).toBeNull();
     expect(screen.getByRole('heading', { name: 'Einstellungen' })).toBeInTheDocument();
   });
 
   it('an overridden setting names its default', async () => {
     renderSection({ settings_list: listed([{ ...SEED, value: 30, overridden: true }]) });
     expect(await screen.findByText('30 Tage')).toBeInTheDocument();
-    expect(screen.getByText('Standard: 14 Tage')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Standard' })).toBeInTheDocument();
   });
 
   it('offers no Ändern without the owning capability', async () => {

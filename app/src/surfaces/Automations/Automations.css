@@ -28,12 +28,6 @@
   gap: var(--t-space-2);
 }
 
-.automations__actions {
-  display: flex;
-  gap: var(--t-space-1);
-  flex-wrap: wrap;
-}
-
 .automations__feedback {
   margin: 0;
   color: var(--t-text-dim);
@@ -43,45 +37,11 @@
   color: var(--t-danger);
 }
 
-.automations__hint {
-  margin: 0;
-  color: var(--t-text-dim);
-  font-size: var(--t-font-body);
-  line-height: var(--t-lh-body);
-  max-width: 62ch;
-}
-
 /* --- The rule form --------------------------------------------------------------------------- */
-
-.automations__form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-2);
-  background: var(--t-bg-soft);
-  border-radius: var(--t-radius-md);
-  padding: var(--t-space-2);
-}
-
-.automations__form label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-0-5);
-}
-
-.automations__form label span {
-  color: var(--t-text-dim);
-  font-size: var(--t-font-body);
-  line-height: var(--t-lh-body);
-}
 
 .automations__template {
   font-family: var(--t-font-mono);
    resize: vertical;
-}
-
-.automations__formActions {
-  display: flex;
-  gap: var(--t-space-1);
 }
 
 /* --- The two tables -------------------------------------------------------------------------- */

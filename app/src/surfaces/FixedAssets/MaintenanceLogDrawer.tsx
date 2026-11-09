@@ -14,6 +14,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { Err } from '../../lib/client';
 import { useT } from '../../i18n';
 import { ErrorBanner } from '../../components/states';
+import { Field } from '../../components/Field';
 import { Select } from '../../components/Select';
 import { DetailDrawer } from '../../components/DetailDrawer';
 
@@ -85,8 +86,7 @@ export function MaintenanceLogDrawer({ mode, draft, setDraft, writeError, canWri
     >
       {writeError && <ErrorBanner error={writeError} />}
 
-      <div className="fa-field">
-        <label htmlFor="fa-mnt-date">{t('assets.maintenance.field.logDate')}</label>
+      <Field label={t('assets.maintenance.field.logDate')} id="fa-mnt-date">
         <input className="field"
           id="fa-mnt-date"
           type="date"
@@ -94,10 +94,9 @@ export function MaintenanceLogDrawer({ mode, draft, setDraft, writeError, canWri
           disabled={isEdit}
           onChange={(e) => set({ logDate: e.target.value })}
         />
-      </div>
+      </Field>
 
-      <div className="fa-field">
-        <label htmlFor="fa-mnt-type">{t('assets.maintenance.field.type')}</label>
+      <Field label={t('assets.maintenance.field.type')} id="fa-mnt-type">
         <Select
           id="fa-mnt-type"
           value={draft.maintenanceType}
@@ -106,53 +105,45 @@ export function MaintenanceLogDrawer({ mode, draft, setDraft, writeError, canWri
           options={MAINTENANCE_TYPES.map((ty) => ({ value: ty, label: t(`assets.maintenance.type.${ty}`) }))}
           ariaLabel={t('assets.maintenance.field.type')}
         />
-      </div>
+      </Field>
 
-      <div className="fa-field">
-        <label htmlFor="fa-mnt-title">{t('assets.maintenance.field.title')}</label>
+      <Field label={t('assets.maintenance.field.title')} id="fa-mnt-title">
         <input className="field" id="fa-mnt-title" value={draft.title} maxLength={200} onChange={(e) => set({ title: e.target.value })} />
-      </div>
+      </Field>
 
-      <div className="fa-field">
-        <label htmlFor="fa-mnt-desc">{t('assets.maintenance.field.description')}</label>
+      <Field label={t('assets.maintenance.field.description')} id="fa-mnt-desc">
         <textarea className="field" id="fa-mnt-desc" value={draft.description} rows={3} onChange={(e) => set({ description: e.target.value })} />
-      </div>
+      </Field>
 
-      <div className="fa-field">
-        <label htmlFor="fa-mnt-party">{t('assets.maintenance.field.externalParty')}</label>
+      <Field label={t('assets.maintenance.field.externalParty')} id="fa-mnt-party">
         <input className="field"
           id="fa-mnt-party"
           value={draft.externalParty}
           disabled={isEdit}
           onChange={(e) => set({ externalParty: e.target.value })}
         />
-      </div>
+      </Field>
 
       <fieldset className="fa-fieldset">
         <legend>{t('assets.maintenance.field.cost')}</legend>
-        <div className="fa-field">
-          <label htmlFor="fa-mnt-cost">{t('assets.maintenance.field.costTotal')}</label>
+        <Field label={t('assets.maintenance.field.costTotal')} id="fa-mnt-cost">
           <input className="field" id="fa-mnt-cost" inputMode="decimal" value={draft.costChf} onChange={(e) => set({ costChf: e.target.value })} />
-        </div>
-        <div className="fa-field">
-          <label htmlFor="fa-mnt-parts">{t('assets.maintenance.field.partsCost')}</label>
+        </Field>
+        <Field label={t('assets.maintenance.field.partsCost')} id="fa-mnt-parts">
           <input className="field" id="fa-mnt-parts" inputMode="decimal" value={draft.partsChf} onChange={(e) => set({ partsChf: e.target.value })} />
-        </div>
-        <div className="fa-field">
-          <label htmlFor="fa-mnt-labour">{t('assets.maintenance.field.labourCost')}</label>
+        </Field>
+        <Field label={t('assets.maintenance.field.labourCost')} id="fa-mnt-labour">
           <input className="field" id="fa-mnt-labour" inputMode="decimal" value={draft.labourChf} onChange={(e) => set({ labourChf: e.target.value })} />
-        </div>
+        </Field>
       </fieldset>
 
-      <div className="fa-field">
-        <label htmlFor="fa-mnt-ref">{t('assets.maintenance.field.externalReference')}</label>
+      <Field label={t('assets.maintenance.field.externalReference')} id="fa-mnt-ref">
         <input className="field" id="fa-mnt-ref" value={draft.externalReference} onChange={(e) => set({ externalReference: e.target.value })} />
-      </div>
+      </Field>
 
-      <div className="fa-field">
-        <label htmlFor="fa-mnt-notes">{t('assets.maintenance.field.notes')}</label>
+      <Field label={t('assets.maintenance.field.notes')} id="fa-mnt-notes">
         <textarea className="field" id="fa-mnt-notes" value={draft.notes} rows={2} onChange={(e) => set({ notes: e.target.value })} />
-      </div>
+      </Field>
     </DetailDrawer>
   );
 }

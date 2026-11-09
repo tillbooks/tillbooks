@@ -12,15 +12,8 @@
 }
 
 /* The filter triplet (Gruppierung, Horizont, Periode) is genuinely surface-specific: a forecast lens
-   has no text search, so the shared FilterBar (search-first) does not fit. It sits under the shared
-   SurfaceHeader, which now carries the title, help and the always-on §3 disclaimer subtitle. */
-.forecast-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--t-space-3);
-}
-
+   has no text search, so the shared FilterBar (search-first) does not fit. It sits in the shared
+   SurfaceHeader's toolbar row (D187), under the title, help and the always-on §3 disclaimer subtitle. */
 .forecast-field {
   display: flex;
   flex-direction: column;

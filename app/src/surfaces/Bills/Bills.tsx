@@ -42,10 +42,8 @@
  * header and the primary "Rechnung erfassen" action are the shared `SurfaceHeader`. The bespoke table,
  * head and drawer CSS is deleted; what remains is genuinely surface-specific: the reconciliation band,
  * the open-total line, the overdue note beside the shared `Status` word and the two-select filter
- * toolbar. The row itself opens the bill (K-21) and its one overflow holds the pay verb. The status/vendor
- * filter row is NOT the shared `FilterBar` (that primitive leads with a free-text search this surface
- * has no read wired for, and inventing one is out of D118 B2 scope): it stays two selects that drive
- * the server-side read. The transport error keeps its own surface copy above the table rather than
+ * toolbar. The row itself opens the bill (K-21) and its one overflow holds the pay verb. D187 Listen A: status and vendor are
+ * `FilterBar` facets that drive the server-side read; the search narrows the loaded rows in the browser. The transport error keeps its own surface copy above the table rather than
  * DataTable's error slot, so a failed read never renders as an empty ledger.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -59,10 +57,10 @@ import { useT, useTRich, formatMoney, formatDate } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
-import { Select } from '../../components/Select';
+import { FilterBar, type FilterFacet } from '../../components/FilterBar';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied } from '../../components/states';
-import { AlertGlyph, InfoGlyph } from '../../components/states/glyphs';
-import { Tooltip } from '../../components/Tooltip';
+import { AlertGlyph } from '../../components/states/glyphs';
+import { IconButton } from '../../components/IconButton';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
 import { Status, type StatusKind } from '../../components/Status';
 import { BillEditor } from './BillEditor';
@@ -137,6 +135,7 @@ export function Bills() {
   const [justSaved, setJustSaved] = useState<{ workspaceId: string | null; id: string } | null>(null);
   const justSavedId = justSaved !== null && justSaved.workspaceId === workspaceId ? justSaved.id : null;
   useCommitAck(justSavedId, view);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [denied, setDenied] = useState(false);
@@ -250,7 +249,27 @@ export function Bills() {
   if (denied) return <PermissionDenied body={t('bills.error.permissionDenied.read')} />;
 
   const settled = !loading && !failed && view !== null;
-  const filterActive = statusParam !== null || vendorParam !== null;
+  const needle = search.trim().toLowerCase();
+  const filterActive = statusParam !== null || vendorParam !== null || needle !== '';
+  const shown = (view?.bills ?? []).filter(
+    (bill) => needle === '' || `${bill.vendorReference ?? ''} ${bill.vendorName ?? ''}`.toLowerCase().includes(needle),
+  );
+  const facets: FilterFacet[] = [
+    {
+      key: 'status',
+      label: t('bills.column.status'),
+      options: VENDOR_BILL_STATUSES.map((status) => ({ value: status, label: t(`bills.status.${status}`) })),
+      value: statusParam,
+      onChange: (value) => setParam('status', value),
+    },
+    {
+      key: 'vendor',
+      label: t('bills.vendor'),
+      options: vendorOptions.map((option) => ({ value: option.id, label: option.label })),
+      value: vendorParam,
+      onChange: (value) => setParam('vendor', value),
+    },
+  ];
 
   /**
    * The list columns. Text left-aligns; every money column is `numeric`, so DataTable right-aligns it,
@@ -360,6 +379,7 @@ export function Bills() {
       <SurfaceHeader
         title={t('bills.title')}
         titleId="bills-title"
+        count={settled ? shown.length : undefined}
         help={<SurfaceHelp surface="Bills" />}
         actions={
           <button type="button" className="btn btn--primary" onClick={() => setParam('new', '1')}>
@@ -404,9 +424,12 @@ export function Bills() {
                 difference: <span className="t-money">{formatMoney(view.reconciliationDifferenceMinor, view.baseCurrency)}</span>,
               })}
             </span>
-            <Tooltip
+            <IconButton
+              icon="info"
+              small
               placement="bottom"
-              content={
+              name={t('bills.reconciliation.info')}
+              context={
                 <span className="bills-mismatch-explain">
                   {tRich('bills.reconciliation.mismatch', {
                     difference: (
@@ -418,44 +441,18 @@ export function Bills() {
                   {t('bills.reconciliation.hint')}
                 </span>
               }
-            >
-              <button type="button" className="btn btn--ghost btn--icon btn--sm" aria-label={t('bills.reconciliation.info')}>
-                <InfoGlyph size={16} />
-              </button>
-            </Tooltip>
+            />
           </p>
         )}
       </div>
 
-      <div className="bills-toolbar">
-        <div className="bills-filter">
-          <span>{t('bills.column.status')}</span>
-          <Select
-            id="bills-status"
-            value={statusParam ?? ''}
-            onChange={(value) => setParam('status', value === '' ? null : value)}
-            options={[
-              { value: '', label: t('bills.filter.allStatuses') },
-              ...VENDOR_BILL_STATUSES.map((status) => ({ value: status, label: t(`bills.status.${status}`) })),
-            ]}
-            ariaLabel={t('bills.column.status')}
-          />
-        </div>
-
-        <div className="bills-filter">
-          <span>{t('bills.vendor')}</span>
-          <Select
-            id="bills-vendor"
-            value={vendorParam ?? ''}
-            onChange={(value) => setParam('vendor', value === '' ? null : value)}
-            options={[
-              { value: '', label: t('bills.filter.allVendors') },
-              ...vendorOptions.map((option) => ({ value: option.id, label: option.label })),
-            ]}
-            ariaLabel={t('bills.vendor')}
-          />
-        </div>
-      </div>
+      <FilterBar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchLabel={t('bills.search')}
+        searchPlaceholder={t('bills.search')}
+        facets={facets}
+      />
 
       {/*
         The transport error stays a SURFACE-level banner (its own copy and retry), rendered above the
@@ -468,7 +465,7 @@ export function Bills() {
       {!failed && (
         <DataTable
           columns={columns}
-          rows={view?.bills ?? []}
+          rows={shown}
           rowKey={(bill) => bill.id}
           caption={t('bills.list.caption')}
           onRowClick={(bill) => setParam('bill', bill.id)}
@@ -490,7 +487,10 @@ export function Bills() {
                 title={t('bills.empty.filtered.title')}
                 hint={t('bills.empty.filtered.hint')}
                 filtered={{
-                  onClear: () => setParams(new URLSearchParams()),
+                  onClear: () => {
+                    setSearch('');
+                    setParams(new URLSearchParams());
+                  },
                   clearLabel: t('bills.empty.filtered.action'),
                 }}
               />

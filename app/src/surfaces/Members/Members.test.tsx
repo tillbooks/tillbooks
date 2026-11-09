@@ -280,7 +280,7 @@ describe('Members, the roster', () => {
     // Humanising a name someone typed would show them a word they did not write.
     withCapabilities(baseCanned());
     await screen.findAllByRole('row');
-    await userEvent.click(screen.getAllByRole('combobox')[1]);
+    await openRolePicker(1);
     // Options portal to <body>; the disabled check-glyph is aria-hidden, so each option's
     // accessible name is exactly its role label.
     expect(screen.getByRole('option', { name: de.members.role.owner })).toBeInTheDocument();
@@ -294,8 +294,9 @@ describe('Members, the roster', () => {
     // The one notice that is not an error. Inviting somebody is ALSO the act of claiming ownership,
     // and an operator should not discover that afterwards.
     withCapabilities({ ...baseCanned(), whoami: whoamiUnclaimed, list_members: ok({ members: [] }) });
-    await waitFor(() => expect(document.querySelector('.action-feedback')).not.toBeNull());
-    expect(document.querySelector('.action-feedback')?.textContent).toBe(de.members.unclaimed);
+    // D187 (Hinweise A): the notice is in the header's Hinweise, and beside Einladen, whose click it describes.
+    await screen.findByRole('button', { name: /Hinweis/ });
+    expect(screen.getAllByText(de.members.unclaimed).length).toBeGreaterThan(0);
   });
 });
 
@@ -303,6 +304,20 @@ describe('Members, the roster', () => {
 async function confirmRevoke() {
   const dialog = await screen.findByRole('alertdialog', { name: de.members.revokeConfirm.title });
   await userEvent.click(within(dialog).getByRole('button', { name: de.members.revokeConfirm.confirm }));
+}
+
+/** D187 (Hinzufügen A): a role is a value; its pencil turns it into the picker. Row 0 is the head. */
+async function openRolePicker(rowIndex: number) {
+  const row = within(screen.getAllByRole('row')[rowIndex] as HTMLElement);
+  await userEvent.click(row.getByRole('button', { name: 'Bearbeiten' }));
+  await userEvent.click(row.getByRole('combobox', { name: de.members.roleLabel }));
+}
+
+/** D187 (Listen A): "Zugriff entziehen" sits under the row's Mehr. Row 0 is the head. */
+async function pressRevoke(rowIndex: number) {
+  const row = within(screen.getAllByRole('row')[rowIndex] as HTMLElement);
+  await userEvent.click(row.getByRole('button', { name: /^Aktionen für/ }));
+  await userEvent.click(await screen.findByRole('menuitem', { name: de.members.revoke }));
 }
 
 describe('Members, the writes', () => {
@@ -341,7 +356,7 @@ describe('Members, the writes', () => {
     await screen.findAllByRole('row');
     expect(listCalls).toBe(1);
 
-    await userEvent.click(screen.getAllByRole('combobox')[2]);
+    await openRolePicker(2);
     await userEvent.click(screen.getAllByRole('option').find((o) => o.getAttribute('data-value') === 'viewer')!);
     await waitFor(() => expect(setRole).toHaveBeenCalledOnce());
     expect(setRole.mock.calls[0][0]).toMatchObject({ memberId: 'member_2', role: 'viewer' });
@@ -352,7 +367,7 @@ describe('Members, the writes', () => {
     const revoke = vi.fn<CannedHandler>(() => ok({ memberId: 'member_2', revoked: true }));
     withCapabilities({ ...baseCanned(), revoke_member: revoke });
     await screen.findAllByRole('row');
-    await userEvent.click(screen.getAllByRole('button', { name: 'Zugriff entziehen' })[1] as HTMLElement);
+    await pressRevoke(2);
     await confirmRevoke();
     await waitFor(() => expect(revoke).toHaveBeenCalledOnce());
     expect(revoke.mock.calls[0][0]).toMatchObject({ memberId: 'member_2' });
@@ -364,7 +379,7 @@ describe('Members, the writes', () => {
     // "that did not work" would leave them with no idea why.
     withCapabilities({ ...baseCanned(), revoke_member: reject('last_owner', { memberId: 'member_1' }) });
     await screen.findAllByRole('row');
-    await userEvent.click(screen.getAllByRole('button', { name: 'Zugriff entziehen' })[0] as HTMLElement);
+    await pressRevoke(1);
     await confirmRevoke();
 
     const alert = await screen.findByRole('alert');
@@ -381,7 +396,7 @@ describe('Members, the writes', () => {
       revoke_member: reject('permission_denied', { capability: 'manage_members', role: 'bookkeeper' }),
     });
     await screen.findAllByRole('row');
-    await userEvent.click(screen.getAllByRole('button', { name: 'Zugriff entziehen' })[0] as HTMLElement);
+    await pressRevoke(1);
     await confirmRevoke();
 
     const alert = await screen.findByRole('alert');
@@ -414,7 +429,8 @@ describe('Members, the capability gate on the surface itself', () => {
     await screen.findAllByRole('row');
     expect(screen.getByRole('button', { name: 'Einladen' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: de.members.tab.roles })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Zugriff entziehen' })).toHaveLength(2);
+    // D187: each row's acts sit under its Mehr; Zugriff entziehen is one of them.
+    expect(screen.getAllByRole('button', { name: /^Aktionen für/ })).toHaveLength(2);
   });
 });
 
@@ -576,7 +592,8 @@ describe('Members, the seated MCP agent (D50)', () => {
     const rows = await screen.findAllByRole('row');
     const agent = within(rows[2] as HTMLElement);
 
-    expect(agent.getByRole('button', { name: de.members.revoke })).toBeInTheDocument();
+    expect(agent.getByRole('button', { name: /^Aktionen für/ })).toBeInTheDocument();
+    await userEvent.click(agent.getByRole('button', { name: 'Bearbeiten' }));
     await userEvent.click(agent.getByRole('combobox', { name: de.members.roleLabel }));
     await userEvent.click(screen.getAllByRole('option').find((o) => o.getAttribute('data-value') === 'viewer')!);
     await waitFor(() => expect(setRole).toHaveBeenCalledOnce());
@@ -601,7 +618,10 @@ describe('M03: the local-mode go-online notice (S4.2)', () => {
     const invite = vi.fn<CannedHandler>(() => ok({ memberId: 'member_3', token: 'invite_77', delivery: 'prepared' }));
     withCapabilities({ ...baseCanned(), invite_member: invite });
     await screen.findAllByRole('row');
-    const notice = screen.getByRole('note');
+    // D187 (Hinweise A): the notice is in the header's Hinweise chip, with its link.
+    const chip = screen.getByRole('button', { name: /Hinweis/ });
+    await userEvent.click(chip);
+    const notice = document.getElementById(chip.getAttribute('aria-controls') ?? '') as HTMLElement;
     expect(notice.textContent).toContain(de.members.goOnline.notice);
     // One link, to the Hosting journey (the Operations surface), not a second invite path.
     expect(within(notice).getByRole('link', { name: de.members.goOnline.link })).toHaveAttribute(
@@ -632,7 +652,7 @@ describe('M03: the local-mode go-online notice (S4.2)', () => {
     });
     withCapabilities({ ...baseCanned(), whoami: whoamiServed });
     await screen.findAllByRole('row');
-    expect(screen.queryByRole('note')).toBeNull();
+    expect(screen.queryByText(de.members.goOnline.notice)).toBeNull();
     // The form itself is unchanged: served mode is where inviting actually works.
     expect(screen.getByLabelText('E-Mail')).toBeEnabled();
   });
@@ -640,13 +660,13 @@ describe('M03: the local-mode go-online notice (S4.2)', () => {
   it('is ABSENT for a viewer, because it belongs to the invite form and the viewer has none', async () => {
     withCapabilities({ ...baseCanned(), whoami: whoamiViewer });
     await screen.findAllByRole('row');
-    expect(screen.queryByRole('note')).toBeNull();
+    expect(screen.queryByText(de.members.goOnline.notice)).toBeNull();
   });
 
   it('has no axe violations with the notice shown', async () => {
     const { container } = withCapabilities(baseCanned());
     await screen.findAllByRole('row');
-    screen.getByRole('note');
+    screen.getByRole('button', { name: /Hinweis/ });
     expect(await axe(container)).toHaveNoViolations();
   });
 });
@@ -739,7 +759,7 @@ describe('Members, Phase 2c: kind, confirm, re-invite', () => {
     const revoke = vi.fn<CannedHandler>(() => ok({ memberId: 'member_2', revoked: true }));
     withCapabilities({ ...baseCanned(), revoke_member: revoke });
     await screen.findAllByRole('row');
-    await userEvent.click(screen.getAllByRole('button', { name: de.members.revoke })[1] as HTMLElement);
+    await pressRevoke(2);
     const dialog = await screen.findByRole('alertdialog', { name: de.members.revokeConfirm.title });
     expect(dialog.textContent).toContain(de.members.revokeConfirm.body.replace('{name}', 'B. Halter'));
     expect(dialog.textContent).toContain(consequenceSentence('revoke_member', 'de-CH') as string);
@@ -770,7 +790,7 @@ describe('Members, Phase 2c: kind, confirm, re-invite', () => {
   it('has no axe violations with the confirm open and the kind field rendered', async () => {
     const { container } = withCapabilities({ ...baseCanned(), whoami: whoamiOwnerServed });
     await screen.findAllByRole('row');
-    await userEvent.click(screen.getAllByRole('button', { name: de.members.revoke })[1] as HTMLElement);
+    await pressRevoke(2);
     await screen.findByRole('alertdialog');
     expect(await axe(container)).toHaveNoViolations();
   });

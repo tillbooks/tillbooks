@@ -1022,8 +1022,21 @@ export function Uebersicht() {
         </SortableList>
       ) : null}
 
-      {!loading && hiddenCount > 0 ? <p className="uebersicht-note">{t('dashboard.more_tiles')}</p> : null}
-      {!loading && (overview?.omitted.length ?? 0) > 0 ? <p className="uebersicht-note">{t('dashboard.omitted_note')}</p> : null}
+      {!loading && (hiddenCount > 0 || (overview?.omitted.length ?? 0) > 0) ? (
+        <div className="uebersicht-note">
+          <IconButton
+            icon="info"
+            small
+            context={
+              <>
+                {hiddenCount > 0 ? <span>{t('dashboard.more_tiles')}</span> : null}
+                {hiddenCount > 0 && (overview?.omitted.length ?? 0) > 0 ? ' ' : null}
+                {(overview?.omitted.length ?? 0) > 0 ? <span>{t('dashboard.omitted_note')}</span> : null}
+              </>
+            }
+          />
+        </div>
+      ) : null}
 
       <p className="visually-hidden" aria-live="polite">
         {announcement}

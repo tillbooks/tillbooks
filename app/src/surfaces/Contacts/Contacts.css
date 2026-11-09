@@ -52,7 +52,6 @@
 /* Fields. The editor and drawer forms are hand-rolled inside the shared DetailDrawer/Modal shells,
    so their field styling stays here; only the drawer/modal chrome moved to the primitives. The
    body wrappers keep the 8-pt vertical rhythm the old drawer body used to provide. */
-.ct-editor-form,
 .ct-merge-body,
 .ct-import-body {
   display: flex;
@@ -74,11 +73,6 @@
 
 .ct-field-row .ct-field {
   flex: 1 1 0;
-}
-
-.ct-field-inline {
-  display: inline-flex;
-  align-items: center;
 }
 
 .ct-field-label {
@@ -124,7 +118,7 @@
 .ct-address-grid {
   display: grid;
   grid-template-columns: 2fr 1fr;
-  gap: var(--t-space-1) var(--t-space-2);
+  gap: var(--t-space-2);
 }
 
 .ct-address-grid .ct-street,
@@ -196,9 +190,19 @@
 .ct-subsection {
   display: flex;
   flex-direction: column;
-  gap: var(--t-space-1);
-  padding-top: var(--t-space-1);
-  border-top: 1px solid var(--t-border);
+  gap: var(--t-space-2);
+  padding-top: var(--t-space-2);
+}
+
+.ct-subsection-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+}
+
+/* A field with its act beside it: the act sits on the field's baseline row, a gap apart, never on it. */
+.ct-field-row--act {
+  align-items: flex-end;
 }
 
 .ct-subsection-title {
@@ -535,19 +539,12 @@
 .ct-task-editor {
   display: flex;
   flex-direction: column;
-  gap: var(--t-space-1);
-  padding: var(--t-space-1) var(--t-space-2);
-  background: var(--t-bg-soft);
-  border-radius: var(--t-radius-sm);
-}
-
-.ct-task-editor-fields {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-1);
+  gap: var(--t-space-2);
 }
 
 .ct-task-editor-actions {
   display: flex;
   gap: var(--t-space-1);
+  margin-top: var(--t-space-1);
 }
+

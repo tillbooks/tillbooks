@@ -91,34 +91,25 @@
   gap: var(--t-space-2);
 }
 
-.item-field,
-.item-field-inner {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-0-5);
-}
-
 .item-row2 {
   display: flex;
   gap: var(--t-space-2);
 }
 
-.item-row2 .item-field,
-.item-row2 > .item-field-inner {
+.item-row2 > .form-row {
   flex: 1 1 0;
 }
 
-.item-field-label {
-  font-size: var(--t-font-sm);
-  line-height: var(--t-lh-sm);
-  color: var(--t-text-dim);
+.item-check-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
 }
 
-/* A precondition or a note under a control: it carries meaning, so it reads dim (K-36). */
-.item-field-hint {
-  color: var(--t-text-dim);
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
+.item-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
 }
 
 /* A checkbox is a standalone control: its label row is a 44px tap target (D116) and the box itself is
@@ -225,21 +216,11 @@
   gap: var(--t-space-2);
 }
 
+/* D187: the three price-list blocks are form stacks on the shared rhythm, grouped by whitespace. */
 .pricelists-create,
 .pricelists-prices,
 .pricelists-resolve {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-1);
-  padding: var(--t-space-2);
-}
-
-/* The section title inside a price-list panel. */
-.item-drawer-title {
-  margin: 0;
-  font-size: var(--t-font-lg);
-  line-height: var(--t-lh-lg);
-  font-weight: 600;
+  max-width: 40rem;
 }
 
 /* The price lists and a list's prices: rows on the table rhythm, no bullets. */

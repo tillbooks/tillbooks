@@ -124,12 +124,6 @@
   color: var(--t-accent);
 }
 
-.iv-controls {
-  display: flex;
-  gap: var(--t-space-2);
-  flex-wrap: wrap;
-}
-
 .iv-figures {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -194,4 +188,10 @@
   color: var(--t-text-dim);
   font-size: var(--t-font-body);
   line-height: var(--t-lh-body);
+}
+
+.iv-check-row {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
 }

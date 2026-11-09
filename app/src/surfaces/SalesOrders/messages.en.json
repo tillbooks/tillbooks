@@ -83,7 +83,8 @@
     "unknownItem": "Unknown item",
     "rowOpen": "Open order {row}",
     "emptyHint": "Orders appear here once you create one or convert a quote.",
-    "emptyBackordersHint": "Every order is fully delivered."
+    "emptyBackordersHint": "Every order is fully delivered.",
+    "search": "Search orders"
   },
   "dn": {
     "action": {

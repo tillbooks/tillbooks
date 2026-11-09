@@ -60,7 +60,8 @@
       "preview": "Preview",
       "submit": "Submit for approval",
       "apply": "Apply"
-    }
+    },
+    "search": "Search purchase orders"
   },
   "help": {
     "PurchaseVersions": {

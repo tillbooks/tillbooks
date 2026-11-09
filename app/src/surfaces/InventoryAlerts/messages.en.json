@@ -5,7 +5,7 @@
   "inventory": {
     "alerts": {
       "title": "Stock & alerts",
-      "subtitle": "One read-only view over the whole inventory: alerts, stock position, low stock, valuation drift, slow movers, cycle counts and reorder candidates, each a single structured call.",
+      "search": "Search this report",
       "reportsLabel": "Reports",
       "noWorkspace": "Pick a client to see the inventory alerts.",
       "emptyTitle": "Nothing to show",

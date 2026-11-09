@@ -27,6 +27,7 @@ import { useWorkspaceId } from '../../app/workspace';
 import { useT, formatDate } from '../../i18n';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { Status, type StatusKind } from '../../components/Status';
+import { IconButton } from '../../components/IconButton';
 import { Select } from '../../components/Select';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
 import './Inbox.css';
@@ -398,9 +399,13 @@ export function Inbox() {
             {t('notifications.action.markAllRead')}
           </button>
         )}
-        <button type="button" className="btn btn--secondary" onClick={() => setPrefsOpen(!prefsOpen)}>
-          {prefsOpen ? t('notifications.action.closePrefs') : t('notifications.action.openPrefs')}
-        </button>
+        <IconButton
+          icon="settings"
+          name={prefsOpen ? t('notifications.action.closePrefs') : t('notifications.action.openPrefs')}
+          context={t('notifications.prefs.title')}
+          aria-expanded={prefsOpen}
+          onClick={() => setPrefsOpen(!prefsOpen)}
+        />
       </header>
 
       {writeError !== null && <ErrorBanner message={errorMessage(writeError)} />}
@@ -408,10 +413,12 @@ export function Inbox() {
 
       {prefsOpen && (
         <section className="inbox-prefs" aria-labelledby="inbox-prefs-title">
-          <h2 id="inbox-prefs-title" className="inbox-section-title">
-            {t('notifications.prefs.title')}
-          </h2>
-          <p className="inbox-prefs-hint">{t('notifications.prefs.hint')}</p>
+          <div className="inbox-section-title">
+            <h2 id="inbox-prefs-title" className="inbox-section-heading">
+              {t('notifications.prefs.title')}
+            </h2>
+            <IconButton icon="info" small context={t('notifications.prefs.hint')} />
+          </div>
           {prefsLoading ? (
             <Skeleton rows={3} height={32} labelKey="notifications.loading" />
           ) : prefsFailed ? (
@@ -423,9 +430,11 @@ export function Inbox() {
                   {t('notifications.prefs.saved')}
                 </p>
               )}
-              <h3 className="inbox-prefs-group">{t('notifications.prefs.wildcard')}</h3>
+              <div className="inbox-prefs-group">
+                <h3 className="inbox-prefs-group-title">{t('notifications.prefs.wildcard')}</h3>
+                <IconButton icon="info" small context={t('notifications.prefs.cloudTier')} />
+              </div>
               {CHANNELS.map(prefRow)}
-              <p className="inbox-prefs-cloud">{t('notifications.prefs.cloudTier')}</p>
               <h3 className="inbox-prefs-group">{t('notifications.prefs.override.title')}</h3>
               {overrides.length === 0 ? (
                 <p className="inbox-section-empty">{t('notifications.prefs.override.none')}</p>

@@ -54,6 +54,12 @@ function tree(canned: Canned, asked?: Array<{ action: string; input: Record<stri
   );
 }
 
+/** The shared Select: open the combobox, then pick the option by its name. */
+async function pickRunKind(picker: HTMLElement, option: string) {
+  await userEvent.click(picker);
+  await userEvent.click(await screen.findByRole('option', { name: option }));
+}
+
 async function openLohn() {
   await userEvent.click(await screen.findByRole('tab', { name: 'Lohn' }));
 }
@@ -181,9 +187,9 @@ describe('A34 Lohn tab', () => {
     }), asked));
     await openLohn();
     expect(await screen.findByRole('cell', { name: /je_9 · 13\. Monatslohn/ })).toBeInTheDocument();
-    const picker = screen.getByLabelText('Lohnlauf') as HTMLSelectElement;
-    expect(picker.value).toBe('regular');
-    await userEvent.selectOptions(picker, 'bonus');
+    const picker = screen.getByRole('combobox', { name: 'Lohnlauf' });
+    expect(picker).toHaveTextContent('Regulär');
+    await pickRunKind(picker, 'Bonus');
     await userEvent.upload(screen.getByLabelText('Lohndatei hochladen'), new File(['x'], 'lohn.csv', { type: 'text/csv' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Buchen' }));
     await waitFor(() => {
@@ -201,11 +207,11 @@ describe('A34 Lohn tab', () => {
         input.confirm === true ? ok({ wageJournalPostId: 'wjp_3', postedEntryId: 'je_3', runKind: input.runKind }) : ok({ preview: pvLines }),
     }), asked));
     await openLohn();
-    const picker = await screen.findByLabelText('Lohnlauf');
-    await userEvent.selectOptions(picker, 'bonus');
+    const picker = await screen.findByRole('combobox', { name: 'Lohnlauf' });
+    await pickRunKind(picker, 'Bonus');
     expect(screen.queryByLabelText('Grund für diesen Lohnlauf')).toBeNull();
     expect(screen.getByLabelText('Grund für diesen Lohnlauf (optional)')).toBeInTheDocument();
-    await userEvent.selectOptions(picker, 'correction');
+    await pickRunKind(picker, 'Korrektur');
     const reason = screen.getByLabelText('Grund für diesen Lohnlauf');
     expect(screen.getByLabelText('Lohndatei hochladen')).toBeDisabled();
     await userEvent.type(reason, 'Falscher Satz im Juni');
@@ -229,7 +235,7 @@ describe('A34 Lohn tab', () => {
         input.confirm === true ? ok({ wageJournalPostId: 'wjp_4', postedEntryId: 'je_4', runKind: input.runKind }) : ok({ preview: pvLines }),
     }), asked));
     await openLohn();
-    await userEvent.selectOptions(await screen.findByLabelText('Lohnlauf'), 'bonus');
+    await pickRunKind(await screen.findByRole('combobox', { name: 'Lohnlauf' }), 'Bonus');
     expect(screen.getByLabelText('Lohndatei hochladen')).toBeEnabled();
     await userEvent.type(screen.getByLabelText('Grund für diesen Lohnlauf (optional)'), 'Jahresbonus');
     await userEvent.upload(screen.getByLabelText('Lohndatei hochladen'), new File(['x'], 'lohn.csv', { type: 'text/csv' }));
@@ -247,7 +253,7 @@ describe('A34 Lohn tab', () => {
     await openLohn();
     const picker = await screen.findByLabelText('Lohnlauf');
     await waitFor(async () => {
-      await userEvent.selectOptions(picker, 'bonus');
+      await pickRunKind(picker, 'Bonus');
       expect(screen.getByLabelText('Grund für diesen Lohnlauf')).toBeInTheDocument();
     });
   });

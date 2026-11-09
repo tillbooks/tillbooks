@@ -14,6 +14,12 @@
     "recount": "Recount",
     "freeze": "Freeze date",
     "progress": "Progress",
+    "search": "Search type or cut-off date",
+    "emptyFiltered": "No counts match this filter.",
+    "filter": {
+      "clear": "Clear filters"
+    },
+    "expandLabel": "Details for {type} on {date}",
     "listLabel": "Stocktake sessions",
     "detailLabel": "Session detail",
     "noLines": "This session has no lines.",

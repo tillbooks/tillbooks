@@ -12,14 +12,12 @@
     "booked": "In den Büchern",
     "reversalTag": "Storno",
     "filters": {
-      "legend": "Journal filtern",
       "from": "Von",
       "to": "Bis",
       "number": "Beleg-Nr.",
       "account": "Konto",
       "source": "Quelle",
       "status": "Status",
-      "all": "Alle",
       "apply": "Filter anwenden",
       "clear": "Filter zurücksetzen"
     },

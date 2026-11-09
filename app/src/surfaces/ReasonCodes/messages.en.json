@@ -4,7 +4,6 @@
   },
   "reasonCodes": {
     "title": "Adjustment reason codes",
-    "new": "New reason code",
     "edit": "Edit",
     "archive": "Archive",
     "rowActions": "Actions for {code}",
@@ -52,8 +51,7 @@
     },
     "empty": {
       "title": "No reason codes yet",
-      "hint": "Create your first reason code so every stock adjustment can be classified.",
-      "cta": "Create a reason code"
+      "hint": "Create your first reason code so every stock adjustment can be classified."
     },
     "list": {
       "caption": "Catalog of adjustment reason codes"
@@ -63,7 +61,10 @@
     },
     "errors": {
       "duplicate_code": "A reason code with this code already exists in this workspace."
-    }
+    },
+    "search": "Search reason codes",
+    "add": "Add",
+    "addInfo": "Adds the reason code with this category. The note requirement and the stocktake default are set when you edit it."
   },
   "help": {
     "ReasonCodes": {

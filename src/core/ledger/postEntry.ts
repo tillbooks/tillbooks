@@ -723,6 +723,18 @@ const VALID_SOURCES = new Set([
   'vat_settlement',
 ]);
 
+/**
+ * D190 critic nit 1: whether a string is a `journal_entry.source` the engine can write, and the values,
+ * for a reader (the journal export) that must refuse a typo instead of answering an empty extract.
+ */
+export function isJournalSource(source: string): boolean {
+  return VALID_SOURCES.has(source);
+}
+
+export function journalSources(): string[] {
+  return [...VALID_SOURCES].sort();
+}
+
 /** The journal source of an A38 MWST settlement entry. Only `vatSettlementPost` writes it. */
 export const VAT_SETTLEMENT_SOURCE = 'vat_settlement';
 

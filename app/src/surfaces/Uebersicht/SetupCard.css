@@ -13,9 +13,8 @@
 
 .setup-card-head {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--t-space-2);
+  align-items: center;
+  gap: var(--t-space-1);
 }
 
 .setup-card-title {
@@ -28,6 +27,7 @@
 
 .setup-card-dismiss {
   flex: none;
+  margin-left: auto;
   /* K-10: the transparent edge the focus cue turns brass, taken out of the padding. */
   border: 1px solid transparent;
   background: none;
@@ -44,13 +44,6 @@
 }
 
 /* Focus is the shared global :focus-visible ring (tokens.css); no local outline restated here. */
-
-.setup-card-lead {
-  margin: var(--t-space-0-5) 0 0;
-  font-size: var(--t-font-body);
-  line-height: var(--t-lh-body);
-  color: var(--t-text-dim);
-}
 
 .setup-card-steps {
   list-style: none;

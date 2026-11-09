@@ -37,13 +37,15 @@ import { CAP, useCapabilities } from '../../lib/capabilities';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton, refusalText } from '../../components/states';
+import { Field } from '../../components/Field';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { Select } from '../../components/Select';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { Status, type StatusKind } from '../../components/Status';
-import { CloseGlyph } from '../../components/icons';
+import { IconButton } from '../../components/IconButton';
+import { FilterBar, type FilterFacet } from '../../components/FilterBar';
 import './SalesOrders.css';
 
 const newKey = () => crypto.randomUUID();
@@ -201,6 +203,8 @@ export function SalesOrders() {
   const [locations, setLocations] = useState<LocationOpt[]>([]);
   const [backorderIds, setBackorderIds] = useState<Set<string>>(new Set());
   const [onlyBackorders, setOnlyBackorders] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [denied, setDenied] = useState(false);
@@ -351,11 +355,16 @@ export function SalesOrders() {
   if (workspaceId === null) return <NoWorkspaceState />;
   if (denied) return <PermissionDenied body={t('so.error.permissionDenied.read')} />;
 
-  const visible = onlyBackorders ? orders.filter((o) => backorderIds.has(o.id)) : orders;
   const statusLabel = (s: string) => t(`so.status.${s}`);
   const statusChip = (s: string) => <Status kind={STATUS_KIND[s] ?? 'neutral'} label={statusLabel(s)} />;
   // A contact or an item the side reads did not return reads as such, never as its raw id (K-38).
   const contactName = (id: string | null) => (id === null ? '-' : contacts.get(id) ?? t('so.unknownContact'));
+  const visible = orders.filter((o) => {
+    if (onlyBackorders && !backorderIds.has(o.id)) return false;
+    if (statusFilter !== null && o.status !== statusFilter) return false;
+    const needle = search.trim().toLowerCase();
+    return needle === '' || o.number.toLowerCase().includes(needle) || contactName(o.contactId).toLowerCase().includes(needle);
+  });
   const lineName = (l: OrderLine) =>
     l.description ?? (l.itemId === null ? '-' : items.find((i) => i.id === l.itemId)?.name ?? t('so.unknownItem'));
   const activeLocations = locations.filter((l) => !l.archived);
@@ -397,24 +406,35 @@ export function SalesOrders() {
   ];
 
   // The backorder filter toggle and the create action ride the SurfaceHeader actions slot.
-  const headerActions = (
-    <>
-      <label className="so-toggle">
-        <input type="checkbox" checked={onlyBackorders} onChange={(e) => setOnlyBackorders(e.target.checked)} />
-        <span>{t('so.filter.backorders')}</span>
-      </label>
-      {canWrite && (
-        <button type="button" className="btn btn--primary" onClick={openCreate}>
-          {t('so.action.new')}
-        </button>
-      )}
-    </>
-  );
+  const headerActions = canWrite ? (
+    <button type="button" className="btn btn--primary" onClick={openCreate}>
+      {t('so.action.new')}
+    </button>
+  ) : undefined;
 
-  // The detail drawer's pinned action row, assembled per status. Deliver lives in the body with its
-  // location select; here sit the pure lifecycle buttons. One primary per view (K-08), across body and
-  // foot (see the deliver button below). None of these is a money write (the invoice is a draft), so
-  // none is the tinted `.btn--accent`.
+  const facets: FilterFacet[] = [
+    {
+      key: 'status',
+      label: t('so.field.status'),
+      options: Object.keys(STATUS_KIND).map((status) => ({ value: status, label: statusLabel(status) })),
+      value: statusFilter,
+      onChange: setStatusFilter,
+    },
+    {
+      key: 'backorders',
+      label: t('so.filter.backorders'),
+      options: [{ value: '1', label: t('so.filter.backorders') }],
+      value: onlyBackorders ? '1' : null,
+      onChange: (value) => setOnlyBackorders(value !== null),
+    },
+  ];
+  const clearFilters = () => {
+    setSearch('');
+    setStatusFilter(null);
+    setOnlyBackorders(false);
+  };
+  const filtersOn = search.trim() !== '' || statusFilter !== null || onlyBackorders;
+
   const detailActions: ReactNode[] = [];
   if (detail !== null && canWrite) {
     if (detail.order.status === 'draft') {
@@ -445,11 +465,24 @@ export function SalesOrders() {
       <SurfaceHeader
         title={t('so.tab.title')}
         titleId="so-title"
+        count={loading || failed ? undefined : visible.length}
         help={<SurfaceHelp surface="SalesOrders" />}
         actions={headerActions}
       />
 
       {failed && <ErrorBanner message={t('so.error.transport')} onRetry={() => void load()} />}
+
+      {!failed && (
+        <FilterBar
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchLabel={t('so.search')}
+          searchPlaceholder={t('so.search')}
+          onClear={clearFilters}
+          clearLabel={t('so.filter.clear')}
+          facets={facets}
+        />
+      )}
 
       {!failed && (
         <DataTable
@@ -467,8 +500,10 @@ export function SalesOrders() {
               <EmptyState
                 title={t('so.emptyBackorders')}
                 hint={t('so.emptyBackordersHint')}
-                filtered={{ onClear: () => setOnlyBackorders(false), clearLabel: t('so.filter.clear') }}
+                filtered={{ onClear: clearFilters, clearLabel: t('so.filter.clear') }}
               />
+            ) : filtersOn ? (
+              <EmptyState title={t('so.empty')} filtered={{ onClear: clearFilters, clearLabel: t('so.filter.clear') }} />
             ) : (
               <EmptyState
                 title={t('so.empty')}
@@ -507,8 +542,7 @@ export function SalesOrders() {
               void create();
             }}
           >
-            <div className="so-field">
-              <span>{t('so.field.contact')}</span>
+            <Field label={t('so.field.contact')}>
               <Select
                 value={contactId}
                 onChange={setContactId}
@@ -518,7 +552,7 @@ export function SalesOrders() {
                 ]}
                 ariaLabel={t('so.field.contact')}
               />
-            </div>
+            </Field>
             <fieldset className="so-lines">
               <legend>{t('so.field.lines')}</legend>
               {lines.map((line, index) => (
@@ -578,14 +612,13 @@ export function SalesOrders() {
                     />
                   )}
                   {lines.length > 1 && (
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--icon btn--sm"
-                      aria-label={t('so.action.removeLine')}
+                    <IconButton
+                      icon="remove"
+                      small
+                      name={t('so.action.removeLine')}
+                      context={String(index + 1)}
                       onClick={() => setLines(lines.filter((_, i) => i !== index))}
-                    >
-                      <CloseGlyph aria-hidden="true" />
-                    </button>
+                    />
                   )}
                 </div>
               ))}
@@ -645,8 +678,7 @@ export function SalesOrders() {
 
               {canWrite && (detail.order.status === 'confirmed' || detail.order.status === 'partially_delivered') && (
                 <div className="so-deliver">
-                  <div className="so-field">
-                    <span>{t('so.field.location')}</span>
+                  <Field label={t('so.field.location')}>
                     <Select
                       value={deliverLocation}
                       onChange={setDeliverLocation}
@@ -656,7 +688,7 @@ export function SalesOrders() {
                       ]}
                       ariaLabel={t('so.field.location')}
                     />
-                  </div>
+                  </Field>
                   {/* When an order is partially delivered, invoicing already spends the drawer's one
                       primary, so this go action drops to secondary (K-08, D137: one primary per view,
                       and the tinted accent is only the commit of a money write, which a delivery is

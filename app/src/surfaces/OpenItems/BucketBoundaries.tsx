@@ -69,6 +69,7 @@ import { useIdempotencyKey } from '../../lib/idempotency';
 import { useWorkspaceId } from '../../app/workspace';
 import { useT } from '../../i18n';
 import { Skeleton, refusalText } from '../../components/states';
+import { IconButton } from '../../components/IconButton';
 import { bucketLabel, boundaryErrorKey, parseBucketConfig, MAX_BOUNDARIES } from './model';
 
 export interface BucketBoundariesProps {
@@ -244,9 +245,18 @@ export function BucketBoundaries({ onClose, onSaved }: BucketBoundariesProps) {
     >
       {/* `tabIndex={-1}`: a focus target, never a tab stop. The panel's name is announced on open
           without adding a stop to the surface's tab order. */}
-      <h2 className="oi-popover-title" tabIndex={-1} ref={titleRef}>
-        {t('openItems.editBoundaries')}
-      </h2>
+      <div className="oi-popover-head">
+        <h2 className="oi-popover-title" tabIndex={-1} ref={titleRef}>
+          {t('openItems.editBoundaries')}
+        </h2>
+        {!loading && !readError && (
+          <IconButton
+            icon="info"
+            small
+            context={`${configured ? t('openItems.boundaries.chosen') : t('openItems.boundaries.default')} ${t('openItems.boundaries.note')}`}
+          />
+        )}
+      </div>
 
       {loading ? (
         <Skeleton rows={3} />
@@ -256,10 +266,6 @@ export function BucketBoundaries({ onClose, onSaved }: BucketBoundariesProps) {
         </p>
       ) : (
         <>
-          <p className="oi-popover-source">
-            {configured ? t('openItems.boundaries.chosen') : t('openItems.boundaries.default')}
-          </p>
-
           <div className="form-stack">
             {values.map((value, index) => (
               <div className="form-row oi-boundary-row" key={`boundary-${index}`}>
@@ -283,13 +289,13 @@ export function BucketBoundaries({ onClose, onSaved }: BucketBoundariesProps) {
                   }}
                 />
                 <span className="oi-boundary-unit">{t('openItems.boundaries.days')}</span>
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--sm"
+                <IconButton
+                  icon="remove"
+                  small
+                  name={t('openItems.boundaries.remove', { n: index + 1 })}
+                  context={t('openItems.boundaries.field', { n: index + 1 })}
                   onClick={() => setValues(values.filter((_, i) => i !== index))}
-                >
-                  {t('openItems.boundaries.remove', { n: index + 1 })}
-                </button>
+                />
                 {/* Beside the field it is about, never at the bottom of the panel. */}
                 {index === outOfOrderAt && (
                   <span className="field-error" id={`oi-boundary-${index}-error`}>
@@ -318,8 +324,6 @@ export function BucketBoundaries({ onClose, onSaved }: BucketBoundariesProps) {
               {t('openItems.boundaries.preview', { buckets: preview.join(', ') })}
             </p>
           )}
-
-          <p className="oi-popover-note">{t('openItems.boundaries.note')}</p>
 
           {writeError !== null && (
             <p className="field-error" role="alert">

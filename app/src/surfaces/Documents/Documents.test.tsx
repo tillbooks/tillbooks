@@ -141,14 +141,15 @@ describe('Documents list, truncation notice (D34)', () => {
   });
 });
 
-describe('Documents list, filter tabs', () => {
+describe('Documents list, type facet', () => {
   it('drives a ?type= filter through list_documents', async () => {
     const listSpy = vi.fn((input: Record<string, unknown>) =>
       ok({ documents: input.type === 'invoice' ? [listFixture.documents[0]] : listFixture.documents }),
     );
     renderList({ list_documents: listSpy, list_contacts: ok({ contacts: CONTACTS }) });
     await screen.findByText('O-2026-0001');
-    await userEvent.click(screen.getByRole('tab', { name: 'Rechnung' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Filter hinzufügen' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Typ: Rechnung' }));
     await waitFor(() =>
       expect(listSpy.mock.calls.some((c) => (c[0] as Record<string, unknown>).type === 'invoice')).toBe(true),
     );

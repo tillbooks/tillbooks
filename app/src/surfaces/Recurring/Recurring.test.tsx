@@ -228,9 +228,10 @@ describe('Recurring, the permission gate', () => {
       expect(screen.getByRole('button', { name: de.recurring.new })).toBeDisabled();
     });
     expect(screen.getByRole('button', { name: de.recurring.tick.now })).toBeDisabled();
-    expect(screen.getByRole('button', { name: de.recurring.action.edit })).toBeDisabled();
-    expect(screen.getByRole('button', { name: de.recurring.action.pause })).toBeDisabled();
-    expect(screen.getByRole('button', { name: de.recurring.action.end })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Aktionen für Beratung Muster AG' }));
+    expect(screen.getByRole('menuitem', { name: de.recurring.action.edit })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: de.recurring.action.pause })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('menuitem', { name: de.recurring.action.end })).toHaveAttribute('aria-disabled', 'true');
     // The reason is stated in prose beside the controls, never hung on a hover-only title.
     expect(screen.getByText(de.recurring.needsPermission)).toBeInTheDocument();
   });
@@ -241,7 +242,8 @@ describe('Recurring, the permission gate', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: de.recurring.new })).toBeEnabled();
     });
-    expect(screen.getByRole('button', { name: de.recurring.action.pause })).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Aktionen für Beratung Muster AG' }));
+    expect(screen.getByRole('menuitem', { name: de.recurring.action.pause })).not.toHaveAttribute('aria-disabled');
     expect(screen.queryByText(de.recurring.needsPermission)).not.toBeInTheDocument();
   });
 });
@@ -397,7 +399,8 @@ describe('Recurring, controls and provenance', () => {
         return ok({ schedule: SCHEDULE({ status: 'paused' }) });
       },
     });
-    await user.click(await screen.findByRole('button', { name: de.recurring.action.pause }));
+    await user.click(await screen.findByRole('button', { name: 'Aktionen für Beratung Muster AG' }));
+    await user.click(screen.getByRole('menuitem', { name: de.recurring.action.pause }));
     await waitFor(() => expect(called).toEqual(['rsched_1']));
     expect(await screen.findByText(de.recurring.paused)).toBeInTheDocument();
   });
@@ -489,7 +492,7 @@ describe('Recurring, controls and provenance', () => {
     expect(within(detail).getByText(de.recurring.error.period_locked)).toBeInTheDocument();
     // Spec 4b, where the operator acts: both responses to a waiting draft are legal, and the
     // history says so instead of leaving the operator to guess what a cancel would do.
-    expect(within(detail).getByText(de.recurring.history.skippedHint)).toBeInTheDocument();
+    expect(within(detail).getByText(de.recurring.history.skippedHint)).toBeVisible();
   });
 
   it('renders a discarded period as its own outcome, not as an error', async () => {

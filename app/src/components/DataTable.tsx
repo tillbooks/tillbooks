@@ -42,6 +42,7 @@
 import {
   Fragment,
   useCallback,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -237,6 +238,18 @@ export interface DataTableProps<Row> {
    * Example: `rowClassName={(r) => (r.overdue ? 'ledger-row--overdue' : undefined)}`.
    */
   rowClassName?: (row: Row, index: number) => string | undefined;
+  /**
+   * D187 (the owner's pick "Arbeitsflächen B"): a row opens IN PLACE to show its detail (a stock item's
+   * movements, a search hit's context) in a full-width row under it. One row is open at a time; a click
+   * on the row or its chevron toggles it. `label` names the chevron per row ("Bewegungen von X").
+   * Uncontrolled unless `openKey` and `onOpenChange` are passed.
+   */
+  expand?: {
+    render: (row: Row) => ReactNode;
+    label: (row: Row) => string;
+    openKey?: string | null;
+    onOpenChange?: (key: string | null) => void;
+  };
   /** Number of placeholder rows to show while the read is in flight. */
   skeletonRows?: number;
   /**
@@ -318,7 +331,16 @@ export function DataTable<Row>({
   rowClassName,
   skeletonRows = 5,
   footer,
+  expand,
 }: DataTableProps<Row>) {
+  const [ownOpenKey, setOwnOpenKey] = useState<string | null>(null);
+  const tableId = useId();
+  const t = useT();
+  const openKey = expand?.openKey !== undefined ? expand.openKey : ownOpenKey;
+  const setOpenKey = (key: string | null) => {
+    expand?.onOpenChange?.(key);
+    if (expand?.openKey === undefined) setOwnOpenKey(key);
+  };
   // Collapse state for the grouped disclosure is held here, not by the caller: it is presentational
   // and every consumer wanted the same behaviour. Seeded once from `defaultCollapsedGroups`.
   const [collapsed, setCollapsed] = useState<Set<string>>(
@@ -423,7 +445,8 @@ export function DataTable<Row>({
   // (C1 critic note). An all-numeric table therefore has no leading cell.
   const leadKey = rowHeaderKey ?? columns.find((column) => !column.numeric)?.key;
   const hasActions = rowActions !== undefined;
-  const spanCount = columns.length + (selection !== undefined ? 1 : 0) + (hasActions ? 1 : 0);
+  const spanCount =
+    columns.length + (selection !== undefined ? 1 : 0) + (hasActions ? 1 : 0) + (expand !== undefined ? 1 : 0);
 
   // Every row, flat, for the select-all state.
   const allRows = groups !== undefined ? groups.flatMap((group) => group.rows) : rows;
@@ -440,9 +463,15 @@ export function DataTable<Row>({
   const renderRow = (row: Row, index: number, depth: number) => {
     const href = rowHref?.(row);
     const opensRoute = href !== undefined;
-    const clickable = opensRoute || onRowClick !== undefined;
+    const key = rowKey(row);
+    const expandable = expand !== undefined && !opensRoute;
+    const isOpen = expandable && openKey === key;
+    const toggleOpen = () => setOpenKey(isOpen ? null : key);
+    const clickable = opensRoute || onRowClick !== undefined || expandable;
     // The row itself is the control only for an in-place opener; a route opener's control is its link.
-    const rowIsControl = !opensRoute && onRowClick !== undefined;
+    // An expandable row's control is its chevron button (it carries aria-expanded); the row click is a
+    // pointer convenience on top.
+    const rowIsControl = !opensRoute && onRowClick !== undefined && !expandable;
     const current = isRowCurrent?.(row) === true;
     const selected = current || selection?.isSelected(row) === true;
     const extra = rowClassName?.(row, index);
@@ -464,13 +493,20 @@ export function DataTable<Row>({
         event.currentTarget.querySelector<HTMLAnchorElement>('a.data-table-open')?.click();
         return;
       }
+      if (expandable) {
+        if ((event.target as Element).closest(INTERACTIVE) !== null) return;
+        toggleOpen();
+        return;
+      }
       onRowClick?.(row);
     };
 
+    const detailId = `${tableId}-detail-${index}`;
     return (
+      <Fragment key={key}>
       <tr
-        key={rowKey(row)}
         className={className}
+        data-open={isOpen ? '' : undefined}
         data-selected={selected ? '' : undefined}
         aria-current={current ? 'true' : undefined}
         tabIndex={rowIsControl ? 0 : undefined}
@@ -545,7 +581,32 @@ export function DataTable<Row>({
             <RowActions items={rowActions(row)} label={rowActionsLabel?.(row) ?? ''} />
           </td>
         )}
+        {expandable && (
+          <td className="data-table-expand" data-align="end">
+            <button
+              type="button"
+              className="btn btn--ghost btn--icon data-table-expand-toggle"
+              aria-expanded={isOpen}
+              aria-controls={isOpen ? detailId : undefined}
+              onClick={(event) => {
+                event.stopPropagation();
+                toggleOpen();
+              }}
+            >
+              <ChevronRightGlyph size={16} />
+              <span className="visually-hidden">{`${expand.label(row)}: ${isOpen ? t('calm.rowClose') : t('calm.rowOpen')}`}</span>
+            </button>
+          </td>
+        )}
       </tr>
+      {isOpen && (
+        <tr className="data-table-detail-row" id={detailId}>
+          <td colSpan={spanCount}>
+            <div className="data-table-detail">{expand.render(row)}</div>
+          </td>
+        </tr>
+      )}
+      </Fragment>
     );
   };
 
@@ -629,6 +690,7 @@ export function DataTable<Row>({
                 );
               })}
               {hasActions && <ActionsHeader />}
+              {expand !== undefined && <th className="data-table-expand" aria-hidden="true" />}
             </tr>
           </thead>
           <tbody>
@@ -660,6 +722,7 @@ export function DataTable<Row>({
                   );
                 })}
                 {hasActions && <td className="data-table-actions" />}
+                {expand !== undefined && <td className="data-table-expand" />}
               </tr>
             </tfoot>
           )}

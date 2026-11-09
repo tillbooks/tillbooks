@@ -23,6 +23,8 @@ import { useWorkspaceId } from '../../app/workspace';
 import { formatMoney, useT } from '../../i18n';
 import { EmptyState, ErrorBanner, NoWorkspaceState, Skeleton } from '../../components/states';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
+import { IconButton } from '../../components/IconButton';
+import { Field } from '../../components/Field';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { useCalendarFormat } from '../../lib/format';
@@ -295,8 +297,61 @@ export function AssetDepreciation() {
     <div className="fa">
       <SurfaceHeader
         title={t('assets.depreciation.title')}
-        subtitle={t('assets.depreciation.subtitle')}
-        help={<SurfaceHelp surface="FixedAssets" />}
+        help={
+          <>
+            <SurfaceHelp surface="FixedAssets" />
+            <IconButton icon="info" small context={t('assets.depreciation.subtitle')} />
+          </>
+        }
+        toolbar={
+          !loading && assets.length > 0 ? (
+            <>
+                <Field label={t('assets.depreciation.assetLabel')}>
+                  <Select
+                    ariaLabel={t('assets.depreciation.assetLabel')}
+                    value={assetId}
+                    onChange={(value) => setAssetId(value)}
+                    options={[
+                      { value: '', label: t('assets.depreciation.chooseAsset') },
+                      ...assets.map((a) => ({ value: a.id, label: `${a.number} ${a.name}` })),
+                    ]}
+                  />
+                </Field>
+                <Field label={t('assets.depreciation.period')} size="date">
+                  <input
+                    className="field"
+                    type="month"
+                    aria-label={t('assets.depreciation.period')}
+                    value={period}
+                    onChange={(e) => setPeriod(e.target.value)}
+                  />
+                </Field>
+                {showUnits && (
+                  <Field label={t('assets.depreciation.unitsThisPeriod')} size="amount">
+                    <input className="field" type="number" min={0} value={unitsThisPeriod} onChange={(e) => setUnitsThisPeriod(e.target.value)} />
+                  </Field>
+                )}
+                {showUnits && (
+                  <Field label={t('assets.depreciation.totalUnits')} size="amount">
+                    <input className="field" type="number" min={0} value={totalUnits} onChange={(e) => setTotalUnits(e.target.value)} />
+                  </Field>
+                )}
+                {showRate && (
+                  <Field label={t('assets.depreciation.rateBp')} size="amount">
+                    <input className="field" type="number" min={0} value={rateBp} onChange={(e) => setRateBp(e.target.value)} />
+                  </Field>
+                )}
+                <IconButton
+                  icon="refresh"
+                  name={t('assets.depreciation.refresh')}
+                  context={t('assets.depreciation.title')}
+                  onClick={() => void runPreview()}
+                  disabled={assetId === ''}
+                />
+                {(showUnits || showRate) && <IconButton icon="info" small context={t('assets.depreciation.paramHint')} />}
+            </>
+          ) : undefined
+        }
       />
 
       {failed && <ErrorBanner message={t('assets.depreciation.error.transport')} onRetry={() => void load()} />}
@@ -307,53 +362,6 @@ export function AssetDepreciation() {
         <EmptyState title={t('assets.depreciation.empty.title')} hint={t('assets.depreciation.empty.hint')} />
       ) : (
         <>
-          <div className="fa-filters">
-            <div className="fa-field-inline">
-              <span>{t('assets.depreciation.assetLabel')}</span>
-              <Select
-                ariaLabel={t('assets.depreciation.assetLabel')}
-                value={assetId}
-                onChange={(value) => setAssetId(value)}
-                options={[
-                  { value: '', label: t('assets.depreciation.chooseAsset') },
-                  ...assets.map((a) => ({ value: a.id, label: `${a.number} ${a.name}` })),
-                ]}
-              />
-            </div>
-            <label className="fa-field-inline">
-              <span>{t('assets.depreciation.period')}</span>
-              <input
-                className="field"
-                type="month"
-                aria-label={t('assets.depreciation.period')}
-                value={period}
-                onChange={(e) => setPeriod(e.target.value)}
-              />
-            </label>
-            {showUnits && (
-              <label className="fa-field-inline">
-                <span>{t('assets.depreciation.unitsThisPeriod')}</span>
-                <input className="field" type="number" min={0} value={unitsThisPeriod} onChange={(e) => setUnitsThisPeriod(e.target.value)} />
-              </label>
-            )}
-            {showUnits && (
-              <label className="fa-field-inline">
-                <span>{t('assets.depreciation.totalUnits')}</span>
-                <input className="field" type="number" min={0} value={totalUnits} onChange={(e) => setTotalUnits(e.target.value)} />
-              </label>
-            )}
-            {showRate && (
-              <label className="fa-field-inline">
-                <span>{t('assets.depreciation.rateBp')}</span>
-                <input className="field" type="number" min={0} value={rateBp} onChange={(e) => setRateBp(e.target.value)} />
-              </label>
-            )}
-            <button type="button" className="btn btn--ghost" onClick={() => void runPreview()} disabled={assetId === ''}>
-              {t('assets.depreciation.refresh')}
-            </button>
-          </div>
-
-          {(showUnits || showRate) && <p className="fa-hint">{t('assets.depreciation.paramHint')}</p>}
 
           {calcError && <ErrorBanner error={calcError} />}
 
@@ -415,8 +423,10 @@ export function AssetDepreciation() {
           )}
 
           <section aria-label={t('assets.depreciation.methods.title')} className="fa-methods">
-            <h2 className="fa-drawer-subtitle">{t('assets.depreciation.methods.title')}</h2>
-            <p className="fa-hint">{t('assets.depreciation.methods.hint')}</p>
+            <div className="fa-subtitle-row">
+              <h2 className="fa-drawer-subtitle">{t('assets.depreciation.methods.title')}</h2>
+              <IconButton icon="info" small context={t('assets.depreciation.methods.hint')} />
+            </div>
             {methodError && <ErrorBanner error={methodError} />}
             <DataTable columns={methodColumns} rows={methods} rowKey={(m) => m.key} />
           </section>

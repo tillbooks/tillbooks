@@ -54,7 +54,8 @@ import { useT, formatMoney, formatDate } from '../../i18n';
 import { EmptyState, Skeleton } from '../../components/states';
 import { Select } from '../../components/Select';
 import { useFocusTrap } from '../../components/useFocusTrap';
-import { CloseGlyph } from '../../components/icons';
+import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
 import { CheckGlyph } from '../../components/states/glyphs';
 import {
   asArray,
@@ -828,25 +829,27 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
         tabIndex={-1}
       >
         <header className="pay-wb-head">
-          <h2 className="pay-wb-title">
-            {mode === 'allocate' ? t('payment.allocateCredit.label') : t('payment.record')}
-          </h2>
-          <button
-            type="button"
-            className="btn btn--ghost btn--icon pay-wb-close"
+          <span className="pay-wb-titlerow">
+            <h2 className="pay-wb-title">
+              {mode === 'allocate' ? t('payment.allocateCredit.label') : t('payment.record')}
+            </h2>
+          </span>
+          <IconButton
+            icon="close"
+            name={t('payment.close')}
+            context={mode === 'allocate' ? t('payment.allocateCredit.label') : t('payment.record')}
+            className="pay-wb-close"
             onClick={requestClose}
-            aria-label={t('payment.close')}
-          >
-            <CloseGlyph size={18} />
-          </button>
+          />
         </header>
 
+        {/* The money critic (D187 sweep): an allocation is undone only by reversing the whole payment, and
+            the confirm can be switched off, so this consequence stays on the page, never hover-only. */}
         {mode === 'allocate' && <p className="pay-warning">{t('payment.allocateCredit.warning')}</p>}
 
         {/* --- 1. THE MONEY, across the top (P8) --------------------------------------------------- */}
         <div className="pay-money">
-          <div className="pay-field">
-            <span>{t('payment.column.direction')}</span>
+          <Field label={t('payment.column.direction')} className="pay-field">
             {/* Incoming and outgoing are ONE surface, not two. A14 already carries both directions
                 and A17's vendor bills open this same workbench with direction=outgoing. */}
             <Select
@@ -859,9 +862,8 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
               ]}
               ariaLabel={t('payment.column.direction')}
             />
-          </div>
-          <label className="pay-field">
-            <span>{t('payment.amount')}</span>
+          </Field>
+          <Field label={t('payment.amount')} className="pay-field">
             <input className="field"
               inputMode="decimal"
               value={amount}
@@ -869,9 +871,8 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
               disabled={mode === 'allocate'}
               aria-busy={mode === 'allocate' && guthabenLoading ? true : undefined}
             />
-          </label>
-          <label className="pay-field">
-            <span>{t('payment.date')}</span>
+          </Field>
+          <Field label={t('payment.date')} className="pay-field">
             <input
               className="field"
               type="date"
@@ -879,9 +880,8 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
               onChange={(event) => setDate(event.target.value)}
               disabled={mode === 'allocate'}
             />
-          </label>
-          <div className="pay-field">
-            <span>{t('payment.bankAccount')}</span>
+          </Field>
+          <Field label={t('payment.bankAccount')} className="pay-field">
             {/* S9. Its empty state is a banner-CTA and NOT an empty select, because an empty
                 dropdown is a dead end that looks like a working control. */}
             {mode === 'allocate' ? (
@@ -898,9 +898,13 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
                 disabled
               />
             ) : accountsLoading ? (
-              <select className="field" disabled aria-busy="true">
-                <option>{''}</option>
-              </select>
+              <Select
+                value=""
+                onChange={() => undefined}
+                options={[]}
+                ariaLabel={t('payment.bankAccount')}
+                disabled
+              />
             ) : accounts.length === 0 ? (
               <span className="pay-inline-empty">
                 {t('payment.error.needs_bank_account')}{' '}
@@ -921,9 +925,8 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
                 required
               />
             )}
-          </div>
-          <div className="pay-field">
-            <span>{t('payment.counterparty.label')}</span>
+          </Field>
+          <Field label={t('payment.counterparty.label')} className="pay-field">
             <Select
               value={counterpartyId}
               onChange={setCounterpartyId}
@@ -934,22 +937,24 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
               ariaLabel={t('payment.counterparty.label')}
               disabled={mode === 'allocate'}
             />
-          </div>
-          <label className="pay-field pay-field--wide">
-            <span>{t('payment.reference.label')}</span>
-            <input className="field"
-              value={reference}
-              onChange={(event) => setReference(event.target.value)}
-              placeholder={t('payment.reference.hint')}
-            />
-            {/* State which reference kind was recognised, so a user who pasted a SCOR is not left
-                wondering whether it was understood. */}
-            {current?.reference?.kind === 'qrr' && <small className="pay-hint">{t('payment.reference.qrr')}</small>}
-            {current?.reference?.kind === 'scor' && <small className="pay-hint">{t('payment.reference.scor')}</small>}
-            {current?.reference?.valid === false && (
-              <small className="pay-hint pay-hint--bad">{t('payment.error.reference_check_digit')}</small>
-            )}
-          </label>
+          </Field>
+          {/* State which reference kind was recognised, so a user who pasted a SCOR is not left
+              wondering whether it was understood. */}
+          <Field
+            label={t('payment.reference.label')}
+            info={t('payment.reference.hint')}
+            className="pay-field pay-field--wide"
+            hint={
+              current?.reference?.kind === 'qrr'
+                ? t('payment.reference.qrr')
+                : current?.reference?.kind === 'scor'
+                  ? t('payment.reference.scor')
+                  : undefined
+            }
+            error={current?.reference?.valid === false ? t('payment.error.reference_check_digit') : undefined}
+          >
+            <input className="field" value={reference} onChange={(event) => setReference(event.target.value)} />
+          </Field>
         </div>
 
         {/* --- THE PANEL: one surface, two panes, a single hairline between (D113) ---------------- */}
@@ -958,6 +963,7 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
           <section className="pay-wb-left" aria-label={t('payment.candidates')}>
             <h3 className="pay-section-title">
               {t('payment.candidates')}
+              {!asking && <IconButton icon="info" small context={t('payment.prompt.start')} />}
               {asking && current !== null && (
                 // Two numbers, deliberately separate: a ranked list must never read as a filtered one.
                 <span className="pay-count">
@@ -971,7 +977,7 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
 
             {!asking ? (
               // At rest there is nothing to rank by, so no list: the money first, then the matches.
-              <p className="pay-dim pay-cand-prompt">{t('payment.prompt.start')}</p>
+              null
             ) : matchesLoading && current === null ? (
               <Skeleton rows={3} />
             ) : matchesError !== null ? (
@@ -1208,14 +1214,13 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
                 // The field stays on screen once revealed, even when the remainder later reaches zero.
                 // Unmounting it while it still held a value would put a figure on the wire that nothing
                 // on screen accounts for.
-                <label className="pay-field pay-field--inline">
-                  <span>{t('payment.onAccount.field')}</span>
+                <Field label={t('payment.onAccount.field')} className="pay-field pay-field--inline">
                   <input className="field"
                     inputMode="decimal"
                     value={onAccount}
                     onChange={(event) => setOnAccount(event.target.value)}
                   />
-                </label>
+                </Field>
               ) : mode === 'record' && remainderMinor !== null && remainderMinor > 0 && counterpartyId !== '' ? (
                 // Fills the field. It does not post, and it is not a second write control. P12b: a
                 // Guthaben belongs to somebody, so the chip is ABSENT until the Gegenpartei is picked
@@ -1504,14 +1509,13 @@ function CandidateRow({
 
                 {offerSkonto &&
                   (showSkonto || input.skonto !== '' ? (
-                    <label className="pay-field pay-field--inline">
-                      <span>{t('payment.skonto')}</span>
+                    <Field label={t('payment.skonto')} className="pay-field pay-field--inline">
                       <input className="field"
                         inputMode="decimal"
                         value={input.skonto}
                         onChange={(event) => onChange({ ...input, skonto: event.target.value })}
                       />
-                    </label>
+                    </Field>
                   ) : (
                     <button type="button" className="btn btn--ghost" onClick={() => setShowSkonto(true)}>
                       {`+ ${t('payment.skonto')}`}

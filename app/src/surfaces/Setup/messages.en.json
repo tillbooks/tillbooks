@@ -154,8 +154,6 @@
       "items": "{n} items",
       "percent": "{n} %"
     },
-    "defaultIs": "Default: {value}",
-    "isDefault": "Default",
     "editTitle": "Change: {setting}",
     "cancel": "Cancel",
     "reset": "Reset to default ({value})",

@@ -37,3 +37,63 @@
   margin-left: auto;
   flex: 0 0 auto;
 }
+
+/* D187, the owner's pick "Listen A": a set facet is a chip after the search (its value, a menu to
+   change it, an x to remove it); "+ Filter" offers the facets that are off. One quiet pill shape, the
+   tinted ground only while a facet holds (it narrows the list, so it is selected state). */
+.facet-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  padding: 0 2px 0 var(--t-space-1);
+  border-radius: var(--t-radius-full);
+  background: var(--t-accent-soft);
+  color: var(--t-accent);
+  font-size: var(--t-font-sm);
+}
+
+.facet-chip-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+span.facet-chip-value {
+  cursor: default;
+}
+
+.facet-chip .btn--icon {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  color: inherit;
+}
+
+.facet-chip-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 var(--t-space-1);
+  border: 1px dashed var(--t-border-strong);
+  border-radius: var(--t-radius-full);
+  background: none;
+  color: var(--t-text-dim);
+  font: inherit;
+  font-size: var(--t-font-sm);
+  cursor: pointer;
+}
+
+.facet-chip-add:hover,
+.facet-chip-add[aria-expanded='true'] {
+  color: var(--t-text);
+  border-color: var(--t-text-dim);
+}

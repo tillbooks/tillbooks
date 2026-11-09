@@ -19,7 +19,6 @@
     "paymentTermsStandardImmediate": "Standard (sofort)",
     "paymentTermsStandardUnknown": "Standard",
     "paymentTermsImmediate": "sofort",
-    "paymentTermsInfo": "Woher die Zahlungsfrist kommt",
     "paymentTermsHelp": "Leer lassen: Es gilt die Standard-Zahlungsfrist aus dem Firmenprofil. 0 heisst sofort fällig, am Rechnungsdatum.",
     "description": "Notiz",
     "partyRole": "Rolle",
@@ -27,9 +26,6 @@
       "customer": "Kunde",
       "vendor": "Lieferant",
       "both": "Kunde und Lieferant"
-    },
-    "roleFilter": {
-      "all": "Alle Rollen"
     },
     "archive": "Archivieren",
     "archived": "Archiviert",
@@ -62,14 +58,10 @@
       "company": "Firma",
       "person": "Person"
     },
-    "kindFilter": {
-      "all": "Firmen und Personen"
-    },
     "people": "Personen",
     "segmentsTitle": "Segmente",
     "segments": {
       "empty": "Noch keine Segmente.",
-      "filter": "Nach Segment filtern",
       "add": "Segment hinzufügen",
       "addAction": "Hinzufügen",
       "addHint": "Gib zuerst ein Segment ein, dann kannst du es hinzufügen."
@@ -89,6 +81,7 @@
     "action": {
       "merge": "Zusammenführen",
       "import": "Importieren",
+      "importContext": "Kontakte aus einer CSV-Datei",
       "anonymise": "Anonymisieren"
     },
     "field": {

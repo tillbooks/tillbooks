@@ -62,7 +62,10 @@
       "it-CH": "Italian"
     },
     "rowActions": "Actions for {name}",
-    "create": "Create a template"
+    "create": "Create a template",
+    "hintTitle": {
+      "permission": "Permission"
+    }
   },
   "nav": {
     "documentTemplates": "Templates"

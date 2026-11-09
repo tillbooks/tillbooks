@@ -152,16 +152,3 @@
   line-height: var(--t-lh-body);
 }
 
-/* The drawer form fields the shared DetailDrawer hosts. The controls themselves are the shared
-   `.field` class (global.css); this is only the label-stacked layout around them. */
-.wh-field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--t-space-0-5);
-}
-
-.wh-field label {
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  color: var(--t-text-dim);
-}

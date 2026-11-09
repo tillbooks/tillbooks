@@ -15,6 +15,12 @@
     "freeze": "Stichtag",
     "progress": "Fortschritt",
     "listLabel": "Inventur-Sessions",
+    "search": "Art oder Stichtag suchen",
+    "emptyFiltered": "Keine Inventuren für diesen Filter.",
+    "filter": {
+      "clear": "Filter zurücksetzen"
+    },
+    "expandLabel": "Details zu {type} vom {date}",
     "detailLabel": "Session-Detail",
     "noLines": "Diese Session hat keine Positionen.",
     "lineCount": "{n} Positionen",

@@ -35,6 +35,7 @@ import { ErrorBanner, refusalText } from '../../components/states';
 import { IconButton } from '../../components/IconButton';
 import { Modal } from '../../components/Modal';
 import { Select } from '../../components/Select';
+import { SettingGroup, SettingRow } from '../../components/SettingRow';
 import { useCapabilities } from '../../lib/capabilities';
 import './WorkspaceSettings.css';
 
@@ -142,7 +143,7 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
 
   if (loadError !== null) {
     return (
-      <section className="panel setup-panel ws-settings" aria-labelledby={headingId}>
+      <section className="setup-panel ws-settings" aria-labelledby={headingId}>
         <h2 id={headingId} className="setup-panel-title">
           {t('workspaceSettings.title')}
         </h2>
@@ -153,40 +154,42 @@ export function WorkspaceSettings({ workspaceId }: { workspaceId: string }) {
   if (settings === null || settings.length === 0) return null;
 
   return (
-    <section className="panel setup-panel ws-settings" aria-labelledby={headingId}>
+    <section className="setup-panel ws-settings" aria-labelledby={headingId}>
       <h2 id={headingId} className="setup-panel-title">
         {t('workspaceSettings.title')}
       </h2>
+      {/* D187 (Einstellungen A): one column of rows under small group headings; the explanation is the
+          registry's own line, shown on the page; "Standard" only while the value is overridden. */}
       {groupSettings(settings).map((group) => (
-        <div key={group.id} className="ws-settings-group" role="group" aria-label={textOf(group.label, locale)}>
-          <h3 className="ws-settings-group-title">{textOf(group.label, locale)}</h3>
-          <ul className="ws-settings-list">
-            {group.settings.map((s) => {
-              const label = textOf(s.label, locale);
-              const canEdit = caps.can(s.owningCapability);
-              return (
-                <li key={s.key} className="ws-settings-row" data-key={s.key}>
-                  <div className="ws-settings-text">
-                    <span className="ws-settings-label">{label}</span>
-                    <IconButton icon="info" small context={textOf(s.description, locale)} />
-                  </div>
-                  <div className="ws-settings-value">
-                    <span className="ws-settings-current">{format(s.schema, s.value)}</span>
-                    <span className="ws-settings-default">
-                      {s.overridden ? t('workspaceSettings.defaultIs', { value: format(s.schema, s.default) }) : t('workspaceSettings.isDefault')}
-                    </span>
-                    {canEdit && <IconButton icon="edit" small context={label} onClick={() => setEditing(s)} />}
-                  </div>
-                  {s.stale === true && (
+        <SettingGroup key={group.id} title={textOf(group.label, locale)} dataKey={group.id}>
+          {group.settings.map((s) => {
+            const label = textOf(s.label, locale);
+            const canEdit = caps.can(s.owningCapability);
+            return (
+              <SettingRow
+                key={s.key}
+                dataKey={s.key}
+                label={label}
+                description={textOf(s.description, locale)}
+                reset={
+                  canEdit && (s.overridden || s.stale === true)
+                    ? { defaultLabel: format(s.schema, s.default), onReset: () => setEditing(s) }
+                    : undefined
+                }
+                status={
+                  s.stale === true ? (
                     <p className="status-line ws-settings-stale" role="status">
                       {t('workspaceSettings.stale', { stored: s.ignoredStoredValue ?? '', value: format(s.schema, s.default) })}
                     </p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+                  ) : undefined
+                }
+              >
+                <span className="ws-settings-current">{format(s.schema, s.value)}</span>
+                {canEdit && <IconButton icon="edit" small context={label} onClick={() => setEditing(s)} />}
+              </SettingRow>
+            );
+          })}
+        </SettingGroup>
       ))}
       {editing !== null && (
         <EditSetting

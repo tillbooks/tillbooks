@@ -18,8 +18,8 @@
  *     ones that exist are frozen per file in FROZEN_ICON_ONLY_BUTTONS, as an exact count.
  *  3. **A money commit keeps its word** (D154 rule 2). An element carrying `data-money-commit` (the
  *     accent guard's contract) must contain visible text. No baseline: this already holds.
- *  4. **The vocabulary stays closed.** `icons/vocabulary.tsx` holds exactly the twenty-five names DESIGN.md
- *     lists (D154's twelve, D177's five, D180's five, A41.5's Freigeben, D186's Vergleichen and Verlauf), and no money commit or destructive act is among them, so
+ *  4. **The vocabulary stays closed.** `icons/vocabulary.tsx` holds exactly the thirty-three names DESIGN.md
+ *     lists (D154's twelve, D177's five, D180's five, A41.5's Freigeben, D186's Vergleichen and Verlauf, D187's eight), and no money commit or destructive act is among them, so
  *     `IconButton` cannot draw one. The one exception is Ignorieren, by the owner's ruling (D177 point 5):
  *     a bank line's ignore is undone in one click, so it may be a glyph at the row's right edge.
  *  5. **No frosted glass** (DESIGN.md's forbidden list, D154 lost option): no `backdrop-filter` in a
@@ -85,6 +85,14 @@ const VOCABULARY_NAMES = [
   // D186 (owner, 09.11.2026): the key-figure settings, icons with their words on hover.
   'Vergleichen',
   'Verlauf',
+  'Hinzufügen',
+  'Importieren',
+  'Wiederherstellen',
+  'Einstellungen',
+  'Aktualisieren',
+  'Sortieren',
+  'Ordner öffnen',
+  'Teilen',
 ];
 
 /** D177 point 5: the one destructive act the owner ruled may be a glyph (it is undone in one click). */
@@ -118,7 +126,6 @@ const FROZEN_SVG = Object.freeze({
   'app/src/components/WorkspaceSwitcher.tsx': 1,
   'app/src/components/states/glyphs.tsx': 5,
   'app/src/surfaces/Agent/Agent.tsx': 2,
-  'app/src/surfaces/Attention/Attention.tsx': 1,
   // 24 after D167's source glyph pair; 20 since D177 moved Aufteilen, Abgleichen and Ignorieren into the
   // vocabulary and retired the split editor's remove glyph.
   'app/src/surfaces/Bank/glyphs.tsx': 20,
@@ -128,19 +135,16 @@ const FROZEN_SVG = Object.freeze({
   'app/src/surfaces/Files/SignSection.tsx': 1,
   'app/src/surfaces/Files/glyphs.tsx': 9,
   'app/src/surfaces/Fx/glyphs.tsx': 2,
-  'app/src/surfaces/Items/glyphs.tsx': 1,
   'app/src/surfaces/Journal/ArchiveTab.tsx': 1,
   'app/src/surfaces/Journal/Journal.tsx': 1,
   'app/src/surfaces/Journal/glyphs.tsx': 3,
   'app/src/surfaces/Migration/TestmandantPanel.tsx': 1,
   'app/src/surfaces/Onboarding/DemoBanner.tsx': 1,
-  'app/src/surfaces/OpenItems/glyphs.tsx': 4,
   'app/src/surfaces/Operations/Diagnostics.tsx': 1,
   'app/src/surfaces/Operations/Trust.tsx': 1,
   'app/src/surfaces/Periods/glyphs.tsx': 5,
   'app/src/surfaces/Reports/glyphs.tsx': 3,
   'app/src/surfaces/Review/glyphs.tsx': 5,
-  'app/src/surfaces/Setup/glyphs.tsx': 2,
   'app/src/surfaces/Uebersicht/BankBand.tsx': 4,
   'app/src/surfaces/VatReturn/glyphs.tsx': 5,
   'app/src/surfaces/VatSettings/glyphs.tsx': 1,
@@ -163,39 +167,23 @@ const FROZEN_ICON_ONLY_BUTTONS = Object.freeze({
   'app/src/components/DensityToggle.tsx': 1,
   'app/src/components/DetailDrawer.tsx': 1,
   'app/src/components/Modal.tsx': 1,
-  'app/src/components/OverflowMenu.tsx': 1,
   'app/src/components/ThemeToggle.tsx': 1,
   'app/src/surfaces/Agent/Agent.tsx': 2,
   // D167 (3864f0c2): the consequence tooltip trigger on the Vorschlag line; measured at the undo integration.
   'app/src/surfaces/Agent/VorschlagLine.tsx': 1,
-  'app/src/surfaces/Attention/Attention.tsx': 1,
   'app/src/surfaces/Bank/InfoCard.tsx': 1,
-  'app/src/surfaces/Bills/BillEditor.tsx': 1,
-  'app/src/surfaces/Bills/Bills.tsx': 1,
-  'app/src/surfaces/Contacts/ContactEditor.tsx': 1,
-  'app/src/surfaces/Deals/Deals.tsx': 1,
-  'app/src/surfaces/Dispatch/Dispatch.tsx': 1,
   'app/src/surfaces/Documents/DocumentEditor.tsx': 1,
-  'app/src/surfaces/Documents/EditorInfo.tsx': 1,
-  'app/src/surfaces/Inventory/Inventory.tsx': 1,
   'app/src/surfaces/Journal/ComposerParts.tsx': 2,
-  'app/src/surfaces/OpenItems/ReconciliationBand.tsx': 2,
-  'app/src/surfaces/Operations/HostingJourney.tsx': 1,
-  'app/src/surfaces/Operations/SyncHosting.tsx': 1,
+  'app/src/surfaces/OpenItems/ReconciliationBand.tsx': 1,
   'app/src/surfaces/Operations/Trust.tsx': 1,
-  'app/src/surfaces/Payments/PaymentAllocator.tsx': 1,
   'app/src/surfaces/Periods/AccrualEditor.tsx': 1,
-  'app/src/surfaces/Purchasing/Purchasing.tsx': 1,
-  'app/src/surfaces/Quotes/Quotes.tsx': 1,
   'app/src/surfaces/Reports/TrialBalance.tsx': 1,
   'app/src/surfaces/Review/CoverageBar.tsx': 1,
   'app/src/surfaces/Review/Review.tsx': 3,
-  'app/src/surfaces/SalesOrders/SalesOrders.tsx': 1,
-  'app/src/surfaces/Setup/CompanyProfile.tsx': 2,
+  'app/src/surfaces/Setup/CompanyProfile.tsx': 1,
   'app/src/surfaces/Uebersicht/BankBand.tsx': 1,
-  'app/src/surfaces/VatReturn/Abstimmung.tsx': 2,
-  'app/src/surfaces/VatReturn/JourneyLine.tsx': 2,
-  'app/src/surfaces/VatReturn/VatReturn.tsx': 1,
+  'app/src/surfaces/VatReturn/Abstimmung.tsx': 1,
+  'app/src/surfaces/VatReturn/JourneyLine.tsx': 1,
   'app/src/surfaces/VatSettings/VatSettings.tsx': 1,
 });
 

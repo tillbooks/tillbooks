@@ -52,7 +52,7 @@ import { IconButton } from '../../components/IconButton';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { SurfaceHeader } from '../../components/SurfaceHeader';
 import { Segmented } from '../../components/Segmented';
-import { Tooltip, TooltipPortalContext } from '../../components/Tooltip';
+import { TooltipPortalContext } from '../../components/Tooltip';
 import { EmptyState, ErrorBanner, NoWorkspaceState, Padlock, Skeleton, refusalText } from '../../components/states';
 import { ActionFeedback, type FeedbackTone } from '../../components/ActionFeedback';
 import { OverflowMenu, type OverflowMenuItem } from '../../components/OverflowMenu';
@@ -119,27 +119,6 @@ const TARGET_KIND_KEY: Readonly<Record<string, string>> = {
   payment_batch: 'attention.vorschlag.target.paymentBatch',
   rule: 'attention.vorschlag.target.rule',
 };
-
-/** The refresh control's glyph: a circular arrow, 16px on the one stroke width (K-37). */
-function RefreshGlyph() {
-  return (
-    <svg
-      width={16}
-      height={16}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M20 11a8 8 0 1 0-2.3 5.7" />
-      <path d="M20 4v7h-7" />
-    </svg>
-  );
-}
 
 interface BatchOutcome {
   approved: { title: string; entryId: string | null }[];
@@ -517,8 +496,8 @@ export function Attention() {
     rowRefs.current[next]?.focus();
   };
 
-  const header = (actions?: ReactNode) => (
-    <SurfaceHeader title={t('attention.title')} titleId="att-title" help={<SurfaceHelp surface="Attention" />} actions={actions} />
+  const header = (actions?: ReactNode, count?: number) => (
+    <SurfaceHeader title={t('attention.title')} titleId="att-title" count={count} help={<SurfaceHelp surface="Attention" />} actions={actions} />
   );
 
   if (workspaceId === null) return <NoWorkspaceState />;
@@ -929,12 +908,9 @@ export function Attention() {
           />
           {data.incomplete && <span className="att-incomplete">{t('attention.incomplete')}</span>}
           {/* The "Stand" time is the refresh control's tooltip (the design judge): no line of its own. */}
-          <Tooltip content={stand === null ? t('attention.refresh') : `${t('attention.refresh')} · ${stand}`}>
-            <button type="button" className="btn btn--ghost btn--icon btn--sm att-refresh" aria-label={t('attention.refresh')} data-stand={stand ?? undefined} onClick={() => void load()}>
-              <RefreshGlyph />
-            </button>
-          </Tooltip>
+          <IconButton icon="refresh" context={stand ?? t('attention.refresh')} name={t('attention.refresh')} className="att-refresh" small data-stand={stand ?? undefined} onClick={() => void load()} />
         </>,
+        data.sections.reduce((sum, section) => sum + section.count, 0),
       )}
 
       {/* A failed provider is named exactly once, with its own retry, and carries no count (story 1.3). */}

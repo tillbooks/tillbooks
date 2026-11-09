@@ -209,6 +209,9 @@ describe('InventoryValuation, the balance-sheet figure and the basis behind it',
     await screen.findByRole('dialog', { name: de.invValuation.form.defaultTitle });
     await userEvent.click(screen.getByRole('combobox', { name: de.invValuation.col.method }));
     await userEvent.click(screen.getByRole('option', { name: 'Gewogener Durchschnitt' }));
+    // the period lock and the recalculation are said at rest, not behind an (i)
+    expect(screen.getByText(de.invValuation.effectiveFromHint)).toBeVisible();
+    expect(screen.getByText(de.invValuation.forceHint)).toBeVisible();
     fireEvent.change(screen.getByLabelText(de.invValuation.effectiveFrom), { target: { value: '2026-07-01' } });
     await userEvent.type(screen.getByLabelText(de.invValuation.history.reason), 'Neue Politik');
     await userEvent.click(screen.getByRole('button', { name: de.invValuation.save }));

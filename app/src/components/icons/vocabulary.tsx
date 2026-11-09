@@ -1,7 +1,7 @@
 /**
  * The closed icon vocabulary of Ruhig 3 (D154, DESIGN.md "Icon vocabulary").
  *
- * These twenty-three glyphs (D154's twelve, D177's five, D180's five and A41.5's Freigeben), and only these, may stand alone on a button. Each means one thing everywhere,
+ * These thirty-three glyphs (D154's twelve, D177's five, D180's five, A41.5's Freigeben, D186's Vergleichen and Verlauf, and D187's eight), and only these, may stand alone on a button. Each means one thing everywhere,
  * and its German name is the button's accessible name and the first line of its tooltip, so the same
  * pencil never reads "Bearbeiten" here and "Ändern" there. `IconButton` takes a key of this table and
  * nothing else: a glyph outside it needs a word beside it, and a money commit (Buchen, Ausstellen,
@@ -281,6 +281,95 @@ function TrendGlyph(props: GlyphProps) {
   );
 }
 
+/*
+ * D187 (09.11.2026, the Ruhig sweep): eight more that may stand alone, the owner's picks. None moves
+ * money or deletes anything. Hinzufügen adds a row or a position inside a form, never a surface's main
+ * create action, which keeps its word (D154).
+ */
+
+/** Hinzufügen (D187): a plus in a ring, a row or a position added inside a form. */
+function AddGlyph(props: GlyphProps) {
+  return (
+    <svg {...glyphBase(props)}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 8v8M8 12h8" />
+    </svg>
+  );
+}
+
+/** Importieren (D187): an arrow entering a page from the left, a file brought in. */
+function ImportGlyph(props: GlyphProps) {
+  return (
+    <svg {...glyphBase(props)}>
+      <path d="M13.5 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z" />
+      <path d="M13.5 3.5V9H19" />
+      <path d="M2.5 14.5h8.5M8.5 12l2.5 2.5L8.5 17" />
+    </svg>
+  );
+}
+
+/** Wiederherstellen (D187): a clock with a turning-back arrow, a backup or an earlier state. */
+function RestoreGlyph(props: GlyphProps) {
+  return (
+    <svg {...glyphBase(props)}>
+      <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3" />
+      <path d="M4.5 4.5v3.7h3.7" />
+      <path d="M12 8.5V12l2.5 1.5" />
+    </svg>
+  );
+}
+
+/** Einstellungen (D187): a gear, the settings of this page. Never the theme's sun. */
+function SettingsGlyph(props: GlyphProps) {
+  return (
+    <svg {...glyphBase(props)}>
+      <path d="M18.59 9.96L21.02 10.17V13.83L18.59 14.04L18.1 15.22L19.67 17.08L17.08 19.67L15.22 18.1L14.04 18.59L13.83 21.02H10.17L9.96 18.59L8.78 18.1L6.92 19.67L4.33 17.08L5.9 15.22L5.41 14.04L2.98 13.83V10.17L5.41 9.96L5.9 8.78L4.33 6.92L6.92 4.33L8.78 5.9L9.96 5.41L10.17 2.98H13.83L14.04 5.41L15.22 5.9L17.08 4.33L19.67 6.92L18.1 8.78Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+/** Aktualisieren (D187): two arrows chasing round, fetch again (the bank, the rates). */
+function RefreshGlyph(props: GlyphProps) {
+  return (
+    <svg {...glyphBase(props)}>
+      <path d="M19.5 12a7.5 7.5 0 0 1-13.2 4.9M4.5 12a7.5 7.5 0 0 1 13.2-4.9" />
+      <path d="M17.7 3.5v3.6h-3.6M6.3 20.5v-3.6h3.6" />
+    </svg>
+  );
+}
+
+/** Sortieren (D187): an arrow up beside an arrow down, the order of a list. */
+function SortGlyph(props: GlyphProps) {
+  return (
+    <svg {...glyphBase(props)}>
+      <path d="M8 4.5v15M4.5 8L8 4.5 11.5 8" />
+      <path d="M16 19.5v-15M12.5 16l3.5 3.5 3.5-3.5" />
+    </svg>
+  );
+}
+
+/** Ordner öffnen (D187): a folder, a file picked on this device. */
+function FolderGlyph(props: GlyphProps) {
+  return (
+    <svg {...glyphBase(props)}>
+      <path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
+    </svg>
+  );
+}
+
+/** Teilen (D187): three joined nodes, a document sent to someone. */
+function ShareGlyph(props: GlyphProps) {
+  return (
+    <svg {...glyphBase(props)}>
+      <circle cx="17.5" cy="6" r="2.5" />
+      <circle cx="6.5" cy="12" r="2.5" />
+      <circle cx="17.5" cy="18" r="2.5" />
+      <path d="M8.7 10.8l6.6-3.6M8.7 13.2l6.6 3.6" />
+    </svg>
+  );
+}
+
 /** One entry of the vocabulary: the name a person reads and the glyph drawn for it. */
 export interface VocabularyEntry {
   /** The accessible name and the tooltip's first line. A verb or a noun of action, never a sentence. */
@@ -288,7 +377,7 @@ export interface VocabularyEntry {
   glyph: (props: GlyphProps) => ReactElement;
 }
 
-/** The twenty-three, in the order DESIGN.md lists them. Frozen: a new key is a design-law change. */
+/** The thirty-three, in the order DESIGN.md lists them. Frozen: a new key is a design-law change. */
 export const VOCABULARY = Object.freeze({
   edit: { name: 'Bearbeiten', glyph: EditGlyph },
   attach: { name: 'Anhängen', glyph: AttachGlyph },
@@ -315,6 +404,14 @@ export const VOCABULARY = Object.freeze({
   approve: { name: 'Freigeben', glyph: ApproveGlyph },
   compare: { name: 'Vergleichen', glyph: CompareGlyph },
   trend: { name: 'Verlauf', glyph: TrendGlyph },
+  add: { name: 'Hinzufügen', glyph: AddGlyph },
+  import: { name: 'Importieren', glyph: ImportGlyph },
+  restore: { name: 'Wiederherstellen', glyph: RestoreGlyph },
+  settings: { name: 'Einstellungen', glyph: SettingsGlyph },
+  refresh: { name: 'Aktualisieren', glyph: RefreshGlyph },
+  sort: { name: 'Sortieren', glyph: SortGlyph },
+  folder: { name: 'Ordner öffnen', glyph: FolderGlyph },
+  share: { name: 'Teilen', glyph: ShareGlyph },
 } satisfies Record<string, VocabularyEntry>);
 
 /** A key of the closed vocabulary: the only thing `IconButton` accepts as its icon. */
