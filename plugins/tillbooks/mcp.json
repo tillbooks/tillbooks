@@ -2,7 +2,7 @@
   "mcpServers": {
     "tillbooks": {
       "command": "npx",
-      "args": ["-y", "tillbooks@1.0.0-beta.2", "mcp"]
+      "args": ["-y", "tillbooks@1.0.0-beta.3", "mcp"]
     }
   }
 }

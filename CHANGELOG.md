@@ -7,6 +7,46 @@ compatibility promise yet, so back up before every upgrade.
 
 ## [Unreleased]
 
+## [1.0.0-beta.3] - 2026-11-09
+
+The third beta. Receipts now find their bank lines, and rules and agents take over more of the daily
+booking. The overview leads with the money that is actually on the bank. Still a beta: back up
+before you update.
+
+**Upgrade note (database generation 19).** Opening your books with this version upgrades them in one
+go. Make a backup before you upgrade and another one afterwards: a backup from before the upgrade
+restores only into the previous version, and an older version refuses the upgraded books without
+changing them. Update the desktop extension (.mcpb) and the command line tool together.
+
+### Added
+
+- Receipts and bank lines: TILL suggests which receipt belongs to which bank line (an invoice and
+  its receipt count as one), shows its own confidence next to an agent's booking proposal, and notes
+  when the VAT on the receipt differs from the VAT it computes. The booked VAT stays the computed one.
+- Receipt assignment: a bank line can hold one assigned receipt, set by TILL on an unambiguous match
+  or by you ("Zuordnen", "Lösen", "Zahlen bestätigen"). An automatic booking can be told to wait for
+  its receipt, and it trusts only figures you confirmed or a Swiss QR code, by default.
+- The bank list: a confidence column, a one-click approve per line, several lines approved at once,
+  a banner that offers to save a repeated booking as a rule, and a preview of the receipt PDF next to
+  the line.
+- Card and fee lines: a card purchase takes its merchant from the booking text, and a bank fee its
+  bank, so rules, learned history and receipt matching now work on lines that name no counterparty.
+- Rules that learn: TILL offers a rule once you booked the same counterparty the same way a few
+  times, and a rule you trust can book its lines by itself after you switch that on.
+- Bank statement gaps: a missing period can be filled from the bank's own CSV export (a ZKB preset is
+  included), tied to the statement balances on both sides, with the source of every line kept.
+- Settlement files: `import_settlement` books a payment processor's settlement file event by event
+  in the open `till-settlement/v1` format.
+- The Übersicht: the balance on the bank as of its latest statement, the turnover your open bank
+  lines would add, and a library of key figures with comparisons and trends.
+- For agents: Belege straight from the chat, a house book (Hausbuch) that records how this workspace
+  books, tool profiles, a dry run and batch verbs.
+
+### Changed
+
+- The new behaviours are settings with a default. The ones that decide how money is booked or which
+  figures are trusted can only be changed by a person, never by an agent.
+
 ## [1.0.0-beta.2] - 2026-10-28
 
 The second beta. It makes the bank inbox and the Studio's daily screens easier to work in, turns

@@ -1,7 +1,7 @@
 {
   "name": "tillbooks",
   "displayName": "TILL",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "description": "TILL, the open-source Swiss ERP for SMEs, as a local MCP server: sales, purchasing, payments, stock, projects, books and MWST in one SQLite file on your own machine. Your agent drafts, you approve in the Studio.",
   "author": {
     "name": "Nomadik GmbH",
