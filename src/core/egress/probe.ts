@@ -35,7 +35,9 @@
  *              IN-PROCESS SOCKET PATCH CANNOT SEE: a spawned `curl` opens its socket in ANOTHER OS
  *              process, invisible to every wrap above, so the only defence is to intercept the SPAWN.
  *              Its coverage is best-effort and honestly bounded (see the note on the wrapper), and it
- *              is the vector this module flags hardest for review.
+ *              is the vector this module flags hardest for review. ONE local subprocess is allowed:
+ *              E04's `lsof` busy check on the Thunderbird Drafts mbox (ALLOWED_LOCAL_SUBPROCESSES),
+ *              recorded with `allowed: true` and named in the Vertrauen limits list.
  *
  * WHAT THIS PROBE DOES NOT COVER, STATED FIRST NOT LAST (spec §3, the honest threat model): a
  * FILE WRITE outside the sanctioned SQLite/Drafts sandbox is local data spillage, not network
@@ -81,6 +83,34 @@ export interface EgressViolation {
   kind: EgressKind;
   target: string;
   stack: string;
+  /**
+   * Set on the one ALLOW-LISTED local subprocess (`isAllowedLocalSubprocess`): it is recorded, so the
+   * self-test can say it ran, but it is delegated, never refused, and it is not a violation of the
+   * claim. Every other record is a violation.
+   */
+  allowed?: true;
+}
+
+/**
+ * The one subprocess the local-correspondence loop may start: E04's Thunderbird busy check,
+ * `lsof -t -w -- <files>` (src/core/mail/adapters.ts, `processesHolding`), which lists the processes
+ * holding the user's Drafts mbox or its profile lock open. `lsof` reads the kernel's open-file table
+ * and opens no socket. It is allowed BY NAME AND PATH (the system binary `/usr/sbin/lsof`, which
+ * macOS ships and TILL calls by absolute path there, `/usr/bin/lsof`, or the bare name resolved
+ * through PATH on Linux) and BY SHAPE (spawnSync, exactly `-t -w --` then absolute file paths, no
+ * shell). Anything else on the subprocess door stays a violation. Named in the Vertrauen limits list.
+ */
+export const ALLOWED_LOCAL_SUBPROCESSES: readonly string[] = ['/usr/sbin/lsof', '/usr/bin/lsof', 'lsof'];
+
+/** Is this spawn the allow-listed `lsof` busy check, by name, path and argument shape? */
+export function isAllowedLocalSubprocess(fn: string, args: readonly unknown[]): boolean {
+  if (fn !== 'spawnSync') return false;
+  const [command, argv, options] = args;
+  if (typeof command !== 'string' || !ALLOWED_LOCAL_SUBPROCESSES.includes(command)) return false;
+  if (!Array.isArray(argv) || argv[0] !== '-t' || argv[1] !== '-w' || argv[2] !== '--' || argv.length < 4) return false;
+  if (!argv.slice(3).every((a) => typeof a === 'string' && a.startsWith('/'))) return false;
+  const shell = (options as { shell?: unknown } | undefined)?.shell;
+  return shell === undefined || shell === false;
 }
 
 export interface InstalledProbe {
@@ -261,6 +291,8 @@ export function installEgressProbe(options: ProbeOptions = {}): InstalledProbe {
     }
 
     // subprocess: the vector an in-process socket patch CANNOT see, so we intercept the spawn. The
+    // one exception is E04's `lsof` busy check (ALLOWED_LOCAL_SUBPROCESSES), recorded but let through.
+    // E04 calls it through the module's default export (not a named import), so this wrap sees it. The
     // wrap is on the module namespace, which catches `cp.exec(...)` / `require('child_process').spawn`,
     // the realistic dependency shape. A module that captured a named import BEFORE this install is a
     // known, documented limitation (spec §3 "our own future code" / supply chain): the honest bound is
@@ -270,6 +302,11 @@ export function installEgressProbe(options: ProbeOptions = {}): InstalledProbe {
       if (typeof original !== 'function') continue;
       const originalFn = original as (...a: unknown[]) => unknown;
       (childProcess as unknown as Record<string, unknown>)[fn] = function patchedSpawn(this: unknown, ...args: unknown[]) {
+        if (isAllowedLocalSubprocess(fn, args)) {
+          // Recorded (the self-test names it), delegated, never refused: see ALLOWED_LOCAL_SUBPROCESSES.
+          violations.push({ kind: 'subprocess', target: String(args[0]), stack: stackHere(), allowed: true });
+          return originalFn.apply(this, args);
+        }
         refuse('subprocess', String(args[0] ?? 'unknown'));
         return originalFn.apply(this, args);
       };

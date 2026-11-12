@@ -42,6 +42,13 @@ test('every static version copy equals package.json (Studio, MCP registry, CITAT
   assert.equal(mcpb.version, pkg.version, 'packaging/mcpb/manifest.json');
 });
 
+test('the README banner and the docs introduction name the package version', () => {
+  for (const rel of ['README.md', 'site-docs/introduction.mdx']) {
+    const named = read(rel).match(/public beta,? version (\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\./i)?.[1];
+    assert.equal(named, pkg.version, rel);
+  }
+});
+
 test('the two lockfiles carry the root version at both of their root copies (critic phase0-installable r1)', () => {
   // Not shipped, but `npm ci` and every audit read them, and both still said 0.1.0 at 1.0.0-beta.1.
   // `ops/release.mjs bump` now edits all four copies in place.

@@ -13,7 +13,9 @@
  *   grows past twice the cap.
  */
 
-import { appendFileSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+
+import { fsyncDirectory, writeFileDurably } from '../store/sqlite-store.js';
 
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
@@ -45,9 +47,9 @@ function compactIfLarge(paths: SupportPaths): void {
   try {
     const lines = readLines(paths);
     if (lines.length <= COMPACT_AT) return;
-    const tmp = `${paths.journalPath}.tmp`;
-    writeFileSync(tmp, `${lines.slice(-JOURNAL_CAP).join('\n')}\n`, 'utf8');
-    renameSync(tmp, paths.journalPath);
+    // Durable replace: a crash mid-compaction leaves the full journal or the compacted one, never an
+    // empty or torn file (the old fixed `.tmp` name was also shared by the two faces).
+    writeFileDurably(paths.journalPath, `${lines.slice(-JOURNAL_CAP).join('\n')}\n`);
   } catch {
     return;
   }
@@ -97,7 +99,11 @@ export function readJournal(paths: SupportPaths): Result {
  */
 export function clearJournal(paths: SupportPaths): Result {
   try {
+    const existed = existsSync(paths.journalPath);
     rmSync(paths.journalPath, { force: true });
+    // Off means GONE (revDSG Art. 32): sync the directory so the deletion itself survives a power cut
+    // instead of the journal reappearing on the next boot.
+    if (existed) fsyncDirectory(paths.dir);
   } catch (e) {
     return err('journal_not_readable', {
       path: paths.journalPath,

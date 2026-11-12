@@ -39,6 +39,15 @@ import { DetailDrawer } from '../../components/DetailDrawer';
 import { Status } from '../../components/Status';
 import './Correspondence.css';
 
+/**
+ * `mail_store_busy` with reason `mail_client_unknown`: the Thunderbird busy check (lsof) could not
+ * answer, so the engine refused rather than write. "Close your mail app" would be the wrong fix, so it
+ * gets its own sentence.
+ */
+function cannotRuleOutMailClient(err: Err): boolean {
+  return err.error === 'mail_store_busy' && (err as { reason?: unknown }).reason === 'mail_client_unknown';
+}
+
 /** A fresh key per write, so a retry after a transport failure is a retry and not a second write. */
 const newKey = () => crypto.randomUUID();
 
@@ -340,7 +349,8 @@ export function Correspondence() {
   );
 
   const errorMessage = (error: Err): string => {
-    const known = ['needs_mailstore', 'unknown_mail_adapter', 'drafts_not_writable', 'message_moved'];
+    if (cannotRuleOutMailClient(error)) return t('mail.error.mail_client_unknown');
+    const known = ['needs_mailstore', 'unknown_mail_adapter', 'drafts_not_writable', 'mail_store_busy', 'mail_store_changed', 'message_moved'];
     return refusalText(t, error, { own: 'mail.error', known, keys: { permission_denied: 'mail.error.permissionDenied.write' } });
   };
 
@@ -728,6 +738,7 @@ function DraftPane({ workspaceId, thread }: { workspaceId: string; thread: Threa
   }, [load]);
 
   const draftErrorMessage = (err: Err): string => {
+    if (cannotRuleOutMailClient(err)) return t('draft.error.mail_client_unknown');
     const known = [
       'nothing_to_reply_to',
       'needs_voice_profile',
@@ -736,6 +747,9 @@ function DraftPane({ workspaceId, thread }: { workspaceId: string; thread: Threa
       'source_changed',
       'draft_gone',
       'generation_failed',
+      'drafts_not_writable',
+      'mail_store_busy',
+      'mail_store_changed',
     ];
     return refusalText(t, err, { own: 'draft.error', known, keys: { permission_denied: 'draft.error.forbidden' } });
   };

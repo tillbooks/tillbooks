@@ -375,6 +375,15 @@ export const AUDIT_ACTIONS = [
   //   - `refreeze_override` (D174): one run's fee reversal deviated from the dunning settings, with a
   //     reason (it stands in the correcting entry's text). Not `override` of a lock or a rule.
   'refreeze_override',
+  //   - `override_proceeds_check` (D191): one disposal reversed although its proceeds document stands; the reason is on the correcting row.
+  'override_proceeds_check',
+  //   - `proceeds_cleared` (D192): a disposal took its proceeds from its invoice's sale line (the fact the
+  //     ledger reads its booking mode from), never `post` again.
+  'proceeds_cleared',
+  //   - `override_proceeds_booking` / `override_cross_year_sale` (D192): one disposal booked against the
+  //     workspace setting, its reason on the disposal's description.
+  'override_proceeds_booking',
+  'override_cross_year_sale',
   // A25. Three words, each refused a near miss:
   //   - `comment` is not `record`: `record` mints a statutory input (a rate, a credit), while a
   //     comment only ever asks a question about a posting that already exists.

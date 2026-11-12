@@ -206,6 +206,8 @@ export interface PaymentPreview {
   writeOffThresholdMinor: number;
   balanced: boolean;
   error: PreviewBlocker | null;
+  /** D192 point 2: `invoice_cleared_by_disposal` when a Skonto or write-off reduces an invoice a disposal cleared. */
+  warnings?: { code: string; assetNumber?: string; disposalDate?: string }[];
 }
 
 /**

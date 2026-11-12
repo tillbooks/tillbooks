@@ -44,6 +44,9 @@ const SCOPED_CALLEES = new Set(['postEntryInternal', 'postEntryInternalChecked',
  * `<file>|<callee>|<key source text>`; a reason is a statement about the code a reader can check.
  */
 const DECIDED = {
+  // --- D192: the disposal reverse takes back the Abgrenzung its disposal posted. -----------------------
+  'src/core/assets/reversal.ts|reverseDisposalAbgrenzungWithin|`${typed.id}:abgrenzung-reverse`':
+    "the key is only ever stored as the accrual row's reverse_idempotency_key, never memoised in a public scope: the one public door that reads it, accrual_reverse, refuses every accrual in the asset_transaction: namespace (accrual_backs_disposal) before it looks at the key, the Storno entries post under A38's internal scope (accrual_reverse_internal) and the owned reversal, and the whole call runs inside the asset_transaction_reverse memo, so a replay never reaches it",
   // --- N01 (D183): a batch item IS the public single call, under the key the spec names. ----------------
   'src/api/batch-actions.ts|governedRun|`${batchKey}:${bankTxnId}`':
     "N01 US-N01.6: each book_bank_lines item is deliberately ONE public book_bank_line through the transport seam (its own act, its own Vorschlag under a draft dial), so its key lives in the public scope on purpose; a caller who spent <batchKey>:<bankTxnId> first is held by the registry argument claim (idempotency_args, US-N01.5): the same arguments replay the same act, other arguments refuse idempotency_key_conflict, so no other act is ever replayed as the item",

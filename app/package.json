@@ -1,7 +1,7 @@
 {
   "name": "@tillbooks/app",
   "private": true,
-  "version": "1.0.0-beta.4",
+  "version": "1.0.0-beta.5",
   "type": "module",
   "description": "TILL Studio: the human oversight GUI. F1 foundation: shell, client, i18n, five-state primitives.",
   "scripts": {

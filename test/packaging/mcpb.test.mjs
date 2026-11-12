@@ -12,7 +12,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
-import { stampAndValidate } from '../../scripts/build-mcpb.mjs';
+import { stampAndValidate, keptPrebuilds } from '../../scripts/build-mcpb.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
@@ -63,4 +63,17 @@ test('the Node floor is one number everywhere, and it is the one better-sqlite3 
     `package.json engines.node ${pkg.engines.node} is below better-sqlite3's ${sqlite.engines.node}`,
   );
   assert.equal(major(manifest.compatibility.runtimes.node), major(pkg.engines.node), 'the manifest and package.json disagree');
+});
+
+test('--pack keeps the better-sqlite3 prebuilds of the manifest platforms only, musl with linux', () => {
+  const all = [
+    'darwin-arm64.node', 'darwin-x64.node', 'linux-arm64.node', 'linux-x64.node',
+    'linuxmusl-arm64.node', 'linuxmusl-x64.node', 'win32-arm64.node', 'win32-x64.node',
+  ];
+  assert.deepEqual(keptPrebuilds(['darwin', 'linux'], all), all.slice(0, 6));
+  assert.deepEqual(keptPrebuilds(['darwin'], all), ['darwin-arm64.node', 'darwin-x64.node']);
+  // The shipped manifest's own platforms never keep a Windows build (D104).
+  const kept = keptPrebuilds(stampAndValidate(repoRoot).compatibility.platforms, all);
+  assert.ok(kept.includes('darwin-arm64.node'));
+  assert.ok(!kept.some((name) => name.startsWith('win32-')));
 });

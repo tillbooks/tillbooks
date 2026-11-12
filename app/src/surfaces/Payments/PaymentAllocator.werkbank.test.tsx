@@ -195,6 +195,9 @@ describe('the roving candidate amount fields', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'R-2026-0003 zuweisen' }));
     const amounts = within(dialog).getAllByLabelText('Zuweisen');
     expect(amounts.length).toBeGreaterThanOrEqual(2);
+    // Picking a row focuses its amount in a requestAnimationFrame. Let that land first, or it can
+    // steal focus back from the click below, depending on machine load.
+    await waitFor(() => expect(amounts[1]).toHaveFocus());
 
     await userEvent.click(amounts[0]);
     expect(amounts[0]).toHaveFocus();

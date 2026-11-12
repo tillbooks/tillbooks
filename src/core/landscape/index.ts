@@ -31,4 +31,11 @@ export {
   readOrBootstrap,
   type LandscapeDeps,
 } from './operations.js';
-export { envCopy, envCreateCopy, envResetCopy } from './copy.js';
+export { envCopy, envCreateCopy, envResetCopy, swapInto, LandscapeSwapError } from './copy.js';
+export {
+  missingEnvironmentLedger,
+  assertEnvironmentLedgerPresent,
+  ledgerFilePresent,
+  MissingEnvironmentLedgerError,
+  type MissingEnvironmentLedger,
+} from './ledgerGuard.js';

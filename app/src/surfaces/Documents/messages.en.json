@@ -147,7 +147,8 @@
       },
       "issuedAndSentAck": "{number} is issued and sent to {email}.",
       "issuedNotSentAck": "{number} is issued but not yet sent to {email}.",
-      "vatPosted": "VAT on this document: {tax}"
+      "vatPosted": "VAT on this document: {tax}",
+      "clearedByDisposal": "A credit note on an invoice the disposal of fixed asset {asset} on {date} cleared: it stays on its account, and the disposal's gain is stated before it."
     },
     "issue": {
       "title": "Issue document",

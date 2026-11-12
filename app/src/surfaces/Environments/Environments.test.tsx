@@ -19,6 +19,7 @@ import { CapabilitiesContext, type Capabilities } from '../../lib/capabilities';
 import { Environments } from './Environments';
 import { CopyRefreshDialog } from './CopyRefreshDialog';
 import { DeleteDialog } from './DeleteDialog';
+import { ResetDialog } from './ResetDialog';
 import { RailStatusMenu } from '../../app/RailStatusMenu';
 import { DensityProvider } from '../../app/density';
 import type { EnvironmentRow } from './model';
@@ -205,10 +206,46 @@ describe('Copy / refresh dialog: the four phases and the error rows', () => {
     expect(await screen.findByText(/Mandant .* wurde in der Quelle nicht gefunden/)).toBeInTheDocument();
   });
 
+  it('says the target is open elsewhere when the swap is refused with target_in_use, and that nothing changed', async () => {
+    renderCopy('test', transportFor({ env_copy: at({ ok: false, error: 'copy_swap_refused', reason: 'target_in_use', target: 'test' }, 422) }));
+    await userEvent.click(screen.getByRole('button', { name: 'Kopieren und ersetzen' }));
+    expect(await screen.findByText(/«test» ist gerade geöffnet\. Ist sie die aktive Umgebung, wechsle zuerst zu einer anderen Umgebung; sonst beende das Programm, das sie nutzt.* Es wurde nichts geändert\./)).toBeInTheDocument();
+  });
+
+  it('says a refused swap left the environment unchanged (any other swap reason)', async () => {
+    renderCopy('test', transportFor({ env_copy: at({ ok: false, error: 'copy_swap_refused', reason: 'building_wal_not_folded', target: 'test' }, 422) }));
+    await userEvent.click(screen.getByRole('button', { name: 'Kopieren und ersetzen' }));
+    expect(await screen.findByText('Die neue Version konnte nicht sicher eingesetzt werden. Die bisherige Umgebung ist unverändert.')).toBeInTheDocument();
+  });
+
+  it('points a mandate copy into a target with a missing ledger at the rebuild (target_data_missing)', async () => {
+    renderCopy('test', transportFor({ env_copy: at({ ok: false, error: 'target_data_missing', target: 'test', dbPath: '/data/test/till.db' }, 422) }));
+    await userEvent.click(screen.getByRole('button', { name: 'Kopieren und ersetzen' }));
+    expect(await screen.findByText(/Das Hauptbuch von «test» fehlt\. Baue die Umgebung mit «Zurücksetzen»/)).toBeInTheDocument();
+  });
+
+  it('says a copy that failed its final check was discarded (copy_gate_failed)', async () => {
+    renderCopy('test', transportFor({ env_copy: at({ ok: false, error: 'copy_gate_failed', reason: 'unbalanced_entry' }, 422) }));
+    await userEvent.click(screen.getByRole('button', { name: 'Kopieren und ersetzen' }));
+    expect(await screen.findByText(/Schlussprüfung nicht bestanden und wurde verworfen/)).toBeInTheDocument();
+  });
+
   it('marks every phase done and reports the summary on success', async () => {
     renderCopy('test', transportFor({ env_copy: at({ ok: true, summary: { workspacesCopied: 3, piiCellsMasked: 42 } }) }));
     await userEvent.click(screen.getByRole('button', { name: 'Kopieren und ersetzen' }));
     expect(await screen.findByText(/3 Arbeitsbereiche kopiert, 42 Felder anonymisiert/)).toBeInTheDocument();
+  });
+});
+
+describe('Reset dialog: a refused swap names the environment', () => {
+  it('says «develop» is open elsewhere (swap_refused, target_in_use), never an empty «»', async () => {
+    renderNode(
+      <ResetDialog env={DEVELOP} onClose={() => undefined} onDone={() => undefined} />,
+      transportFor({ env_reset: at({ ok: false, error: 'swap_refused', reason: 'target_in_use', name: 'develop', target: 'develop' }, 422) }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Zurücksetzen' }));
+    expect(await screen.findByText(/«develop» ist gerade geöffnet\./)).toBeInTheDocument();
+    expect(screen.queryByText(/«»/)).not.toBeInTheDocument();
   });
 });
 

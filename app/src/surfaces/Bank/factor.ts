@@ -5,8 +5,8 @@
  *
  *   - "Plattform-Auszahlung (MWST-Satz, Gebühr vom Netto)": the owner's preset (D177 point 1). With the
  *     MWST rate v and a fee f taken on the net, the gross is payout × (1 + v) / (v + f), exact in basis
- *     points: num = 10000 + vBp, den = vBp + fBp, reduced. 8.1 % and 9.9 % give 1081/180, so a 15.12
- *     payout gives 90.80.
+ *     points: num = 10000 + vBp, den = vBp + fBp, reduced. 8.1 % and 9.9 % give 1081/180, so a 27.00
+ *     payout gives 162.15.
  *   - "Faktor": a decimal ("6.0056") or a fraction ("1081/180"), turned into an exact num/den, reduced.
  *
  * Every figure stays an integer (BigInt for the product), so nothing drifts by a Rappen.

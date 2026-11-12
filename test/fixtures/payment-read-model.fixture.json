@@ -15,7 +15,8 @@
     ],
     "vendorBills": [],
     "dunningFees": [],
-    "ok": true
+    "ok": true,
+    "warnings": []
   },
   "previewPayment": {
     "direction": "incoming",
@@ -91,7 +92,8 @@
       "number": "R-2026-0001",
       "status": "settled"
     },
-    "ok": true
+    "ok": true,
+    "warnings": []
   },
   "suggestPaymentMatches": {
     "reference": {

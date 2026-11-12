@@ -5054,18 +5054,23 @@ export const SCENARIOS = {
   },
 
   // --- H06, Asset Disposal (MONEY PATH: the terminal disposal journal) --------------------------
-  // Seed an ACTIVE asset (cost 1'200'000, accumulated 0, NBV 1'200'000), then dispose it for 1'000'000
-  // proceeds: a book loss of 200'000. The gate calls the verb TWICE with identical input and compares
+  // Seed an ACTIVE asset (cost 1'200'000, accumulated 0, NBV 1'200'000), then dispose it against an
+  // invoice of net 100'000: a book loss of 1'100'000. The gate calls the verb TWICE with identical input and compares
   // the whole database row by row, so this is where §H-IDEMPOTENT is proven ON ROWS for the disposal:
   // a replay posts no second journal, appends no second asset_transaction and re-flips no status.
+  // D192: the proceeds are the linked invoice's sale line (net 1'000.00 on 3200 at UST81), so the default
+  // assets.proceeds_booking clear_via_document DERIVES them: the call names no proceeds at all, the entry
+  // debits 3200 by the booked CHF, and the double call proves the link and the clearing are stored once
+  // (one row, one entry, one proceeds_cleared audit) and never re-derived on replay. Until D192 this
+  // linked a payment with proceeds on the bank: the N2 double count, now refused proceeds_needs_invoice.
   asset_dispose: (fx) => {
     const assetId = depreciableAssetSeed(fx, 'disp');
+    const invoice = issuedInvoice(fx, 'disp-inv');
     return {
+      proceedsInvoiceId: invoice.id,
       workspaceId: fx.workspaceId,
       assetId,
-      disposalDate: '2026-07-15',
-      proceedsRappen: 1_000_000,
-      proceedsAccountId: fx.accId('1020'),
+      disposalDate: '2026-07-16',
       gainLossAccountId: fx.accId('6900'),
       reason: 'Verkauf an Dritte',
       idempotencyKey: 'disp-1',
@@ -7694,7 +7699,8 @@ function reportsAssetSeed(fx, prefix, opts = {}) {
   if (opts.dispose === true) {
     fx.call('asset_dispose', {
       assetId: asset.asset.id,
-      disposalDate: '2026-07-20',
+      // D192 (critic r3 C1): never after the fixture clock (2026-07-16).
+      disposalDate: '2026-07-16',
       proceedsRappen: 1_000_000,
       proceedsAccountId: fx.accId('1020'),
       gainLossAccountId: fx.accId('6900'),

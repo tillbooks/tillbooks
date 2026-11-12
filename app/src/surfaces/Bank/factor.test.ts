@@ -6,11 +6,11 @@ import { describe, expect, it } from 'vitest';
 import { applyFactor, decimalFactor, percentToBp, platformFactor } from './factor';
 
 describe('factor authoring (D177)', () => {
-  it('the platform preset: 8.1 % MWST and 9.9 % fee on the net give 1081/180, and 15.12 gives 90.80', () => {
+  it('the platform preset: 8.1 % MWST and 9.9 % fee on the net give 1081/180, and 27.00 gives 162.15', () => {
     const f = platformFactor('8.1', '9.9');
     expect(f).toEqual({ num: 1081, den: 180, explain: { vatBp: 810, feeBp: 990 } });
-    expect(applyFactor(1_512, f as NonNullable<typeof f>)).toBe(9_080);
-    expect(applyFactor(-1_512, f as NonNullable<typeof f>)).toBe(9_080);
+    expect(applyFactor(2_700, f as NonNullable<typeof f>)).toBe(16_215);
+    expect(applyFactor(-2_700, f as NonNullable<typeof f>)).toBe(16_215);
   });
 
   it('reads a comma, refuses a rate it cannot read or a zero denominator', () => {

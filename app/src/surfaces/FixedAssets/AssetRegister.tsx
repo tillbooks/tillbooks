@@ -26,7 +26,7 @@ import { Select } from '../../components/Select';
 import { Field } from '../../components/Field';
 import { IconButton } from '../../components/IconButton';
 import { useWorkspaceId } from '../../app/workspace';
-import { formatMoney, useT } from '../../i18n';
+import { formatDate, formatMoney, useT } from '../../i18n';
 import { useCalendarFormat } from '../../lib/format';
 import { Status, type StatusKind } from '../../components/Status';
 import type { OverflowMenuItem } from '../../components/OverflowMenu';
@@ -107,6 +107,8 @@ export interface LedgerEvent {
   netBookValueAfterRappen: number;
   /** D170: the compensating row that took this event back, or null while it stands. */
   reversedByTransactionId: string | null;
+  /** D191: a disposal's linked proceeds document still stands (true), no longer does (false), or none (null). */
+  proceedsDocumentStands: boolean | null;
 }
 
 /** D170: the four events `asset_transaction_reverse` takes back (depreciation goes with its run). */
@@ -151,8 +153,65 @@ function parseLedger(body: unknown): LedgerEvent[] {
       accumulatedDeprAfterRappen: num(r.accumulatedDeprAfterRappen),
       netBookValueAfterRappen: num(r.netBookValueAfterRappen),
       reversedByTransactionId: str(r.reversedByTransactionId),
+      proceedsDocumentStands: typeof r.proceedsDocumentStands === 'boolean' ? r.proceedsDocumentStands : null,
     }))
     .filter((tr) => tr.id !== '');
+}
+
+/** D191: the engine's `invalid_proceeds_document` reasons, each with its own sentence (never the raw code). */
+const PROCEEDS_REASONS = [
+  'not_found',
+  'not_an_invoice',
+  'not_issued',
+  'not_incoming',
+  'not_standing',
+  'payment_not_for_invoice',
+  'no_proceeds',
+  // D192
+  'no_sale_line',
+  'sale_not_single_line',
+  'proceeds_needs_invoice',
+  'invoice_already_cleared',
+] as const;
+
+/** D191: the message key for a refused link's reason; an unknown reason gets the generic sentence. */
+export function proceedsReasonKey(reason: string): string {
+  return (PROCEEDS_REASONS as readonly string[]).includes(reason) ? `assets.disposal.proceedsDocReason.${reason}` : 'assets.disposal.proceedsDocInvalid';
+}
+
+/** D192: the dispose refusals that concern the DATE, each with its own sentence on the date field. */
+const DATE_REFUSALS = ['sale_in_other_financial_year', 'years_not_adjacent', 'disposal_date_in_future', 'disposal_date_before_reversal', 'period_locked'] as const;
+
+/**
+ * D192: where a dispose refusal is shown and in which words (never the raw code). `doc` is the proceeds
+ * document field, `date` the disposal date; null for a refusal the generic banner handles.
+ */
+export function disposalRefusal(body: unknown): { field: 'doc' | 'date'; key: string; suggestedDate: string | null } | null {
+  const b = (body ?? {}) as { error?: unknown; reason?: unknown; suggestedDisposalDate?: unknown };
+  const error = String(b.error ?? '');
+  const reason = String(b.reason ?? '');
+  const suggestedDate = typeof b.suggestedDisposalDate === 'string' ? b.suggestedDisposalDate : null;
+  if (error === 'invalid_proceeds_document') return { field: 'doc', key: proceedsReasonKey(reason), suggestedDate };
+  if (error === 'invalid_input' && reason === 'proceeds_from_document') return { field: 'doc', key: 'assets.disposal.refusal.proceeds_from_document', suggestedDate };
+  if ((DATE_REFUSALS as readonly string[]).includes(error)) return { field: 'date', key: `assets.disposal.refusal.${error}`, suggestedDate };
+  return null;
+}
+
+/** D192: how a linked disposal books its proceeds (the `assets.proceeds_booking` setting). */
+export type ProceedsBookingMode = 'clear_via_document' | 'book_proceeds';
+
+export function parseProceedsBooking(body: unknown): ProceedsBookingMode {
+  const v = (body as { setting?: { value?: unknown } })?.setting?.value;
+  return v === 'book_proceeds' ? 'book_proceeds' : 'clear_via_document';
+}
+
+/** D191: how the reverse treats a standing proceeds document (the `assets.proceeds_check` setting). */
+export type ProceedsCheckMode = 'refuse' | 'warn' | 'off';
+
+/** D191: the mode asset_ledger_get reports; anything unknown reads as the default, `refuse`. */
+export function parseProceedsCheck(body: unknown): ProceedsCheckMode {
+  const v = (body as { proceedsCheck?: unknown })?.proceedsCheck;
+  return v === 'warn' || v === 'off' ? v : 'refuse';
 }
 
 /** H05: a fixed-asset location, the transfer target and the register's location dimension. */
@@ -329,6 +388,34 @@ interface DisposeDraft {
   gainLossAccountId: string;
   reason: string;
   counterparty: string;
+  /** D191: the optional proceeds document, `invoice:<id>` or `payment:<id>`; '' links none. */
+  proceedsDoc: string;
+}
+
+/** D191: one pickable proceeds document (an issued invoice or a standing incoming payment). */
+export interface ProceedsOption {
+  key: string;
+  label: string;
+}
+
+/** D191: the open invoices and standing incoming payments a disposal may name as its proceeds. */
+export function proceedsOptions(docs: unknown, payments: unknown, money: (minor: number) => string, invoiceWord: string, paymentWord: string): ProceedsOption[] {
+  const rows = (v: unknown): Record<string, unknown>[] =>
+    Array.isArray(v) ? v.filter((r): r is Record<string, unknown> => r !== null && typeof r === 'object') : [];
+  const invoices = rows(docs)
+    .filter((d) => d.type === 'invoice' && d.status !== 'draft' && d.status !== 'cancelled' && typeof d.id === 'string')
+    .map((d) => ({ key: `invoice:${String(d.id)}`, label: `${invoiceWord} ${String(d.number ?? d.id)} · ${money(num(d.totalMinor))}` }));
+  const pays = rows(payments)
+    .filter((p) => p.direction === 'incoming' && p.status === 'posted' && typeof p.id === 'string')
+    .map((p) => ({ key: `payment:${String(p.id)}`, label: `${paymentWord} ${String(p.date ?? '')} · ${money(num(p.baseAmountMinor ?? p.amountMinor))}` }));
+  return [...invoices, ...pays];
+}
+
+/** D191: the engine fields for a picked proceeds document. */
+function proceedsFields(key: string): { proceedsInvoiceId?: string; proceedsPaymentId?: string } {
+  if (key.startsWith('invoice:')) return { proceedsInvoiceId: key.slice('invoice:'.length) };
+  if (key.startsWith('payment:')) return { proceedsPaymentId: key.slice('payment:'.length) };
+  return {};
 }
 
 /** H06: the previewed disposal journal (asset_disposal_preview), the exact entry a dispose will post. */
@@ -345,6 +432,26 @@ interface DisposalPreview {
   proceedsRappen: number;
   gainLossRappen: number;
   lines: DisposalPreviewLine[];
+  /** D191: amount / currency / counterparty differences between the proceeds and the linked document. */
+  warnings: string[];
+  /** D192: the proceeds come from the linked invoice's sale line (the engine derived them). */
+  proceedsFromDocument: boolean;
+  /** D192: the account the proceeds (or the clearing) land on, as `number name`. */
+  proceedsAccountLabel: string | null;
+  /** D192: the Abgrenzung a sale across a year end posts with the disposal, or null. */
+  abgrenzung: { kind: string; periodEnd: string; reversalDate: string; lines: DisposalPreviewLine[] } | null;
+}
+
+function previewLinesOf(raw: unknown): DisposalPreviewLine[] {
+  const rows = Array.isArray(raw) ? raw : [];
+  return rows
+    .filter((r): r is Record<string, unknown> => r !== null && typeof r === 'object')
+    .map((r) => ({
+      accountNumber: String(r.account_number ?? ''),
+      accountName: String(r.account_name ?? ''),
+      debitRappen: num(r.debit_rappen),
+      creditRappen: num(r.credit_rappen),
+    }));
 }
 
 function parseDisposalPreview(body: unknown): DisposalPreview | null {
@@ -367,6 +474,23 @@ function parseDisposalPreview(body: unknown): DisposalPreview | null {
     proceedsRappen: num(o.proceeds_rappen),
     gainLossRappen: num(o.gain_loss_rappen),
     lines,
+    warnings: Array.isArray(o.warnings)
+      ? o.warnings.map((w) => String((w as { code?: unknown })?.code ?? '')).filter((c) => c !== '')
+      : [],
+    proceedsFromDocument: o.proceeds_from_document === true,
+    proceedsAccountLabel:
+      o.proceeds_account !== null && typeof o.proceeds_account === 'object'
+        ? `${String((o.proceeds_account as { number?: unknown }).number ?? '')} ${String((o.proceeds_account as { name?: unknown }).name ?? '')}`.trim()
+        : null,
+    abgrenzung:
+      o.abgrenzung !== null && typeof o.abgrenzung === 'object'
+        ? {
+            kind: String((o.abgrenzung as { kind?: unknown }).kind ?? ''),
+            periodEnd: String((o.abgrenzung as { period_end?: unknown }).period_end ?? ''),
+            reversalDate: String((o.abgrenzung as { reversal_date?: unknown }).reversal_date ?? ''),
+            lines: previewLinesOf((o.abgrenzung as { lines?: unknown }).lines),
+          }
+        : null,
   };
 }
 
@@ -382,6 +506,7 @@ const EMPTY_DISPOSE: DisposeDraft = {
   gainLossAccountId: '',
   reason: '',
   counterparty: '',
+  proceedsDoc: '',
 };
 
 function draftFrom(a: Asset): Draft {
@@ -445,6 +570,18 @@ export function AssetRegister() {
   // only from the confirm dialog, never straight from the row's menu.
   const [reversingTxn, setReversingTxn] = useState<LedgerEvent | null>(null);
   const [reverseReason, setReverseReason] = useState('');
+  // D191: the single-case override of the proceeds check, with its own required reason.
+  const [overrideProceeds, setOverrideProceeds] = useState(false);
+  // D191: the workspace setting `assets.proceeds_check` as asset_ledger_get reports it.
+  const [proceedsCheck, setProceedsCheck] = useState<ProceedsCheckMode>('refuse');
+  const [overrideReason, setOverrideReason] = useState('');
+  const [proceedsChoices, setProceedsChoices] = useState<ProceedsOption[]>([]);
+  const [dispPreviewError, setDispPreviewError] = useState<{ field: 'doc' | 'date'; key: string } | null>(null);
+  // D192: how a linked disposal books its proceeds; with an invoice under `clear_via_document` the
+  // engine derives them and the amount and account fields give way to the preview's figures.
+  const [proceedsBooking, setProceedsBooking] = useState<ProceedsBookingMode>('clear_via_document');
+  // D192: the date is pre-filled from a refusal's suggestion only while the person has not touched it.
+  const [dispDateTouched, setDispDateTouched] = useState(false);
 
   const canWrite = can(CAP.manageMasterData);
   // A capitalisation posts a journal, so the honest gate is the posting capability; the register CRUD
@@ -664,6 +801,7 @@ export function AssetRegister() {
       // and its journal link, from asset_ledger_get.
       const res = await client.call('asset_ledger_get', { workspaceId, assetId: a.id });
       setTxns(isErr(res.body) ? [] : parseLedger(res.body));
+      setProceedsCheck(isErr(res.body) ? 'refuse' : parseProceedsCheck(res.body));
     },
     [client, workspaceId],
   );
@@ -676,13 +814,16 @@ export function AssetRegister() {
       assetId: viewing.id,
       transactionId: reversingTxn.id,
       reason: reverseReason.trim(),
+      ...(overrideProceeds ? { overrideProceedsCheck: true, overrideReason: overrideReason.trim() } : {}),
       idempotencyKey: newKey(),
     });
     if (!ok) return;
     setReversingTxn(null);
     setReverseReason('');
+    setOverrideProceeds(false);
+    setOverrideReason('');
     await openTxns(viewing);
-  }, [write, viewing, reversingTxn, reverseReason, openTxns]);
+  }, [write, viewing, reversingTxn, reverseReason, overrideProceeds, overrideReason, openTxns]);
 
   // D170: an event that still stands offers Stornieren, destructive, behind its confirm dialog.
   // Stornieren is destructive, so it stays under Mehr (brand/DESIGN.md, Icon vocabulary).
@@ -696,6 +837,8 @@ export function AssetRegister() {
           onSelect: () => {
             setWriteError(null);
             setReverseReason('');
+            setOverrideProceeds(false);
+            setOverrideReason('');
             setReversingTxn(tr);
           },
         }]
@@ -801,6 +944,28 @@ export function AssetRegister() {
     setDispPreview(null);
     setDispDraft({ ...EMPTY_DISPOSE, disposalDate: today() });
     setDisposing(a);
+    setProceedsChoices([]);
+    setDispPreviewError(null);
+    setDispDateTouched(false);
+    if (workspaceId === null) return;
+    // D191: the optional proceeds picker offers issued invoices and standing incoming payments.
+    void (async () => {
+      const [docs, pays, booking] = await Promise.all([
+        client.call('list_documents', { workspaceId, type: 'invoice' }),
+        client.call('list_payments', { workspaceId, direction: 'incoming' }),
+        client.call('settings_get', { workspaceId, key: 'assets.proceeds_booking' }),
+      ]);
+      setProceedsBooking(isErr(booking.body) ? 'clear_via_document' : parseProceedsBooking(booking.body));
+      setProceedsChoices(
+        proceedsOptions(
+          isErr(docs.body) ? [] : (docs.body as { documents?: unknown }).documents,
+          isErr(pays.body) ? [] : (pays.body as { payments?: unknown }).payments,
+          money,
+          t('assets.disposal.proceedsDocInvoice'),
+          t('assets.disposal.proceedsDocPayment'),
+        ),
+      );
+    })();
   };
   const closeDispose = () => {
     setDisposing(null);
@@ -809,15 +974,19 @@ export function AssetRegister() {
   };
 
   const dispProceedsRappen = Math.round(Number(dispDraft.proceedsMajor.trim() || '0') * 100);
+  // D192: a document linked under `clear_via_document` brings its own proceeds (an invoice's sale line);
+  // the engine derives them, so the call names none and the amount fields step aside.
+  const dispDerived = proceedsBooking === 'clear_via_document' && dispDraft.proceedsDoc !== '';
   // A preview is requestable once the engine has what it needs: a valid date, a gain/loss account, a
   // non-negative integer proceeds, and (only when proceeds are received) a proceeds account.
   const dispPreviewable =
     disposing !== null &&
     dispDraft.disposalDate !== '' &&
     dispDraft.gainLossAccountId !== '' &&
-    Number.isFinite(dispProceedsRappen) &&
-    dispProceedsRappen >= 0 &&
-    (dispProceedsRappen === 0 || dispDraft.proceedsAccountId !== '');
+    (dispDerived ||
+      (Number.isFinite(dispProceedsRappen) &&
+        dispProceedsRappen >= 0 &&
+        (dispProceedsRappen === 0 || dispDraft.proceedsAccountId !== '')));
 
   // Live journal preview: recompute whenever the inputs change, so the exact entry the disposal will
   // post (and the gain/loss) is visible BEFORE the irreversible click. The preview is a pure read.
@@ -832,12 +1001,20 @@ export function AssetRegister() {
         workspaceId,
         assetId: disposing.id,
         disposalDate: dispDraft.disposalDate,
-        proceedsRappen: dispProceedsRappen,
-        proceedsAccountId: dispProceedsRappen > 0 ? dispDraft.proceedsAccountId : undefined,
+        ...(dispDerived
+          ? {}
+          : { proceedsRappen: dispProceedsRappen, proceedsAccountId: dispProceedsRappen > 0 ? dispDraft.proceedsAccountId : undefined }),
         gainLossAccountId: dispDraft.gainLossAccountId,
+        ...proceedsFields(dispDraft.proceedsDoc),
       });
       if (cancelled) return;
       setDispPreview(isErr(res.body) ? null : parseDisposalPreview(res.body));
+      const refusal = isErr(res.body) ? disposalRefusal(res.body) : null;
+      setDispPreviewError(refusal === null ? null : { field: refusal.field, key: refusal.key });
+      // D192: a refusal that names the invoice's date fills it in while the person has not chosen one.
+      if (refusal?.suggestedDate != null && !dispDateTouched) {
+        setDispDraft((dr) => ({ ...dr, disposalDate: refusal.suggestedDate as string }));
+      }
     })();
     return () => {
       cancelled = true;
@@ -848,9 +1025,12 @@ export function AssetRegister() {
     disposing,
     dispPreviewable,
     dispProceedsRappen,
+    dispDerived,
+    dispDateTouched,
     dispDraft.disposalDate,
     dispDraft.proceedsAccountId,
     dispDraft.gainLossAccountId,
+    dispDraft.proceedsDoc,
   ]);
 
   const submitDispose = useCallback(async () => {
@@ -859,22 +1039,24 @@ export function AssetRegister() {
     const ok = await write('asset_dispose', {
       assetId: disposing.id,
       disposalDate: dispDraft.disposalDate,
-      proceedsRappen: proceeds,
-      proceedsAccountId: proceeds > 0 ? dispDraft.proceedsAccountId : undefined,
+      // D192: under clear_via_document an invoice brings its own proceeds; the call names none.
+      ...(dispDerived ? {} : { proceedsRappen: proceeds, proceedsAccountId: proceeds > 0 ? dispDraft.proceedsAccountId : undefined }),
       gainLossAccountId: dispDraft.gainLossAccountId,
       reason: dispDraft.reason.trim() === '' ? undefined : dispDraft.reason.trim(),
       counterpartyName: dispDraft.counterparty.trim() === '' ? undefined : dispDraft.counterparty.trim(),
+      ...(dispDerived || proceeds > 0 ? proceedsFields(dispDraft.proceedsDoc) : {}),
       idempotencyKey: newKey(),
     });
     if (ok) closeDispose();
-  }, [write, disposing, dispDraft]);
+  }, [write, disposing, dispDraft, dispDerived]);
 
   const disposeValid =
     disposing !== null &&
     dispDraft.disposalDate !== '' &&
     dispDraft.gainLossAccountId !== '' &&
-    dispProceedsRappen >= 0 &&
-    (dispProceedsRappen === 0 || dispDraft.proceedsAccountId !== '');
+    (dispDerived
+      ? dispPreview !== null && dispPreviewError === null
+      : dispProceedsRappen >= 0 && (dispProceedsRappen === 0 || dispDraft.proceedsAccountId !== ''));
 
   const assetGlAccount = useMemo(() => {
     if (acquiring === null) return null;
@@ -1314,7 +1496,7 @@ export function AssetRegister() {
             <button
               type="button"
               className="btn btn--danger"
-              disabled={!canPost || reverseReason.trim() === ''}
+              disabled={!canPost || reverseReason.trim() === '' || (overrideProceeds && overrideReason.trim() === '')}
               onClick={() => void confirmReverse()}
             >
               {t('assets.ledger.reverseConfirm')}
@@ -1325,7 +1507,26 @@ export function AssetRegister() {
         <div id="fa-reverse-body">
           <p>{t('assets.ledger.reverseBody')}</p>
           <ConsequenceLine verb={REVERSE_VERB} />
-          {writeError && <ErrorBanner error={writeError} />}
+          {/* D191: the linked proceeds document still stands: name the order (undo the money act first). */}
+          {reversingTxn?.type === 'disposal' && proceedsCheck === 'warn' && reversingTxn.proceedsDocumentStands === true && (
+            <p role="status" className="fa-hint">{t('assets.ledger.proceedsStandsWarn')}</p>
+          )}
+          {reversingTxn?.type === 'disposal' &&
+            ((proceedsCheck === 'refuse' && reversingTxn.proceedsDocumentStands === true) || writeError?.error === 'proceeds_settled') && (
+            <div role="alert" className="fa-hint">
+              <p>{t('assets.ledger.proceedsSettled')}</p>
+              <label>
+                <input type="checkbox" checked={overrideProceeds} onChange={(e) => setOverrideProceeds(e.target.checked)} />{' '}
+                {t('assets.ledger.proceedsOverride')}
+              </label>
+              {overrideProceeds && (
+                <Field label={t('assets.ledger.proceedsOverrideReason')} id="fa-reverse-override-reason">
+                  <input className="field" id="fa-reverse-override-reason" value={overrideReason} maxLength={200} onChange={(e) => setOverrideReason(e.target.value)} />
+                </Field>
+              )}
+            </div>
+          )}
+          {writeError && writeError.error !== 'proceeds_settled' && <ErrorBanner error={writeError} />}
           <Field label={t('assets.ledger.reverseReason')} id="fa-reverse-reason">
             <input className="field"
               id="fa-reverse-reason"
@@ -1444,14 +1645,42 @@ export function AssetRegister() {
           <p className="fa-hint">{t('assets.disposal.explainer')}</p>
           {writeError && <ErrorBanner error={writeError} />}
 
-          <Field label={t('assets.disposal.date')} id="fa-disp-date">
+          <Field
+            label={t('assets.disposal.date')}
+            id="fa-disp-date"
+            error={dispPreviewError?.field === 'date' ? t(dispPreviewError.key) : undefined}
+          >
             <input className="field"
               id="fa-disp-date"
               type="date"
               value={dispDraft.disposalDate}
-              onChange={(e) => setDispDraft({ ...dispDraft, disposalDate: e.target.value })}
+              onChange={(e) => {
+                setDispDateTouched(true);
+                setDispDraft({ ...dispDraft, disposalDate: e.target.value });
+              }}
             />
           </Field>
+          <Field
+            label={t('assets.disposal.proceedsDoc')}
+            id="fa-disp-proceeds-doc"
+            info={
+              dispDraft.proceedsDoc === ''
+                ? t('assets.disposal.proceedsDocNone')
+                : dispDerived
+                  ? t('assets.disposal.proceedsDocClears')
+                  : t('assets.disposal.proceedsDocLinked')
+            }
+            error={dispPreviewError?.field === 'doc' ? t(dispPreviewError.key) : undefined}
+          >
+            <Select
+              id="fa-disp-proceeds-doc"
+              value={dispDraft.proceedsDoc}
+              onChange={(value) => setDispDraft({ ...dispDraft, proceedsDoc: value })}
+              options={[{ value: '', label: t('assets.disposal.proceedsDocNoneOption') }, ...proceedsChoices.map((o) => ({ value: o.key, label: o.label }))]}
+              ariaLabel={t('assets.disposal.proceedsDoc')}
+            />
+          </Field>
+          {!dispDerived && (
           <Field label={t('assets.disposal.proceeds')} id="fa-disp-proceeds">
             <input className="field"
               id="fa-disp-proceeds"
@@ -1462,7 +1691,8 @@ export function AssetRegister() {
               onChange={(e) => setDispDraft({ ...dispDraft, proceedsMajor: e.target.value })}
             />
           </Field>
-          {dispProceedsRappen > 0 && (
+          )}
+          {!dispDerived && dispProceedsRappen > 0 && (
             <Field label={t('assets.disposal.proceedsAccount')} id="fa-disp-proceeds-acc">
               <Select
                 id="fa-disp-proceeds-acc"
@@ -1521,6 +1751,13 @@ export function AssetRegister() {
                 <span />
                 <span className="fa-num t-money">{money(dispPreview.netBookValueRappen)}</span>
               </div>
+              {dispPreview.proceedsFromDocument && (
+                <div className="fa-preview-line" data-testid="fa-disp-derived">
+                  <span>{t('assets.disposal.proceedsFromInvoice')}</span>
+                  <span>{dispPreview.proceedsAccountLabel}</span>
+                  <span className="fa-num t-money">{money(dispPreview.proceedsRappen)}</span>
+                </div>
+              )}
               <div className="fa-preview-line">
                 <span>{dispPreview.gainLossRappen >= 0 ? t('assets.disposal.gain') : t('assets.disposal.loss')}</span>
                 <span />
@@ -1528,6 +1765,9 @@ export function AssetRegister() {
                   {money(Math.abs(dispPreview.gainLossRappen))}
                 </span>
               </div>
+              {dispPreview.warnings.map((w) => (
+                <p className="fa-hint" key={w}>{t(`assets.disposal.warning.${w}`)}</p>
+              ))}
               <span className="fa-preview-title">{t('assets.disposal.journalPreview')}</span>
               {dispPreview.lines.map((l, i) => (
                 <div className="fa-preview-line" key={`${l.accountNumber}-${i}`}>
@@ -1538,6 +1778,22 @@ export function AssetRegister() {
                   <span className="fa-num t-money">{money(l.debitRappen > 0 ? l.debitRappen : l.creditRappen)}</span>
                 </div>
               ))}
+              {dispPreview.abgrenzung !== null && (
+                <>
+                  <span className="fa-preview-title" data-testid="fa-disp-abgrenzung">
+                    {t('assets.disposal.abgrenzung', { date: formatDate(dispPreview.abgrenzung.periodEnd), reversal: formatDate(dispPreview.abgrenzung.reversalDate) })}
+                  </span>
+                  {dispPreview.abgrenzung.lines.map((l, i) => (
+                    <div className="fa-preview-line" key={`abg-${l.accountNumber}-${i}`}>
+                      <span>{l.debitRappen > 0 ? t('assets.acquisition.debit') : t('assets.acquisition.credit')}</span>
+                      <span>
+                        {l.accountNumber} {l.accountName}
+                      </span>
+                      <span className="fa-num t-money">{money(l.debitRappen > 0 ? l.debitRappen : l.creditRappen)}</span>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           )}
           {/* C4: the shared consequence sentence for the disposal post. It renders nothing today, the

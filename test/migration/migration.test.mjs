@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { getAction } from '../../dist/api/registry.js';
 import { STEP_TRANSITIONS } from '../../dist/core/migration/index.js';
 import { freshDeps, mintWorkspace } from '../api/support.mjs';
+import { grantRealBackup } from './backup-support.mjs';
 
 const call = (deps, name, input) => {
   const res = getAction(name).run(deps, input);
@@ -80,7 +81,7 @@ function ws(seed) {
 }
 
 function grantBackup(deps, planId) {
-  deps.store.db.prepare('UPDATE migration_plan SET backup_ref = ? WHERE id = ?').run('backup-1', planId);
+  grantRealBackup(deps, planId);
 }
 
 // --- The money path: posts nothing, idempotent on rows ------------------------------------------

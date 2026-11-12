@@ -49,6 +49,8 @@ import {
   ACCRUAL_KIND_RULES,
   ACCRUAL_SOURCE,
   ACCRUAL_STATUSES,
+  DISPOSAL_SOURCE_REF_PREFIX,
+  isDisposalSourceRef,
   accountByNumber,
   accrualLinesOf,
   describeLines,
@@ -136,6 +138,8 @@ export interface AccrualView {
   readonly reversalEntryId: string | null;
   readonly stornoEntryId: string | null;
   readonly stornoReversalEntryId: string | null;
+  /** D192: the date the Storno C is booked on (null until reversed), so a list can say from when. */
+  readonly stornoDate: string | null;
   readonly createdBy: string;
   readonly createdAt: string;
   readonly postedAt: string | null;
@@ -161,6 +165,12 @@ function viewOf(ctx: WorkspaceContext, row: AccrualRow): AccrualView {
     .prepare('SELECT id, number, name FROM account WHERE workspace_id = ? AND id IN (?, ?)')
     .all(ctx.workspaceId, row.balance_account_id, row.contra_account_id) as { id: string; number: string; name: string }[];
   const byId = new Map(numbers.map((a) => [a.id, a]));
+  const storno =
+    row.storno_entry_id === null
+      ? undefined
+      : (ctx.store.db
+          .prepare('SELECT date FROM journal_entry WHERE workspace_id = ? AND id = ?')
+          .get(ctx.workspaceId, row.storno_entry_id) as { date: string } | undefined);
   return {
     id: row.id,
     kind: row.kind,
@@ -180,6 +190,7 @@ function viewOf(ctx: WorkspaceContext, row: AccrualRow): AccrualView {
     reversalEntryId: row.reversal_entry_id,
     stornoEntryId: row.storno_entry_id,
     stornoReversalEntryId: row.storno_reversal_entry_id,
+    stornoDate: storno?.date ?? null,
     createdBy: row.created_by,
     createdAt: row.created_at,
     postedAt: row.posted_at,
@@ -236,8 +247,23 @@ export interface AccrualCreateInput {
  * carries the lines the post will write, from the same function.
  */
 export function accrualCreate(ctx: WorkspaceContext, input: AccrualCreateInput): Result {
+  return createDraft(ctx, input, false);
+}
+
+/**
+ * The ONE create body: `accrual_create` calls it with `allowDisposalRef` false, H06's
+ * `postDisposalAbgrenzungWithin` with true (D192: only the disposal writes the reserved namespace).
+ */
+function createDraft(ctx: WorkspaceContext, input: AccrualCreateInput, allowDisposalRef: boolean): Result {
   const capable = ctx.capabilities.assert('post');
   if (!capable.ok) return capable;
+  if (!allowDisposalRef && isDisposalSourceRef(input.sourceRef)) {
+    return err('reserved_source_ref', {
+      field: 'sourceRef',
+      prefix: DISPOSAL_SOURCE_REF_PREFIX,
+      hint: 'this reference is reserved for the Abgrenzung asset_dispose posts itself for a sale across a year end',
+    });
+  }
 
   const guard =
     requireString(input.idempotencyKey, 'idempotencyKey') ??
@@ -434,6 +460,16 @@ export function accrualDiscard(ctx: WorkspaceContext, input: AccrualDiscardInput
 
   const row = readRow(ctx, input.accrualId);
   if (row === undefined) return err('not_found', { accrualId: input.accrualId });
+  // D192: an Abgrenzung a disposal posted belongs to that disposal, whatever its status. It is created
+  // and posted in one transaction (never a draft at rest), so `already_posted` below would refuse it too;
+  // the namespace is refused FIRST so no future path that leaves such a row a draft can discard it.
+  if (isDisposalSourceRef(row.source_ref)) {
+    return err('accrual_backs_disposal', {
+      accrualId: row.id,
+      transactionId: (row.source_ref as string).slice(DISPOSAL_SOURCE_REF_PREFIX.length),
+      hint: 'this Abgrenzung belongs to a fixed-asset disposal across a year end; reverse the disposal (asset_transaction_reverse), which takes it back with it',
+    });
+  }
   if (row.status === 'discarded') {
     // The discard key is kept in the reverse slot: a discarded draft never posts or reverses.
     if (row.reverse_idempotency_key === input.idempotencyKey) return ok({ accrual: viewOf(ctx, row) });
@@ -501,55 +537,124 @@ export function accrualPost(ctx: WorkspaceContext, input: AccrualPostInput): Res
     return err('already_posted', { accrualId: row.id, entryId: row.entry_id, postedAt: row.posted_at });
   }
 
-  const lines = linesOfRow(row);
   return runGuarded(() =>
     ctx.store.tx(() => {
-      const posted = postEntryInternalChecked(ctx, {
-        date: row.period_end,
-        source: ACCRUAL_SOURCE,
-        idempotencyKey: `accrual:${row.id}`,
-        description: row.description,
-        ...(row.source_ref !== null ? { ref: row.source_ref } : {}),
-        lines,
-      }, 'accrual_post_internal');
+      const posted = postPairWithin(ctx, row, input.idempotencyKey);
       // The throw is the ONLY abort that rolls the tx back (a `return` would COMMIT the partial
       // writes and memoise the failure under the entry key).
-      if (!posted.ok) throw new AccrualAbort(err(posted.error, { ...posted, date: row.period_end, leg: 'accrual' }));
-
-      const reversal = reverseOwnedEntry(
-        ctx,
-        {
-          entryId: posted.entryId,
-          date: row.reversal_date,
-          idempotencyKey: `accrual-rev:${row.id}`,
-          description: `Rückbuchung: ${row.description}`,
-        },
-        ACCRUAL_OWNER,
-      );
-      // A reversal blocked by a locked next period rolls the accrual entry back TOO.
-      if (!reversal.ok) throw new AccrualAbort(err(reversal.error, { ...reversal, date: row.reversal_date, leg: 'reversal' }));
-
-      const at = ctx.clock.now();
-      ctx.store.db
-        .prepare(
-          `UPDATE accrual SET status = 'posted', entry_id = ?, reversal_entry_id = ?, post_idempotency_key = ?,
-             posted_at = ?, posted_by = ?, updated_at = ?
-            WHERE workspace_id = ? AND id = ?`,
-        )
-        .run(posted.entryId, reversal.reversalId, input.idempotencyKey, at, ctx.actor, at, ctx.workspaceId, row.id);
-      ctx.audit.record({ entityKind: 'accrual', entityId: row.id, action: 'post', actor: ctx.actor, at });
-
-      const after = readRow(ctx, row.id);
-      if (after === undefined) throw new AccrualAbort(err('not_found', { accrualId: row.id }));
-      return ok<AccrualPostOk>({
-        accrualId: row.id,
-        entryId: posted.entryId,
-        reversalEntryId: reversal.reversalId,
-        reversalDate: row.reversal_date,
-        accrual: viewOf(ctx, after),
-      });
+      if (!posted.ok) throw new AccrualAbort(posted);
+      return posted;
     }),
   );
+}
+
+/**
+ * THE ONE POST BODY (D192): entry A dated `periodEnd`, its automatic Rückbuchung B the next day, the row
+ * to `posted`. It opens NO transaction of its own: the caller's must be open and must THROW on a refusal
+ * (A may already be written when B is refused), which `accrual_post` and H06's dispose both do.
+ */
+function postPairWithin(ctx: WorkspaceContext, row: AccrualRow, postKey: string): Result<AccrualPostOk> {
+  const lines = linesOfRow(row);
+  const posted = postEntryInternalChecked(ctx, {
+    date: row.period_end,
+    source: ACCRUAL_SOURCE,
+    idempotencyKey: `accrual:${row.id}`,
+    description: row.description,
+    ...(row.source_ref !== null ? { ref: row.source_ref } : {}),
+    lines,
+  }, 'accrual_post_internal');
+  if (!posted.ok) return err(posted.error, { ...posted, date: row.period_end, leg: 'accrual' });
+
+  const reversal = reverseOwnedEntry(
+    ctx,
+    {
+      entryId: posted.entryId,
+      date: row.reversal_date,
+      idempotencyKey: `accrual-rev:${row.id}`,
+      description: `Rückbuchung: ${row.description}`,
+    },
+    ACCRUAL_OWNER,
+  );
+  // A reversal blocked by a locked next period rolls the accrual entry back TOO (the caller throws).
+  if (!reversal.ok) return err(reversal.error, { ...reversal, date: row.reversal_date, leg: 'reversal' });
+
+  const at = ctx.clock.now();
+  ctx.store.db
+    .prepare(
+      `UPDATE accrual SET status = 'posted', entry_id = ?, reversal_entry_id = ?, post_idempotency_key = ?,
+         posted_at = ?, posted_by = ?, updated_at = ?
+        WHERE workspace_id = ? AND id = ?`,
+    )
+    .run(posted.entryId, reversal.reversalId, postKey, at, ctx.actor, at, ctx.workspaceId, row.id);
+  ctx.audit.record({ entityKind: 'accrual', entityId: row.id, action: 'post', actor: ctx.actor, at });
+
+  const after = readRow(ctx, row.id);
+  if (after === undefined) return err('not_found', { accrualId: row.id });
+  return ok<AccrualPostOk>({
+    accrualId: row.id,
+    entryId: posted.entryId,
+    reversalEntryId: reversal.reversalId,
+    reversalDate: row.reversal_date,
+    accrual: viewOf(ctx, after),
+  });
+}
+
+/** What H06 asks A38 to post for a sale across a year end (D192 point 11). */
+export interface DisposalAbgrenzungInput {
+  kind: 'accrued_income' | 'deferred_income';
+  periodEnd: string;
+  amountMinor: number;
+  /** The sale line's account (an income account), by id. */
+  contraAccountId: string;
+  costCenterId: string | null;
+  description: string;
+  /** The disposal row's id: the accrual's `source_ref` becomes `asset_transaction:<id>`. */
+  disposalTransactionId: string;
+}
+
+/**
+ * D192 (owner option b, 10.11.2026): create AND post the Abgrenzung of a disposal, inside the
+ * disposal's open transaction, through the same create and post bodies the `accrual_*` verbs run. The
+ * caller THROWS on a refusal. Keys are minted from the disposal row id, so a replay of the dispose
+ * (answered before this runs) can never post a second one, and the schema's `accrual_one_per_disposal`
+ * stops any other writer.
+ */
+export function postDisposalAbgrenzungWithin(ctx: WorkspaceContext, input: DisposalAbgrenzungInput): Result<AccrualPostOk> {
+  const sourceRef = `${DISPOSAL_SOURCE_REF_PREFIX}${input.disposalTransactionId}`;
+  // MINTED (K1): `accrual_create` replays any draft stored under the same key, so a key a caller could
+  // compute (`<prefix>:<txnId>`) could be claimed first and its draft posted as the disposal's. The
+  // minted suffix makes the key unknowable; the read-back below is the proof the row is this call's own.
+  const createKey = `asset_disposal_abgrenzung:${input.disposalTransactionId}:${ctx.ids.next('abg')}`;
+  const created = createDraft(
+    ctx,
+    {
+      kind: input.kind,
+      periodEnd: input.periodEnd,
+      amountMinor: input.amountMinor,
+      contraAccount: input.contraAccountId,
+      description: input.description,
+      sourceRef,
+      ...(input.costCenterId !== null ? { costCenterId: input.costCenterId } : {}),
+      idempotencyKey: createKey,
+    },
+    true,
+  );
+  if (!created.ok) return err(created.error, { ...created, leg: 'abgrenzung' });
+  const row = ctx.store.db
+    .prepare(`SELECT ${COLUMNS} FROM accrual WHERE workspace_id = ? AND idempotency_key = ?`)
+    .get(ctx.workspaceId, createKey) as AccrualRow | undefined;
+  if (row === undefined || row.source_ref !== sourceRef || row.status !== 'draft' || row.amount_minor !== input.amountMinor) {
+    return err('inner_write_not_own', { inner: 'accrual_create', expected: { sourceRef, amountMinor: input.amountMinor }, found: row === undefined ? null : { sourceRef: row.source_ref, status: row.status } });
+  }
+  return postPairWithin(ctx, row, createKey);
+}
+
+/** The accrual a disposal posted, or undefined (§H-TENANT: this workspace only). */
+export function disposalAbgrenzungOf(ctx: WorkspaceContext, disposalTransactionId: string): AccrualView | undefined {
+  const row = ctx.store.db
+    .prepare(`SELECT ${COLUMNS} FROM accrual WHERE workspace_id = ? AND source_ref = ?`)
+    .get(ctx.workspaceId, `${DISPOSAL_SOURCE_REF_PREFIX}${disposalTransactionId}`) as AccrualRow | undefined;
+  return row === undefined ? undefined : viewOf(ctx, row);
 }
 
 export interface AccrualReverseInput {
@@ -597,65 +702,113 @@ export function accrualReverse(ctx: WorkspaceContext, input: AccrualReverseInput
     return err('already_reversed', { accrualId: row.id, stornoEntryId: row.storno_entry_id, reversedAt: row.reversed_at });
   }
   if (row.entry_id === null) return err('not_posted', { accrualId: row.id, status: row.status });
-  const originalEntryId = row.entry_id;
+  // D192: an Abgrenzung a disposal posted belongs to that disposal; only its reverse takes it back.
+  if (isDisposalSourceRef(row.source_ref)) {
+    return err('accrual_backs_disposal', {
+      accrualId: row.id,
+      transactionId: (row.source_ref as string).slice(DISPOSAL_SOURCE_REF_PREFIX.length),
+      hint: 'this Abgrenzung was posted by a fixed-asset disposal across a year end; reverse the disposal (asset_transaction_reverse), which takes it back with it',
+    });
+  }
 
-  const stornoLines = mirrorLinesOf(linesOfRow(row));
-  const description = input.reason === undefined ? `Storno: ${row.description}` : `Storno: ${row.description} (${input.reason})`;
   return runGuarded(() =>
     ctx.store.tx(() => {
-      const storno = postEntryInternalChecked(ctx, {
-        date: row.period_end,
-        source: ACCRUAL_SOURCE,
-        idempotencyKey: `accrual-storno:${row.id}`,
-        description,
-        // The journal carries no storno column; `ref` names the entry this one mirrors.
-        ref: originalEntryId,
-        lines: stornoLines,
-      }, 'accrual_reverse_internal');
-      if (!storno.ok) throw new AccrualAbort(err(storno.error, { ...storno, date: row.period_end, leg: 'storno' }));
-
-      const stornoReversal = reverseOwnedEntry(
-        ctx,
-        {
-          entryId: storno.entryId,
-          date: row.reversal_date,
-          idempotencyKey: `accrual-storno-rev:${row.id}`,
-          description: `Rückbuchung: ${description}`,
-        },
-        ACCRUAL_OWNER,
-      );
-      if (!stornoReversal.ok) {
-        throw new AccrualAbort(err(stornoReversal.error, { ...stornoReversal, date: row.reversal_date, leg: 'storno_reversal' }));
-      }
-
-      const at = ctx.clock.now();
-      ctx.store.db
-        .prepare(
-          `UPDATE accrual SET status = 'reversed', storno_entry_id = ?, storno_reversal_entry_id = ?, reverse_idempotency_key = ?,
-             reversed_at = ?, reversed_by = ?, reverse_reason = ?, updated_at = ?
-            WHERE workspace_id = ? AND id = ?`,
-        )
-        .run(
-          storno.entryId,
-          stornoReversal.reversalId,
-          input.idempotencyKey,
-          at,
-          ctx.actor,
-          input.reason ?? null,
-          at,
-          ctx.workspaceId,
-          row.id,
-        );
-      ctx.audit.record({ entityKind: 'accrual', entityId: row.id, action: 'reverse', actor: ctx.actor, at });
-
-      const after = readRow(ctx, row.id);
-      if (after === undefined) throw new AccrualAbort(err('not_found', { accrualId: row.id }));
-      return ok<AccrualReverseOk>({
-        accrualId: row.id,
-        stornoEntryId: storno.entryId,
-        stornoReversalEntryId: stornoReversal.reversalId,
-        accrual: viewOf(ctx, after),
+      const reversed = reversePairWithin(ctx, row, {
+        reverseKey: input.idempotencyKey,
+        reason: input.reason ?? null,
+        stornoDate: row.period_end,
+        stornoReversalDate: row.reversal_date,
       });
+      if (!reversed.ok) throw new AccrualAbort(reversed);
+      return reversed;
     }),
   );
+}
+
+/** The dates and the key of one Storno pair (D192: the caller chooses the dates). */
+interface ReversePairOptions {
+  reverseKey: string;
+  reason: string | null;
+  /** C, the mirror of A. `accrual_reverse` passes `periodEnd`. */
+  stornoDate: string;
+  /** D, the reversal of C. `accrual_reverse` passes the reversal date. */
+  stornoReversalDate: string;
+}
+
+/**
+ * THE ONE REVERSE BODY (D192): the mirror pair C and D and the row to `reversed`. `accrual_reverse`
+ * dates C at `periodEnd` and D at the reversal date (its standalone Storno, unchanged); H06's
+ * disposal reverse dates both TODAY, beside its own mirror (D170, OR 957a), because the disposal stays
+ * booked in the earlier year and a C on `periodEnd` would misstate both years by the sale price. No
+ * transaction of its own: the caller's must be open and must THROW on a refusal.
+ */
+function reversePairWithin(ctx: WorkspaceContext, row: AccrualRow, opts: ReversePairOptions): Result<AccrualReverseOk> {
+  if (row.entry_id === null) return err('not_posted', { accrualId: row.id, status: row.status });
+  const originalEntryId = row.entry_id;
+  const stornoLines = mirrorLinesOf(linesOfRow(row));
+  const description = opts.reason === null ? `Storno: ${row.description}` : `Storno: ${row.description} (${opts.reason})`;
+  const storno = postEntryInternalChecked(ctx, {
+    date: opts.stornoDate,
+    source: ACCRUAL_SOURCE,
+    idempotencyKey: `accrual-storno:${row.id}`,
+    description,
+    // The journal carries no storno column; `ref` names the entry this one mirrors.
+    ref: originalEntryId,
+    lines: stornoLines,
+  }, 'accrual_reverse_internal');
+  if (!storno.ok) return err(storno.error, { ...storno, date: opts.stornoDate, leg: 'storno' });
+
+  const stornoReversal = reverseOwnedEntry(
+    ctx,
+    {
+      entryId: storno.entryId,
+      date: opts.stornoReversalDate,
+      idempotencyKey: `accrual-storno-rev:${row.id}`,
+      description: `Rückbuchung: ${description}`,
+    },
+    ACCRUAL_OWNER,
+  );
+  if (!stornoReversal.ok) return err(stornoReversal.error, { ...stornoReversal, date: opts.stornoReversalDate, leg: 'storno_reversal' });
+
+  const at = ctx.clock.now();
+  ctx.store.db
+    .prepare(
+      `UPDATE accrual SET status = 'reversed', storno_entry_id = ?, storno_reversal_entry_id = ?, reverse_idempotency_key = ?,
+         reversed_at = ?, reversed_by = ?, reverse_reason = ?, updated_at = ?
+        WHERE workspace_id = ? AND id = ?`,
+    )
+    .run(storno.entryId, stornoReversal.reversalId, opts.reverseKey, at, ctx.actor, opts.reason, at, ctx.workspaceId, row.id);
+  ctx.audit.record({ entityKind: 'accrual', entityId: row.id, action: 'reverse', actor: ctx.actor, at });
+
+  const after = readRow(ctx, row.id);
+  if (after === undefined) return err('not_found', { accrualId: row.id });
+  return ok<AccrualReverseOk>({
+    accrualId: row.id,
+    stornoEntryId: storno.entryId,
+    stornoReversalEntryId: stornoReversal.reversalId,
+    accrual: viewOf(ctx, after),
+  });
+}
+
+/**
+ * D192: take back the Abgrenzung a disposal posted, inside the disposal reverse's open transaction,
+ * both Storno legs dated `date` (the reverse's own date). Answers ok with null when the disposal posted
+ * none, or when it is already reversed (nothing to take back). The caller THROWS on a refusal.
+ */
+export function reverseDisposalAbgrenzungWithin(
+  ctx: WorkspaceContext,
+  input: { disposalTransactionId: string; date: string; reason: string | null; idempotencyKey: string },
+): Result<{ reversed: AccrualReverseOk | null }> {
+  const row = ctx.store.db
+    .prepare(`SELECT ${COLUMNS} FROM accrual WHERE workspace_id = ? AND source_ref = ?`)
+    .get(ctx.workspaceId, `${DISPOSAL_SOURCE_REF_PREFIX}${input.disposalTransactionId}`) as AccrualRow | undefined;
+  if (row === undefined || row.status !== 'posted') return ok({ reversed: null });
+  const reversed = reversePairWithin(ctx, row, {
+    reverseKey: input.idempotencyKey,
+    reason: input.reason,
+    stornoDate: input.date,
+    stornoReversalDate: input.date,
+  });
+  if (!reversed.ok) return err(reversed.error, { ...reversed, leg: 'abgrenzung' });
+  return ok({ reversed });
 }

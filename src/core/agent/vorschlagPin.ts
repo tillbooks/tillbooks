@@ -782,7 +782,13 @@ export const PIN_FOR_VERB: Readonly<Record<string, readonly PinField[]>> = {
   inventory_valuation_post: [{ field: 'runId', record: 'inventory_valuation_run' }],
   asset_acquire: [{ field: 'assetId', record: 'asset' }],
   asset_add_capitalisation: [{ field: 'assetId', record: 'asset' }],
-  asset_dispose: [{ field: 'assetId', record: 'asset' }],
+  // D191: the optional proceeds document is pinned too, so an invoice cancelled or a payment reversed
+  // under the Vorschlag voids it (an absent field is simply not pinned).
+  asset_dispose: [
+    { field: 'assetId', record: 'asset' },
+    { field: 'proceedsInvoiceId', record: 'document' },
+    { field: 'proceedsPaymentId', record: 'payment' },
+  ],
   asset_opening_balance: [{ field: 'assetId', record: 'asset' }],
   // D170: the asset is pinned like its forward acts', so a master moved under the Vorschlag voids it;
   // the D165 crash census covers it (asserted by name).
@@ -1342,13 +1348,29 @@ const ENV = 'copies or resets an environment\'s data root wholesale; it consumes
 const FILE_REFERENCE_GUARD =
   'the file_in_use guard (src/core/files/files.ts fileReferences) reads whether any row points at the file by foreign key; it can only make the delete refuse, never change what is deleted';
 
+/** D192 point 2: the asset is read only to NAME it in the `invoice_cleared_by_disposal` warning. */
+const CLEARED_WARNING =
+  'reads the asset (number) and its disposal row only to name them in the invoice_cleared_by_disposal warning (D192 point 2); nothing the act posts or prints comes from the asset';
+/**
+ * D192 point 11: the Abgrenzungen a disposal reads are those of the reserved asset_transaction: namespace,
+ * created and posted in the one transaction that creates them (never a draft at rest). The only free
+ * writer of `accrual`, accrual_discard, takes drafts only and refuses that namespace first
+ * (accrual_backs_disposal), so no free verb can change what is read.
+ */
+const DISPOSAL_ABGRENZUNG =
+  'reads only Abgrenzungen of the reserved asset_transaction: namespace (posted in the transaction that creates them, never a draft); accrual_discard, the one free writer of accrual, refuses that namespace (accrual_backs_disposal), so no free verb changes what is read';
+
 export const LIVE_READ_WAIVERS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  // D192: the warning and the disposal's own Abgrenzungen (see the two constants above).
+  issue_credit_note: { asset: CLEARED_WARNING },
+  asset_dispose: { accrual: DISPOSAL_ABGRENZUNG },
+  asset_transaction_reverse: { accrual: DISPOSAL_ABGRENZUNG },
   // N01 critic follow-up: the erasures that pass through `deleteFile` read the referencing tables only to
   // refuse `file_in_use`.
   files_delete: { sign_request: FILE_REFERENCE_GUARD },
   gl_archive_purge: { sign_request: FILE_REFERENCE_GUARD },
   // Settlement of issued documents.
-  record_payment: { document: ISSUED, contact: CONTACT_NAME },
+  record_payment: { document: ISSUED, contact: CONTACT_NAME, asset: CLEARED_WARNING },
   allocate_payment: { document: ISSUED, contact: CONTACT_NAME },
   apply_qr_match: { document: ISSUED, contact: CONTACT_NAME },
   override_qr_match: { document: ISSUED, contact: CONTACT_NAME, expense_claim: 'reads a reimbursed claim to reopen it; claims move freely only between draft, submitted and rejected, where this verb refuses' },

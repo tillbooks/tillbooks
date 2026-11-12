@@ -10,13 +10,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 
 import { TillClientProvider } from '../../lib/client-context';
 import { TillClient, type RestResponse, type Transport } from '../../lib/client';
 import { I18nProvider } from '../../i18n';
 import { WorkspaceProvider } from '../../app/workspace';
-import { CreditNoteDialog } from './CreditNoteDialog';
+import { CreditNoteDialog, clearedByDisposalOf } from './CreditNoteDialog';
 import { IssueDialog } from './IssueDialog';
 import type { DocumentDto, DocumentLine } from './model';
 
@@ -234,5 +234,43 @@ describe('CreditNoteDialog: accessibility', () => {
     expect(await axe(container)).toHaveNoViolations();
     await userEvent.click(screen.getByLabelText('Ein Betrag (netto)'));
     expect(await axe(container)).toHaveNoViolations();
+  });
+});
+
+describe('CreditNoteDialog, D192 point 2: a credit note on an invoice a fixed-asset disposal cleared', () => {
+  function Landing() {
+    const state = useLocation().state as { clearedByDisposal?: { assetNumber: string; disposalDate: string } } | null;
+    return <p data-testid="landing">{state?.clearedByDisposal === undefined ? 'none' : `${state.clearedByDisposal.assetNumber} ${state.clearedByDisposal.disposalDate}`}</p>;
+  }
+  const renderRouted = (canned: Canned) =>
+    render(
+      <TillClientProvider client={new TillClient(fakeTransport(canned))}>
+        <I18nProvider>
+          <WorkspaceProvider initialId="ws_test">
+            <MemoryRouter initialEntries={['/']}>
+              <Routes>
+                <Route
+                  path="/"
+                  element={<CreditNoteDialog invoice={INVOICE} lines={LINES} alreadyCreditedNetMinor={0} priorCreditNoteIds={[]} onClose={() => {}} />}
+                />
+                <Route path="/documents/:id" element={<Landing />} />
+              </Routes>
+            </MemoryRouter>
+          </WorkspaceProvider>
+        </I18nProvider>
+      </TillClientProvider>,
+    );
+
+  it('the engine\'s invoice_cleared_by_disposal travels into the draft it opens, and nothing does without it', async () => {
+    renderRouted({
+      create_credit_note: ok({
+        document: { id: 'doc_cn', type: 'credit_note', status: 'draft' },
+        warnings: [{ code: 'invoice_cleared_by_disposal', assetNumber: 'FA-0001', disposalDate: '2026-07-19', transactionId: 'atxn_1' }],
+      }),
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Entwurf erstellen' }));
+    expect(await screen.findByTestId('landing')).toHaveTextContent('FA-0001 2026-07-19');
+    expect(clearedByDisposalOf({ warnings: [] })).toBeNull();
+    expect(clearedByDisposalOf({ warnings: [{ code: 'other' }] })).toBeNull();
   });
 });

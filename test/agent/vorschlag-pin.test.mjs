@@ -54,6 +54,7 @@ import { SqliteStore } from '../../dist/core/store/sqlite-store.js';
 import { fixedClock } from '../../dist/core/clock.js';
 import { sequenceIdGen } from '../../dist/core/ids.js';
 import { syntheticIban, chain, container, mockBank } from '../banking/ebics-support.mjs';
+import { grantRealBackup } from '../migration/backup-support.mjs';
 
 /** @typedef {{ ok: boolean, error?: string, [key: string]: unknown }} Body */
 /** @typedef {ReturnType<typeof fixture>} Fx */
@@ -2718,7 +2719,7 @@ test('D165 PROBE STK-MIG (critic r2 R2-1): a refusal the act memoises is not the
   const { planId, stepId } = seedOpeningStep(fx, 'stk');
   const staged = mustOk(fx.call('migration_commit_step', { planId, stepId, idempotencyKey: 'stk-stage' }), 'stage');
   assert.equal(staged.staged, true);
-  fx.deps.store.db.prepare('UPDATE migration_plan SET backup_ref = ? WHERE id = ?').run('backup-1', planId);
+  grantRealBackup(fx.deps, planId);
   mustOk(fx.call('migration_record_approval', { planId, stepId, checkHash: staged.checkHash, idempotencyKey: 'stk-appr' }), 'approval');
   const drafted = /** @type {Body} */ (handleRest('migration_commit_step', { workspaceId: fx.workspaceId, planId, stepId, idempotencyKey: 'stk-agent' }, { ...fx.deps, actor: 'agent' }).body);
   assert.equal(drafted.drafted, true, JSON.stringify(drafted).slice(0, 300));

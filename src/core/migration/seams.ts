@@ -10,7 +10,10 @@
  * leg is satisfied by there being nothing to assert, not by a fabricated pass.
  */
 
+import type Database from 'better-sqlite3';
+
 import type { WorkspaceContext } from '../context.js';
+import { backupBundleOnDisk } from '../data/portability.js';
 import type { Result } from '../result.js';
 import { seamCheckStep } from './check.js';
 import { archiveImport } from './archive.js';
@@ -78,11 +81,39 @@ export function glArchiveImport(ctx: WorkspaceContext, input: unknown): Result {
  * when `create_backup` was called with this plan's id AFTER the plan reached `planned`, in this
  * workspace (portability.ts writes it only under those conditions, §H-TENANT). A backup taken while
  * the plan was still `draft` leaves `backup_ref` null, so the leg stays unsatisfied: the since-
- * `planned` condition is enforced by the writer, and this reader is the honest non-null check over
- * it. Before G18 the column had no writer and a money-path first commit was refused forever with
- * `needs_backup`; the leg is now a real, satisfiable conjunction.
+ * `planned` condition is enforced by the writer.
+ *
+ * THE COLUMN IS NOT THE BACKUP. A non-null `backup_ref` only says a backup was taken. The leg is met
+ * when that backup is still ON DISK and intact (`backupBundleOnDisk`: the workspace's complete
+ * `backups` row, its bundle's manifest present, every file re-hashing to the manifest, the snapshot
+ * hash equal to the one the plan recorded). A bundle deleted, moved or torn by a crash after the row
+ * committed no longer satisfies the leg, so the first live money-path commit is refused rather than
+ * run without the safety net it was promised. A `backup_ref` that is not the writer's JSON shape
+ * names no bundle at all and fails the same way.
  */
-export function hasPreMigrationBackup(plan: { backup_ref?: string | null }): boolean {
-  return plan.backup_ref !== null && plan.backup_ref !== undefined;
+export function preMigrationBackupStatus(
+  db: Database.Database,
+  workspaceId: string,
+  plan: { backup_ref?: string | null },
+): PreMigrationBackupStatus {
+  if (plan.backup_ref === null || plan.backup_ref === undefined) return { ok: false, reason: 'no_backup_on_record' };
+  let ref: { backupId?: unknown; sha256?: unknown };
+  try {
+    ref = JSON.parse(plan.backup_ref) as { backupId?: unknown; sha256?: unknown };
+  } catch {
+    return { ok: false, reason: 'backup_ref_unreadable' };
+  }
+  if (ref === null || typeof ref !== 'object' || typeof ref.backupId !== 'string' || typeof ref.sha256 !== 'string') {
+    return { ok: false, reason: 'backup_ref_unreadable' };
+  }
+  return backupBundleOnDisk(db, workspaceId, { backupId: ref.backupId, sha256: ref.sha256 });
+}
+
+/** Why the pre-migration backup leg is (not) met. `ok: false` carries a machine reason. */
+export type PreMigrationBackupStatus = { ok: true } | { ok: false; reason: string; file?: string };
+
+/** The boolean form of `preMigrationBackupStatus`, for the commit gate and the readiness leg. */
+export function hasPreMigrationBackup(db: Database.Database, workspaceId: string, plan: { backup_ref?: string | null }): boolean {
+  return preMigrationBackupStatus(db, workspaceId, plan).ok;
 }
 

@@ -12,8 +12,20 @@
  * deleted (§H-AUDIT) is enforced there, in the ledger writer.
  */
 
-import { closeSync, fsyncSync, mkdirSync, openSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { randomBytes } from 'node:crypto';
+import {
+  closeSync,
+  existsSync,
+  fchmodSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeSync,
+} from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 
 import Database from 'better-sqlite3';
 
@@ -133,8 +145,9 @@ export function isBusyError(e: unknown): boolean {
  * `new Database(...)` calls this on the very next statement. `test/core/store-durability.test.mjs`
  * holds that in place across src/, bin/, scripts/, ops/ and the dev bridge: a module outside a short
  * list may not load a SQLite driver at all (by any import form, `node:sqlite` included), and inside it
- * every writable open must be made durable that way or listed with its reason. One is listed today,
- * as a known gap rather than an exception: G04's backup snapshot, whose fix is not a pragma.
+ * every writable open must be made durable that way or listed with its reason. None is listed for a
+ * file today: G04's backup snapshot, the last known gap, now builds as ONE transaction on a connection
+ * made durable here, and its bundle is published through `fsyncTree` (see `writeScopedSqlite`).
  *
  * A read-only connection cannot commit or checkpoint, so it has nothing to sync, and an in-memory
  * database has no disk to sync to: both are left exactly as the driver opened them.
@@ -284,6 +297,159 @@ export function makeDirectoryDurably(dir: string): void {
     if (d === top || dirname(d) === d) break;
   }
   for (const d of created.reverse()) fsyncDirectory(dirname(d));
+}
+
+/**
+ * Flush one FILE's contents to the medium. Node's `fsyncSync` is libuv's `uv_fs_fsync`, which on
+ * macOS issues `fcntl(F_FULLFSYNC)` (falling back to F_BARRIERFSYNC, then fsync), so this reaches
+ * past the drive's write cache the way the ledger's `fullfsync` pragma does; elsewhere fsync already
+ * reaches the medium. Opened read-write because Windows' FlushFileBuffers needs write access.
+ */
+export function fsyncFile(path: string): void {
+  let fd: number;
+  try {
+    fd = openSync(path, 'r+');
+  } catch (e) {
+    // A read-only file (0o444) still syncs through a read descriptor on POSIX.
+    if (process.platform === 'win32' || !['EACCES', 'EPERM'].includes((e as { code?: string }).code ?? '')) throw e;
+    fd = openSync(path, 'r');
+  }
+  try {
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
+ * Make a whole directory TREE durable before it is published: every regular file's contents, then
+ * every directory's entries, deepest first, `root` itself last. Used on a bundle built in a temp
+ * directory right before the one rename that publishes it (G04's `.tillbackup`/`.tillexport`), so
+ * the rename can never expose a name whose bytes are still in a cache.
+ */
+export function fsyncTree(root: string): void {
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) fsyncTree(path);
+    else if (entry.isFile()) fsyncFile(path);
+  }
+  fsyncDirectory(root);
+}
+
+export interface DurableWriteOptions {
+  /** The exact permission bits the file ends with (umask does not apply). Defaults to 0o666 minus umask. */
+  mode?: number;
+  /**
+   * Runs after the temp file is durable and immediately before the rename. Throwing aborts the
+   * replace (the temp file is removed, the target is untouched): the last moment to re-check that
+   * the target did not change under a read-modify-write.
+   */
+  beforeRename?: () => void;
+}
+
+/**
+ * THE ONE WAY TO REPLACE A SMALL FILE OUTSIDE THE LEDGER so that a power cut leaves either the old
+ * content or the new, never an empty or torn file: write a uniquely named temp file in the SAME
+ * directory, fsync it, rename it over the target (atomic on one filesystem), then fsync the
+ * directory so the rename itself survives. A plain `writeFileSync` truncates first and can leave a
+ * zero-length file; a temp + rename without the two syncs can, on a crash, surface as the new name
+ * pointing at unwritten blocks. The temp name carries the pid and random bytes, so two processes
+ * writing one file at once (the MCP and REST faces share `~/.till`) never share a temp file: the last
+ * rename wins whole. On any failure the temp file is removed and the error is rethrown; the target is
+ * untouched. A process killed between the temp's fsync and the rename cannot remove its own temp
+ * file, and for E04's mbox that file is a full copy of the user's Drafts (OP6: no second copy of the
+ * mail), so every successful replace also removes the stale temp siblings of its target whose writer
+ * pid is no longer alive (`removeStaleTempSiblings`, critic R1-L5).
+ *
+ * Used by the landscape control file, G08's config and diagnostics journal, and E04's mbox draft
+ * rewrite. Not for the ledger: SQLite owns that file's durability (`applyDurableSync`).
+ */
+export function writeFileDurably(path: string, data: string | Uint8Array, options: DurableWriteOptions = {}): void {
+  const dir = dirname(resolve(path));
+  const tmp = join(dir, `.${basename(path)}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`);
+  let fd: number | undefined;
+  try {
+    fd = openSync(tmp, 'wx', options.mode ?? 0o666);
+    if (options.mode !== undefined) fchmodSync(fd, options.mode);
+    const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
+    let written = 0;
+    while (written < bytes.byteLength) written += writeSync(fd, bytes, written, bytes.byteLength - written);
+    fsyncSync(fd);
+    closeSync(fd);
+    fd = undefined;
+    options.beforeRename?.();
+    renameSync(tmp, path);
+  } catch (e) {
+    if (fd !== undefined) {
+      try {
+        closeSync(fd);
+      } catch {
+        // already failing; the original error is the one worth reporting
+      }
+    }
+    rmSync(tmp, { force: true });
+    throw e;
+  }
+  fsyncDirectory(dir);
+  removeStaleTempSiblings(dir, basename(path));
+}
+
+/** Is a process with this pid alive (EPERM: alive, owned by someone else)? */
+function pidIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as { code?: string }).code === 'EPERM';
+  }
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Remove the `.<name>.<pid>.<hex>.tmp` files `writeFileDurably` left beside `<name>` in `dir` when its
+ * writer died before the rename. Only a temp whose pid is NOT alive is removed: a live pid may be
+ * another face (MCP, REST) mid-write on the same file, and its temp is its own. Best effort: a temp
+ * that cannot be listed or removed now is tried again by the next replace.
+ */
+export function removeStaleTempSiblings(dir: string, name: string): void {
+  const shape = new RegExp(`^\\.${escapeRegExp(name)}\\.(\\d+)\\.[0-9a-f]{12}\\.tmp$`);
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const pid = Number(shape.exec(entry)?.[1] ?? Number.NaN);
+    if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid || pidIsAlive(pid)) continue;
+    try {
+      rmSync(join(dir, entry), { force: true });
+    } catch {
+      // best effort, see above
+    }
+  }
+}
+
+/**
+ * Append to a file and make the appended bytes durable before returning (and, when the append
+ * created the file, its directory entry too). For an append-only log whose record is load-bearing,
+ * such as the landscape's hash-chained audit trail.
+ */
+export function appendFileDurably(path: string, data: string | Uint8Array): void {
+  const existed = existsSync(path);
+  const fd = openSync(path, 'a');
+  try {
+    const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
+    let written = 0;
+    while (written < bytes.byteLength) written += writeSync(fd, bytes, written, bytes.byteLength - written);
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  if (!existed) fsyncDirectory(dirname(resolve(path)));
 }
 
 /**

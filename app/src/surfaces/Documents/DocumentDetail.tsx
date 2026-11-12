@@ -191,6 +191,8 @@ export function DocumentDetail({ justIssued = false, sendOutcome = null }: { jus
   const qr = useInvoiceQr(doc);
 
   const fromNumber = (location.state as { fromNumber?: string } | null)?.fromNumber;
+  // D192 point 2: arriving from a credit note on an invoice a fixed-asset disposal cleared.
+  const clearedByDisposal = (location.state as { clearedByDisposal?: { assetNumber: string; disposalDate: string } } | null)?.clearedByDisposal;
   // The Commit moment (D122 D-I): arriving from an issue, the banner lands and draws its check.
   const issuedNow = justIssued || (location.state as { justIssued?: boolean } | null)?.justIssued === true;
   // F-03 (J3.5): the send half of "Ausstellen und senden", from the route state or the route wrapper.
@@ -386,6 +388,12 @@ export function DocumentDetail({ justIssued = false, sendOutcome = null }: { jus
     <div className="documents-detail">
       {fromNumber !== undefined && (
         <ActionFeedback tone="info" message={t('document.detail.convertedToast', { number: fromNumber })} />
+      )}
+      {clearedByDisposal !== undefined && (
+        <ActionFeedback
+          tone="warn"
+          message={t('document.detail.clearedByDisposal', { asset: clearedByDisposal.assetNumber, date: formatDate(clearedByDisposal.disposalDate) })}
+        />
       )}
       {issuedNow && doc.status !== 'draft' && sendNow === null && (
         <ActionFeedback

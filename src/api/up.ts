@@ -23,13 +23,14 @@
  */
 
 import { createServer } from 'node:http';
-import { homedir } from 'node:os';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { existsSync, lstatSync, mkdtempSync, readdirSync, rmdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join, normalize, extname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import type { ChildProcess, SpawnOptions } from 'node:child_process';
 
 import { makeApiDeps } from './mcp.js';
 import { resolveEbicsRuntime, type HostEbicsPorts } from './host-runtime.js';
@@ -182,14 +183,64 @@ export function redactStudioLink(url: string): string {
   return hash === -1 ? url : url.slice(0, hash);
 }
 
-/** Open the default browser at `url`, best-effort. A launch failure is never fatal: the URL is logged, minus any key. */
-export function openBrowser(url: string, log: (line: string) => void = () => {}): void {
-  const platform = process.platform;
-  const cmd = platform === 'darwin' ? 'open' : platform === 'win32' ? 'cmd' : 'xdg-open';
-  const args = platform === 'win32' ? ['/c', 'start', '', url] : [url];
-  const failed = () => log(`till up: could not open a browser automatically. TILL is at ${redactStudioLink(url)}.`);
+/**
+ * What the openers below touch outside this process. Overridable so a suite records every command line
+ * they would run instead of opening a browser (`test/api/up-open-argv.test.mjs`).
+ */
+export interface OpenerPorts {
+  platform: NodeJS.Platform;
+  spawn: (command: string, args: readonly string[], options: SpawnOptions) => ChildProcess;
+  /** Where a handoff file may be written, in order (a fresh owner-only directory inside the first that takes it). */
+  handoffDirs: readonly string[];
+  /** How long a handoff file lives before it is removed. */
+  handoffTtlMs: number;
+}
+
+/** A browser that is still starting reads the handoff file late; half a minute covers a cold start. */
+export const HANDOFF_TTL_MS = 30_000;
+/** The prefix of a handoff directory, so a later open can sweep one an exited process left behind. */
+export const HANDOFF_DIR_PREFIX = 'till-open-';
+
+/**
+ * Where the handoff page goes. On Linux the HOME directory first (critic r1 F1): Ubuntu's default
+ * Firefox and Chromium are snaps with a private `/tmp`, so a page there opens as "file not found",
+ * while the snap `home` interface reads a non-hidden directory under `$HOME` (which is why the
+ * directory name has no leading dot). The page lives there for seconds, owner-only.
+ */
+function defaultHandoffDirs(platform: NodeJS.Platform): string[] {
+  if (platform !== 'linux') return [tmpdir()];
+  // `homedir()` throws with no HOME and no passwd entry (critic r1 nit 1): the second `till up` must
+  // still open the Studio and exit 0, so a missing home only drops that choice.
+  let home = '';
   try {
-    const child = spawn(cmd, args, { stdio: 'ignore', detached: true });
+    home = homedir();
+  } catch {
+    home = '';
+  }
+  return home === '' ? [tmpdir()] : [home, tmpdir()];
+}
+
+function defaultOpenerPorts(): OpenerPorts {
+  const platform = process.platform;
+  return { platform, spawn, handoffDirs: defaultHandoffDirs(platform), handoffTtlMs: HANDOFF_TTL_MS };
+}
+
+/**
+ * Run the platform's opener on `target` (a URL or a `file:` URL). THE ONE PLACE an opener gets a
+ * command line, so the one place that guarantees no fragment rides on it (D162 point 3): an argument
+ * is readable by every account on the machine through `ps` or `/proc/<pid>/cmdline`, and a browser
+ * the opener cold-starts keeps it in ITS command line for as long as it runs.
+ */
+function spawnOpener(target: string, log: (line: string) => void, ports: OpenerPorts, shown?: string): void {
+  const bare = redactStudioLink(target);
+  // Windows: `rundll32 url.dll,FileProtocolHandler` hands the target to the shell as ONE argument, where
+  // `cmd /c start` would re-parse it and split a path at a `&` (critic r1 F2).
+  const cmd = ports.platform === 'darwin' ? 'open' : ports.platform === 'win32' ? 'rundll32' : 'xdg-open';
+  const args = ports.platform === 'win32' ? ['url.dll,FileProtocolHandler', bare] : [bare];
+  // The log names what the person can open: the http base, never a handoff page that is about to go.
+  const failed = () => log(`till up: could not open a browser automatically. TILL is at ${shown ?? bare}.`);
+  try {
+    const child = ports.spawn(cmd, args, { stdio: 'ignore', detached: true });
     child.on('error', failed);
     child.unref();
   } catch {
@@ -198,26 +249,148 @@ export function openBrowser(url: string, log: (line: string) => void = () => {})
 }
 
 /**
- * Open a Studio link (it carries a one-time ticket, D166) through the operating system. On macOS the
- * link goes to `osascript` on stdin (`open location`), not on a command line: an argument is visible to
- * every account on the machine through `ps` while the process lives, and the reopen door can be fired
- * by any local program. Elsewhere it falls back to `openBrowser` (`xdg-open` takes the URL as an
- * argument; a ticket seen there is single-use and expires, DECISIONS D166). Best-effort, never fatal.
+ * Open the default browser at `url`, best-effort. A launch failure is never fatal: the URL is logged.
+ * The fragment is CUT before the command line is built (it may carry a ticket or a key): a Studio link
+ * that must keep its ticket goes through `openStudioLink`.
  */
-export function openStudioLink(url: string, log: (line: string) => void = () => {}): void {
-  // The link is ours (`studioTicketLink`): http(s), a host, a port, `#t=` (or the dev bridge's `#k=`)
-  // and base64url. Anything else is not embedded in a script, whatever produced it.
-  if (process.platform !== 'darwin' || !/^https?:\/\/[A-Za-z0-9.:[\]-]+\/#[tk]=[A-Za-z0-9_.-]+$/.test(url)) {
-    openBrowser(url, log);
+export function openBrowser(url: string, log: (line: string) => void = () => {}, ports: OpenerPorts = defaultOpenerPorts()): void {
+  spawnOpener(url, log, ports);
+}
+
+/** The one file a handoff directory holds. */
+const HANDOFF_FILE = 'open-till.html';
+
+/**
+ * The exact name `mkdtempSync(join(base, HANDOFF_DIR_PREFIX))` makes: the prefix and six characters
+ * from libuv's `[A-Za-z0-9]` alphabet. A name of any other shape is not ours (critic r1 F1: on Linux
+ * the base is `$HOME`, where a person's own `~/till-open-banking` lives).
+ */
+const HANDOFF_DIR_SHAPE = /^till-open-[A-Za-z0-9]{6}$/;
+
+/**
+ * Remove a handoff directory WITHOUT recursion: unlink the page, then `rmdir`. A directory that holds
+ * anything else fails the `rmdir` and stays, so nothing but what `writeHandoff` wrote is ever deleted.
+ */
+function removeHandoffDir(dir: string): void {
+  try {
+    unlinkSync(join(dir, HANDOFF_FILE));
+  } catch {
+    // already gone, or never written
+  }
+  try {
+    rmdirSync(dir);
+  } catch {
+    // not empty (not ours to empty), or already gone
+  }
+}
+
+/**
+ * Remove handoff directories of ours older than their lifetime: a process that exited early (the
+ * second `till up`, which redirects and exits) left them. Runs before every handoff and at start.
+ * Only a directory `writeHandoff` could have made is touched (critic r1 F1): a mkdtemp-shaped name,
+ * a real directory (never a symlink) this account owns, holding nothing but the page, itself a plain
+ * file. Anything else is left alone, whatever its age.
+ */
+export function sweepStudioHandoffs(ports: Pick<OpenerPorts, 'handoffDirs' | 'handoffTtlMs'> = defaultOpenerPorts()): void {
+  const uid = process.getuid?.();
+  for (const base of ports.handoffDirs) {
+    let names: string[];
+    try {
+      names = readdirSync(base);
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      if (!HANDOFF_DIR_SHAPE.test(name)) continue;
+      const dir = join(base, name);
+      try {
+        const st = lstatSync(dir);
+        if (!st.isDirectory() || (uid !== undefined && st.uid !== uid)) continue;
+        if (Date.now() - st.mtimeMs <= ports.handoffTtlMs) continue;
+        const inside = readdirSync(dir);
+        if (inside.length > 1 || (inside.length === 1 && inside[0] !== HANDOFF_FILE)) continue;
+        if (inside.length === 1 && !lstatSync(join(dir, HANDOFF_FILE)).isFile()) continue;
+        removeHandoffDir(dir);
+      } catch {
+        // another process swept it first, or it is not ours to touch
+      }
+    }
+  }
+}
+
+/**
+ * Write a page that forwards to `link`, owner-only, and return its `file:` URL; null when it could not
+ * be written anywhere. The directory is a fresh `mkdtemp` (0700) and the file 0600, so another account
+ * cannot read the ticket, and both are removed after `handoffTtlMs` (or by a later sweep, when this
+ * process exits first). `link` already passed `STUDIO_LINK_SHAPE`, so it cannot close the script.
+ *
+ * Known limit: the page opens in the `.html` handler, which is usually but not always the default web
+ * browser. A handler that is not a browser shows the page, not the Studio; the person still has the
+ * terminal link, and the ticket in the page is single-use and short-lived (D166).
+ */
+function writeHandoff(link: string, ports: OpenerPorts): string | null {
+  sweepStudioHandoffs(ports);
+  for (const base of ports.handoffDirs) {
+    let dir: string | null = null;
+    try {
+      dir = mkdtempSync(join(base, HANDOFF_DIR_PREFIX));
+      const file = join(dir, HANDOFF_FILE);
+      writeFileSync(
+        file,
+        `<!doctype html><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>TILL</title>` +
+          `<script>location.replace(${JSON.stringify(link)})</script>\n`,
+        { mode: 0o600, flag: 'wx' },
+      );
+      const made = dir;
+      setTimeout(() => removeHandoffDir(made), ports.handoffTtlMs).unref();
+      return pathToFileURL(file).href;
+    } catch {
+      if (dir !== null) removeHandoffDir(dir);
+    }
+  }
+  return null;
+}
+
+/** The shape of a Studio link (`studioTicketLink`): http(s), a host, a port, `#t=` (or the dev bridge's `#k=`), base64url. */
+const STUDIO_LINK_SHAPE = /^https?:\/\/[A-Za-z0-9.:[\]-]+\/#[tk]=[A-Za-z0-9_.-]+$/;
+
+/**
+ * Open a Studio link (it carries a one-time ticket, D166) through the operating system WITHOUT the
+ * ticket ever reaching a command line (D162 point 3), on every platform and every fallback:
+ *
+ *   - macOS: the link goes to `osascript` on stdin (`open location`);
+ *   - elsewhere, and when `osascript` cannot start: the opener gets the `file:` URL of an owner-only
+ *     handoff page that forwards to the link (`writeHandoff`);
+ *   - when no handoff can be written, or the link is not ours: the bare URL, and the tab pairs itself
+ *     or shows how to get in.
+ *
+ * Best-effort, never fatal.
+ */
+export function openStudioLink(url: string, log: (line: string) => void = () => {}, ports: OpenerPorts = defaultOpenerPorts()): void {
+  // Anything not shaped like our link is embedded in no script and no page, whatever produced it.
+  if (!STUDIO_LINK_SHAPE.test(url)) {
+    spawnOpener(url, log, ports);
+    return;
+  }
+  // Once only: a failed `osascript` may report through more than one path.
+  let handed = false;
+  const handOver = () => {
+    if (handed) return;
+    handed = true;
+    spawnOpener(writeHandoff(url, ports) ?? url, log, ports, redactStudioLink(url));
+  };
+  if (ports.platform !== 'darwin') {
+    handOver();
     return;
   }
   try {
-    const child = spawn('/usr/bin/osascript', ['-'], { stdio: ['pipe', 'ignore', 'ignore'], detached: true });
-    child.on('error', () => openBrowser(url, log));
+    const child = ports.spawn('/usr/bin/osascript', ['-'], { stdio: ['pipe', 'ignore', 'ignore'], detached: true });
+    child.on('error', handOver);
+    child.stdin?.on('error', () => {}); // an osascript that died first must not crash the host with EPIPE
     child.stdin?.end(`open location "${url}"\n`);
     child.unref();
   } catch {
-    openBrowser(url, log);
+    handOver();
   }
 }
 
@@ -274,9 +447,11 @@ export interface UpOptions {
   /**
    * D166 point 8 (critic F1/F2): `dbPath` is the ADOPTED book (`resolveDbChoice` source `adopted`).
    * Then a failed open does not stop `till up`: it starts on an in-memory book and reports the adopted
-   * book unavailable (`unopenable`). `unavailable: 'missing'` says the file is already known to be gone.
+   * book unavailable (`unopenable`). `unavailable` says `resolveDbChoice` already found it unavailable,
+   * and why: `missing` (the file is gone) or `unopenable` (it is there but holds no ledger, e.g. 0 bytes,
+   * critic R4-L1/R5-L1), so the Studio shows the sentence that fits.
    */
-  adoptedBook?: { path: string; unavailable?: 'missing' };
+  adoptedBook?: { path: string; unavailable?: AdoptedBookUnavailable['reason'] };
   log?: (line: string) => void;
 }
 
@@ -403,7 +578,7 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   // nowhere, runs no cadence, and tells the Studio, which offers "Erneut versuchen", "Anderes
   // Hauptbuch wählen" and "Vergessen und neu beginnen". Any other refused open fails as before.
   let unavailable: AdoptedBookUnavailable | null =
-    opts.adoptedBook?.unavailable === 'missing' ? { path: opts.adoptedBook.path, reason: 'missing' } : null;
+    opts.adoptedBook?.unavailable !== undefined ? { path: opts.adoptedBook.path, reason: opts.adoptedBook.unavailable } : null;
   // The adopted book is PROBED read-only before the writable open, exactly as the door probed it, so a
   // file that is no longer a TILL book this runtime can open (a foreign SQLite, a newer generation, a
   // lost permission) is never written to, not even a WAL header (critic F2).
@@ -631,6 +806,8 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
         : `till up: open the Studio through ${studioUrl}`,
     );
   }
+  // A handoff page a redirecting `till up` left behind (it exits before its timer) goes now.
+  if (local) sweepStudioHandoffs();
   if (opts.open !== false) openUrl(studioUrl);
 
   return { started: true, ...handle };

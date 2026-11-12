@@ -194,6 +194,15 @@ export interface AccrualRow {
   entryId: string | null;
   reversalEntryId: string | null;
   stornoEntryId: string | null;
+  /** D192: the date the Storno is booked on (null until reversed), so a reversed row says from when. */
+  stornoDate?: string | null;
+  /** D192: `asset_transaction:<id>` when a fixed-asset disposal posted this Abgrenzung itself. */
+  sourceRef?: string | null;
+}
+
+/** D192: an Abgrenzung a fixed-asset disposal posted itself; only the disposal's reverse takes it back. */
+export function isDisposalAbgrenzung(row: Pick<AccrualRow, 'sourceRef'>): boolean {
+  return typeof row.sourceRef === 'string' && row.sourceRef.startsWith('asset_transaction:');
 }
 
 /** One provision row as `provision_list` sends it. */

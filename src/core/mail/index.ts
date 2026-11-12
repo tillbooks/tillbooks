@@ -16,12 +16,16 @@ export {
   writeMailDraft,
   replaceMailDraft,
   draftEditedSinceWritten,
+  prepareDraftWrite,
+  mboxClientGuardOf,
+  recheckDraftWrite,
+  unansweredCheckWarning,
   listMailDrafts,
   purgeMailForContact,
 } from './mailstore.js';
 export type { ConnectMailInput, ReindexInput, DraftWriteInput, DraftReplaceInput, ThreadsListFilter } from './mailstore.js';
-export { ADAPTERS, bodySha256, parseHeaders, directionOf } from './adapters.js';
-export type { MailStoreAdapter, WalkedMessage, ParsedHeaders } from './adapters.js';
+export { ADAPTERS, bodySha256, parseHeaders, directionOf, MBOX_CLIENT_GUARDS } from './adapters.js';
+export type { MailStoreAdapter, WalkedMessage, ParsedHeaders, PreparedDraftWrite, MboxClientGuard } from './adapters.js';
 export {
   MAIL_ADAPTERS,
   MAIL_DIRECTIONS,

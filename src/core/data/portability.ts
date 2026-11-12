@@ -39,6 +39,7 @@ import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync, rename
 import { join } from 'node:path';
 
 import type { SqliteStore } from '../store/sqlite-store.js';
+import { applyDurableSync, fsyncDirectory, fsyncTree, makeDirectoryDurably } from '../store/sqlite-store.js';
 import type { Clock } from '../clock.js';
 import type { IdGen } from '../ids.js';
 import { SCHEMA_GENERATION } from '../store/schema.js';
@@ -295,28 +296,42 @@ interface TableManifest {
  * `no column named ...`, critic A31 R2-M1). Rows are inserted with foreign keys off and lines before
  * entries, so a posted ledger loads without tripping the immutability trigger. Returns the per-table
  * manifest and the snapshot's shape.
+ *
+ * DURABLE, AND ONE COMMIT. The connection gets the ledger's own durability contract
+ * (`applyDurableSync`: synchronous EXTRA, F_FULLFSYNC on macOS) before any statement, and the whole
+ * build (schema, every row) runs as ONE transaction, so the snapshot pays a single durable commit.
+ * Row by row under F_FULLFSYNC the Seeblick ledger took 39 s instead of 2.1 s; as one transaction it
+ * is a single flush, and a crash mid-build leaves an empty file in a temp directory, never a
+ * half-written snapshot. The file's directory entry and the bundle around it are made durable by the
+ * caller (`fsyncTree`) before the bundle is renamed into place.
  */
 function writeScopedSqlite(srcDb: Database.Database, srcWsId: string, destPath: string): { tables: TableManifest; shape: SchemaShape } {
   const dest = new Database(destPath);
+  applyDurableSync(dest);
   try {
+    // Per-connection and a no-op inside a transaction, so it is set before the build begins.
     dest.pragma('foreign_keys = OFF');
-    copySchemaDdl(srcDb, dest);
-    dest.pragma(`user_version = ${SCHEMA_GENERATION}`);
-    const manifest: TableManifest = {};
+    const build = (): TableManifest => {
+      copySchemaDdl(srcDb, dest);
+      dest.pragma(`user_version = ${SCHEMA_GENERATION}`);
+      const manifest: TableManifest = {};
 
-    // The single workspace row.
-    const wsRow = srcDb.prepare('SELECT * FROM "workspace" WHERE id = ?').get(srcWsId) as Row | undefined;
-    const wsRows = wsRow === undefined ? [] : [wsRow];
-    insertRows(dest, 'workspace', columnsOf(srcDb, 'workspace'), wsRows);
-    manifest['workspace'] = { rowCount: wsRows.length, sha256: sha256Hex(canonicalRows(wsRows)) };
+      // The single workspace row.
+      const wsRow = srcDb.prepare('SELECT * FROM "workspace" WHERE id = ?').get(srcWsId) as Row | undefined;
+      const wsRows = wsRow === undefined ? [] : [wsRow];
+      insertRows(dest, 'workspace', columnsOf(srcDb, 'workspace'), wsRows);
+      manifest['workspace'] = { rowCount: wsRows.length, sha256: sha256Hex(canonicalRows(wsRows)) };
 
-    for (const table of loadOrder(snapshotTables(srcDb))) {
-      const where = scopedWhere(srcDb, table, srcWsId);
-      const rows = srcDb.prepare(`SELECT * FROM "${table}" WHERE ${where.clause}`).all(...where.params) as Row[];
-      insertRows(dest, table, columnsOf(srcDb, table), rows);
-      manifest[table] = { rowCount: rows.length, sha256: sha256Hex(canonicalRows(rows)) };
-    }
-    return { tables: manifest, shape: schemaShapeOf(dest) };
+      for (const table of loadOrder(snapshotTables(srcDb))) {
+        const where = scopedWhere(srcDb, table, srcWsId);
+        const rows = srcDb.prepare(`SELECT * FROM "${table}" WHERE ${where.clause}`).all(...where.params) as Row[];
+        insertRows(dest, table, columnsOf(srcDb, table), rows);
+        manifest[table] = { rowCount: rows.length, sha256: sha256Hex(canonicalRows(rows)) };
+      }
+      return manifest;
+    };
+    const tables = dest.transaction(build).immediate();
+    return { tables, shape: schemaShapeOf(dest) };
   } finally {
     dest.close();
   }
@@ -450,7 +465,7 @@ function produceArtifact(deps: PortDeps, workspaceId: string, kind: 'backup' | '
   let tmpDir: string;
   let published = false;
   try {
-    mkdirSync(deps.backupDir, { recursive: true });
+    makeDirectoryDurably(deps.backupDir);
     tmpDir = mkdtempSync(join(deps.backupDir, '.tmp-'));
   } catch (e) {
     return err('export_destination_unwritable', { message: e instanceof Error ? e.message : String(e) });
@@ -508,9 +523,15 @@ function produceArtifact(deps: PortDeps, workspaceId: string, kind: 'backup' | '
     writeFileSync(join(tmpDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
     writeFileSync(join(tmpDir, 'FORMAT.md'), formatDoc(kind, manifest));
 
-    // Atomic publish: rename the fully-built temp bundle onto the final path.
+    // Durable, atomic publish. Every file's bytes and every directory's entries in the temp bundle
+    // reach the medium FIRST (`fsyncTree`), then one rename publishes the bundle, then the parent
+    // directory is synced so the rename itself survives a power cut. Only after all of that does the
+    // `backups` row below commit (durably, in `withKey`'s transaction), so the ledger can never record
+    // a complete backup whose bundle a crash could still take back or tear.
+    fsyncTree(tmpDir);
     renameSync(tmpDir, finalDir);
     published = true;
+    fsyncDirectory(deps.backupDir);
 
     deps.store.db
       .prepare(
@@ -697,6 +718,68 @@ export function listBackups(
   return ok({ backups });
 }
 
+/** Why a bundle on disk is not the intact bundle its manifest describes. */
+type BundleFault = { ok: false; reason: string; file?: string };
+
+/**
+ * Read a bundle's `manifest.json`, writing nothing. The first half of the one integrity check that
+ * both `verifyBackup` and G18's pre-migration-backup gate (`backupBundleOnDisk`) run, so the two can
+ * never disagree about what an intact bundle is.
+ */
+function readBundleManifest(source: string): { ok: true; manifest: ArtifactManifest } | BundleFault {
+  if (source.length === 0 || !existsSync(source)) return { ok: false, reason: 'source_missing' };
+  const manifestPath = join(source, 'manifest.json');
+  if (!existsSync(manifestPath)) return { ok: false, reason: 'manifest_missing' };
+  let manifest: ArtifactManifest;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as ArtifactManifest;
+  } catch {
+    return { ok: false, reason: 'manifest_unreadable' };
+  }
+  if (manifest === null || typeof manifest !== 'object' || manifest.files === null || typeof manifest.files !== 'object') {
+    return { ok: false, reason: 'manifest_unreadable' };
+  }
+  return { ok: true, manifest };
+}
+
+/** The second half: every file the manifest names is present and re-hashes to the recorded value. */
+function rehashBundleFiles(source: string, manifest: ArtifactManifest): { ok: true } | (BundleFault & { file: string }) {
+  for (const [name, meta] of Object.entries(manifest.files)) {
+    const filePath = join(source, name);
+    if (!existsSync(filePath)) return { ok: false, reason: 'file_missing', file: name };
+    if (sha256Hex(readFileSync(filePath)) !== meta.sha256) return { ok: false, reason: 'checksum_mismatch', file: name };
+  }
+  return { ok: true };
+}
+
+/**
+ * G18's pre-migration-backup gate, bound to the DISK rather than to a column. `backup_ref` on a
+ * migration plan records that a backup was taken; this proves the backup is still THERE and intact:
+ * the `backups` row exists in this workspace (§H-TENANT) as a complete `.tillbackup`, the bundle it
+ * points at still has its manifest, every file re-hashes to the manifest, and the snapshot's hash is
+ * the one the plan recorded. A bundle deleted, moved, truncated or torn by a crash after the row
+ * committed answers `ok: false` with the reason, so the first live money-path commit is refused
+ * instead of proceeding without the backup the gate exists to guarantee.
+ */
+export function backupBundleOnDisk(
+  db: Database.Database,
+  workspaceId: string,
+  ref: { backupId: string; sha256: string },
+): { ok: true } | BundleFault {
+  const row = db
+    .prepare('SELECT storage_ref, sha256, kind, status FROM backups WHERE id = ? AND workspace_id = ?')
+    .get(ref.backupId, workspaceId) as { storage_ref: string; sha256: string; kind: string; status: string } | undefined;
+  if (row === undefined) return { ok: false, reason: 'backup_row_missing' };
+  if (row.kind !== 'backup' || row.status !== 'complete') return { ok: false, reason: 'backup_not_complete' };
+  if (row.sha256 !== ref.sha256) return { ok: false, reason: 'backup_ref_mismatch' };
+  const read = readBundleManifest(row.storage_ref);
+  if (!read.ok) return read;
+  const files = rehashBundleFiles(row.storage_ref, read.manifest);
+  if (!files.ok) return files;
+  if (read.manifest.files['data.sqlite']?.sha256 !== ref.sha256) return { ok: false, reason: 'snapshot_hash_mismatch' };
+  return { ok: true };
+}
+
 /**
  * G04.3. Check a `.tillbackup`/`.tillexport` bundle without writing anything: per-file checksums, an
  * EXACT schema-version match (spec §0a.6), and a per-entry balance sanity-check. `source` is a bundle
@@ -704,16 +787,9 @@ export function listBackups(
  */
 export function verifyBackup(deps: PortDeps, input: { source: string }): Result {
   const source = String(input.source ?? '');
-  if (source.length === 0 || !existsSync(source)) return err('backup_corrupt', { reason: 'source_missing' });
-  const manifestPath = join(source, 'manifest.json');
-  if (!existsSync(manifestPath)) return err('backup_corrupt', { reason: 'manifest_missing' });
-
-  let manifest: ArtifactManifest;
-  try {
-    manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as ArtifactManifest;
-  } catch {
-    return err('backup_corrupt', { reason: 'manifest_unreadable' });
-  }
+  const read = readBundleManifest(source);
+  if (!read.ok) return err('backup_corrupt', { reason: read.reason });
+  const manifest = read.manifest;
 
   if (manifest.schemaVersion !== SCHEMA_GENERATION) {
     return err('incompatible_schema_version', {
@@ -723,13 +799,8 @@ export function verifyBackup(deps: PortDeps, input: { source: string }): Result 
   }
 
   // Every file the manifest names must re-hash to the recorded value.
-  for (const [name, meta] of Object.entries(manifest.files)) {
-    const filePath = join(source, name);
-    if (!existsSync(filePath)) return err('backup_corrupt', { reason: 'file_missing', file: name });
-    if (sha256Hex(readFileSync(filePath)) !== meta.sha256) {
-      return err('backup_corrupt', { reason: 'checksum_mismatch', file: name });
-    }
-  }
+  const files = rehashBundleFiles(source, manifest);
+  if (!files.ok) return err('backup_corrupt', { reason: files.reason, file: files.file });
 
   // A balance sanity-check, read-only. For a sqlite_snapshot open data.sqlite and re-foot every posted
   // entry; a jsonl_bundle reports the manifest's entry count without opening a queryable ledger.

@@ -147,7 +147,8 @@
       },
       "issuedAndSentAck": "{number} ist ausgestellt und an {email} versendet.",
       "issuedNotSentAck": "{number} ist ausgestellt, aber noch nicht an {email} versendet.",
-      "vatPosted": "MWST auf diesem Beleg: {tax}"
+      "vatPosted": "MWST auf diesem Beleg: {tax}",
+      "clearedByDisposal": "Eine Gutschrift auf eine Rechnung, die der Abgang der Anlage {asset} vom {date} ausgeglichen hat: Sie bleibt auf ihrem Konto, der Gewinn des Abgangs ist vor ihr ausgewiesen."
     },
     "issue": {
       "title": "Beleg ausstellen",

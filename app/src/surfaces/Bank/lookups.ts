@@ -378,7 +378,7 @@ export function reasonSentence(t: T, l: Lookups, line: BankInboxLine): string {
       return t('bankInbox.reason.rule_needs_amount', { name: ruleName(t, rule), asks });
     }
     case 'rule_computed': {
-      // D177: the rule's computed legs, by label and figure ("Bruttoumsatz 90.80").
+      // D177: the rule's computed legs, by label and figure ("Bruttoumsatz 162.15").
       const rule = l.standardById.get(proposalRuleId(line) ?? '');
       const asks = ruleComputedOf(line)
         .map((c) => `${c.label !== '' ? c.label : t('bankInbox.rules.askFallback')} ${formatMoney(c.amountMinor, currency)}`)

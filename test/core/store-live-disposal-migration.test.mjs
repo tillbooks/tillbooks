@@ -217,7 +217,12 @@ test('(c) a generation-11 book with live assets and a disposal migrates without 
     const ctx = makeContext(store, { workspaceId: ws, actor: 'user_1', clock, ids, ...ledgerPorts({ store, workspaceId: ws, ids }) });
     const acc = (n) => store.db.prepare('SELECT id FROM account WHERE workspace_id = ? AND number = ?').get(ws, n).id;
     must(assetTransactionReverse(ctx, { assetId: assets[1], transactionId: disposalTxnId, reason: 'Verkauf storniert', idempotencyKey: 'rev-disp' }), 'reverse disposal');
-    must(assetDispose(ctx, { assetId: assets[1], disposalDate: '2026-08-10', proceedsRappen: 900_000, proceedsAccountId: acc('1020'), gainLossAccountId: acc('6900'), idempotencyKey: 'disp-2' }), 'dispose again');
+    // D192 (code critic r1 R1): the asset is back on the books from the reverse (16.08.2026), so a redo
+    // dated before it would clear it twice that year and is refused; the redo is dated on the reverse day.
+    const early = assetDispose(ctx, { assetId: assets[1], disposalDate: '2026-08-10', proceedsRappen: 900_000, proceedsAccountId: acc('1020'), gainLossAccountId: acc('6900'), idempotencyKey: 'disp-early' });
+    assert.equal(early.error, 'disposal_date_before_reversal', JSON.stringify(early));
+    assert.equal(early.reversedOn, '2026-08-16');
+    must(assetDispose(ctx, { assetId: assets[1], disposalDate: '2026-08-16', proceedsRappen: 900_000, proceedsAccountId: acc('1020'), gainLossAccountId: acc('6900'), idempotencyKey: 'disp-2' }), 'dispose again');
     const r = must(assetReconciliationReport(ctx, { asOf: '2026-12-31' }), 'reconciliation');
     assert.equal(r.summary.status, 'balanced', JSON.stringify(r.accounts));
     store.close();

@@ -75,6 +75,9 @@
       "needs_mailstore": "No local mail store found.",
       "unknown_mail_adapter": "This folder is not a mail store TILL can read.",
       "drafts_not_writable": "The Drafts folder cannot be written to.",
+      "mail_store_busy": "Your mail app has the Drafts folder open right now. Close it and try again. Nothing was written.",
+      "mail_client_unknown": "TILL could not check whether your mail app has the Drafts folder open (lsof did not answer), so nothing was written. If it never answers on this computer, change \"Mail app check before writing a draft\" under Setup, Settings.",
+      "mail_store_changed": "The Drafts folder changed while TILL was writing. Try again. Nothing was overwritten.",
       "message_moved": "This message is no longer where it was indexed.",
       "transport": "The correspondence could not be loaded.",
       "permissionDenied": {
@@ -132,6 +135,10 @@
       "source_changed": "This message changed. Reindex and try again.",
       "draft_gone": "This draft is no longer in your Drafts folder.",
       "generation_failed": "The local model could not write this draft. The attempt is on record.",
+      "mail_store_busy": "Your mail app has the Drafts folder open right now. Close it and try again. Nothing was written.",
+      "mail_client_unknown": "TILL could not check whether your mail app has the Drafts folder open (lsof did not answer), so nothing was written. If it never answers on this computer, change \"Mail app check before writing a draft\" under Setup, Settings.",
+      "mail_store_changed": "The Drafts folder changed while TILL was writing. Try again. Nothing was overwritten.",
+      "drafts_not_writable": "The Drafts folder cannot be written to.",
       "forbidden": "This needs the \"Create drafts\" right."
     }
   },

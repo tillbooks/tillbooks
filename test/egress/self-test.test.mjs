@@ -18,12 +18,12 @@ import net from 'node:net';
 const { getAction } = await import('../../dist/api/registry.js');
 const { registerRuntime, resetRuntimeRegistration } = await import('../../dist/core/voice/index.js');
 const { freshDeps, mintWorkspace } = await import('../api/support.mjs');
-const { tempStoreDir, makeMaildirStore } = await import('../mail/fixtures.mjs');
+const { tempStoreDir, makeMaildirStore, makeMboxStore } = await import('../mail/fixtures.mjs');
 const { stubAdapter, stubManifest, outboundCorpus } = await import('../voice/fixtures.mjs');
 const { inboundAsk } = await import('../drafting/fixtures.mjs');
 
 /** Build a workspace with a connected store, a reindexed needs-reply thread, a runtime and a voice. */
-function setUpLoop(prefix) {
+function setUpLoop(prefix, dialect = 'maildir') {
   const deps = freshDeps();
   const { workspaceId } = mintWorkspace(deps);
   const call = (name, input) => getAction(name).run(deps, { workspaceId, ...input });
@@ -31,7 +31,10 @@ function setUpLoop(prefix) {
   const root = tempStoreDir(`till-e07-${prefix}-`);
   const messages = outboundCorpus(21);
   messages.push(inboundAsk());
-  makeMaildirStore(root, messages);
+  if (dialect === 'mbox') {
+    makeMboxStore(root, messages);
+    makeMboxStore(root, [], 'Drafts'); // the user's Drafts mbox exists, so the busy check has a file to ask about
+  } else makeMaildirStore(root, messages);
 
   const account = call('mail_connect', {
     adapter: 'thunderbird',
@@ -133,5 +136,19 @@ test('egress_self_test: a non-egress failure is reported honestly, not as a clea
   assert.equal(result.ok, false);
   assert.equal(result.error, 'self_test_incomplete');
   assert.equal(result.socketsOpened, 0, 'no socket was opened, and that is stated even on the sad path');
+  resetRuntimeRegistration();
+});
+
+test('egress_self_test on a Thunderbird mbox store: a clean pass that NAMES the lsof busy check it ran (critic R1-L2)', { skip: process.platform === 'win32' ? 'no lsof on Windows' : false }, () => {
+  registerRuntime(stubAdapter(), stubManifest());
+  const { deps, workspaceId } = setUpLoop('mbox', 'mbox');
+
+  const result = getAction('egress_self_test').run(deps, { workspaceId });
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.socketsOpened, 0);
+  assert.deepEqual(result.offenders, []);
+  assert.equal(result.localSubprocesses.length, 1, 'the run says a subprocess ran, never that none did');
+  assert.match(result.localSubprocesses[0], /(^|\/)lsof$/);
   resetRuntimeRegistration();
 });

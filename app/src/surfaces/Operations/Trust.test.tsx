@@ -113,6 +113,7 @@ describe('Trust (E07 Vertrauen panel)', () => {
     // D96: the standing indicator's network-socket-only scope, named out loud (the on-demand
     // self-test is what covers subprocess and higher-layer vectors).
     expect(screen.getByText(de.egress.limits.sockets)).toBeInTheDocument();
+    expect(screen.getByText(de.egress.limits.lsof)).toBeInTheDocument();
     expect(screen.getByText(de.egress.limits.trust_us)).toBeInTheDocument();
     // The one deliberate network event, named out loud.
     expect(screen.getByText(de.egress.model_download.note)).toBeInTheDocument();
@@ -228,6 +229,7 @@ describe('Trust at rest: one line, the words behind (i) (D152)', () => {
       de.egress.limits.machine,
       de.egress.limits.disk,
       de.egress.limits.sockets,
+      de.egress.limits.lsof,
       de.egress.limits.trust_us,
       de.egress.model_download.note,
     ]) {
@@ -236,7 +238,7 @@ describe('Trust at rest: one line, the words behind (i) (D152)', () => {
     // The scope note still comes FIRST (US-E07.2 Boundary), and iCloud/backup leads the limits.
     expect(words.indexOf(de.egress.scope.note)).toBe(0);
     expect(words.indexOf(de.egress.limits.os)).toBeLessThan(words.indexOf(de.egress.limits.machine));
-    expect(within(card).getAllByRole('listitem')).toHaveLength(5);
+    expect(within(card).getAllByRole('listitem')).toHaveLength(6);
   });
 
   it('the card opens on focus and on hover, and Escape closes it', async () => {

@@ -124,7 +124,7 @@ const RULE_SHOP = {
 const LONG_TEXT = 'BONDIGOO AUSZAHLUNG OKTOBER 2026 SITZUNGEN 14 BIS 27 REFERENZ BG-2026-10-4711 ABZUEGLICH PLATTFORMGEBUEHR UND MWST GEMAESS VERTRAG VOM 1.3.2026';
 
 const BOND = line('bt_bond', {
-  amountMinor: 1_512,
+  amountMinor: 2_700,
   counterparty: { name: 'Fernpay Plattform AG', iban: 'CH9300762011623852957' },
   remittance: { text: LONG_TEXT, referenceKind: 'NON', referenceValue: null, endToEndId: null },
   standardId: 'bs_bond',
@@ -133,7 +133,7 @@ const BOND = line('bt_bond', {
     target: { kind: 'rule', standardId: 'bs_bond', asks: {} },
     certainty: 'check',
     reasonCode: 'rule_computed',
-    reasonParams: { standardId: 'bs_bond', computed: [{ legIndex: 0, label: 'Bruttoumsatz', amountMinor: 9_080, explain: { vatBp: 810, feeBp: 990 } }] },
+    reasonParams: { standardId: 'bs_bond', computed: [{ legIndex: 0, label: 'Bruttoumsatz', amountMinor: 16_215, explain: { vatBp: 810, feeBp: 990 } }] },
     vatCode: null,
   },
 });
@@ -209,12 +209,12 @@ function inboxFor(lines: unknown[]): Handler {
   };
 }
 
-/** Seven balanced lines for a computed Bondigoo payout of 15.12 (gross 90.80). */
+/** Seven balanced lines for a computed Bondigoo payout of 27.00 (gross 162.15). */
 const BOND_LINES = [
-  { account: BANK_LEDGER, debit: 1_512, credit: 0 },
-  { account: account('6700'), debit: 7_568, credit: 0 },
-  { account: account('3400'), debit: 0, credit: 8_400 },
-  { account: account('2200'), debit: 0, credit: 680 },
+  { account: BANK_LEDGER, debit: 2_700, credit: 0 },
+  { account: account('6700'), debit: 13_515, credit: 0 },
+  { account: account('3400'), debit: 0, credit: 15_000 },
+  { account: account('2200'), debit: 0, credit: 1_215 },
   { account: account('6700'), debit: 0, credit: 0 },
   { account: account('6700'), debit: 0, credit: 0 },
   { account: account('6700'), debit: 0, credit: 0 },
@@ -225,16 +225,16 @@ function compose(): Handler {
   const engine = composeEngine();
   return (input) => {
     const target = input.target as { kind?: string; asks?: Record<string, number>; legs?: { accountId: string; amountMinor: number }[] } | undefined;
-    // The rule without its rest leg (a rest of 0, D177 final judge FAIL 1): the engine's lines for 15.12 gross.
-    if (target?.kind === 'accounts' && input.bankTxnId === 'bt_bond' && target.legs?.length === 1 && target.legs[0]?.amountMinor === 1_512) {
+    // The rule without its rest leg (a rest of 0, D177 final judge FAIL 1): the engine's lines for 27.00 gross.
+    if (target?.kind === 'accounts' && input.bankTxnId === 'bt_bond' && target.legs?.length === 1 && target.legs[0]?.amountMinor === 2_700) {
       return ok({
         mode: 'expand',
         composed: true,
         stamped: true,
         lines: [
-          { account: BANK_LEDGER, debit: 1_512 },
-          { account: account('3400'), credit: 1_399 },
-          { account: account('2200'), credit: 113 },
+          { account: BANK_LEDGER, debit: 2_700 },
+          { account: account('3400'), credit: 2_498 },
+          { account: account('2200'), credit: 202 },
         ],
         captions: [],
         verdict: { ok: true },
@@ -242,7 +242,7 @@ function compose(): Handler {
     }
     if (target?.kind !== 'rule') return engine(input);
     const asks = target.asks ?? {};
-    if (asks['0'] === 1_512) {
+    if (asks['0'] === 2_700) {
       return ok({ mode: 'expand', composed: false, stamped: false, lines: [], captions: [], verdict: { ok: false, error: 'rest_is_zero' } });
     }
     return ok({ mode: 'expand', composed: true, stamped: true, lines: BOND_LINES, captions: [], verdict: { ok: true } });
@@ -374,17 +374,17 @@ function visibleProse(root: HTMLElement): string[] {
 afterEach(() => window.localStorage.clear());
 
 describe('D177 story matrix (A39 §16.3)', () => {
-  it('1 Bondigoo payout: 90.80 prefilled and "berechnet", the panel shows the seven lines, one click books the rule as proposed', async () => {
+  it('1 Bondigoo payout: 162.15 prefilled and "berechnet", the panel shows the seven lines, one click books the rule as proposed', async () => {
     const { transport, calls } = recording(canned([BOND]));
     renderBank(transport);
     await rulesRead('bt_bond');
     await select('bt_bond');
     const field = within(panel()).getByLabelText('Bruttoumsatz') as HTMLInputElement;
-    expect(field.value).toBe('90.80');
+    expect(field.value).toBe('162.15');
     const computed = panel().querySelector('[data-computed="engine"]') as HTMLElement;
     expect(computed).toHaveTextContent('berechnet');
     // In plain words (UX judge round 2, item 11), never the fraction.
-    expect(tipOf(computed)).toBe('Bruttoumsatz aus 15.12: MWST 8.1 % und Gebühr 9.9 % vom Netto');
+    expect(tipOf(computed)).toBe('Bruttoumsatz aus 27.00: MWST 8.1 % und Gebühr 9.9 % vom Netto');
     expect(panel().textContent ?? '').not.toMatch(/1081|× \d/);
     await waitFor(() => expect(panel().querySelectorAll('.bank-legs__table tbody tr')).toHaveLength(7));
     await userEvent.click(bookOf(rowOf('bt_bond')));
@@ -404,7 +404,7 @@ describe('D177 story matrix (A39 §16.3)', () => {
     expect(panel().querySelector('[data-computed="person"]')).toHaveTextContent('von dir');
     await waitFor(() => expect(calls.some((c) => c.action === 'compose_entry' && (c.input.target as { asks?: Record<string, number> } | undefined)?.asks?.['0'] === 9_120)).toBe(true));
     await userEvent.click(within(panel()).getByRole('button', { name: 'berechnen' }));
-    expect((within(panel()).getByLabelText('Bruttoumsatz') as HTMLInputElement).value).toBe('90.80');
+    expect((within(panel()).getByLabelText('Bruttoumsatz') as HTMLInputElement).value).toBe('162.15');
     expect(panel().querySelector('[data-computed="engine"]')).not.toBeNull();
   });
 
@@ -415,13 +415,13 @@ describe('D177 story matrix (A39 §16.3)', () => {
     await select('bt_bond');
     const field = within(panel()).getByLabelText('Bruttoumsatz') as HTMLInputElement;
     await userEvent.clear(field);
-    await userEvent.type(field, '15.12');
+    await userEvent.type(field, '27.00');
     const book = bookOf(rowOf('bt_bond'));
     await waitFor(() => expect(book).toHaveAttribute('aria-disabled', 'true'));
     expect(tipOf(book)).toBe('Für 6700 bleibt nichts übrig');
     await userEvent.click(book);
     expect(calls.some((c) => c.action === 'book_bank_line')).toBe(false);
-    expect(field.value).toBe('15.12');
+    expect(field.value).toBe('27.00');
   });
 
   it('4 the wrong rule by text: the Woher switcher offers the payer\'s other rule, and picking it books by Shopify', async () => {
@@ -759,11 +759,11 @@ describe('D177 UX judge findings', () => {
   it('3: the posting preview keeps one line per account, narrow amount columns, and the Durchlaufkonto quieter, never folded', async () => {
     const via = account('1060');
     const lines = [
-      { account: BANK_LEDGER, debit: 1_512, credit: 0 },
-      { account: via, debit: 0, credit: 1_512 },
-      { account: via, debit: 9_080, credit: 0 },
-      { account: account('3400'), debit: 0, credit: 8_400 },
-      { account: account('2200'), debit: 0, credit: 680 },
+      { account: BANK_LEDGER, debit: 2_700, credit: 0 },
+      { account: via, debit: 0, credit: 2_700 },
+      { account: via, debit: 16_215, credit: 0 },
+      { account: account('3400'), debit: 0, credit: 15_000 },
+      { account: account('2200'), debit: 0, credit: 1_215 },
     ];
     const withVia = { ...RULE_BOND, viaAccountId: via, viaAccountNumber: '1060' };
     renderBank(
@@ -922,7 +922,7 @@ describe('D177 UX judge round 2', () => {
     await select('bt_bond');
     const field = within(panel()).getByLabelText('Bruttoumsatz') as HTMLInputElement;
     await userEvent.clear(field);
-    await userEvent.type(field, '15.12');
+    await userEvent.type(field, '27.00');
     await waitFor(() => expect(panel().querySelector('.bank-ask__note')).toHaveTextContent('Für 6700 bleibt nichts übrig'));
     expect(field).not.toHaveAttribute('aria-invalid');
     expect(within(panel()).getByRole('region', { name: 'So wird gebucht' }).textContent ?? '').not.toMatch(/bleibt nichts übrig/);
@@ -1105,7 +1105,7 @@ describe('D177 final judge', () => {
     await select('bt_bond');
     const field = within(panel()).getByLabelText('Bruttoumsatz') as HTMLInputElement;
     await userEvent.clear(field);
-    await userEvent.type(field, '15.12');
+    await userEvent.type(field, '27.00');
     const legs = () => within(panel()).getByRole('region', { name: 'So wird gebucht' });
     await waitFor(() => expect(legs().querySelector('tr[data-zero="true"]')).not.toBeNull());
     // The rule WITHOUT its rest leg went to the engine: one leg, the whole line.
@@ -1113,7 +1113,7 @@ describe('D177 final judge', () => {
     const rows = Array.from(legs().querySelectorAll('tbody tr')).map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => (td.textContent ?? '').trim()));
     expect(rows.map((r) => r[0]?.slice(0, 4))).toEqual(['1020', '3400', '2200', '6700']);
     expect(legs().textContent ?? '').not.toMatch(/\?/);
-    // The rest books against the line with the engine's figures (90.80 > 15.12): Soll, as in the valid state.
+    // The rest books against the line with the engine's figures (162.15 > 27.00): Soll, as in the valid state.
     expect(rows[3]).toEqual([expect.stringMatching(/^6700/), '0.00', '']);
   });
 

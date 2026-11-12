@@ -26,10 +26,11 @@
 
 import Database from 'better-sqlite3';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 import { ok, err, type Result } from '../result.js';
-import { SqliteStore } from '../store/sqlite-store.js';
+import { SqliteStore, applyDurableSync, fsyncDirectory, fsyncFile, isBusyError } from '../store/sqlite-store.js';
+import { ledgerFilePresent } from './ledgerGuard.js';
 import { SCHEMA_GENERATION } from '../store/schema.js';
 import { tillTables } from '../store/schemaShape.js';
 import { createBackup, restoreBackup, remapCopiedWorkspaceIds } from '../data/portability.js';
@@ -129,13 +130,121 @@ function removeDbFiles(dbPath: string): void {
   }
 }
 
-/** Move a gated `.building` file (and its sidecars) over the live target, replacing it. */
-function swapInto(building: string, target: string): void {
-  removeDbFiles(target);
-  renameSync(building, target);
-  for (const suffix of ['-wal', '-shm']) {
-    if (existsSync(building + suffix)) renameSync(building + suffix, target + suffix);
+/** A swap that could not be made safely. The prior target is untouched; the caller drops the build. */
+export class LandscapeSwapError extends Error {
+  constructor(readonly reason: string) {
+    super(reason);
+    this.name = 'LandscapeSwapError';
   }
+}
+
+/** True when a `-wal` sidecar exists and holds frames (a header-only or empty WAL holds none). */
+function walHasContent(dbPath: string): boolean {
+  try {
+    return statSync(dbPath + '-wal').size > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** How long the quiesce probe waits for another connection to let go before refusing the swap. */
+const QUIESCE_TIMEOUT_MS = 1000;
+
+/**
+ * Quiesce an EXISTING target before it is replaced: prove that NO other connection has it open, and
+ * fold its write-ahead log into its main file so its sidecars can be dropped without losing a commit.
+ *
+ * Both come from ONE statement: switching the journal out of WAL (`journal_mode = DELETE`) needs the
+ * database to itself. SQLite checkpoints the whole WAL into the main file and removes the WAL, and it
+ * answers SQLITE_BUSY when any other connection has the file open, even an IDLE one that is not in a
+ * transaction (it still holds its shared lock on the WAL index). A plain TRUNCATE checkpoint only
+ * noticed a connection that was mid-read, so an idle `till up` on the target let the swap through
+ * and its next write went into the unlinked old file, silently lost. Such a target is live: the swap
+ * is refused with `target_in_use` and nothing is touched. The connection is made durable on its very
+ * next statement, so the fold syncs the main file (F_FULLFSYNC on macOS). Every TILL ledger runs in
+ * WAL mode (`SqliteStore`), which is what makes an idle connection visible here.
+ *
+ * A file that is not a SQLite database at all answers SQLITE_NOTADB (`target_not_a_ledger`); the
+ * rebuild verbs replace it (`SwapOptions.replaceUnreadable`). Every other failure is the named
+ * `target_quiesce_failed`, so a verb answers `swap_refused` / `copy_swap_refused`, never a raw error.
+ */
+function quiesceTarget(target: string): void {
+  let db: Database.Database | undefined;
+  try {
+    db = new Database(target, { timeout: QUIESCE_TIMEOUT_MS });
+    applyDurableSync(db);
+    const mode = db.pragma('journal_mode = DELETE', { simple: true });
+    if (mode !== 'delete') throw new LandscapeSwapError('target_in_use');
+  } catch (e) {
+    if (e instanceof LandscapeSwapError) throw e;
+    if (isBusyError(e)) throw new LandscapeSwapError('target_in_use');
+    if (isNotADatabaseError(e)) throw new LandscapeSwapError('target_not_a_ledger');
+    // Any other failure (a permission error, an I/O error, a corrupt page) is a NAMED refusal: the
+    // target is left exactly as it was and the caller drops the build.
+    throw new LandscapeSwapError('target_quiesce_failed');
+  } finally {
+    try {
+      db?.close();
+    } catch {
+      // best effort: a connection that failed to open has nothing to close
+    }
+  }
+  if (walHasContent(target)) throw new LandscapeSwapError('target_wal_not_folded');
+}
+
+/** SQLITE_NOTADB: the file is not a SQLite database (torn header, foreign bytes). */
+function isNotADatabaseError(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { code?: unknown }).code === 'SQLITE_NOTADB';
+}
+
+/** How `swapInto` treats an existing target. */
+export interface SwapOptions {
+  /**
+   * The rebuild verbs (`env_reset`, an instance `env_copy`) set this: a target whose file is NOT a
+   * SQLite database (SQLITE_NOTADB: a torn file, a half-restored disk, a foreign file at the data root)
+   * is replaced instead of refused. No SQLite connection can hold a file that is not a database, so
+   * there is nothing to quiesce and nothing that could keep writing into the replaced inode. Without
+   * it (`env_create`, the probes) such a target is refused with `target_not_a_ledger`.
+   */
+  readonly replaceUnreadable?: boolean;
+}
+
+/**
+ * Move a gated `.building` ledger over the target in ONE atomic rename, durably.
+ *
+ * The old swap deleted the target first and renamed after, with no directory sync: a crash between
+ * the two left NO ledger at the target, the next open silently created an empty one, and the next
+ * build deleted the surviving `.building` file. Now:
+ *
+ *   1. The build must be self-contained. Every builder checkpoints (TRUNCATE) and closes its store
+ *      before the swap, so its WAL is empty; a build whose WAL still holds frames is refused, because
+ *      two files cannot move in one atomic step.
+ *   2. The OLD target is quiesced (`quiesceTarget`): any other open connection refuses the swap, and
+ *      its WAL is folded into its main file, so its sidecars can go without losing a commit. A stale
+ *      `-wal` left beside the NEW file would be replayed into it on the next open and corrupt it,
+ *      which is why the sidecars go BEFORE the rename.
+ *   3. The build's bytes are fsynced, `rename(building, target)` replaces the target atomically (no
+ *      delete first: at every instant the target path names either the old ledger or the new one),
+ *      and the directory is fsynced so the rename survives a power cut.
+ *
+ * A crash anywhere leaves a valid ledger at the target (old or new), never none. Shared by env_copy,
+ * env_create and env_reset (`operations.ts` imports it), so there is one swap, not two.
+ */
+export function swapInto(building: string, target: string, options: SwapOptions = {}): void {
+  if (walHasContent(building)) throw new LandscapeSwapError('building_wal_not_folded');
+  for (const suffix of ['-wal', '-shm']) rmSync(building + suffix, { force: true });
+  if (existsSync(target)) {
+    try {
+      quiesceTarget(target);
+    } catch (e) {
+      const unreadable = e instanceof LandscapeSwapError && e.reason === 'target_not_a_ledger';
+      if (!(unreadable && options.replaceUnreadable === true)) throw e;
+    }
+  }
+  for (const suffix of ['-wal', '-shm']) rmSync(target + suffix, { force: true });
+  fsyncFile(building);
+  renameSync(building, target);
+  fsyncDirectory(dirname(resolve(target)));
 }
 
 /**
@@ -353,7 +462,7 @@ function runCopy(deps: LandscapeDeps, srcEnv: Environment, tgtEnv: Environment, 
     // data-root directory may not exist yet (env_create policy=copy provisions a brand-new env), so make it.
     mkdirSync(join(building, '..'), { recursive: true });
     removeDbFiles(building);
-    if (opts.scope.kind === 'mandate' && existsSync(tgtEnv.db_path)) {
+    if (opts.scope.kind === 'mandate' && ledgerFilePresent(tgtEnv.db_path)) {
       copyDbFiles(tgtEnv.db_path, building);
     }
     buildingStore = new SqliteStore({ location: building });
@@ -493,7 +602,9 @@ function runCopy(deps: LandscapeDeps, srcEnv: Environment, tgtEnv: Environment, 
     }
     gateDbFile(building); // throws GateError -> caught below
 
-    swapInto(building, tgtEnv.db_path);
+    // An instance copy replaces the whole target, so it is a rebuild: a target that is not a ledger
+    // at all is replaced. A mandate copy merges into the target and never reaches here with one.
+    swapInto(building, tgtEnv.db_path, { replaceUnreadable: opts.scope.kind === 'instance' });
     swapped = true;
 
     const targetSizeBytes = (() => {
@@ -518,6 +629,9 @@ function runCopy(deps: LandscapeDeps, srcEnv: Environment, tgtEnv: Environment, 
   } catch (e) {
     if (e instanceof GateError) {
       return err('copy_gate_failed', { reason: e.reason });
+    }
+    if (e instanceof LandscapeSwapError) {
+      return err('copy_swap_refused', { reason: e.reason, target: tgtEnv.name });
     }
     throw e;
   } finally {
@@ -599,7 +713,7 @@ function resolvePath(p: string): string {
 
 /** The source must exist on disk and not be newer than this build (finding #6). */
 function guardSource(srcEnv: Environment): Result | undefined {
-  if (!existsSync(srcEnv.db_path)) {
+  if (!ledgerFilePresent(srcEnv.db_path)) {
     return err('source_data_missing', { source: srcEnv.name, dbPath: srcEnv.db_path });
   }
   const gen = rawSchemaGeneration(srcEnv.db_path);
@@ -647,11 +761,24 @@ export function envCopy(deps: LandscapeDeps, input: CopyInput): Result {
   const srcGuard = guardSource(srcEnv);
   if (srcGuard !== undefined) return srcGuard;
 
-  // finding #11: a copy INTO the active env requires switching away first, or a forced quiesce.
+  // A mandate copy MERGES into the target's existing ledger. When a target that was populated before
+  // has lost its ledger file, building "fresh" would silently produce a target holding this one
+  // mandate and none of the others it held: fail loud and point at the rebuild instead. (An instance
+  // copy replaces the whole target, so it is itself the rebuild and needs no such guard.)
+  if (scope.kind === 'mandate' && tgtEnv.last_refresh_at !== null && !ledgerFilePresent(tgtEnv.db_path)) {
+    return err('target_data_missing', {
+      target: targetName,
+      dbPath: tgtEnv.db_path,
+      hint: 'the target ledger is missing or empty (0 bytes): rebuild it with env_reset or an instance copy, then copy the mandate',
+    });
+  }
+
+  // finding #11: a copy INTO the active env requires switching away first. force does not help: the
+  // serving face holds the active ledger open, so the swap's quiesce answers target_in_use (R1-L3).
   if (targetName === file.active && input.force !== true) {
     return err('environment_active', {
       name: targetName,
-      hint: 'switch away first, or pass force to quiesce the active environment before the swap',
+      hint: 'switch away first: the serving process holds the active environment open, so a swap into it is always refused',
     });
   }
 
@@ -898,7 +1025,7 @@ export function envResetCopy(deps: LandscapeDeps, input: ResetCopyInput): Result
     return err('environment_protected', { name, reason: 'main is protected against reset' });
   }
   if (name === file.active && input.force !== true) {
-    return err('environment_active', { name, hint: 'switch away first, or pass force to quiesce' });
+    return err('environment_active', { name, hint: 'switch away first' });
   }
   const sourceName = env.source_env;
   if (sourceName === null || sourceName === undefined || file.environments[sourceName] === undefined) {
@@ -965,7 +1092,7 @@ export function envResetCopy(deps: LandscapeDeps, input: ResetCopyInput): Result
 
 /** Count the workspaces in a source db FILE (read-only), for the plan`s `workspacesAffected`. */
 function countWorkspaces(dbPath: string): number {
-  if (!existsSync(dbPath)) return 0;
+  if (!ledgerFilePresent(dbPath)) return 0;
   const db = new Database(dbPath, { readonly: true });
   try {
     const row = db.prepare('SELECT COUNT(*) AS n FROM "workspace"').get() as { n: number };

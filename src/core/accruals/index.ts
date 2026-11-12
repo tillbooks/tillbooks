@@ -20,6 +20,8 @@ export {
   DIRECT_TAX_ACCOUNT,
   ACCRUAL_SOURCE,
   PROVISION_SOURCE,
+  DISPOSAL_SOURCE_REF_PREFIX,
+  isDisposalSourceRef,
   accrualLinesOf,
   mirrorLinesOf,
   provisionLinesOf,
@@ -30,8 +32,19 @@ export {
 } from './lines.js';
 export type { AccrualKind, AccrualKindRule, AccrualStatus, ProvisionReason, ProvisionStatus, LineView } from './lines.js';
 
-export { accrualCreate, accrualGet, accrualList, accrualDiscard, accrualPost, accrualReverse } from './accrual.js';
+export {
+  accrualCreate,
+  accrualGet,
+  accrualList,
+  accrualDiscard,
+  accrualPost,
+  accrualReverse,
+  postDisposalAbgrenzungWithin,
+  reverseDisposalAbgrenzungWithin,
+  disposalAbgrenzungOf,
+} from './accrual.js';
 export type {
+  DisposalAbgrenzungInput,
   AccrualView,
   AccrualCreateInput,
   AccrualIdInput,

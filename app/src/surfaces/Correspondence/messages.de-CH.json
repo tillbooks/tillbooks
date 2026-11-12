@@ -75,6 +75,9 @@
       "needs_mailstore": "Kein lokaler Mail-Speicher gefunden.",
       "unknown_mail_adapter": "Dieser Ordner ist kein Mail-Speicher, den TILL lesen kann.",
       "drafts_not_writable": "In den Entwurfsordner kann nicht geschrieben werden.",
+      "mail_store_busy": "Dein Mail-Programm hat den Entwurfsordner gerade offen. Schliesse es und versuche es nochmals. Es wurde nichts geschrieben.",
+      "mail_client_unknown": "TILL konnte nicht prüfen, ob dein Mail-Programm den Entwurfsordner offen hat (lsof hat nicht geantwortet). Darum wurde nichts geschrieben. Wenn lsof auf diesem Computer nie antwortet, ändere unter Einrichtung, Einstellungen «Mail-Programm prüfen vor einem Entwurf».",
+      "mail_store_changed": "Der Entwurfsordner hat sich während des Schreibens geändert. Versuche es nochmals. Es wurde nichts überschrieben.",
       "message_moved": "Diese Nachricht liegt nicht mehr dort, wo sie eingelesen wurde.",
       "transport": "Die Korrespondenz konnte nicht geladen werden.",
       "permissionDenied": {
@@ -132,6 +135,10 @@
       "source_changed": "Diese Nachricht hat sich geändert. Bitte neu einlesen und erneut versuchen.",
       "draft_gone": "Dieser Entwurf liegt nicht mehr in deinem Entwurfsordner.",
       "generation_failed": "Das lokale Modell konnte diesen Entwurf nicht schreiben. Der Versuch ist protokolliert.",
+      "mail_store_busy": "Dein Mail-Programm hat den Entwurfsordner gerade offen. Schliesse es und versuche es nochmals. Es wurde nichts geschrieben.",
+      "mail_client_unknown": "TILL konnte nicht prüfen, ob dein Mail-Programm den Entwurfsordner offen hat (lsof hat nicht geantwortet). Darum wurde nichts geschrieben. Wenn lsof auf diesem Computer nie antwortet, ändere unter Einrichtung, Einstellungen «Mail-Programm prüfen vor einem Entwurf».",
+      "mail_store_changed": "Der Entwurfsordner hat sich während des Schreibens geändert. Versuche es nochmals. Es wurde nichts überschrieben.",
+      "drafts_not_writable": "In den Entwurfsordner kann nicht geschrieben werden.",
       "forbidden": "Dafür fehlt die Berechtigung «Entwürfe erstellen»."
     }
   },

@@ -45,7 +45,7 @@ type SelfTestOutcome =
   | { kind: 'needs_setup'; missing: string[] }
   | { kind: 'incomplete' };
 
-const LIMIT_KEYS = ['os', 'machine', 'disk', 'sockets', 'trust_us'] as const;
+const LIMIT_KEYS = ['os', 'machine', 'disk', 'sockets', 'lsof', 'trust_us'] as const;
 
 /**
  * Where each prerequisite of the self-test is set up (F-10, J7.6). The keys are the engine's

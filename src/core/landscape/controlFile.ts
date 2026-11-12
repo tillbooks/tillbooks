@@ -19,8 +19,10 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { appendFileDurably, makeDirectoryDurably, writeFileDurably } from '../store/sqlite-store.js';
 
 import {
   AUDIT_FILE_NAME,
@@ -156,7 +158,7 @@ export function readAuditChain(supportDir: string): readonly EnvAuditRecord[] {
 }
 
 /**
- * Persist a mutation ATOMICALLY-ENOUGH: append the new audit record, then write the control file whose
+ * Persist a mutation ATOMICALLY-ENOUGH: append the new audit record, then replace the control file whose
  * `audit_head` binds that record. The audit append happens first so that a crash between the two leaves
  * an audit record with no matching head, which `readLandscape` refuses (a refusal to open on a
  * detectable inconsistency, never a silent half-state). `verifiedPrevHead` is the head the caller read
@@ -170,7 +172,7 @@ export function writeLandscape(
   audit: Omit<EnvAuditRecord, 'seq' | 'prev_hash' | 'hash'>,
   verifiedPrevHead: LandscapeControlFile['audit_head'],
 ): LandscapeControlFile {
-  mkdirSync(supportDir, { recursive: true });
+  makeDirectoryDurably(supportDir);
 
   const seq = (verifiedPrevHead?.seq ?? 0) + 1;
   const prev = verifiedPrevHead?.hash ?? AUDIT_GENESIS_PREV;
@@ -178,10 +180,15 @@ export function writeLandscape(
   const hash = auditHashRecord(prev, body);
   const record: EnvAuditRecord = { ...body, prev_hash: prev, hash };
 
-  appendFileSync(AUDIT_PATH(supportDir), `${JSON.stringify(record)}\n`);
+  // Both writes are DURABLE before this returns. The audit record is fsynced before the control file
+  // is touched, so the record a head names always exists on disk. The control file is replaced whole
+  // through a temp file, fsync and rename, then a directory fsync: a crash mid-write leaves the
+  // previous, self-consistent file, never a truncated one that `readLandscape` would refuse as
+  // unreadable (the old in-place write could do exactly that).
+  appendFileDurably(AUDIT_PATH(supportDir), `${JSON.stringify(record)}\n`);
 
   const withHead: Omit<LandscapeControlFile, 'checksum'> = { ...next, audit_head: { seq, hash } };
   const file: LandscapeControlFile = { ...withHead, checksum: controlChecksum(withHead) };
-  writeFileSync(CONTROL_PATH(supportDir), `${JSON.stringify(file, null, 2)}\n`);
+  writeFileDurably(CONTROL_PATH(supportDir), `${JSON.stringify(file, null, 2)}\n`);
   return file;
 }

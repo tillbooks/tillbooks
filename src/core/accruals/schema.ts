@@ -108,6 +108,29 @@ BEGIN
   SELECT RAISE(ABORT, 'accrual_append_only');
 END;
 
+-- D192: ONE Abgrenzung per disposal. H06's asset_dispose posts the accrual of a sale across a year end
+-- itself, under the reserved source_ref 'asset_transaction:<disposal row id>'; the engine never writes
+-- a second, and this is the chokepoint underneath every writer of the table. A trigger rather than a
+-- unique index: an index build fails on open for a book that already holds a duplicate, a trigger only
+-- stops new ones. Additive (nothing dropped), so no SCHEMA_GENERATION move. The second trigger keeps
+-- the reference from being edited into or out of the namespace on any row.
+CREATE TRIGGER IF NOT EXISTS accrual_one_per_disposal
+BEFORE INSERT ON accrual
+WHEN NEW.source_ref IS NOT NULL AND substr(NEW.source_ref, 1, 18) = 'asset_transaction:' AND EXISTS (
+  SELECT 1 FROM accrual a WHERE a.workspace_id = NEW.workspace_id AND a.source_ref = NEW.source_ref)
+BEGIN
+  SELECT RAISE(ABORT, 'accrual_one_per_disposal');
+END;
+
+CREATE TRIGGER IF NOT EXISTS accrual_disposal_ref_frozen
+BEFORE UPDATE OF source_ref ON accrual
+WHEN NEW.source_ref IS NOT OLD.source_ref AND (
+     (OLD.source_ref IS NOT NULL AND substr(OLD.source_ref, 1, 18) = 'asset_transaction:')
+  OR (NEW.source_ref IS NOT NULL AND substr(NEW.source_ref, 1, 18) = 'asset_transaction:'))
+BEGIN
+  SELECT RAISE(ABORT, 'accrual_disposal_ref_frozen');
+END;
+
 CREATE TABLE IF NOT EXISTS provision (
   id                        TEXT PRIMARY KEY,
   workspace_id              TEXT NOT NULL REFERENCES workspace(id),

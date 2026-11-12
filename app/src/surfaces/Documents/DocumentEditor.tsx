@@ -149,6 +149,8 @@ function DocumentEditorBody({ onStatusChanged, forcedType }: DocumentEditorProps
   // A10-G7: convert navigates with the origin's number in route state, but a convert TARGET is a
   // draft, so it mounts this editor, not the detail where the toast used to live. It never rendered.
   const fromNumber = (location.state as { fromNumber?: string } | null)?.fromNumber;
+  // D192 point 2: arriving from a credit note on an invoice a fixed-asset disposal cleared.
+  const clearedByDisposal = (location.state as { clearedByDisposal?: { assetNumber: string; disposalDate: string } } | null)?.clearedByDisposal;
 
   const [docId, setDocId] = useState<string | null>(id ?? null);
   const [type, setType] = useState<DocumentType>(initialType);
@@ -955,6 +957,12 @@ function DocumentEditorBody({ onStatusChanged, forcedType }: DocumentEditorProps
     <div className="documents-editor">
       {fromNumber !== undefined && (
         <ActionFeedback tone="info" message={t('document.detail.convertedToast', { number: fromNumber })} />
+      )}
+      {clearedByDisposal !== undefined && (
+        <ActionFeedback
+          tone="warn"
+          message={t('document.detail.clearedByDisposal', { asset: clearedByDisposal.assetNumber, date: formatDate(clearedByDisposal.disposalDate) })}
+        />
       )}
 
       <div className="documents-editor-head">

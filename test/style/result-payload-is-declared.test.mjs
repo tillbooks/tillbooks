@@ -81,6 +81,8 @@ const CONVERTED = [
   // `openBalanceMinor` is the figure the provisions list renders; `openBalance` is the francs read.
   { module: './dist/core/accruals/accrual.js', verb: 'accrualPost', field: 'reversalEntryId', absent: 'reversalId' },
   { module: './dist/core/accruals/accrual.js', verb: 'accrualReverse', field: 'stornoEntryId', absent: 'entryId' },
+  // D192: the Abgrenzung H06 posts through A38's own post body answers the same pair as accrualPost.
+  { module: './dist/core/accruals/accrual.js', verb: 'postDisposalAbgrenzungWithin', field: 'reversalEntryId', absent: 'reversalId' },
   { module: './dist/core/accruals/provision.js', verb: 'provisionRelease', field: 'openBalanceMinor', absent: 'openBalance' },
   // The release undo answers the MIRROR's id as `reversalEntryId` (the Studio's name for the pair's
   // other half); `reversalId` is what `reverseOwnedEntry` answers one call down.
@@ -421,7 +423,7 @@ const UNDECLARED = { module: './dist/core/ledger/draft.js', verb: 'deleteDraft' 
 // 86 since D185 (2026-11-07): `importSettlement`, `setSettlementTemplate`, `getSettlementTemplate`.
 // 89 since A41.3 (2026-11-07): `assignBeleg`, `releaseBeleg`, `confirmCaptureFigures`.
 // 90 since the A41.3 follow-ups (2026-11-09): `assignBelegFile`.
-const DECLARED_FLOOR = 90;
+const DECLARED_FLOOR = 91;
 
 /**
  * The resolved compiler options of `tsconfig.test.json`, read through TypeScript's own JSONC parser

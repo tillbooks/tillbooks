@@ -22,7 +22,7 @@ as drafts and contact details, runs without asking, and every call the agent mak
 The dial covers agents that connect to TILL. An agent that can drive your browser or run commands on
 your computer can act as you: give your agent TILL, not your browser or your shell.
 
-> **Public beta, version 1.0.0-beta.2.** Nomadik GmbH, the company behind TILL, keeps its own books
+> **Public beta, version 1.0.0-beta.5.** Nomadik GmbH, the company behind TILL, keeps its own books
 > in it. If you move your books to TILL, keep your old system running until the figures match, and
 > read [what the beta does not do yet](#what-the-beta-does-not-do-yet) first.
 

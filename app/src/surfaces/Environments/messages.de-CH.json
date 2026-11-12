@@ -103,6 +103,10 @@
       "seed_failed": "Der Seed ist in der Phase «{phase}» fehlgeschlagen. Die vorherige Umgebung ist unverändert.",
       "phase_b_not_implemented": "Der Kopier- und Anonymisierungspfad kommt mit Phase B. Synthetische und Live-Umgebungen lassen sich schon jetzt anlegen und zurücksetzen.",
       "invalid_input": "Eine Eingabe war ungültig. Bitte prüfe die Felder.",
+      "swap_refused": "Die neue Version konnte nicht sicher eingesetzt werden. Die bisherige Umgebung ist unverändert.",
+      "target_in_use": "«{name}» ist gerade geöffnet. Ist sie die aktive Umgebung, wechsle zuerst zu einer anderen Umgebung; sonst beende das Programm, das sie nutzt, und versuche es nochmals. Es wurde nichts geändert.",
+      "target_data_missing": "Das Hauptbuch von «{name}» fehlt. Baue die Umgebung mit «Zurücksetzen» oder einer vollständigen Kopie neu auf und kopiere danach den Mandanten.",
+      "copy_gate_failed": "Die Kopie hat die Schlussprüfung nicht bestanden und wurde verworfen. Das Ziel ist unverändert.",
       "generic": "Die Aktion konnte nicht abgeschlossen werden. Es wurde nichts geändert."
     },
     "create_dialog": {

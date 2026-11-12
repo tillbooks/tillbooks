@@ -37,8 +37,8 @@
 import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
-import { ADAPTERS, bodySha256, writeMailDraft, replaceMailDraft, draftEditedSinceWritten } from '../mail/index.js';
-import type { MailStoreAdapter } from '../mail/index.js';
+import { ADAPTERS, bodySha256, writeMailDraft, replaceMailDraft, draftEditedSinceWritten, prepareDraftWrite, mboxClientGuardOf, recheckDraftWrite } from '../mail/index.js';
+import type { MailStoreAdapter, PreparedDraftWrite } from '../mail/index.js';
 import { registeredRuntime, retrieveVoiceExemplars } from '../voice/index.js';
 // A16's per-customer read model (it composes the same open items `list_open_items` reports, plus
 // the parked credits): the ONE door E06 takes into the debtors position.
@@ -291,6 +291,12 @@ interface AttemptOptions {
   /** Set on regenerate (D161.2): replace the draft even though the person edited it. */
   overwriteEdits?: boolean | undefined;
   idempotencyKey?: string | undefined;
+  /**
+   * The E04 Drafts-write preparation (mail-client busy check, read of the user's mbox), taken BEFORE
+   * this composite's transaction opened, so the ledger's write lock is never held across the `lsof`
+   * spawn (critic R1-L4). Handed down to the inner write.
+   */
+  prepared?: PreparedDraftWrite | undefined;
 }
 
 function insertRun(
@@ -478,6 +484,12 @@ function attemptGeneration(ctx: WorkspaceContext, opts: AttemptOptions): Result 
     return err('generation_failed', { draftRunId: run.id });
   }
 
+  // Critic R2-L1: the busy check ran before the transaction (R1-L4), so before the model wrote. A
+  // local model takes seconds to minutes, and a Thunderbird started meanwhile would not be seen: ask
+  // again now that the body exists, right before the write (one lsof, bounded at 2 s). A refusal
+  // rides the snapshot to the write, which answers `mail_store_busy` and stamps the run failed.
+  const prepared = recheckDraftWrite(opts.prepared);
+
   // The run row FIRST (its id rides the mail_draft row as provenance), then the E04 write. The
   // whole attempt runs inside one transaction, so a failed write leaves the row stamped 'failed'
   // and nothing half-done.
@@ -514,12 +526,14 @@ function attemptGeneration(ctx: WorkspaceContext, opts: AttemptOptions): Result 
           threadId: opts.thread.id,
           body,
           draftRunId: runId,
+          prepared,
           ...(opts.idempotencyKey === undefined ? {} : { idempotencyKey: `${opts.idempotencyKey}:w` }),
         })
       : replaceMailDraft(ctx, {
           draftId: replaceDraftId,
           body,
           draftRunId: runId,
+          prepared,
           ...(opts.overwriteEdits === true ? { overwriteEdits: true } : {}),
           ...(opts.idempotencyKey === undefined ? {} : { idempotencyKey: `${opts.idempotencyKey}:w` }),
         }),
@@ -561,7 +575,15 @@ function attemptGeneration(ctx: WorkspaceContext, opts: AttemptOptions): Result 
     draftId: (written as { ok: true; draftId?: string }).draftId ?? null,
     grounded,
     factsCount: context.factsUsed.length,
+    // D172: under `mail.mbox_client_guard` = refuse_running, a busy check that could not answer is named.
+    ...writeWarnings(written),
   });
+}
+
+/** The `warnings` a Drafts write answered (D172: an unanswered busy check under `refuse_running`), carried to the run's answer. */
+function writeWarnings(written: Result): { warnings: unknown[] } | Record<string, never> {
+  const warnings = (written as unknown as { warnings?: unknown }).warnings;
+  return Array.isArray(warnings) ? { warnings } : {};
 }
 
 export interface GenerateDraftInput {
@@ -589,6 +611,7 @@ export function generateDraft(ctx: WorkspaceContext, input: GenerateDraftInput):
     profileId: input.profileId,
     groundInLedger: input.groundInLedger,
     idempotencyKey: input.idempotencyKey,
+    prepared: prepareDraftWrite(adapter, account.store_path, undefined, undefined, mboxClientGuardOf(ctx)),
   };
   const run = (): Result => attemptGeneration(ctx, opts);
   if (typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0) {
@@ -674,6 +697,7 @@ export function regenerateDraft(ctx: WorkspaceContext, input: RegenerateDraftInp
     replaceDraftId: draft.id,
     overwriteEdits: input.overwriteEdits === true,
     idempotencyKey: input.idempotencyKey,
+    prepared: prepareDraftWrite(adapter, account.store_path, draft.store_ref, undefined, mboxClientGuardOf(ctx)),
   };
   const run = (): Result => attemptGeneration(ctx, opts);
   if (typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0) {
@@ -693,7 +717,10 @@ export interface ListDraftRunsInput {
  * BODY READ ON DEMAND from the Drafts-folder locator, never from SQLite (OP6). `draftGone` says
  * the human sent or deleted it in their own client; `modelChanged` says the registered runtime's
  * model no longer matches the one that wrote it ("Mit einem anderen Modell erstellt."). A read:
- * leaves the database byte-identical.
+ * leaves the database byte-identical (D96: `egress_self_test` is the one read verb that writes), so a
+ * draft the user's client MOVED is shown where it now is, and its `mail_draft.store_ref` is corrected
+ * by the next write that touches it (`replaceMailDraft` stores the locator it really replaced), not
+ * here.
  */
 export function listDraftRuns(ctx: WorkspaceContext, input: ListDraftRunsInput = {}): Result {
   if (input.threadId !== undefined && readThread(ctx, input.threadId) === undefined) {
@@ -712,8 +739,8 @@ export function listDraftRuns(ctx: WorkspaceContext, input: ListDraftRunsInput =
   const registration = registeredRuntime();
   const runs = rows.map((row) => {
     const draft = ctx.store.db
-      .prepare('SELECT id, store_ref, account_id FROM mail_draft WHERE workspace_id = ? AND draft_run_id = ?')
-      .get(ctx.workspaceId, row.id) as { id: string; store_ref: string; account_id: string } | undefined;
+      .prepare('SELECT id, store_ref, account_id, body_sha256 FROM mail_draft WHERE workspace_id = ? AND draft_run_id = ?')
+      .get(ctx.workspaceId, row.id) as { id: string; store_ref: string; account_id: string; body_sha256: string } | undefined;
     let body: string | null = null;
     let draftGone = row.status === 'ok';
     if (input.includeBodies === false) {
@@ -721,9 +748,13 @@ export function listDraftRuns(ctx: WorkspaceContext, input: ListDraftRunsInput =
     } else if (draft !== undefined) {
       const account = readAccount(ctx, draft.account_id);
       if (account !== undefined) {
-        const raw = adapterOf(account).readBody(account.store_path, draft.store_ref);
-        if (raw !== undefined) {
-          body = stripHeaders(raw);
+        // Read by IDENTITY (Message-ID or body hash on the bytes read), never by position alone: a
+        // compaction in the user's client shifts mbox positions, and a positional read would show
+        // another message (the user's own draft) as TILL's. A draft that moved is followed; a draft
+        // that is no longer there is `draftGone`.
+        const found = adapterOf(account).locateDraft(account.store_path, draft.store_ref, { draftId: draft.id, bodySha256: draft.body_sha256 });
+        if (found !== undefined) {
+          body = stripHeaders(found.raw);
           draftGone = false;
         }
       }

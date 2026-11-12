@@ -103,6 +103,10 @@
       "seed_failed": "The seed failed in the “{phase}” phase. The prior environment is unchanged.",
       "phase_b_not_implemented": "The copy and sanitize path lands with Phase B. Synthetic and live environments can already be created and reset.",
       "invalid_input": "An input was invalid. Please check the fields.",
+      "swap_refused": "The new version could not be put in place safely. The environment is unchanged.",
+      "target_in_use": "“{name}” is open right now. If it is the active environment, switch to another environment first; otherwise quit the program using it and try again. Nothing was changed.",
+      "target_data_missing": "The ledger of “{name}” is missing. Rebuild the environment with Reset or a full copy, then copy the mandate.",
+      "copy_gate_failed": "The copy failed its final check and was discarded. The target is unchanged.",
       "generic": "The action could not be completed. Nothing was changed."
     },
     "create_dialog": {

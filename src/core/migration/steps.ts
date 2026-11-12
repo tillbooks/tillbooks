@@ -439,7 +439,7 @@ export function commitStep(ctx: WorkspaceContext, input: { planId: unknown; step
     const priorCommit = ctx.store.db
       .prepare("SELECT 1 FROM migration_step WHERE plan_id = ? AND workspace_id = ? AND status IN ('committed','verified') LIMIT 1")
       .get(plan.id, ctx.workspaceId) as unknown;
-    if (priorCommit === undefined && !hasPreMigrationBackup(plan)) {
+    if (priorCommit === undefined && !hasPreMigrationBackup(ctx.store.db, ctx.workspaceId, plan)) {
       return err('needs_backup', { reason: 'a G04 create_backup must be on record before the first live commit' });
     }
   }

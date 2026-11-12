@@ -439,7 +439,7 @@ function Amounts({ line, lookups, busy, onAsk, target, restZero }: DetailsPanelP
         const invalid = !asIs && a.value.trim() !== '' && askMinor(a) === null;
         const leg = rule?.legs[a.legIndex];
         const factor = leg?.amount.kind === 'factor' ? leg.amount : computed?.num !== undefined && computed.den !== undefined ? { num: computed.num, den: computed.den, explain: computed.explain } : undefined;
-        // UX judge round 2, item 11: in words ("Bruttoumsatz aus 15.12: MWST 8.1 % und Gebühr 9.9 % vom
+        // UX judge round 2, item 11: in words ("Bruttoumsatz aus 27.00: MWST 8.1 % und Gebühr 9.9 % vom
         // Netto"), never the fraction.
         const how = factor === undefined ? '' : howWords(t, factor.explain ?? computed?.explain, factor.num, factor.den);
         const formula =

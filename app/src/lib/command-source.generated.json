@@ -780,7 +780,7 @@
     {
       "name": "asset_disposal_preview",
       "kind": "read",
-      "reqCount": 4,
+      "reqCount": 3,
       "hasComplexInput": false,
       "capabilities": [
         "read_books"
@@ -806,7 +806,7 @@
     {
       "name": "asset_dispose",
       "kind": "write",
-      "reqCount": 4,
+      "reqCount": 3,
       "hasComplexInput": false,
       "capabilities": [
         "post"

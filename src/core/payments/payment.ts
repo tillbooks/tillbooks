@@ -88,6 +88,9 @@ import { revertReimbursedClaimsForPayment } from '../hr/reimbursementReversal.js
 // the payments nor the banking barrel), the same discipline as the two leaf edges above.
 import { clearAnzahlungVatOnAllocation } from '../banking/anzahlungVat.js';
 import { autobookAfterPaymentReversed } from '../banking/autobook.js';
+// D192: a LEAF of the assets module (it imports nothing from payments or sales), so no cycle.
+import { invoiceClearedByDisposal } from '../assets/invoiceClearing.js';
+import type { InvoiceClearedWarning } from '../assets/invoiceClearing.js';
 
 // --- Fixed §H-ENUM value lists this spec owns ---------------------------------------------------
 
@@ -852,9 +855,9 @@ function writeDocumentStatus(ctx: WorkspaceContext, doc: { id: string; status: s
  * the credit note pays the relief out in cash, so that slice no longer offsets the invoice). This
  * is the same netting A16's `creditedOpenMinor` and A21's `principalMinor` derive, restated over
  * A14's own `settledMinor`, so the three reads and this write cannot disagree on when an invoice
- * has nothing left to chase. §H-TENANT on the query.
+ * has nothing left to chase. §H-TENANT on the query. D191: `counts` keeps only some credit notes (assets).
  */
-function creditCoverMinor(ctx: WorkspaceContext, invoiceId: string): number {
+export function creditCoverMinor(ctx: WorkspaceContext, invoiceId: string, counts?: (creditNoteId: string) => boolean): number {
   const rows = ctx.store.db
     .prepare(
       `SELECT id, total_minor FROM document
@@ -863,7 +866,7 @@ function creditCoverMinor(ctx: WorkspaceContext, invoiceId: string): number {
     )
     .all(ctx.workspaceId, invoiceId) as { id: string; total_minor: number }[];
   let cover = 0;
-  for (const row of rows) {
+  for (const row of rows.filter((r) => counts === undefined || counts(r.id))) {
     cover += Math.max(0, row.total_minor - settledMinor(ctx, 'document', row.id));
   }
   return cover;
@@ -1931,7 +1934,22 @@ function toLineInputs(legs: PaymentLeg[]): LineInput[] {
 export function previewPayment(ctx: WorkspaceContext, input: RecordPaymentInput): Result {
   const planned = planPayment(ctx, input);
   if (!planned.ok) return planned.error;
-  return ok(renderPreview(planned.plan));
+  return ok({ ...renderPreview(planned.plan), warnings: clearedInvoiceWarnings(ctx, planned.plan.rows) });
+}
+
+/**
+ * D192 point 2: a Skonto or a write-off on an invoice whose sale line a fixed-asset disposal cleared
+ * names that disposal (`invoice_cleared_by_disposal`), in the preview before the click and in the
+ * result after it. A warning only: the reduction books where it always does.
+ */
+function clearedInvoiceWarnings(ctx: WorkspaceContext, rows: readonly PlannedRow[]): InvoiceClearedWarning[] {
+  const out: InvoiceClearedWarning[] = [];
+  for (const r of rows) {
+    if (r.targetKind !== 'document' || (r.skontoMinor <= 0 && r.writeOffMinor <= 0)) continue;
+    const w = invoiceClearedByDisposal(ctx, r.targetId);
+    if (w !== null && !out.some((x) => x.transactionId === w.transactionId)) out.push(w);
+  }
+  return out;
 }
 
 function renderPreview(plan: PaymentPlan) {
@@ -2092,6 +2110,7 @@ export function recordPayment(ctx: WorkspaceContext, input: RecordPaymentInput):
         entryId,
         onAccountMinor: plan.onAccountMinor,
         ...echoes(ctx, plan.rows),
+        warnings: clearedInvoiceWarnings(ctx, plan.rows),
       });
     }),
   );

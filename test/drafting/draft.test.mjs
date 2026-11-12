@@ -11,7 +11,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, writeFileSync, unlinkSync, readFileSync, appendFileSync } from 'node:fs';
+import { readdirSync, writeFileSync, unlinkSync, readFileSync, appendFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { installEgressProbe } from '../mail/egress-probe.mjs';
@@ -398,6 +398,64 @@ test('E06 revDSG erasure: contacts_anonymise purges the draft runs with the pers
     w.deps.store.db.prepare('SELECT COUNT(*) AS n FROM draft_run WHERE thread_id = ?').get(w.thread.id).n,
     0,
   );
+});
+
+// --- the pane reads by IDENTITY, not by position (a compaction between write and read) ------------------
+
+const SEP = 'From - Thu Jul 16 00:00:00 2026\n';
+/** What a client's compaction does after the first message left the folder: every later one moves up. */
+const dropFirstMessage = (text) => text.slice(text.indexOf('\nFrom ', 1) + 1);
+const draftRow = (w) => w.deps.store.db.prepare('SELECT store_ref FROM mail_draft ORDER BY created_at DESC LIMIT 1').get();
+
+test('E06 draft_list: after a compaction shifted TILL`s draft, the pane shows TILL`s draft (not the user`s), writes nothing, and says gone once it is sent', () => {
+  const w = world({ store: 'mbox' });
+  const draftsFile = join(w.root, 'Drafts');
+  // The user already has an own draft A in the Drafts mbox before TILL writes (all invented text).
+  writeFileSync(draftsFile, `${SEP}From: praxis@example.ch\nSubject: Eigener Entwurf A\n\nUSER DRAFT A\n\n`);
+  const generated = w.call('draft_generate', { threadId: w.thread.id, idempotencyKey: 'cmp-g' });
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  assert.equal(draftRow(w).store_ref, 'Drafts#1', 'TILL`s draft landed after the user`s draft A');
+  // The user saves another own draft B, then sends A: the client compacts the folder.
+  writeFileSync(draftsFile, `${readFileSync(draftsFile, 'utf8')}${SEP}From: praxis@example.ch\nSubject: Eigener Entwurf B\n\nUSER DRAFT B\n\n`);
+  writeFileSync(draftsFile, dropFirstMessage(readFileSync(draftsFile, 'utf8')));
+  // Positionally, Drafts#1 is now the user's draft B.
+
+  const listed = w.call('draft_list', { threadId: w.thread.id });
+  assert.equal(listed.ok, true, JSON.stringify(listed));
+  const run = listed.runs[0];
+  assert.equal(run.draftGone, false);
+  assert.doesNotMatch(run.body, /USER DRAFT B/, 'the pane showed the user`s draft as TILL`s');
+  assert.match(run.body, /ENTWURF \d/, 'the pane shows TILL`s own draft');
+  // D96: a read verb writes nothing, so the stale locator stays until a write touches the draft.
+  assert.equal(draftRow(w).store_ref, 'Drafts#1', 'draft_list must not write (D96: egress_self_test is the one read-verb writer)');
+
+  // A regenerate (a write) replaces TILL's draft where it really is, never draft B, and stores that locator.
+  const regen = w.call('draft_regenerate', { draftRunId: run.draftRunId ?? run.id, idempotencyKey: 'cmp-r1' });
+  assert.equal(regen.ok, true, JSON.stringify(regen));
+  assert.equal(draftRow(w).store_ref, 'Drafts#0', 'the stored locator follows the draft to where it was replaced');
+  assert.match(readFileSync(draftsFile, 'utf8'), /USER DRAFT B/, 'the user`s draft B is untouched by the replace');
+
+  // The user sends TILL's draft: it leaves Drafts. The pane says gone, never shows draft B.
+  writeFileSync(draftsFile, dropFirstMessage(readFileSync(draftsFile, 'utf8')));
+  const gone = w.call('draft_list', { threadId: w.thread.id });
+  assert.equal(gone.runs[0].draftGone, true);
+  assert.equal(gone.runs[0].body, null);
+  const again = w.call('draft_regenerate', { draftRunId: gone.runs[0].draftRunId ?? gone.runs[0].id, idempotencyKey: 'cmp-r2' });
+  assert.equal(again.ok, false);
+  assert.equal(again.error, 'draft_gone');
+  assert.match(readFileSync(draftsFile, 'utf8'), /USER DRAFT B/, 'the user`s draft B is untouched');
+});
+
+test('E06 draft_list: a Maildir draft the client renamed (a flag change) is still found', () => {
+  const w = world();
+  const generated = w.call('draft_generate', { threadId: w.thread.id, idempotencyKey: 'mdr-g' });
+  assert.equal(generated.ok, true, JSON.stringify(generated));
+  const before = draftRow(w).store_ref;
+  renameSync(join(w.root, before), join(w.root, `${before}S`));
+  const listed = w.call('draft_list', { threadId: w.thread.id });
+  assert.equal(listed.runs[0].draftGone, false);
+  assert.match(listed.runs[0].body, /ENTWURF \d/);
+  assert.equal(draftRow(w).store_ref, before, 'the read wrote nothing (D96)');
 });
 
 test('E06 OP6: none of the above opened a socket', () => {

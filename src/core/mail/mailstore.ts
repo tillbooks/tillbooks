@@ -29,8 +29,9 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { applySavedView } from '../customization/views.js';
-import { ADAPTERS, bodySha256, directionOf, parseHeaders } from './adapters.js';
-import type { MailStoreAdapter, WalkedMessage } from './adapters.js';
+import { getSetting } from '../settings/settings.js';
+import { ADAPTERS, bodySha256, directionOf, DraftGoneError, MailStoreBusyError, MailStoreChangedError, parseHeaders, PreparedDraftWrite, recheckPreparedWrite } from './adapters.js';
+import type { MailStoreAdapter, MboxClientGuard, WalkedMessage } from './adapters.js';
 import { isMailAdapter, isMailBucket, MAIL_ADAPTERS, MAIL_BUCKETS } from './enums.js';
 import type { MailBucket } from './enums.js';
 import { existsSync, statSync } from 'node:fs';
@@ -123,6 +124,24 @@ function readThread(ctx: WorkspaceContext, threadId: unknown): MailThreadRow | u
   return ctx.store.db
     .prepare('SELECT * FROM mail_thread WHERE workspace_id = ? AND id = ?')
     .get(ctx.workspaceId, threadId) as MailThreadRow | undefined;
+}
+
+/**
+ * The refusal for a Drafts write that threw. Two are specific because their fix is specific:
+ * `mail_store_busy` (a running mail client holds the Drafts mbox or its profile: close it, then
+ * regenerate) and `mail_store_changed` (the Drafts file changed between TILL's read and its write,
+ * for instance the client saved a draft: simply try again). A replace whose draft no longer proves
+ * to be TILL's own is `draft_gone`. Anything else is `drafts_not_writable`. Nothing was written in
+ * any of these cases.
+ */
+function draftWriteRefusal(e: unknown, storePath: string, draftId?: string): Result {
+  if (e instanceof DraftGoneError) return err('draft_gone', { draftId });
+  if (e instanceof MailStoreBusyError) {
+    // D172: a check that could not answer is a choice the workspace can change, so the refusal names it.
+    return err('mail_store_busy', { storePath, evidence: e.evidence, reason: e.reason, ...(e.reason === 'mail_client_unknown' ? { settingKey: 'mail.mbox_client_guard' } : {}) });
+  }
+  if (e instanceof MailStoreChangedError) return err('mail_store_changed', { storePath });
+  return err('drafts_not_writable', { storePath });
 }
 
 function adapterOf(row: MailAccountRow): MailStoreAdapter {
@@ -591,6 +610,50 @@ export interface DraftWriteInput {
   inReplyTo?: string;
   draftRunId?: string;
   idempotencyKey?: string;
+  /**
+   * Internal: the adapter's `prepareWrite` snapshot, taken by a composite (E06's draft_generate)
+   * before ITS transaction opened. Only a real `PreparedDraftWrite` instance is honoured.
+   */
+  prepared?: PreparedDraftWrite | undefined;
+}
+
+/**
+ * The adapter's ledger-free preparation of a Drafts write (the mail-client busy check and the read of
+ * the user's mbox), taken BEFORE the ledger transaction opens so the write lock is never held across
+ * an `lsof` spawn (critic R1-L4). A composite that already prepared outside its own transaction hands
+ * its snapshot down; an object that is not a real snapshot is ignored and the write prepares again.
+ */
+export function prepareDraftWrite(
+  adapter: MailStoreAdapter,
+  storePath: string,
+  storeRef?: string,
+  given?: unknown,
+  guard?: MboxClientGuard,
+): PreparedDraftWrite | undefined {
+  if (given instanceof PreparedDraftWrite) return given;
+  return adapter.prepareWrite?.(storePath, storeRef, guard);
+}
+
+/** D172 (critic R2-M1): the workspace's `mail.mbox_client_guard` in force (a misfit stored value reads as the default). */
+export function mboxClientGuardOf(ctx: WorkspaceContext): MboxClientGuard {
+  return getSetting<MboxClientGuard>(ctx, 'mail.mbox_client_guard');
+}
+
+/**
+ * Critic R2-L1: the busy check asked again right before the write, for a composite that prepared before
+ * a slow step (E06's model call). See `recheckPreparedWrite`.
+ */
+export function recheckDraftWrite(prepared: PreparedDraftWrite | undefined): PreparedDraftWrite | undefined {
+  return recheckPreparedWrite(prepared);
+}
+
+/**
+ * What a write's result says when `mail.mbox_client_guard` is `refuse_running` and the busy check could
+ * not answer: the write went ahead, and the caller is told the mail client was not ruled out.
+ */
+export function unansweredCheckWarning(prepared: PreparedDraftWrite | undefined): { warnings: { code: 'mail_client_unknown'; evidence: string; settingKey: 'mail.mbox_client_guard' }[] } | Record<string, never> {
+  if (!(prepared instanceof PreparedDraftWrite) || prepared.unanswered === undefined) return {};
+  return { warnings: [{ code: 'mail_client_unknown', evidence: prepared.unanswered, settingKey: 'mail.mbox_client_guard' }] };
 }
 
 /**
@@ -609,6 +672,7 @@ export function writeMailDraft(ctx: WorkspaceContext, input: DraftWriteInput): R
   const account = readAccount(ctx, thread.account_id);
   if (account === undefined) return err('not_found', { accountId: thread.account_id });
   const adapter = adapterOf(account);
+  const prepared = prepareDraftWrite(adapter, account.store_path, undefined, input.prepared, mboxClientGuardOf(ctx));
 
   const run = (): Result => {
     // The reply target: the counterpart of the newest inbound message, else the thread's last
@@ -642,11 +706,13 @@ export function writeMailDraft(ctx: WorkspaceContext, input: DraftWriteInput): R
 
     let storeRef: string;
     try {
-      storeRef = adapter.writeDraft(account.store_path, raw);
-    } catch {
-      // P9: an unwritable Drafts folder is a structured refusal, and the caller (E06's draft_runs
-      // when it lands) records the failure so the work is not silently lost.
-      return err('drafts_not_writable', { storePath: account.store_path });
+      storeRef = adapter.writeDraft(account.store_path, raw, prepared);
+    } catch (e) {
+      // P9: an unwritable Drafts folder is a structured refusal, and the caller (E06's draft_runs)
+      // records the failure so the work is not silently lost. A running mail client holding the mbox,
+      // or a Drafts file that changed under the write, is its own refusal: nothing was written, and
+      // the fix is different (close the client, or simply try again).
+      return draftWriteRefusal(e, account.store_path);
     }
 
     ctx.store.db
@@ -668,7 +734,7 @@ export function writeMailDraft(ctx: WorkspaceContext, input: DraftWriteInput): R
     const row = ctx.store.db
       .prepare('SELECT * FROM mail_draft WHERE workspace_id = ? AND id = ?')
       .get(ctx.workspaceId, draftId) as MailDraftRow;
-    return ok({ draftId, draft: mapDraft(row) });
+    return ok({ draftId, draft: mapDraft(row), ...unansweredCheckWarning(prepared) });
   };
 
   if (typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0) {
@@ -684,6 +750,8 @@ export interface DraftReplaceInput {
   /** D161.2: replace a draft the person edited since TILL wrote it. Without it that is `draft_edited`. */
   overwriteEdits?: boolean;
   idempotencyKey?: string;
+  /** Internal: as `DraftWriteInput.prepared`, for E06's draft_regenerate. */
+  prepared?: PreparedDraftWrite | undefined;
 }
 
 /**
@@ -703,11 +771,20 @@ function storedDraftSha256(adapter: MailStoreAdapter, storePath: string, storeRe
  * generation, and again at every replace, `storedDraftSha256`), so any change to the stored message, a
  * single character included, reads as an edit.
  * `undefined` when the draft is gone (sent or deleted).
+ *
+ * The draft is found BY IDENTITY (`locateDraft`: its `<id...@till.local>` Message-ID, else the body
+ * hash), never by its locator alone: after the user's client compacts an mbox, `Drafts#n` names the
+ * NEXT message, which may be the user's own draft, and a positional read would judge (and a replace
+ * would overwrite) a message that is not TILL's.
  */
-export function draftEditedSinceWritten(adapter: MailStoreAdapter, storePath: string, draft: { store_ref: string; body_sha256: string }): boolean | undefined {
-  const current = adapter.readBody(storePath, draft.store_ref);
-  if (current === undefined) return undefined;
-  return !sameModuloTrimmedNewlines(current, draft.body_sha256);
+export function draftEditedSinceWritten(
+  adapter: MailStoreAdapter,
+  storePath: string,
+  draft: { id: string; store_ref: string; body_sha256: string },
+): boolean | undefined {
+  const found = adapter.locateDraft(storePath, draft.store_ref, { draftId: draft.id, bodySha256: draft.body_sha256 });
+  if (found === undefined) return undefined;
+  return !sameModuloTrimmedNewlines(found.raw, draft.body_sha256);
 }
 
 /**
@@ -737,9 +814,10 @@ function sameModuloTrimmedNewlines(current: string, storedSha: string): boolean 
  * Replace an existing TILL-written draft in the mail client's Drafts folder (US-E06.4: regenerate
  * is ONE message, never a growing pile). Same composition as `writeMailDraft`, same OP6 posture
  * (locator + hash persisted, never a body), and the mail_draft ROW is updated in place so the
- * thread keeps one draft identity across regenerations. A draft whose locator no longer resolves
- * is `draft_gone`: once the human sent or deleted it in their own client, it is theirs, and TILL
- * does not re-create it (the caller offers a fresh write instead).
+ * thread keeps one draft identity across regenerations. A draft that is no longer in the Drafts
+ * folder (found by identity, not by its locator) is `draft_gone`: once the human sent or deleted it
+ * in their own client, it is theirs, and TILL does not re-create it (the caller offers a fresh write
+ * instead).
  */
 export function replaceMailDraft(ctx: WorkspaceContext, input: DraftReplaceInput): Result {
   if (typeof input.draftId !== 'string' || input.draftId.length === 0) {
@@ -761,6 +839,7 @@ export function replaceMailDraft(ctx: WorkspaceContext, input: DraftReplaceInput
   if (input.overwriteEdits !== undefined && typeof input.overwriteEdits !== 'boolean') {
     return err('invalid_input', { field: 'overwriteEdits' });
   }
+  const prepared = prepareDraftWrite(adapter, account.store_path, draft.store_ref, input.prepared, mboxClientGuardOf(ctx));
 
   const run = (): Result => {
     // The store is the authority: a draft the user already sent or deleted is gone, not re-minted.
@@ -800,9 +879,11 @@ export function replaceMailDraft(ctx: WorkspaceContext, input: DraftReplaceInput
 
     let storeRef: string;
     try {
-      storeRef = adapter.replaceDraft(account.store_path, draft.store_ref, raw);
-    } catch {
-      return err('drafts_not_writable', { storePath: account.store_path });
+      // The adapter re-proves the draft's identity on the very bytes it rewrites (Message-ID, else the
+      // body hash) and answers DraftGoneError, writing nothing, when TILL's draft is no longer there.
+      storeRef = adapter.replaceDraft(account.store_path, draft.store_ref, raw, { draftId: draft.id, bodySha256: draft.body_sha256 }, prepared);
+    } catch (e) {
+      return draftWriteRefusal(e, account.store_path, draft.id);
     }
 
     ctx.store.db
@@ -814,7 +895,7 @@ export function replaceMailDraft(ctx: WorkspaceContext, input: DraftReplaceInput
     const row = ctx.store.db
       .prepare('SELECT * FROM mail_draft WHERE workspace_id = ? AND id = ?')
       .get(ctx.workspaceId, draft.id) as MailDraftRow;
-    return ok({ draftId: draft.id, draft: mapDraft(row) });
+    return ok({ draftId: draft.id, draft: mapDraft(row), ...unansweredCheckWarning(prepared) });
   };
 
   if (typeof input.idempotencyKey === 'string' && input.idempotencyKey.length > 0) {

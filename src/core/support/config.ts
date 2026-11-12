@@ -11,8 +11,10 @@
  * It also means every test points at a temporary directory rather than the developer's home.
  */
 
-import { mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { makeDirectoryDurably, writeFileDurably } from '../store/sqlite-store.js';
 
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
@@ -83,11 +85,12 @@ export function readConfig(paths: SupportPaths): ConfigRead {
 export function writeCapture(paths: SupportPaths, capture: boolean): Result {
   const current = readConfig(paths);
   const next = { ...current.rest, diagnostics: { capture } };
-  const tmp = `${paths.configPath}.tmp`;
   try {
-    mkdirSync(paths.dir, { recursive: true });
-    writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
-    renameSync(tmp, paths.configPath);
+    // Durable replace (temp in the same directory, fsync, rename, directory fsync): a crash can leave
+    // the old preference or the new one, never a torn file that `readConfig` would report unreadable.
+    // The temp name is unique per write, so the MCP and REST faces writing at once cannot share one.
+    makeDirectoryDurably(paths.dir);
+    writeFileDurably(paths.configPath, `${JSON.stringify(next, null, 2)}\n`);
   } catch (e) {
     // The failure mode of a privacy control must be the private one: the caller leaves capture OFF.
     return err('config_not_writable', {

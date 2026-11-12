@@ -67,5 +67,6 @@
   "writeOffThresholdMinor": 100,
   "balanced": true,
   "error": null,
-  "ok": true
+  "ok": true,
+  "warnings": []
 }

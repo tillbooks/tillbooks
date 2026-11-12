@@ -929,7 +929,7 @@ export function readiness(ctx: WorkspaceContext, input: { planId: unknown }): Re
 
   // Condition 6, surfaced as a blocking item until a G04 create_backup is on record (// INTEGRATION-SEAM(G04)).
   const moneyStepExists = steps.some((s) => dataClassDef(s.data_class)?.moneyPath === true);
-  const backupOnRecord = hasPreMigrationBackup(plan);
+  const backupOnRecord = hasPreMigrationBackup(ctx.store.db, ctx.workspaceId, plan);
   if (moneyStepExists && !backupOnRecord) {
     blocking.push({ item: 'backup_required', owner: 'du', reason: 'Vor der ersten Übernahme in die echten Bücher braucht es eine Sicherung' });
   }

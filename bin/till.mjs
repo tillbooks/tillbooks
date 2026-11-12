@@ -203,7 +203,7 @@ switch (command) {
           ? {
               adoptedBook:
                 choice.adoptedUnavailable !== undefined
-                  ? { path: choice.adoptedUnavailable.path, unavailable: 'missing' }
+                  ? { path: choice.adoptedUnavailable.path, unavailable: choice.adoptedUnavailable.reason }
                   : { path: choice.path },
             }
           : {}),
@@ -217,7 +217,7 @@ switch (command) {
       // A live instance already owns the machine: point at it, open the browser there, and exit 0.
       // Starting a second scheduler on one database is the exact double-fire the lock prevents.
       // The holder URL carries a one-time ticket derived from the key file (D166): print it to a
-      // terminal only, and open it through `openStudioLink`, which keeps it off the command line on macOS.
+      // terminal only, and open it through `openStudioLink`, which keeps it off every command line (D162).
       const { redactStudioLink } = await import(new URL('../dist/api/up.js', import.meta.url));
       const shown = process.stderr.isTTY === true ? result.holder.url : redactStudioLink(result.holder.url);
       console.error(`till up: already running at ${shown} (pid ${result.holder.pid}). Opening it.`);

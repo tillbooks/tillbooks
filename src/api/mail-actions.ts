@@ -88,7 +88,7 @@ export function mailActions(h: MailActionHelpers): readonly ActionDef[] {
     ctxAction(
       'mail_draft_write',
       'write:final:internal',
-      'Schreibe einen Entwurf in den Entwurfsordner des Mail-Programms: renders an RFC-5322 reply (From the account address, To the counterpart, In-Reply-To the newest inbound message) into the local Drafts folder and persists locator + hash, not the body. The human reviews and sends it in their own mail app: TILL has no send verb and no SMTP anywhere (P8 by construction). One idempotency key writes exactly ONE Drafts message however often it is called; an unwritable folder answers drafts_not_writable.',
+      'Schreibe einen Entwurf in den Entwurfsordner des Mail-Programms: renders an RFC-5322 reply (From the account address, To the counterpart, In-Reply-To the newest inbound message) into the local Drafts folder and persists locator + hash, not the body. The human reviews and sends it in their own mail app: TILL has no send verb and no SMTP anywhere (P8 by construction). One idempotency key writes exactly ONE Drafts message however often it is called; an unwritable folder answers drafts_not_writable, a mail client holding the Drafts mbox mail_store_busy (reason mail_client_running, or mail_client_unknown when the lsof busy check could not answer, which refuses rather than write), and a Drafts file that changed under the write mail_store_changed, with nothing written in any of the three.',
       ctxSchema({ threadId: STR, body: STR, inReplyTo: STR, draftRunId: STR, idempotencyKey: STR }, ['threadId', 'body']),
       (ctx, input) => writeMailDraft(ctx, as(input)),
     ),

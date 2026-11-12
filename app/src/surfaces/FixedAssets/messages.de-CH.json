@@ -286,7 +286,11 @@
       "empty": {
         "title": "Noch keine finanziellen Ereignisse",
         "hint": "Erfasse die Anschaffung oder eine Eröffnungsbilanz, um diese Anlage zu aktivieren."
-      }
+      },
+      "proceedsSettled": "Der Erlösbeleg dieses Abgangs gilt noch. Storniere zuerst die Zahlung bzw. storniere die Rechnung oder schreibe sie voll gut, dann den Abgang.",
+      "proceedsOverride": "In diesem Fall trotzdem stornieren",
+      "proceedsOverrideReason": "Grund für die Ausnahme",
+      "proceedsStandsWarn": "Der Erlösbeleg dieses Abgangs gilt noch. Die Stornierung geht trotzdem durch (Einstellung) und nennt ihn."
     },
     "reconciliation": {
       "title": "Anlagenabstimmung",
@@ -536,7 +540,51 @@
       "gain": "Buchgewinn",
       "loss": "Buchverlust",
       "journalPreview": "Buchung",
-      "post": "Abgang buchen"
+      "post": "Abgang buchen",
+      "proceedsDoc": "Erlösbeleg (optional)",
+      "proceedsDocNoneOption": "Kein Beleg",
+      "proceedsDocInvoice": "Rechnung",
+      "proceedsDocPayment": "Zahlungseingang",
+      "proceedsDocNone": "Ohne Erlösbeleg prüft eine spätere Stornierung des Abgangs keine Erlöse.",
+      "proceedsDocLinked": "Solange dieser Beleg gilt, lässt sich der Abgang nicht stornieren: zuerst die Zahlung stornieren bzw. die Rechnung stornieren oder voll gutschreiben.",
+      "proceedsDocInvalid": "Dieser Beleg lässt sich nicht verknüpfen.",
+      "warning": {
+        "proceeds_amount_differs": "Der Betrag des Belegs weicht vom Erlös ab (eine Rechnung enthält die MWST). Der Erlös wird wie erfasst gebucht.",
+        "proceeds_currency_differs": "Der Beleg lautet auf eine andere Währung als der Erlös.",
+        "counterparty_differs": "Die Gegenpartei des Belegs weicht von der erfassten ab.",
+        "proceeds_payment_spans_invoices": "Diese Zahlung begleicht mehrere Rechnungen. Verknüpft wird die Zahlung, keine Rechnung.",
+        "proceeds_double_counted": "Die Rechnung bucht diesen Verkauf schon. Buchst du den Erlös zusätzlich auf dieses Konto, zählt der Verkauf doppelt.",
+        "proceeds_payment_partly_unallocated": "Diese Zahlung liegt nicht ganz auf einer Rechnung. Verknüpft wird die Zahlung, nicht die Rechnung.",
+        "proceeds_exceed_sale_line": "Mehr als die grösste Verkaufszeile auf diesem Konto: auch anderer Umsatz der Rechnung würde ausgeglichen.",
+        "sale_reduced": "Auf der Rechnung liegen eine Gutschrift, ein Skonto oder eine Ausbuchung. Der Gewinn ist vor diesen Minderungen ausgewiesen.",
+        "sale_in_other_month": "Abgang und Rechnung liegen in verschiedenen Monaten.",
+        "sale_in_other_financial_year": "Abgang und Rechnung liegen in verschiedenen Geschäftsjahren.",
+        "abgrenzung_period_locked": "Die Abgrenzung fällt in eine gesperrte Periode: der Abgang wird abgelehnt, bis sie wieder offen ist."
+      },
+      "proceedsDocReason": {
+        "not_found": "Diesen Beleg gibt es in dieser Buchhaltung nicht.",
+        "not_an_invoice": "Verknüpfen kannst du nur eine Rechnung, keine Offerte und keine Gutschrift.",
+        "not_issued": "Diese Rechnung ist noch ein Entwurf. Stelle sie zuerst aus.",
+        "not_incoming": "Verknüpfen kannst du nur einen Zahlungseingang.",
+        "not_standing": "Dieser Beleg ist schon storniert, gutgeschrieben oder zurückgebucht.",
+        "payment_not_for_invoice": "Diese Zahlung begleicht die gewählte Rechnung nicht.",
+        "no_proceeds": "Ein Abgang ohne Erlös hat keinen Erlösbeleg.",
+        "no_sale_line": "Diese Rechnung hat keine gebuchte Verkaufszeile. Buche den Erlös selbst (Erlösbuchung mit Grund).",
+        "sale_not_single_line": "Diese Rechnung hat mehrere Positionen. Stelle die Anlage allein in Rechnung oder buche den Erlös selbst (Erlösbuchung mit Grund).",
+        "proceeds_needs_invoice": "Dieser Zahlungseingang liegt auf keiner einzelnen Rechnung. Stelle die Rechnung aus, weise ihr die Zahlung zu und wähle dann die Rechnung.",
+        "invoice_already_cleared": "Diese Rechnung gehört schon zu einem anderen Abgang."
+      },
+      "proceedsDocClears": "Der Erlös kommt aus der Rechnung: der Abgang gleicht ihre Verkaufszeile aus, so zählt der Verkauf mit seiner MWST einmal.",
+      "proceedsFromInvoice": "Erlös aus der Rechnung",
+      "abgrenzung": "Abgrenzung per {date}, Rückbuchung am {reversal}",
+      "refusal": {
+        "proceeds_from_document": "Der Erlös kommt aus der Rechnung und weicht vom eingegebenen ab.",
+        "sale_in_other_financial_year": "Abgang und Rechnung liegen in verschiedenen Geschäftsjahren. Übernommen ist das Datum der Rechnung.",
+        "years_not_adjacent": "Zwischen Abgang und Rechnung liegt mehr als ein Jahresabschluss.",
+        "disposal_date_in_future": "Ein Abgang wird am Tag gebucht, an dem die Anlage geht, spätestens heute.",
+        "period_locked": "Die Periode dieses Datums ist gesperrt.",
+        "disposal_date_before_reversal": "Ein früherer Abgang dieser Anlage wurde storniert. Datiere den neuen Abgang am oder nach dem Tag der Stornierung."
+      }
     },
     "depreciationRun": {
       "title": "Abschreibungsläufe",

@@ -35,6 +35,7 @@
       "machine": "Wenn dieser Mac kompromittiert ist, gilt nichts davon.",
       "disk": "Verschlüsselung auf der Festplatte ist Aufgabe von FileVault. Schalte es ein.",
       "sockets": "Die ständige Anzeige beobachtet nur Netzwerk-Sockets (TCP, UDP, DNS). Der Selbsttest auf Knopfdruck deckt zusätzlich Subprozesse und höhere Schichten ab (TLS, HTTP, fetch, WebSocket).",
+      "lsof": "Schreibt TILL einen Entwurf in ein Thunderbird-Postfach (mbox), startet es das Systemprogramm lsof. Es prüft nur, ob Thunderbird den Entwurfsordner offen hat, und öffnet keine Verbindung. Der Selbsttest lässt genau dieses eine Programm zu und nennt es.",
       "trust_us": "Diese Anzeige ist unsere Software. Die Prüfung mit ausgeschaltetem WLAN ist die, für die du uns nicht glauben musst."
     },
     "violated": {

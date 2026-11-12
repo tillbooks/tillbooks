@@ -30,10 +30,18 @@
  *   - accruals                  `source='accrual'` lines and their reversals on those accounts (A38's
  *                               own transitorische Posten: revenue recognised, not yet invoiced, or
  *                               invoiced ahead), the "Abgrenzungsposten" the ESTV names
- *   + asset disposal proceeds   `source='asset_disposal'` credits on income accounts OUTSIDE class 3
- *                               (H06 books proceeds as a supply the return declares; when H06 booked
- *                               them into class 3 they are already in the first line)
+ *   + asset sales not invoiced  D192 point 12: the `proceeds_rappen` of the year's standing disposals
+ *                               that resolve to no invoice NOW (unlinked, or linked to a payment that
+ *                               does not lie wholly on one invoice): a sale of a Betriebsmittel the
+ *                               books hold and no invoice declared, the ESTV's Sonderposten
  *   = adjustedRevenueMinor      compared against Σ Ziffer 200 of the year's returns
+ *
+ * D192 (critic r1 F2, a defect on develop before it): `source='asset_disposal'` entries and every mirror
+ * in their chain are EXCLUDED from the first line, the way the MWST settlement is. A disposal books no
+ * turnover: its clearing line takes out an invoice's credit the invoice already declared, and its gain
+ * or loss is a Veräusserungserfolg. The earlier adjustment added the disposal's credits on income
+ * accounts outside class 3, which could only ever be the GAIN, so a VAT-correct invoiced sale warned a
+ * false difference of its gain and an undeclared one warned only its gain.
  *
  * The `vat_settlement` adjustment row is reported with the amount it EXCLUDES (the Saldosteuersatz
  * difference on 3809 is a tax effect, not turnover) so a reader can see what was left out and why.
@@ -108,10 +116,62 @@ function revenueOf(ctx: WorkspaceContext, start: string, end: string): number {
           AND a.type = 'income' AND a.number LIKE '3%'
           AND e.source NOT IN ('close', ?)
           AND NOT (e.source = 'reversal' AND e.reverses_entry_id IN
-                   (SELECT id FROM journal_entry WHERE workspace_id = ? AND source = ?))`,
+                   (SELECT id FROM journal_entry WHERE workspace_id = ? AND source = ?))
+          AND e.id NOT IN (${DISPOSAL_CHAIN_SQL})`,
     )
-    .get(ctx.workspaceId, start, end, VAT_SETTLEMENT_SOURCE, ctx.workspaceId, VAT_SETTLEMENT_SOURCE) as SumRow;
+    .get(ctx.workspaceId, start, end, VAT_SETTLEMENT_SOURCE, ctx.workspaceId, VAT_SETTLEMENT_SOURCE, ctx.workspaceId, ctx.workspaceId) as SumRow;
   return row.net;
+}
+
+/**
+ * D192 point 12: every `asset_disposal` entry and every mirror in its chain (the reverse, a raw Storno,
+ * the mirror of a mirror), workspace-scoped on both hops. Two parameters: the workspace id twice.
+ */
+const DISPOSAL_CHAIN_SQL = `WITH RECURSIVE disposal_chain(id) AS (
+    SELECT id FROM journal_entry WHERE workspace_id = ? AND source = 'asset_disposal'
+    UNION
+    SELECT m.id FROM journal_entry m JOIN disposal_chain c ON m.reverses_entry_id = c.id WHERE m.workspace_id = ?
+  ) SELECT id FROM disposal_chain`;
+
+/** Does the payment lie WHOLLY on one invoice now (D191 point 1's rule, read here for D192 G3)? */
+function paymentWhollyOnOneInvoice(ctx: WorkspaceContext, paymentId: string): boolean {
+  const row = ctx.store.db
+    .prepare(
+      `SELECT p.amount_minor AS amount, COUNT(a.id) AS n, COUNT(DISTINCT a.target_id) AS targets,
+              COALESCE(SUM(a.payment_amount_minor), 0) AS used,
+              COALESCE(SUM(CASE WHEN a.target_kind = 'document' AND d.type = 'invoice' THEN 0 ELSE 1 END), 0) AS other
+         FROM payment p
+         LEFT JOIN payment_allocation a ON a.payment_id = p.id AND a.workspace_id = p.workspace_id
+         LEFT JOIN document d ON d.id = a.target_id AND d.workspace_id = a.workspace_id
+        WHERE p.workspace_id = ? AND p.id = ?`,
+    )
+    .get(ctx.workspaceId, paymentId) as { amount: number | null; n: number; targets: number; used: number; other: number } | undefined;
+  return row !== undefined && row.amount !== null && row.n > 0 && row.targets === 1 && row.other === 0 && row.used >= row.amount;
+}
+
+/**
+ * D192 point 12 (and critic G3): the year's standing disposals with proceeds that resolve to no invoice
+ * NOW. Unlinked rows, and payment-linked rows whose payment does not lie wholly on one invoice at this
+ * reading (a Guthaben applied to an invoice later is declared by that invoice). §H-TENANT on every join.
+ */
+function uninvoicedDisposals(ctx: WorkspaceContext, start: string, end: string): AdjustmentRow[] {
+  const rows = ctx.store.db
+    .prepare(
+      `SELECT d.proceeds_rappen AS proceeds, d.source_document_type AS doc_type, d.source_document_id AS doc_id, ac.number AS number
+         FROM asset_transaction d
+         JOIN asset s ON s.id = d.asset_id AND s.workspace_id = d.workspace_id
+         JOIN account ac ON ac.id = s.gl_asset_account_id AND ac.workspace_id = d.workspace_id
+        WHERE d.workspace_id = ? AND d.type = 'disposal' AND d.date >= ? AND d.date <= ?
+          AND COALESCE(d.proceeds_rappen, 0) > 0
+          AND (d.source_document_type IS NULL OR d.source_document_type <> 'invoice')
+          AND NOT EXISTS (SELECT 1 FROM asset_transaction r WHERE r.workspace_id = d.workspace_id
+                           AND r.source_document_type = 'asset_transaction' AND r.source_document_id = d.id)
+        ORDER BY d.date, d.rowid`,
+    )
+    .all(ctx.workspaceId, start, end) as { proceeds: number; doc_type: string | null; doc_id: string | null; number: string }[];
+  return rows
+    .filter((r) => !(r.doc_type === 'payment' && r.doc_id !== null && paymentWhollyOnOneInvoice(ctx, r.doc_id)))
+    .map((r) => ({ number: r.number, net: r.proceeds }));
 }
 
 /**
@@ -242,8 +302,9 @@ export function vatAnnualReconciliation(ctx: WorkspaceContext, input: VatAnnualR
     adjustments.push({ kind: 'accrual', accountNumber: row.number, amountMinor: -row.net });
     adjustedRevenueMinor -= row.net;
   }
-  for (const row of sourceOnIncomeAccounts(ctx, start, end, 'asset_disposal', false)) {
-    // Proceeds booked outside class 3 are a declared supply the first line did not count: add them.
+  for (const row of uninvoicedDisposals(ctx, start, end)) {
+    // D192 point 12: a sale of a Betriebsmittel no invoice declared. Added, so the difference names it.
+    // `accountNumber` is the asset's cost account (the sale has no turnover account of its own).
     adjustments.push({ kind: 'asset_disposal', accountNumber: row.number, amountMinor: row.net });
     adjustedRevenueMinor += row.net;
   }

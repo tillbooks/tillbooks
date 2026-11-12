@@ -21,7 +21,7 @@
  * D177 (A39 §16.1): on a bank rule, every leg that is not the rest is either "Jedes Mal eingeben" (asked)
  * or "Berechnen" (a `factor`), one segmented control per leg. "Berechnen" offers two presets, the
  * platform payout (MWST rate and a fee on the net, `factor.ts`) and a plain factor; the line the rule is
- * saved from shows what the fraction gives ("15.12 → 90.80"). Only then do the preset's fields show.
+ * saved from shows what the fraction gives ("27.00 → 162.15"). Only then do the preset's fields show.
  *
  * Speichern stays disabled while a question has no answer, and says which one in words beside it. It posts
  * nothing: the payload is the recipe, and `set_bank_standard` is the one write (the
@@ -822,7 +822,7 @@ export function RuleEditor({
 
 /**
  * D177: the "Berechnen" fields of one leg: the preset (platform payout or a factor), its one or two
- * fields, and what the fraction gives on the line the rule is saved from ("15.12 → 90.80").
+ * fields, and what the fraction gives on the line the rule is saved from ("27.00 → 162.15").
  */
 function FactorFields({
   leg,
@@ -894,7 +894,7 @@ function FactorFields({
   );
 }
 
-/** "berechnet aus MWST 8.1 % und Gebühr 9.9 % vom Netto: 15.12 → 90.80" (or "berechnet mit Faktor 2.5: ..."). */
+/** "berechnet aus MWST 8.1 % und Gebühr 9.9 % vom Netto: 27.00 → 162.15" (or "berechnet mit Faktor 2.5: ..."). */
 function factorWords(
   t: (k: string, p?: Record<string, string | number>) => string,
   preset: FactorPreset,

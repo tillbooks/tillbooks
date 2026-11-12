@@ -4,7 +4,7 @@ TILL is accounting software. Read this before you point it at real books.
 
 ## TILL is a public beta. Run it next to your old system first
 
-TILL is in public beta (version 1.0.0-beta.1). Nomadik GmbH, the company behind TILL, keeps its own
+TILL is in public beta (the 1.0.0 beta series). Nomadik GmbH, the company behind TILL, keeps its own
 books in it. A beta still has defects nobody has met yet, and yours may be the first set of books to
 run into one.
 

@@ -70,14 +70,14 @@ export const PROVEN_POSTING_VERBS = [
   {
     verb: 'issue_credit_note',
     why: 'the A13 onIssue delegate posts the mirror entry when the credit note issues',
-    hops: [{ at: 'src/core/sales/creditNote.ts:943', fn: 'buildCreditNotePosting', calls: 'postEntry' }],
+    hops: [{ at: 'src/core/sales/creditNote.ts:954', fn: 'buildCreditNotePosting', calls: 'postEntry' }],
   },
   {
     verb: 'mark_batch_paid',
     why: 'books one outgoing payment per item through A14 recordPayment',
     hops: [
       { at: 'src/core/banking/pain001.ts:1160', fn: 'markBatchPaid', calls: 'recordPayment' },
-      { at: 'src/core/payments/payment.ts:2056', fn: 'recordPayment', calls: 'postEntry' },
+      { at: 'src/core/payments/payment.ts:2074', fn: 'recordPayment', calls: 'postEntry' },
     ],
   },
   {

@@ -17,9 +17,14 @@
  *    is disposed and while a posted run of the capitalisation's period or later covers it (that run
  *    charged depreciation on the raised base).
  *  - disposal: the asset returns to `active` (or `fully_depreciated` when its book value sits at the
- *    residual), `disposed_at` and the proceeds are cleared, NBV is cost minus accumulated again. The
- *    disposal row carries no link to a proceeds invoice or payment (H06 books the proceeds account
- *    directly), so there is nothing to check; D170 records the open question.
+ *    residual), `disposed_at` and the proceeds are cleared, NBV is cost minus accumulated again. D191:
+ *    when the disposal names a proceeds document (an invoice or an incoming payment, on the row's
+ *    source-document link), the reverse refuses `proceeds_settled` while that document stands (undo the
+ *    money act first). An unlinked disposal keeps the D170 behaviour: there is nothing to check. The
+ *    workspace setting `assets.proceeds_check` (D172 registry) decides: `refuse` (default), `warn`
+ *    (reverse, naming the standing document in `warnings`) or `off`. Under `refuse`, one differing case
+ *    passes `overrideProceedsCheck: true` with a required `overrideReason`, which is written onto the
+ *    immutable compensating row and the mirror's text and audited.
  *
  * DATE: today (OR 957a: correct in the open period), the `reverse_entry` convention; a sealed today is
  * `period_locked`, pre-checked before anything is written.
@@ -43,6 +48,10 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { reverseOwnedEntry, ASSET_TRANSACTION_REVERSAL_OWNER } from '../ledger/reverseEntry.js';
+import { standingProceedsDocument, proceedsSettledRefusal } from './proceedsLink.js';
+import type { ProceedsCheckMode } from './proceedsLink.js';
+import { getSetting } from '../settings/settings.js';
+import { reverseDisposalAbgrenzungWithin } from '../accruals/index.js';
 
 /** The four event types this verb takes back. Depreciation has its own run reverse (H04). */
 export const REVERSIBLE_ASSET_TRANSACTION_TYPES = ['acquisition', 'additional_capitalisation', 'opening', 'disposal'] as const;
@@ -59,6 +68,8 @@ interface TxnRow {
   delta_cost_rappen: number;
   delta_accum_depr_rappen: number;
   journal_entry_id: string;
+  source_document_type: string | null;
+  source_document_id: string | null;
 }
 
 interface AssetRow {
@@ -79,7 +90,8 @@ function isReversible(type: string): type is ReversibleType {
 function readTxn(ctx: WorkspaceContext, id: string): TxnRow | undefined {
   return ctx.store.db
     .prepare(
-      `SELECT id, asset_id, type, date, delta_cost_rappen, delta_accum_depr_rappen, journal_entry_id
+      `SELECT id, asset_id, type, date, delta_cost_rappen, delta_accum_depr_rappen, journal_entry_id,
+              source_document_type, source_document_id
          FROM asset_transaction WHERE workspace_id = ? AND id = ?`,
     )
     .get(ctx.workspaceId, id) as TxnRow | undefined;
@@ -233,6 +245,27 @@ export interface AssetTransactionReverseInput {
   transactionId?: string;
   reason?: string;
   idempotencyKey?: string;
+  /** D191: take back ONE disposal although its proceeds document stands; needs `overrideReason`. */
+  overrideProceedsCheck?: boolean;
+  overrideReason?: string;
+}
+
+type StandingProceeds = NonNullable<ReturnType<typeof standingProceedsDocument>>;
+
+/**
+ * D191: the linked proceeds document that still stands, or null. Only a disposal that names one is
+ * looked at, and nothing is read while the setting is `off`.
+ */
+function standingProceeds(ctx: WorkspaceContext, txn: TxnRow, mode: ProceedsCheckMode): StandingProceeds | null {
+  if (txn.type !== 'disposal' || mode === 'off') return null;
+  return standingProceedsDocument(ctx, txn.source_document_type, txn.source_document_id);
+}
+
+/** D191: the proceeds refusal, or null: a standing document under `refuse`, unless the call overrides it. */
+function proceedsRefusal(ctx: WorkspaceContext, txn: TxnRow, overridden: boolean, mode: ProceedsCheckMode): Result | null {
+  if (overridden || mode !== 'refuse') return null;
+  const standing = standingProceeds(ctx, txn, mode);
+  return standing === null ? null : proceedsSettledRefusal(txn.asset_id, txn.id, standing);
 }
 
 /** The pre-checks per type; a refusal Result, or null when the event may be taken back. Writes nothing. */
@@ -298,6 +331,14 @@ export function assetTransactionReverse(ctx: WorkspaceContext, input: AssetTrans
   }
   if (typeof input.reason !== 'string' || input.reason.trim().length === 0) return err('reason_required', { field: 'reason' });
   const reason = input.reason.trim().slice(0, 200);
+  if (input.overrideProceedsCheck !== undefined && typeof input.overrideProceedsCheck !== 'boolean') {
+    return err('invalid_input', { field: 'overrideProceedsCheck' });
+  }
+  const overridden = input.overrideProceedsCheck === true;
+  if (overridden && (typeof input.overrideReason !== 'string' || input.overrideReason.trim().length === 0)) {
+    return err('reason_required', { field: 'overrideReason', hint: 'overriding the proceeds check needs its own reason; it is kept on the correcting row' });
+  }
+  const overrideReason = overridden ? (input.overrideReason as string).trim().slice(0, 200) : null;
   const assetId = input.assetId as string;
   const transactionId = input.transactionId as string;
 
@@ -324,7 +365,9 @@ export function assetTransactionReverse(ctx: WorkspaceContext, input: AssetTrans
   const asset = readAsset(ctx, assetId);
   if (asset === undefined) return err('not_found', { assetId });
   const typed = txn as TxnRow & { type: ReversibleType };
-  const refused = refusalFor(ctx, asset, typed);
+  const refused =
+    refusalFor(ctx, asset, typed) ??
+    proceedsRefusal(ctx, typed, overridden, getSetting<ProceedsCheckMode>(ctx, 'assets.proceeds_check'));
   if (refused !== null) return refused;
 
   const date = ctx.clock.now().slice(0, 10);
@@ -338,6 +381,15 @@ export function assetTransactionReverse(ctx: WorkspaceContext, input: AssetTrans
       if (reversalRowOf(ctx, transactionId) !== undefined) {
         throw new ReverseAbort(err('already_reversed', { assetId, transactionId }));
       }
+      // D191: the proceeds document (and the setting) may have moved since the friendly check (D12):
+      // re-read both here, after the idempotent replay, so a replay never reads the setting at all.
+      const proceedsMode = getSetting<ProceedsCheckMode>(ctx, 'assets.proceeds_check');
+      const standingNow = standingProceeds(ctx, typed, proceedsMode);
+      const blocks = standingNow !== null && proceedsMode === 'refuse';
+      if (blocks && !overridden) throw new ReverseAbort(proceedsSettledRefusal(assetId, typed.id, standingNow));
+      // An override is recorded only when it bypassed a refusal: one that changed nothing is not an override.
+      const bypassed = blocks ? overrideReason : null;
+      const overrideNote = bypassed !== null ? `; Erlösprüfung übersteuert: ${bypassed}` : '';
       const chain = postingChain(ctx, typed.journal_entry_id);
       const adopted = chain.links % 2 === 1;
       let reversalEntryId: string;
@@ -355,7 +407,7 @@ export function assetTransactionReverse(ctx: WorkspaceContext, input: AssetTrans
           {
             entryId: chain.last,
             date,
-            description: `Storno ${LABEL[typed.type]} Anlage ${asset.number}: ${reason}`,
+            description: `Storno ${LABEL[typed.type]} Anlage ${asset.number}: ${reason}${overrideNote}`,
             // One mirror per row and link, whatever key the caller used: the identity is the event.
             idempotencyKey: JSON.stringify(['asset_transaction_reversal', typed.id, chain.last]),
           },
@@ -420,12 +472,37 @@ export function assetTransactionReverse(ctx: WorkspaceContext, input: AssetTrans
           reversalEntryId,
           REVERSAL_SOURCE_DOCUMENT_TYPE,
           typed.id,
-          `Storno ${LABEL[typed.type]}: ${reason}`,
+          `Storno ${LABEL[typed.type]}: ${reason}${overrideNote}`,
           now,
           ctx.actor,
           `${typed.id}:reverse`,
         );
+      // D192 point 11: a disposal across a year end posted its Abgrenzung; take it back in THIS transaction,
+      // through A38's own reverse body, both Storno legs dated with this reverse (not at the accrual's
+      // periodEnd: the disposal stays booked in the earlier year, so a Storno there would misstate both).
+      let abgrenzungReversed: { accrualId: string; stornoEntryId: string; stornoReversalEntryId: string; stornoDate: string } | null = null;
+      if (typed.type === 'disposal') {
+        const taken = reverseDisposalAbgrenzungWithin(ctx, {
+          disposalTransactionId: typed.id,
+          date: rowDate,
+          reason,
+          idempotencyKey: `${typed.id}:abgrenzung-reverse`,
+        });
+        if (!taken.ok) throw new ReverseAbort(taken);
+        if (taken.reversed !== null) {
+          abgrenzungReversed = {
+            accrualId: taken.reversed.accrualId,
+            stornoEntryId: taken.reversed.stornoEntryId,
+            stornoReversalEntryId: taken.reversed.stornoReversalEntryId,
+            stornoDate: rowDate,
+          };
+        }
+      }
       ctx.audit.record({ entityKind: 'asset_transaction', entityId: typed.id, action: 'reverse', actor: ctx.actor, at: now });
+      if (bypassed !== null) {
+        // D191: the override is its own audited act; its reason sits on the immutable correcting row.
+        ctx.audit.record({ entityKind: 'asset_transaction', entityId: typed.id, action: 'override_proceeds_check', actor: ctx.actor, at: now });
+      }
 
       const after = ctx.store.db
         .prepare('SELECT * FROM asset WHERE workspace_id = ? AND id = ?')
@@ -439,6 +516,11 @@ export function assetTransactionReverse(ctx: WorkspaceContext, input: AssetTrans
         postedEntryId: typed.journal_entry_id,
         adopted,
         reason,
+        proceedsCheckOverridden: bypassed !== null,
+        overrideReason: bypassed,
+        abgrenzungReversed,
+        // D191 `warn`: the reverse went ahead although the linked proceeds document stands; name it.
+        warnings: standingNow !== null && proceedsMode === 'warn' ? [{ code: 'proceeds_document_stands', ...standingNow }] : [],
         asset: mapAsset(after),
       });
     });

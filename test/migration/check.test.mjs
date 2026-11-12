@@ -22,6 +22,7 @@ import assert from 'node:assert/strict';
 import { getAction } from '../../dist/api/registry.js';
 import { CONTROL_STATUSES, CONTROL_KINDS } from '../../dist/core/migration/index.js';
 import { freshDeps, mintWorkspace } from '../api/support.mjs';
+import { grantRealBackup } from './backup-support.mjs';
 
 const call = (deps, name, input) => getAction(name).run(deps, input);
 const must = (res, what) => {
@@ -334,7 +335,7 @@ test('G11: a live check that disagrees with the trial check reports diverged and
   must(call(deps, 'migration_trial_load_step', { workspaceId: wid, planId, stepId, idempotencyKey: 'dv-trial' }), 'trial');
   const staged = call(deps, 'migration_commit_step', { workspaceId: wid, planId, stepId, idempotencyKey: 'dv-commit' });
   assert.equal(staged.staged, true);
-  deps.store.db.prepare('UPDATE migration_plan SET backup_ref = ? WHERE id = ?').run('backup-1', planId);
+  grantRealBackup(deps, planId);
   must(call(deps, 'migration_record_approval', { workspaceId: wid, planId, stepId, checkHash: staged.checkHash, idempotencyKey: 'dv-appr' }), 'approval');
   must(call(deps, 'migration_commit_step', { workspaceId: wid, planId, stepId, idempotencyKey: 'dv-commit' }), 'commit');
 

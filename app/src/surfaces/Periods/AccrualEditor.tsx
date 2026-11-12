@@ -57,6 +57,7 @@ import {
   previewProvisionLines,
   provisionRowsOf,
   dayAfter,
+  isDisposalAbgrenzung,
   type AccrualKind,
   type AccrualRow,
   type PickerAccount,
@@ -509,7 +510,7 @@ export function AccrualEditor({ workspaceId, periodEnd, canPost }: AccrualEditor
       header: t('accruals.col.status'),
       render: (r) => (
         <span className={`accrual-status accrual-status--${r.status}`}>
-          {t(`accruals.status.${r.status}`)}
+          {r.status === 'reversed' && typeof r.stornoDate === 'string' ? t('accruals.status.reversedOn', { date: formatDate(r.stornoDate) }) : t(`accruals.status.${r.status}`)}
           {rowNotes[r.id] !== undefined && <span className="accrual-badge">{rowNotes[r.id]}</span>}
         </span>
       ),
@@ -528,7 +529,7 @@ export function AccrualEditor({ workspaceId, periodEnd, canPost }: AccrualEditor
           >
             {t('accruals.post')}
           </button>
-        ) : r.status === 'posted' ? (
+        ) : r.status === 'posted' && !isDisposalAbgrenzung(r) ? (
           <button
             type="button"
             className="btn btn--secondary btn--sm"

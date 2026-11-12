@@ -50,6 +50,19 @@ export function envErrorMessage(err: Err): EnvErrorMessage {
       return { key: 'env.error.seed_failed', params: { phase: str(err, 'phase') } };
     case 'phase_b_not_implemented':
       return { key: 'env.error.phase_b_not_implemented', params: {} };
+    // The build-then-swap refused to put a new ledger in place (the prior one is untouched). When the
+    // target is open in another process the fix is specific, so it gets its own sentence.
+    case 'swap_refused':
+    case 'copy_swap_refused':
+      return str(err, 'reason') === 'target_in_use'
+        ? { key: 'env.error.target_in_use', params: { name: str(err, 'target') || str(err, 'name') } }
+        : { key: 'env.error.swap_refused', params: {} };
+    // A mandate copy into an environment whose ledger file is gone: rebuild first.
+    case 'target_data_missing':
+      return { key: 'env.error.target_data_missing', params: { name: str(err, 'target') } };
+    // The copy's final invariant or privacy gate refused the build; the target is unchanged.
+    case 'copy_gate_failed':
+      return { key: 'env.error.copy_gate_failed', params: {} };
     case 'landscape_integrity_failed':
       return { key: 'env.integrityError', params: {} };
     case 'invalid_input':

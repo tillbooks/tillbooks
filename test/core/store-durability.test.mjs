@@ -215,7 +215,7 @@ test('every WRITABLE file connection the engine opens and closes internally is d
 
   const onFile = seen.filter((c) => !c.memory);
   const writable = onFile.filter((c) => !c.readonly);
-  // The G04 snapshot destination is the one raw writable open the guard below lists as a known gap.
+  // The G04 snapshot destination: built in a temp dir, and held to the same contract as every other open.
   const snapshot = (c) => /[\\/]\.tmp-[^\\/]+[\\/]data\.sqlite$/.test(c.name);
 
   // Non-vacuity: the flows really went through every kind of connection this test is about.
@@ -228,7 +228,7 @@ test('every WRITABLE file connection the engine opens and closes internally is d
   };
   for (const [kind, present] of Object.entries(kinds)) assert.equal(present, true, `the flows never opened ${kind}`);
 
-  for (const c of writable.filter((w) => !snapshot(w))) {
+  for (const c of writable) {
     assertDurable(c, `writable connection on ${relative(tmpdir(), c.name)}`);
   }
 });
@@ -477,9 +477,9 @@ const SCAN_FILES = ['app/dev-api.ts'];
  */
 const DRIVER_MODULES = {
   'src/core/store/sqlite-store.ts': 'THE choke point: every store open is durable by construction',
-  'src/core/data/portability.ts': 'G04: read-only snapshot reads, plus the snapshot destination in LISTED_OPENS',
+  'src/core/data/portability.ts': 'G04: read-only snapshot reads, and the snapshot destination made durable on its next statement',
   'src/core/landscape/operations.ts': 'N00: a read-only gate over a freshly built environment',
-  'src/core/landscape/copy.ts': 'N00: read-only probes and gates over environment files',
+  'src/core/landscape/copy.ts': 'N00: read-only probes and gates over environment files, and the swap quiescing an old target on a connection made durable on its next statement',
   'src/api/book-adopt.ts': 'D166 point 8: a read-only probe of a book the person picks, before it is adopted; never a write',
   'scripts/marketing-screenshots.mjs':
     'website screenshots: one read-only query of the throwaway Seeblick demo book in its own temp dir, never a write',
@@ -500,18 +500,6 @@ const LISTED_OPENS = {
     {
       call: 'new GuardedDatabase(freshMemoryTemplate(), { timeout })',
       reason: 'deserializes the pre-built in-memory template Buffer: an anonymous in-memory database, no file',
-    },
-  ],
-  'src/core/data/portability.ts#writeScopedSqlite': [
-    {
-      call: 'new Database(destPath)',
-      reason:
-        'KNOWN GAP, owned by G04. The backup snapshot is a throwaway file built in a temp dir and renamed into ' +
-        'the .tillbackup bundle; it commits at FULL with a plain fsync, so on macOS a fresh backup can still ' +
-        'sit in the drive cache. A pragma alone is the wrong fix: the copy commits once per row, and ' +
-        'F_FULLFSYNC there measured 39 s instead of 2.1 s for the Seeblick ledger, while manifest.json and the ' +
-        'rename stay unsynced anyway. The fix belongs to G04: build the snapshot in one transaction after ' +
-        'applyDurableSync, fsync manifest.json and the directory, then rename.',
     },
   ],
 };

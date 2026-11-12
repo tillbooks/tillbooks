@@ -40,6 +40,10 @@
  */
 
 import type { WorkspaceContext } from '../context.js';
+import { isProceedsDocumentType, standingProceedsDocument, saleCreditLinesOf } from './proceedsLink.js';
+import type { ProceedsCheckMode, ProceedsBookingMode, CrossYearSaleMode } from './proceedsLink.js';
+import { disposalAbgrenzungOf } from '../accruals/index.js';
+import { getSetting } from '../settings/settings.js';
 import { ok, err } from '../result.js';
 import type { Result } from '../result.js';
 import { postEntry } from '../ledger/postEntry.js';
@@ -129,6 +133,8 @@ interface LedgerEvent {
   netBookValueAfterRappen: number;
   /** D170: the compensating row that took this event back, or null while it stands. */
   reversedByTransactionId: string | null;
+  /** D191: for a disposal naming a proceeds document, whether that document still stands (null otherwise). */
+  proceedsDocumentStands?: boolean | null;
 }
 
 function readAsset(ctx: WorkspaceContext, id: string): AssetRow | undefined {
@@ -209,7 +215,7 @@ export function assetLedgerGet(ctx: WorkspaceContext, input: { assetId?: string 
         ORDER BY date, created_at, id`,
     )
     .all(ctx.workspaceId, input.assetId) as TransactionRow[];
-  const events = foldEvents(rows);
+  const events = foldEvents(rows).map((e) => (e.type === 'disposal' ? { ...e, ...disposalFacts(ctx, e) } : e));
 
   return ok({
     asset: {
@@ -226,7 +232,70 @@ export function assetLedgerGet(ctx: WorkspaceContext, input: { assetId?: string 
     },
     events,
     total: events.length,
+    // D191: how the reverse treats a disposal whose proceeds document stands (`assets.proceeds_check`).
+    proceedsCheck: getSetting<ProceedsCheckMode>(ctx, 'assets.proceeds_check'),
+    // D192: how a linked disposal books its proceeds, and what a sale across a year end does.
+    proceedsBookingSetting: getSetting<ProceedsBookingMode>(ctx, 'assets.proceeds_booking'),
+    crossYearSale: getSetting<CrossYearSaleMode>(ctx, 'assets.cross_year_sale'),
   });
+}
+
+/**
+ * D191 + D192, the facts a disposal row carries on the ledger read:
+ *  - `proceedsDocumentStands` (D191);
+ *  - `proceedsBooking` for a LINKED disposal: `clear_via_document` when its `proceeds_cleared` audit row
+ *    exists, `book_proceeds` otherwise (a beta.5 row, a manual clearing), never derived from the lines;
+ *  - `abgrenzung`: the Abgrenzung it posted across a year end, with its status and Storno date;
+ *  - `migrationHint` (critic r1 F5): a linked `book_proceeds` disposal whose proceeds sit on an account
+ *    the invoice's sale lines did not credit double counts; the route is named.
+ * §H-TENANT on every read.
+ */
+function disposalFacts(ctx: WorkspaceContext, e: { id: string; sourceDocumentType: string | null; sourceDocumentId: string | null; reversedByTransactionId: string | null }) {
+  const linked = isProceedsDocumentType(e.sourceDocumentType);
+  const cleared =
+    linked &&
+    ctx.store.db
+      .prepare("SELECT 1 FROM audit_log WHERE workspace_id = ? AND entity_kind = 'asset_transaction' AND entity_id = ? AND action = 'proceeds_cleared' LIMIT 1")
+      .get(ctx.workspaceId, e.id) !== undefined;
+  const proceedsBooking: ProceedsBookingMode | null = linked ? (cleared ? 'clear_via_document' : 'book_proceeds') : null;
+  const accrual = disposalAbgrenzungOf(ctx, e.id);
+  let migrationHint: string | null = null;
+  if (proceedsBooking === 'book_proceeds' && e.reversedByTransactionId === null && e.sourceDocumentType === 'invoice' && e.sourceDocumentId !== null) {
+    const proceedsAccount = proceedsAccountOfDisposal(ctx, e.id);
+    const invoice = ctx.store.db
+      .prepare('SELECT posted_entry_id FROM document WHERE workspace_id = ? AND id = ?')
+      .get(ctx.workspaceId, e.sourceDocumentId) as { posted_entry_id: string | null } | undefined;
+    const saleAccounts = new Set(saleCreditLinesOf(ctx, invoice?.posted_entry_id ?? null).map((l) => l.accountId));
+    if (proceedsAccount !== null && !saleAccounts.has(proceedsAccount)) {
+      migrationHint =
+        'this disposal booked proceeds the invoice already books (a double count): reverse it with overrideProceedsCheck true and a reason, then dispose again against the invoice (assets.proceeds_booking clear_via_document), dated on or after the reverse; when the reverse falls in a later financial year than the invoice, that disposal posts the Abgrenzung into the invoice\'s year (which must be open), so the sale still counts once in the year it was invoiced';
+    }
+  }
+  return {
+    proceedsDocumentStands: linked ? standingProceedsDocument(ctx, e.sourceDocumentType, e.sourceDocumentId) !== null : null,
+    proceedsBooking,
+    abgrenzung:
+      accrual === undefined
+        ? null
+        : { accrualId: accrual.id, kind: accrual.kind, periodEnd: accrual.periodEnd, reversalDate: accrual.reversalDate, amountMinor: accrual.amountMinor, status: accrual.status, stornoDate: accrual.stornoDate },
+    migrationHint,
+  };
+}
+
+/** The debited non-gain account of a disposal's entry that is its proceeds line: the account debited by `proceeds_rappen`. */
+function proceedsAccountOfDisposal(ctx: WorkspaceContext, transactionId: string): string | null {
+  const row = ctx.store.db
+    .prepare(
+      `SELECT l.account_id AS account_id FROM asset_transaction d
+         JOIN journal_line l ON l.entry_id = d.journal_entry_id
+         JOIN journal_entry e ON e.id = l.entry_id AND e.workspace_id = d.workspace_id
+         JOIN asset s ON s.id = d.asset_id AND s.workspace_id = d.workspace_id
+        WHERE d.workspace_id = ? AND d.id = ? AND l.debit_minor = d.proceeds_rappen AND d.proceeds_rappen > 0
+          AND l.account_id <> s.gl_accum_depr_account_id
+        ORDER BY l.rowid LIMIT 1`,
+    )
+    .get(ctx.workspaceId, transactionId) as { account_id: string } | undefined;
+  return row?.account_id ?? null;
 }
 
 export interface AssetLedgerListInput {

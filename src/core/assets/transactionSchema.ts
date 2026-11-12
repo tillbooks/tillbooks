@@ -92,6 +92,26 @@ BEGIN
   SELECT RAISE(ABORT, 'asset_transaction_one_disposal');
 END;
 
+-- D192 point 13 (critic G1): ONE standing disposal per INVOICE. Under D192 a disposal linked to an
+-- invoice clears that invoice's sale line, so a second one on another asset would clear it twice. The
+-- engine refuses invoice_already_cleared in its pre-check and again inside its write transaction; this
+-- trigger is the chokepoint underneath every writer of the table, the per-asset trigger's exact shape
+-- (live = no compensating row names it, so the redo after a reverse inserts). A partial unique index
+-- would be blind to the compensating row and refuse every redo for good. Purely additive: an older
+-- build neither drops nor needs it, so SCHEMA_GENERATION does not move.
+CREATE TRIGGER IF NOT EXISTS asset_transaction_one_live_invoice_disposal
+BEFORE INSERT ON asset_transaction
+WHEN NEW.type = 'disposal' AND NEW.source_document_type = 'invoice' AND EXISTS (
+  SELECT 1 FROM asset_transaction d
+   WHERE d.workspace_id = NEW.workspace_id AND d.type = 'disposal'
+     AND d.source_document_type = 'invoice' AND d.source_document_id = NEW.source_document_id
+     AND NOT EXISTS (SELECT 1 FROM asset_transaction r
+                      WHERE r.workspace_id = d.workspace_id AND r.source_document_type = 'asset_transaction'
+                        AND r.source_document_id = d.id))
+BEGIN
+  SELECT RAISE(ABORT, 'asset_transaction_invoice_already_cleared');
+END;
+
 -- EXACTLY ONE opening baseline per asset (H07). An opening balance seats the migrated carrying cost of
 -- an asset that predates the ledger; seeding it twice double-capitalises silently, because OP11
 -- reconciliation still reports balanced when both the sub-ledger and the GL move together. H07's engine

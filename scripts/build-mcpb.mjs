@@ -10,18 +10,27 @@
  *     `packaging/mcpb/build/manifest.json`. This is the CI check the spec §8 names: "the mcpb manifest
  *     is schema-valid and the entry is resolvable". It needs no external tool and touches no bundle.
  *
- *   - `--pack`: additionally assemble the bundle directory (manifest + server shim + the packaged
- *     `bin/`, `dist/`, `package.json` and the runtime `node_modules`) and zip it into
- *     `packaging/mcpb/build/tillbooks-<version>.mcpb`. Zipping needs the `zip` tool (or the official
- *     `@anthropic-ai/mcpb` CLI); when neither is present the script says so and exits without
- *     pretending it produced an artifact.
+ *   - `--pack [--tgz <tillbooks-x.y.z.tgz>]`: additionally assemble the bundle and zip it into
+ *     `packaging/mcpb/build/tillbooks-<version>.mcpb` (plus `.sha256`). The bundle is the npm package
+ *     itself, unpacked: `package.json`, `bin/`, `dist/`, and its production `node_modules` installed
+ *     from the root `package-lock.json`, with the stamped `manifest.json` and the `server.mjs` shim
+ *     beside them. `--tgz` packs from a tarball that was already verified (the release passes the one
+ *     it published to npm, so the extension carries exactly those bytes); without it the script runs
+ *     `npm pack` of this tree. better-sqlite3 ships N-API prebuilds for every platform; only those of
+ *     the manifest's `compatibility.platforms` stay (linux keeps its musl builds too), and its C
+ *     sources go. Before zipping, the script STARTS the bundled server the way Claude Desktop does
+ *     (`node server.mjs` over stdio, a throwaway database and support directory) and requires that
+ *     `initialize` names this version and that `tools/list` answers. Zipping uses the system `zip`.
  *
- * `stampAndValidate` is exported so `test/packaging/mcpb.test.mjs` runs the same validation the CLI
- * does, against the same files, with no process spawn.
+ * `stampAndValidate` and `keptPrebuilds` are exported so `test/packaging/mcpb.test.mjs` runs the same
+ * logic the CLI does, against the same files, with no process spawn.
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, readdirSync, copyFileSync, mkdtempSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -81,7 +90,137 @@ export function stampAndValidate(repoRoot = REPO_ROOT) {
   return manifest;
 }
 
-function main() {
+/**
+ * The better-sqlite3 prebuilds (`<platform>-<arch>.node`) a bundle for `platforms` keeps. A linux
+ * bundle keeps the musl builds too: better-sqlite3 loads `linuxmusl-<arch>` on Alpine and the like.
+ */
+export function keptPrebuilds(platforms, names) {
+  const wanted = new Set(platforms.flatMap((p) => (p === 'linux' ? ['linux', 'linuxmusl'] : [p])));
+  return names.filter((name) => wanted.has(name.replace(/-[^-]+\.node$/, '')));
+}
+
+const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
+
+/** `npm pack` of this tree into `dest`, or the given tarball; returns the tarball path. */
+function tarball(dest, given) {
+  if (given) {
+    const tgz = resolve(given);
+    if (!existsSync(tgz)) throw new Error(`mcpb: --tgz ${tgz} does not exist`);
+    return tgz;
+  }
+  console.log('mcpb: npm pack (prepack builds dist/)');
+  const out = execFileSync('npm', ['pack', '--silent', '--pack-destination', dest], { cwd: REPO_ROOT, encoding: 'utf8' });
+  const tgz = join(dest, out.trim().split('\n').pop());
+  if (!existsSync(tgz)) throw new Error(`mcpb: npm pack did not produce a tarball (${tgz})`);
+  return tgz;
+}
+
+/**
+ * Start the bundled server the way Claude Desktop does and ask it who it is. The database and the
+ * support directory are throwaway paths (and HOME with them), so the smoke never opens a real book.
+ */
+async function smoke(bundle, manifest) {
+  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+  const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
+  const scratch = mkdtempSync(join(tmpdir(), 'till-mcpb-smoke-'));
+  mkdirSync(join(scratch, 'support'));
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [join(bundle, manifest.server.entry_point)],
+    env: {
+      PATH: process.env.PATH ?? '',
+      HOME: scratch,
+      TILL_DB_PATH: join(scratch, 'smoke.till.db'),
+      TILL_SUPPORT_DIR: join(scratch, 'support'),
+    },
+    stderr: 'pipe',
+  });
+  let stderr = '';
+  transport.stderr?.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  const client = new Client({ name: 'till-mcpb-smoke', version: manifest.version });
+  try {
+    await client.connect(transport);
+    const info = client.getServerVersion();
+    if (info?.name !== manifest.name || info?.version !== manifest.version) {
+      throw new Error(`mcpb: the bundled server says ${JSON.stringify(info)}, expected ${manifest.name} ${manifest.version}`);
+    }
+    let tools = 0;
+    let cursor;
+    do {
+      const page = await client.listTools(cursor ? { cursor } : {});
+      tools += page.tools.length;
+      cursor = page.nextCursor;
+    } while (cursor);
+    if (tools === 0) throw new Error('mcpb: the bundled server lists no tools');
+    // The manifest's description names a tool count; the bundle must serve exactly that many.
+    const claimed = Number(/(\d+) MCP tools/.exec(manifest.description)?.[1]);
+    if (Number.isFinite(claimed) && claimed !== tools) {
+      throw new Error(`mcpb: the manifest says ${claimed} MCP tools, the bundled server lists ${tools}`);
+    }
+    console.log(`mcpb: smoke: ${info.name} ${info.version} over stdio, ${tools} tools`);
+  } catch (e) {
+    if (stderr) process.stderr.write(stderr);
+    throw e;
+  } finally {
+    await client.close().catch(() => {});
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+async function pack(manifest, buildDir, givenTgz) {
+  const bundle = join(buildDir, 'bundle');
+  rmSync(bundle, { recursive: true, force: true });
+  mkdirSync(bundle, { recursive: true });
+
+  const tgz = tarball(buildDir, givenTgz);
+  execFileSync('tar', ['-xzf', tgz, '-C', bundle, '--strip-components', '1']);
+  const packed = JSON.parse(readFileSync(join(bundle, 'package.json'), 'utf8'));
+  if (packed.name !== manifest.name || packed.version !== manifest.version) {
+    throw new Error(`mcpb: ${basename(tgz)} is ${packed.name}@${packed.version}, the manifest is ${manifest.name}@${manifest.version}`);
+  }
+  if (!existsSync(join(bundle, 'bin', 'till.mjs')) || !existsSync(join(bundle, 'dist', 'api', 'mcp.js'))) {
+    throw new Error(`mcpb: ${basename(tgz)} carries no bin/till.mjs or dist/api/mcp.js`);
+  }
+
+  console.log('mcpb: installing production dependencies from package-lock.json');
+  copyFileSync(join(REPO_ROOT, 'package-lock.json'), join(bundle, 'package-lock.json'));
+  execFileSync('npm', ['ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--loglevel=error'], {
+    cwd: bundle,
+    stdio: 'inherit',
+  });
+  rmSync(join(bundle, 'package-lock.json'));
+
+  // Only the prebuilds of the platforms the manifest claims; no C sources, no build tree.
+  const bsq = join(bundle, 'node_modules', 'better-sqlite3');
+  const prebuilds = join(bsq, 'prebuilds');
+  const all = readdirSync(prebuilds);
+  const keep = keptPrebuilds(manifest.compatibility.platforms, all);
+  for (const platform of manifest.compatibility.platforms) {
+    if (!keep.some((name) => name.startsWith(`${platform}-`))) {
+      throw new Error(`mcpb: better-sqlite3 carries no ${platform} prebuild; the extension would not open a book there`);
+    }
+  }
+  for (const name of all) if (!keep.includes(name)) rmSync(join(prebuilds, name));
+  for (const dir of ['deps', 'src', 'build']) rmSync(join(bsq, dir), { recursive: true, force: true });
+  console.log(`mcpb: better-sqlite3 prebuilds kept: ${keep.join(', ')}`);
+
+  writeFileSync(join(bundle, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  copyFileSync(join(MCPB_DIR, manifest.server.entry_point), join(bundle, manifest.server.entry_point));
+
+  await smoke(bundle, manifest);
+
+  const out = join(buildDir, `${manifest.name}-${manifest.version}.mcpb`);
+  rmSync(out, { force: true });
+  execFileSync('zip', ['-r', '-q', '-X', out, '.'], { cwd: bundle });
+  const digest = sha256(out);
+  writeFileSync(`${out}.sha256`, `${digest}  ${basename(out)}\n`, 'utf8');
+  const mb = (statSync(out).size / 1024 / 1024).toFixed(1);
+  console.log(`mcpb: packed ${out} (${mb} MB, sha256 ${digest})`);
+}
+
+async function main() {
   const manifest = stampAndValidate();
   const buildDir = join(MCPB_DIR, 'build');
   mkdirSync(buildDir, { recursive: true });
@@ -90,24 +229,15 @@ function main() {
   console.log(`mcpb: stamped manifest written to ${join(buildDir, 'manifest.json')}`);
 
   if (process.argv.includes('--pack')) {
-    console.error(
-      [
-        'mcpb: --pack assembles the full bundle (manifest + server.mjs + bin/ + dist/ + node_modules)',
-        'and zips it to a .mcpb. That step bundles the native better-sqlite3 build and belongs to the',
-        'release pipeline, where the signed/notarised lane also lives. Run the official packer there:',
-        '  npx @anthropic-ai/mcpb pack packaging/mcpb  (produces tillbooks-<version>.mcpb)',
-        'This validate step is the CI gate; the pack + sign step is release-only and owner-gated.',
-      ].join('\n'),
-    );
+    const at = process.argv.indexOf('--tgz');
+    await pack(manifest, buildDir, at > 0 ? process.argv[at + 1] : undefined);
   }
 }
 
 // Run only when invoked directly, never when imported by the test.
 if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
-  try {
-    main();
-  } catch (e) {
+  main().catch((e) => {
     console.error(e instanceof Error ? e.message : String(e));
     process.exit(1);
-  }
+  });
 }

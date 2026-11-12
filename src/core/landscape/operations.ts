@@ -15,7 +15,8 @@
  *   - #5  reset is BUILD-THEN-SWAP: seed a new file, run `foreign_key_check` + a balance re-foot, and
  *         swap only on success, so a failed reset leaves the prior env intact (matrix E3a).
  *   - #10 each env carries a tier rank; `canCopyDown` (tierRank.ts) is ready for Phase B's `env.copy`.
- *   - #11 reset/delete on the ACTIVE env require switching away first (or `force`).
+ *   - #11 reset/delete on the ACTIVE env require switching away first (`force` cannot quiesce the
+ *     ledger the serving face holds open, R1-L3).
  *   - P8  every write returns a PLAN when unconfirmed and changes nothing.
  *
  * `copy` policy (env.create policy=copy, and reset of a copy-policy env) is PHASE B: it needs the
@@ -24,7 +25,7 @@
  */
 
 import Database from 'better-sqlite3';
-import { existsSync, mkdirSync, renameSync, rmSync, realpathSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, realpathSync } from 'node:fs';
 import { statSync } from 'node:fs';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 
@@ -49,7 +50,8 @@ import { DEFAULT_SEED, type SeederRegistry } from './seed.js';
 // Phase B copy verbs. A value import that forms a cycle with copy.ts`s type-only import of
 // `LandscapeDeps` and value import of `readOrBootstrap`; safe because every use is inside a function
 // body (lazy), never at module-init time.
-import { envCreateCopy, envResetCopy } from './copy.js';
+import { envCreateCopy, envResetCopy, swapInto, LandscapeSwapError } from './copy.js';
+import { ledgerFilePresent } from './ledgerGuard.js';
 import {
   RANK_DEVELOP,
   RANK_MAIN,
@@ -238,7 +240,8 @@ function envView(env: Environment, active: string): Record<string, unknown> {
     seed: env.seed,
     current: env.name === active,
     readOnly: isReadOnly(env),
-    exists: dbSize(env.db_path) !== null,
+    // Agrees with the ledger guard (critic R3 nit): a 0-byte file is no ledger, so it does not exist.
+    exists: ledgerFilePresent(env.db_path),
     sizeBytes: dbSize(env.db_path),
   };
 }
@@ -568,7 +571,8 @@ export function envCreate(deps: LandscapeDeps, input: CreateInput): Result {
     }
     throw e;
   }
-  swapInto(building, resolvedDb);
+  const swapped = swapOrRefuse(building, resolvedDb, name, false);
+  if (swapped !== undefined) return swapped;
 
   const now = deps.now();
   const env: Environment = {
@@ -617,9 +621,10 @@ export function envReset(deps: LandscapeDeps, input: ResetInput): Result {
   if (env.guard_tier === 'protected' || canonical(env.db_path) === canonical(deps.mainDbPath)) {
     return err('environment_protected', { name, reason: 'main is protected against reset (the landscape law)' });
   }
-  // Active-env guard (finding #11): reset the active env only after switching away, or with force.
+  // Active-env guard (finding #11): reset the active env only after switching away. A forced call goes
+  // on to the swap, whose quiesce refuses the ledger the serving face holds (target_in_use, R1-L3).
   if (name === file.active && input.force !== true) {
-    return err('environment_active', { name, hint: 'switch away first, or pass force to quiesce' });
+    return err('environment_active', { name, hint: 'switch away first' });
   }
   // copy policy is Phase B: reset of a copy-policy env re-copies from its recorded source (build-then-swap).
   if (env.data_policy === 'copy') {
@@ -654,7 +659,9 @@ export function envReset(deps: LandscapeDeps, input: ResetInput): Result {
     }
     throw e;
   }
-  swapInto(building, env.db_path);
+  // env_reset IS the rebuild: a ledger file that is not a database is replaced (R1-M1).
+  const swapped = swapOrRefuse(building, env.db_path, name, true);
+  if (swapped !== undefined) return swapped;
 
   const now = deps.now();
   const updated: Environment = { ...env, last_refresh_at: now, seed: seedName };
@@ -668,6 +675,23 @@ export function envReset(deps: LandscapeDeps, input: ResetInput): Result {
     return ok({ name, reset: true, seed: seedName, environment: envView(written.environments[name]!, written.active) });
   } catch (e) {
     return integrityError(e);
+  }
+}
+
+/**
+ * Swap a gated build into place (`swapInto`, the one atomic, durable swap shared with the copy path),
+ * or refuse: on a refused swap the build is dropped and the prior ledger stays exactly as it was.
+ */
+function swapOrRefuse(building: string, target: string, environment: string, rebuild: boolean): Result | undefined {
+  try {
+    swapInto(building, target, { replaceUnreadable: rebuild });
+    return undefined;
+  } catch (e) {
+    removeDbFiles(building);
+    // The environment's NAME rides along (as `name` and `target`, the copy path's field), so a surface
+    // can say which environment is open elsewhere instead of rendering an empty «».
+    if (e instanceof LandscapeSwapError) return err('swap_refused', { reason: e.reason, name: environment, target: environment });
+    throw e;
   }
 }
 
@@ -714,15 +738,6 @@ export function envDelete(deps: LandscapeDeps, input: DeleteInput): Result {
     return ok({ name, deleted: true, count: Object.keys(written.environments).length });
   } catch (e) {
     return integrityError(e);
-  }
-}
-
-/** Move a gated `.building` file (and its sidecars) over the live path, replacing it atomically. */
-function swapInto(building: string, target: string): void {
-  removeDbFiles(target);
-  renameSync(building, target);
-  for (const suffix of ['-wal', '-shm']) {
-    if (existsSync(building + suffix)) renameSync(building + suffix, target + suffix);
   }
 }
 

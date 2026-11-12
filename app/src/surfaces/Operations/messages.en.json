@@ -35,6 +35,7 @@
       "machine": "If this Mac is compromised, none of this holds.",
       "disk": "Encryption at rest is FileVault's job. Turn it on.",
       "sockets": "The standing indicator watches network sockets only (TCP, UDP, DNS). The self-test you run on demand is what also covers subprocesses and higher layers (TLS, HTTP, fetch, WebSocket).",
+      "lsof": "When TILL writes a draft into a Thunderbird mailbox (mbox), it starts the system program lsof. It only checks whether Thunderbird has the Drafts folder open and opens no connection. The self-test allows exactly this one program and names it.",
       "trust_us": "This indicator is our software. The check with your wifi off is the one you do not have to take our word for."
     },
     "violated": {

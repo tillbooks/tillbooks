@@ -586,3 +586,267 @@ describe('AssetRegister, H06 disposal', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });
+
+// D191: the disposal's optional proceeds document, and the reverse that waits for it.
+describe('AssetRegister, D191 proceeds document', () => {
+  const GL_INCOME_ID = SAMPLE_ACCOUNTS.find((a) => a.number === '3600')!.id;
+  const DISPOSAL_EVENT = (over: Record<string, unknown> = {}) => ({
+    id: 'd1', type: 'disposal', date: '2026-07-15', deltaCostRappen: -12500000, deltaAccumDeprRappen: 0,
+    journalEntryId: 'e9', description: null, costAfterRappen: 0, accumulatedDeprAfterRappen: 0, netBookValueAfterRappen: 0,
+    reversedByTransactionId: null, proceedsDocumentStands: null, ...over,
+  });
+  const openReverse = async (user: ReturnType<typeof userEvent.setup>) => {
+    await rowVerb(user, de.assets.acquisition.transactions);
+    await user.click(await screen.findByRole('button', { name: /^Aktionen für die Buchung vom/ }));
+    await user.click(screen.getByRole('menuitem', { name: de.assets.ledger.reverse }));
+    return screen.findByRole('alertdialog');
+  };
+
+  it('the dispose dialog offers issued invoices as the proceeds document and sends the link', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const canned: Canned = {
+      ...baseCanned(),
+      asset_list: ok({ assets: [ASSET({ status: 'active' })], total: 1 }),
+      list_documents: ok({ documents: [
+        { id: 'doc_1', type: 'invoice', number: 'R-0007', status: 'issued', totalMinor: 900000 },
+        { id: 'doc_2', type: 'invoice', number: 'R-0008', status: 'cancelled', totalMinor: 100 },
+      ] }),
+      list_payments: ok({ payments: [] }),
+      // D192: this is the book_proceeds mode (the caller's proceeds), D191's booking.
+      settings_get: ok({ setting: { key: 'assets.proceeds_booking', value: 'book_proceeds' } }),
+      asset_disposal_preview: ok({ preview: { journal_lines: [], warnings: [] } }),
+      asset_dispose: ok({ asset: ASSET({ status: 'disposed' }), transaction: { id: 'dt1' } }),
+    };
+    renderSurface(canned, asked);
+    const user = userEvent.setup();
+    await rowVerb(user, de.assets.disposal.action);
+    await user.type(screen.getByLabelText(de.assets.disposal.proceeds), '9000');
+    await pickOption(user, de.assets.disposal.proceedsAccount, BANK_ID);
+    await pickOption(user, de.assets.disposal.gainLossAccount, GL_INCOME_ID);
+    expect(screen.getByText(de.assets.disposal.proceedsDocNone)).toBeInTheDocument();
+    await user.click(screen.getByRole('combobox', { name: de.assets.disposal.proceedsDoc }));
+    await waitFor(() => expect(screen.getAllByRole('option').some((o) => o.getAttribute('data-value') === 'invoice:doc_1')).toBe(true));
+    expect(screen.getAllByRole('option').some((o) => o.getAttribute('data-value') === 'invoice:doc_2')).toBe(false);
+    await user.click(screen.getAllByRole('option').find((o) => o.getAttribute('data-value') === 'invoice:doc_1')!);
+    expect(screen.getByText(de.assets.disposal.proceedsDocLinked)).toBeInTheDocument();
+    await user.click(screen.getByText(de.assets.disposal.post));
+    await waitFor(() => expect(asked.some((a) => a.action === 'asset_dispose')).toBe(true));
+    const call = asked.find((a) => a.action === 'asset_dispose');
+    expect(call?.input.proceedsInvoiceId).toBe('doc_1');
+    expect(call?.input.proceedsPaymentId).toBeUndefined();
+  });
+
+  it('a disposal whose proceeds document stands says so; the override needs its own reason and is sent', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const canned: Canned = {
+      ...baseCanned(),
+      asset_list: ok({ assets: [ASSET({ status: 'disposed' })], total: 1 }),
+      asset_ledger_get: ok({ asset: { id: 'as_1', status: 'disposed' }, events: [DISPOSAL_EVENT({ proceedsDocumentStands: true })], total: 1 }),
+      asset_transaction_reverse: ok({ assetId: 'as_1', transactionId: 'd1', proceedsCheckOverridden: true }),
+    };
+    renderSurface(canned, asked);
+    const user = userEvent.setup();
+    const confirm = await openReverse(user);
+    expect(within(confirm).getByText(de.assets.ledger.proceedsSettled)).toBeInTheDocument();
+    await user.type(within(confirm).getByLabelText(de.assets.ledger.reverseReason), 'Verkauf geplatzt');
+    await user.click(within(confirm).getByLabelText(de.assets.ledger.proceedsOverride));
+    const go = within(confirm).getByRole('button', { name: de.assets.ledger.reverseConfirm });
+    expect(go).toBeDisabled();
+    await user.type(within(confirm).getByLabelText(de.assets.ledger.proceedsOverrideReason), 'Gutschrift folgt');
+    expect(go).toBeEnabled();
+    await user.click(go);
+    await waitFor(() => expect(asked.some((a) => a.action === 'asset_transaction_reverse')).toBe(true));
+    const call = asked.find((a) => a.action === 'asset_transaction_reverse');
+    expect(call?.input.overrideProceedsCheck).toBe(true);
+    expect(call?.input.overrideReason).toBe('Gutschrift folgt');
+  });
+
+  it('an engine proceeds_settled refusal shows the order in words; an unlinked disposal adds no sentence and sends no override', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const canned: Canned = {
+      ...baseCanned(),
+      asset_list: ok({ assets: [ASSET({ status: 'disposed' })], total: 1 }),
+      asset_ledger_get: ok({ asset: { id: 'as_1', status: 'disposed' }, events: [DISPOSAL_EVENT()], total: 1 }),
+      asset_transaction_reverse: reject('proceeds_settled', { proceedsDocumentType: 'invoice' }),
+    };
+    renderSurface(canned, asked);
+    const user = userEvent.setup();
+    const confirm = await openReverse(user);
+    // Cognitive load (critic r1): an unlinked disposal gets no extra sentence in the dialog.
+    expect(within(confirm).getByText(de.assets.ledger.reverseBody)).toBeInTheDocument();
+    expect(within(confirm).queryByText(de.assets.ledger.proceedsSettled)).toBeNull();
+    await user.type(within(confirm).getByLabelText(de.assets.ledger.reverseReason), 'Falsch');
+    await user.click(within(confirm).getByRole('button', { name: de.assets.ledger.reverseConfirm }));
+    expect(await within(confirm).findByText(de.assets.ledger.proceedsSettled)).toBeInTheDocument();
+    expect(asked.find((a) => a.action === 'asset_transaction_reverse')?.input.overrideProceedsCheck).toBeUndefined();
+  });
+
+  it('a refused link names its reason in words, never the code, and the double-count warning shows before posting', async () => {
+    for (const [preview, expected, absent] of [
+      [reject('invalid_proceeds_document', { reason: 'not_standing' }), de.assets.disposal.proceedsDocReason.not_standing, 'not_standing'],
+      [ok({ preview: { journal_lines: [], warnings: [{ code: 'proceeds_double_counted' }] } }), de.assets.disposal.warning.proceeds_double_counted, 'proceeds_double_counted'],
+    ] as const) {
+      const canned: Canned = {
+        ...baseCanned(),
+        asset_list: ok({ assets: [ASSET({ status: 'active' })], total: 1 }),
+        list_documents: ok({ documents: [{ id: 'doc_1', type: 'invoice', number: 'R-0007', status: 'issued', totalMinor: 900000 }] }),
+        list_payments: ok({ payments: [] }),
+        asset_disposal_preview: preview,
+      };
+      const view = renderSurface(canned);
+      const user = userEvent.setup();
+      await rowVerb(user, de.assets.disposal.action);
+      await user.type(screen.getByLabelText(de.assets.disposal.proceeds), '9000');
+      await pickOption(user, de.assets.disposal.proceedsAccount, BANK_ID);
+      await pickOption(user, de.assets.disposal.gainLossAccount, GL_INCOME_ID);
+      await user.click(screen.getByRole('combobox', { name: de.assets.disposal.proceedsDoc }));
+      await waitFor(() => expect(screen.getAllByRole('option').some((o) => o.getAttribute('data-value') === 'invoice:doc_1')).toBe(true));
+      await user.click(screen.getAllByRole('option').find((o) => o.getAttribute('data-value') === 'invoice:doc_1')!);
+      expect(await screen.findByText(expected)).toBeInTheDocument();
+      expect(screen.queryByText(new RegExp(absent))).toBeNull();
+      view.unmount();
+    }
+  });
+
+  it('under the setting warn the standing document is named without an override; under off nothing is said', async () => {
+    for (const mode of ['warn', 'off'] as const) {
+      const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+      const canned: Canned = {
+        ...baseCanned(),
+        asset_list: ok({ assets: [ASSET({ status: 'disposed' })], total: 1 }),
+        asset_ledger_get: ok({ asset: { id: 'as_1', status: 'disposed' }, events: [DISPOSAL_EVENT({ proceedsDocumentStands: true })], total: 1, proceedsCheck: mode }),
+        asset_transaction_reverse: ok({ assetId: 'as_1', transactionId: 'd1', proceedsCheckOverridden: false, warnings: [] }),
+      };
+      const view = renderSurface(canned, asked);
+      const user = userEvent.setup();
+      const confirm = await openReverse(user);
+      expect(within(confirm).queryByText(de.assets.ledger.proceedsSettled)).toBeNull();
+      expect(within(confirm).queryByLabelText(de.assets.ledger.proceedsOverride)).toBeNull();
+      if (mode === 'warn') expect(within(confirm).getByText(de.assets.ledger.proceedsStandsWarn)).toBeInTheDocument();
+      else expect(within(confirm).queryByText(de.assets.ledger.proceedsStandsWarn)).toBeNull();
+      await user.type(within(confirm).getByLabelText(de.assets.ledger.reverseReason), 'Verkauf geplatzt');
+      await user.click(within(confirm).getByRole('button', { name: de.assets.ledger.reverseConfirm }));
+      await waitFor(() => expect(asked.some((a) => a.action === 'asset_transaction_reverse')).toBe(true));
+      expect(asked.find((a) => a.action === 'asset_transaction_reverse')?.input.overrideProceedsCheck).toBeUndefined();
+      view.unmount();
+    }
+  });
+});
+
+describe('AssetRegister, D192 clear via the invoice', () => {
+  const GL_INCOME_ID = SAMPLE_ACCOUNTS.find((a) => a.number === '3600')!.id;
+  const INVOICES = ok({ documents: [{ id: 'doc_1', type: 'invoice', number: 'R-0007', status: 'issued', totalMinor: 1945800 }] });
+  const DERIVED = {
+    acquisition_cost_rappen: 4000000,
+    accumulated_depr_rappen: 2500000,
+    net_book_value_rappen: 1500000,
+    proceeds_rappen: 1800000,
+    gain_loss_rappen: 300000,
+    journal_lines: [{ account_number: '3200', account_name: 'Erlöse aus Handelswaren', debit_rappen: 1800000, credit_rappen: 0 }],
+    proceeds_from_document: true,
+    proceeds_booking: 'clear_via_document',
+    proceeds_account: { id: 'acc_3200', number: '3200', name: 'Erlöse aus Handelswaren' },
+    abgrenzung: null,
+    warnings: [],
+  };
+  const openWithInvoice = async (canned: Canned, asked: Array<{ action: string; input: Record<string, unknown> }>) => {
+    renderSurface(canned, asked);
+    const user = userEvent.setup();
+    await rowVerb(user, de.assets.disposal.action);
+    await pickOption(user, de.assets.disposal.gainLossAccount, GL_INCOME_ID);
+    await user.click(screen.getByRole('combobox', { name: de.assets.disposal.proceedsDoc }));
+    await waitFor(() => expect(screen.getAllByRole('option').some((o) => o.getAttribute('data-value') === 'invoice:doc_1')).toBe(true));
+    await user.click(screen.getAllByRole('option').find((o) => o.getAttribute('data-value') === 'invoice:doc_1')!);
+    return user;
+  };
+  const world = (extra: Canned): Canned => ({
+    ...baseCanned(),
+    asset_list: ok({ assets: [ASSET({ status: 'active' })], total: 1 }),
+    list_documents: INVOICES,
+    list_payments: ok({ payments: [] }),
+    settings_get: ok({ setting: { key: 'assets.proceeds_booking', value: 'clear_via_document' } }),
+    ...extra,
+  });
+
+  it('a linked invoice brings its own proceeds: the amount fields give way, the preview shows the derived line, and the dispose names no proceeds', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const user = await openWithInvoice(
+      world({
+        asset_disposal_preview: ok({ preview: DERIVED }),
+        asset_dispose: ok({ asset: ASSET({ status: 'disposed' }), transaction: { id: 'dt1' } }),
+      }),
+      asked,
+    );
+    expect(screen.queryByLabelText(de.assets.disposal.proceeds)).toBeNull();
+    expect(screen.queryByRole('combobox', { name: de.assets.disposal.proceedsAccount })).toBeNull();
+    expect(screen.getByText(de.assets.disposal.proceedsDocClears)).toBeInTheDocument();
+    expect(await screen.findByTestId('fa-disp-derived')).toHaveTextContent(de.assets.disposal.proceedsFromInvoice);
+    const previewCall = asked.filter((a) => a.action === 'asset_disposal_preview').at(-1);
+    expect(previewCall?.input.proceedsRappen).toBeUndefined();
+    expect(previewCall?.input.proceedsInvoiceId).toBe('doc_1');
+    await user.click(screen.getByText(de.assets.disposal.post));
+    await waitFor(() => expect(asked.some((a) => a.action === 'asset_dispose')).toBe(true));
+    const call = asked.find((a) => a.action === 'asset_dispose');
+    expect(call?.input.proceedsRappen).toBeUndefined();
+    expect(call?.input.proceedsAccountId).toBeUndefined();
+    expect(call?.input.proceedsInvoiceId).toBe('doc_1');
+  });
+
+  it('the preview shows the Abgrenzung a sale across the year end posts, with its dates', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    await openWithInvoice(
+      world({
+        asset_disposal_preview: ok({
+          preview: {
+            ...DERIVED,
+            abgrenzung: {
+              kind: 'accrued_income',
+              period_end: '2026-12-31',
+              reversal_date: '2027-01-01',
+              amount_rappen: 1800000,
+              lines: [
+                { account_number: '1300', account_name: 'Aktive Rechnungsabgrenzung', debit_rappen: 1800000, credit_rappen: 0 },
+                { account_number: '3200', account_name: 'Erlöse aus Handelswaren', debit_rappen: 0, credit_rappen: 1800000 },
+              ],
+            },
+          },
+        }),
+      }),
+      asked,
+    );
+    const title = await screen.findByTestId('fa-disp-abgrenzung');
+    expect(title.textContent).toContain('31.12.2026');
+    expect(title.textContent).toContain('01.01.2027');
+    expect(screen.getByText(/1300 Aktive Rechnungsabgrenzung/)).toBeInTheDocument();
+  });
+
+  it('a refusal reads as a sentence on its field, never the raw code; a year refusal fills in the invoice date while the date is untouched', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    await openWithInvoice(
+      world({
+        asset_disposal_preview: (input) =>
+          input.disposalDate === '2027-01-03'
+            ? reject('invalid_proceeds_document', { reason: 'sale_not_single_line' })
+            : reject('sale_in_other_financial_year', { suggestedDisposalDate: '2027-01-03' }),
+      }),
+      asked,
+    );
+    await waitFor(() => expect((screen.getByLabelText(de.assets.disposal.date) as HTMLInputElement).value).toBe('2027-01-03'));
+    expect(await screen.findByText(de.assets.disposal.proceedsDocReason.sale_not_single_line)).toBeInTheDocument();
+    expect(screen.queryByText('sale_not_single_line')).toBeNull();
+    expect(screen.getByText(de.assets.disposal.post).closest('button')).toBeDisabled();
+  });
+
+  it('under assets.proceeds_booking book_proceeds a linked invoice keeps the amount and account fields (D191 booking)', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    await openWithInvoice(
+      world({
+        settings_get: ok({ setting: { key: 'assets.proceeds_booking', value: 'book_proceeds' } }),
+        asset_disposal_preview: ok({ preview: { journal_lines: [], warnings: [] } }),
+      }),
+      asked,
+    );
+    expect(screen.getByLabelText(de.assets.disposal.proceeds)).toBeInTheDocument();
+    expect(screen.getByText(de.assets.disposal.proceedsDocLinked)).toBeInTheDocument();
+  });
+});

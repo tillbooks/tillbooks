@@ -148,6 +148,10 @@
       "refreeze_without_fee": "Ohne Gebühr neu ausgestellt",
       "refreeze_without_fee_redated": "Ohne Gebühr neu ausgestellt, auf den Tag der Neuausstellung datiert",
       "refreeze_override": "Für diesen Lauf abweichend",
+      "override_proceeds_check": "Erlösprüfung übersteuert",
+      "proceeds_cleared": "Erlös über die Rechnung ausgeglichen",
+      "override_proceeds_booking": "Erlösbuchung übersteuert",
+      "override_cross_year_sale": "Jahresabgrenzung übersteuert",
       "discard": "Verworfen",
       "comment": "Kommentiert",
       "flag": "Beanstandet",
@@ -287,6 +291,7 @@
       "draft": "Entwurf",
       "posted": "Gebucht",
       "reversed": "Storniert",
+      "reversedOn": "Storniert per {date}",
       "discarded": "Verworfen"
     },
     "badge": {

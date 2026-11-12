@@ -148,6 +148,10 @@
       "refreeze_without_fee": "Re-issued without fee",
       "refreeze_without_fee_redated": "Re-issued without fee, dated the day of the re-issue",
       "refreeze_override": "Settings deviated for this run",
+      "override_proceeds_check": "Proceeds check overridden",
+      "proceeds_cleared": "Proceeds cleared via the invoice",
+      "override_proceeds_booking": "Proceeds booking overridden",
+      "override_cross_year_sale": "Year-end Abgrenzung overridden",
       "discard": "Discarded",
       "comment": "Commented",
       "flag": "Flagged",
@@ -287,6 +291,7 @@
       "draft": "Draft",
       "posted": "Posted",
       "reversed": "Reversed",
+      "reversedOn": "Reversed as of {date}",
       "discarded": "Discarded"
     },
     "badge": {

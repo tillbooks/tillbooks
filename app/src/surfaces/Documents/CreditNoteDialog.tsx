@@ -57,6 +57,14 @@ interface Selection {
   quantity: string;
 }
 
+/** D192: the engine's `invoice_cleared_by_disposal` warning on a credit-note answer, as route state. */
+export function clearedByDisposalOf(body: unknown): { assetNumber: string; disposalDate: string } | null {
+  const ws = (body as { warnings?: unknown })?.warnings;
+  if (!Array.isArray(ws)) return null;
+  const w = ws.find((x) => (x as { code?: unknown })?.code === 'invoice_cleared_by_disposal') as { assetNumber?: unknown; disposalDate?: unknown } | undefined;
+  return w === undefined ? null : { assetNumber: String(w.assetNumber ?? ''), disposalDate: String(w.disposalDate ?? '') };
+}
+
 export function CreditNoteDialog({
   invoice,
   lines,
@@ -229,8 +237,11 @@ export function CreditNoteDialog({
       return;
     }
     const draftId = (body.document as { id: string }).id;
+    // D192 point 2: the invoice's sale line was cleared by a fixed-asset disposal; the draft says so
+    // before it is issued (the engine's `invoice_cleared_by_disposal`, never a Studio guess).
+    const cleared = clearedByDisposalOf(body);
     onClose();
-    navigate(`/documents/${draftId}`);
+    navigate(`/documents/${draftId}`, cleared === null ? undefined : { state: { clearedByDisposal: cleared } });
   }
 
   return (

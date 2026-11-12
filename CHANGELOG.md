@@ -7,6 +7,68 @@ compatibility promise yet, so back up before every upgrade.
 
 ## [Unreleased]
 
+## [1.0.0-beta.5] - 2026-11-11
+
+Asset sales count once, and the files TILL writes beside your books survive a crash. When you link a
+disposal to the invoice for the sale, the proceeds come from the invoice, and a sale across a year end
+gets its Abgrenzung in the same step. `till up` keeps its sign-in ticket off the command line. No
+database upgrade: books from 1.0.0-beta.4 open as they are. Still a beta: back up before you update.
+
+### Added
+
+- A desktop extension for Claude Desktop, `tillbooks-<version>.mcpb`, attached to the GitHub
+  release. A double-click installs TILL's MCP server with no JSON to edit. It asks for two optional
+  settings, the database path and the support directory, and brings no database of its own. It runs
+  on macOS (and Linux hosts); Windows is not supported. `node scripts/build-mcpb.mjs --pack` builds
+  it from the npm tarball, keeps only the prebuilds of those platforms, and starts the bundled server
+  over stdio before it zips anything.
+- When you dispose of a fixed asset you can name the invoice or the incoming payment the sale
+  proceeds came with. Reversing that disposal then waits until the invoice is cancelled or fully
+  credited and the payment is reversed, so the books never keep proceeds for a sale that was undone.
+  In a single exceptional case you can reverse anyway with a stated reason, which stays on the
+  correcting entry. The rule is a setting (refuse, warn or do not check; refuse by default). A
+  disposal without a linked document is reversed as before. Nothing changes in the book format (D191).
+
+### Changed
+
+- An invoiced asset sale is no longer counted twice. Link the invoice to the disposal and TILL takes
+  the proceeds from it: it debits the account the invoice's sale line credited, for that line's booked
+  amount in francs. The sale and its VAT then count once, on the invoice, and the disposal books only
+  the gain or loss. You no longer type the amount. TILL refuses three cases and names the reason: an
+  invoice with more than one position, a payment that does not sit wholly on one invoice, and an
+  invoice another disposal already uses. A sale across a year end (handed over in December, invoiced
+  in January, or the other way round) gets its Abgrenzung in the same step, so both years are right,
+  and reversing the disposal takes it back. A disposal can no longer be dated after today. Two new
+  settings hold the choices: how a linked disposal books its proceeds (from the invoice by default, or
+  the amount you enter, as before) and what a sale across a year end does (book the Abgrenzung by
+  default, or refuse). Disposals already booked are not touched (D192).
+
+### Fixed
+
+- The Claude plugin reaches the local Studio over HTTP at 127.0.0.1:8788 instead of starting a
+  process of its own, so the Claude directory accepts it.
+- Files TILL writes outside the ledger survive a crash or a power cut: backups, environment copies and
+  their control file, the support settings and the Drafts mailbox are written to a temporary file,
+  flushed to disk and then swapped in. A backup is on disk before the books record it.
+- TILL never rewrites your mail client's Drafts file in place. It replaces only its own draft, and it
+  refuses while Thunderbird holds the file. A new setting decides what happens when TILL cannot tell
+  whether a mail client is running: refuse (the default), write anyway, or do not check.
+- An empty (0-byte) book or environment ledger is reported as unavailable and never opened as a new,
+  empty ledger.
+- The yearly MWST turnover reconciliation (Umsatzabstimmung) no longer adds a fixed-asset disposal's
+  gain to turnover. A correctly invoiced sale with a gain showed a difference the size of the gain,
+  and a sale nobody invoiced showed only its gain instead of its price. Disposals now count as no
+  turnover, and a sale without an invoice appears with its price as a special item (D192).
+- A fixed-asset disposal with a gain or a loss no longer shows up as a booking with a missing tax
+  code, which also turned the "no missing tax codes" check of the month and year checklists red. A
+  disposal books no VAT by design: the invoice carries it (D192).
+
+### Security
+
+- `till up` never puts the Studio's one-time ticket on a command line. On macOS the link goes to
+  `osascript` on stdin; on Linux and Windows the browser opens a private page that carries it, and
+  TILL removes that page afterwards. Other local users can no longer read the ticket from `ps`.
+
 ## [1.0.0-beta.4] - 2026-11-09
 
 A calmer Studio and a more flexible export. Every screen now follows one of a few page patterns, and

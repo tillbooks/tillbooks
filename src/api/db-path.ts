@@ -30,6 +30,7 @@ import { homedir } from 'node:os';
 import { join, dirname, isAbsolute } from 'node:path';
 
 import { makeDirectoryDurably } from '../core/store/sqlite-store.js';
+import { assertEnvironmentLedgerPresent, ledgerFilePresent } from '../core/landscape/ledgerGuard.js';
 
 /** The in-memory location, spelled the way better-sqlite3 spells it. */
 export const MEMORY_DB = ':memory:';
@@ -78,7 +79,10 @@ export function readAdoptedBookPath(env: NodeJS.ProcessEnv = process.env): strin
   }
 }
 
-/** Why an adopted book cannot be opened: the file is gone, or it is there and the open failed. */
+/**
+ * Why an adopted book cannot be opened: the file is gone (`missing`), or it is there and is no book TILL
+ * can open (`unopenable`: the open failed, or the file holds 0 bytes, critic R4-L1).
+ */
 export type AdoptedBookUnavailableReason = 'missing' | 'unopenable';
 
 /** An adopted book this process could not open. Reported to the Studio, never papered over. */
@@ -116,6 +120,10 @@ export function resolveDbChoice(env: NodeJS.ProcessEnv = process.env): DbChoice 
   const adopted = readAdoptedBookPath(env);
   if (adopted === null) return { path: defaultDbPath(), source: 'default' };
   if (isMissing(adopted)) return { path: MEMORY_DB, source: 'adopted', adoptedUnavailable: { path: adopted, reason: 'missing' } };
+  // Critic R4-L1: a 0-byte book (a half-restored disk, an interrupted copy) is there but holds no ledger,
+  // and SQLite would open it as a new, empty one. It is unavailable like a missing book, with the
+  // `unopenable` wording ("no longer a TILL book"), since the file itself is still found.
+  if (!ledgerFilePresent(adopted)) return { path: MEMORY_DB, source: 'adopted', adoptedUnavailable: { path: adopted, reason: 'unopenable' } };
   return { path: adopted, source: 'adopted' };
 }
 
@@ -130,12 +138,18 @@ export function resolveDbPath(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 /**
- * `resolveDbChoice`, plus the directory of the chosen file made durably (as `ensureDbPath` does). Not
- * for an unavailable adopted book: its path is `:memory:`, so nothing is created anywhere.
+ * `resolveDbChoice`, plus the directory of the chosen file made durably. Not for an unavailable
+ * adopted book: its path is `:memory:`, so nothing is created anywhere. This is what every face
+ * (`till up`, `till mcp`, `till serve`) opens through, so it is also where a missing path that a
+ * registered non-main environment expects (its data root) fails LOUD, before anything is created:
+ * the store would otherwise open it as a brand-new, empty ledger (`ledgerGuard.ts`).
  */
 export function ensureDbChoice(env: NodeJS.ProcessEnv = process.env): DbChoice {
   const choice = resolveDbChoice(env);
-  if (choice.path !== MEMORY_DB) makeDirectoryDurably(dirname(choice.path));
+  if (choice.path !== MEMORY_DB) {
+    assertEnvironmentLedgerPresent(choice.path, [resolveSupportDir(env)]);
+    makeDirectoryDurably(dirname(choice.path));
+  }
   return choice;
 }
 
@@ -154,9 +168,8 @@ export function adoptedUnavailableRefusal(face: string, unavailable: AdoptedBook
  * of existence. The store syncs the ledger's own directory entry when it creates the file.
  */
 export function ensureDbPath(env: NodeJS.ProcessEnv = process.env): string {
-  const path = resolveDbPath(env);
-  if (path !== MEMORY_DB) makeDirectoryDurably(dirname(path));
-  return path;
+  // The same guard and durable directory as `ensureDbChoice`: one code path, so the two cannot drift.
+  return ensureDbChoice(env).path;
 }
 
 /**

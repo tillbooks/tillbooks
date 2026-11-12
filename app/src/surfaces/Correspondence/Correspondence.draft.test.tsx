@@ -166,6 +166,24 @@ describe('the draft pane, the error states', () => {
     expect(await within(pane).findByText(de.draft.error.needs_local_runtime)).toBeInTheDocument();
   });
 
+  it.each(['mail_store_busy', 'mail_store_changed', 'drafts_not_writable'] as const)(
+    'names %s specifically when the Drafts write is refused (nothing was written)',
+    async (code) => {
+      render(tree({ ...baseCanned(), draft_generate: reject(code, { storePath: '/synthetic/store' }) }));
+      const pane = await openThread();
+      await userEvent.click(within(pane).getByRole('button', { name: de.draft.action.generate }));
+      expect(await within(pane).findByText(de.draft.error[code])).toBeInTheDocument();
+    },
+  );
+
+  it('says TILL could not check the mail app (mail_store_busy, reason mail_client_unknown), not "close it"', async () => {
+    render(tree({ ...baseCanned(), draft_generate: reject('mail_store_busy', { storePath: '/synthetic/store', reason: 'mail_client_unknown' }) }));
+    const pane = await openThread();
+    await userEvent.click(within(pane).getByRole('button', { name: de.draft.action.generate }));
+    expect(await within(pane).findByText(de.draft.error.mail_client_unknown)).toBeInTheDocument();
+    expect(within(pane).queryByText(de.draft.error.mail_store_busy)).not.toBeInTheDocument();
+  });
+
   it('says a gone draft is gone and offers a fresh Entwurf erstellen instead of a phantom regenerate', async () => {
     render(tree({ ...baseCanned(), draft_list: ok({ runs: [RUN({ body: null, draftGone: true })], total: 1 }) }));
     const pane = await openThread();

@@ -14,5 +14,6 @@
   ],
   "vendorBills": [],
   "dunningFees": [],
-  "ok": true
+  "ok": true,
+  "warnings": []
 }

@@ -531,3 +531,25 @@ describe('AccrualEditor, the release undo (D129 leg 2)', () => {
     expect(typeof call.input.idempotencyKey).toBe('string');
   });
 });
+
+describe('AccrualEditor, an Abgrenzung a disposal posted (D192)', () => {
+  it('a reversed row says from when it was reversed, and a disposal\'s own posted Abgrenzung offers no Stornieren (the disposal\'s reverse takes it back)', async () => {
+    renderEditor({
+      accrual_list: {
+        status: 200,
+        body: {
+          ok: true,
+          accruals: [
+            accrualRow({ id: 'accrual_d', kind: 'accrued_income', description: 'Abgrenzung Abgang Anlage FA-0001', status: 'posted', entryId: 'e1', reversalEntryId: 'e2', sourceRef: 'asset_transaction:atxn_1' }),
+            accrualRow({ id: 'accrual_r', description: 'Strom Juni', status: 'reversed', entryId: 'e3', reversalEntryId: 'e4', stornoEntryId: 'e5', stornoDate: '2027-02-20' }),
+          ],
+          totalMinor: 360000,
+        },
+      },
+    });
+    const disposalRow = (await screen.findByText('Abgrenzung Abgang Anlage FA-0001')).closest('tr') as HTMLElement;
+    expect(within(disposalRow).queryByRole('button')).toBeNull();
+    const reversedRow = screen.getByText('Strom Juni').closest('tr') as HTMLElement;
+    expect(within(reversedRow).getByText(new RegExp(formatDate('2027-02-20').replace(/\./g, '\\.')))).toBeInTheDocument();
+  });
+});

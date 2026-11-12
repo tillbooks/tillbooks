@@ -64,6 +64,20 @@ export const DIRECT_TAX_ACCOUNT = '8900';
 export const ACCRUAL_SOURCE = 'accrual';
 export const PROVISION_SOURCE = 'provision';
 
+/**
+ * D192: the `source_ref` namespace of an Abgrenzung that H06's `asset_dispose` posts itself, across a
+ * year end (`asset_transaction:<disposal row id>`). RESERVED: `accrual_create` refuses a caller
+ * `sourceRef` in it (`reserved_source_ref`), `accrual_reverse` refuses an accrual in it
+ * (`accrual_backs_disposal`: the disposal's reverse is the only door), and the schema keeps it unique
+ * per workspace (`accrual_one_per_disposal`).
+ */
+export const DISPOSAL_SOURCE_REF_PREFIX = 'asset_transaction:';
+
+/** Is this `source_ref` in the reserved disposal namespace? */
+export function isDisposalSourceRef(sourceRef: string | null | undefined): boolean {
+  return typeof sourceRef === 'string' && sourceRef.startsWith(DISPOSAL_SOURCE_REF_PREFIX);
+}
+
 /** What each kind needs on its contra side, and which balance-sheet account it lands on. */
 export interface AccrualKindRule {
   readonly balanceAccountNumber: string;

@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 import { getAction } from '../../dist/api/registry.js';
 import { NOT_AUTOMATABLE } from '../../dist/core/automation/denylist.js';
 import { freshDeps, mintWorkspace } from '../api/support.mjs';
+import { grantRealBackup } from './backup-support.mjs';
 
 const must = (res, what) => {
   assert.equal(res.ok, true, `${what} failed: ${JSON.stringify(res)}`);
@@ -92,7 +93,7 @@ test('R3: a waived control is surfaced and readyWithWaivers renders', () => {
   // Drive every step to a terminal state and put a backup on record, so ONLY the waiver stands
   // between the plan and plain-ready (opening_balances is money-path, so the backup leg applies).
   setStepState(deps, planId, 'opening_balances', 'verified');
-  deps.store.db.prepare('UPDATE migration_plan SET backup_ref = ? WHERE id = ?').run('{"backupId":"bk_x","sha256":"deadbeef"}', planId);
+  grantRealBackup(deps, planId);
   const r = must(call('migration_readiness', { planId }), 'readiness');
   assert.equal(r.waivers.length, 1, 'the waived control is surfaced');
   assert.equal(r.waivers[0].reason, 'Altsystem-Rundung, vom Treuhänder geprüft');

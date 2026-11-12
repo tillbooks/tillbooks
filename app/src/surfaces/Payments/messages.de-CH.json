@@ -204,7 +204,8 @@
     "noSuggestion": "Kein Posten passt genau.",
     "showAll": "Alle offenen Posten zeigen ({n})",
     "showSuggestions": "Nur Vorschläge zeigen",
-    "pick": "{number} zuweisen"
+    "pick": "{number} zuweisen",
+    "clearedByDisposal": "Diese Rechnung hat der Abgang der Anlage {asset} vom {date} ausgeglichen: Skonto oder Ausbuchung bleiben auf ihrem Konto, der Gewinn des Abgangs ist vor ihnen ausgewiesen."
   },
   "help": {
     "Payments": {

@@ -24,6 +24,7 @@ import assert from 'node:assert/strict';
 import { getAction } from '../../dist/api/registry.js';
 import { SqliteStore } from '../../dist/core/store/sqlite-store.js';
 import { sequenceIdGen } from '../../dist/core/ids.js';
+import { grantRealBackup } from './backup-support.mjs';
 
 /** A clock the test can move: the engine reads it on every call, so "today" is whatever it says. */
 function movableClock(instant) {
@@ -127,7 +128,7 @@ test('the commit refuses cutover_in_future before the date and writes NOTHING, t
   const staged = must(call(deps, 'migration_commit_step', { workspaceId: wid, planId, stepId, idempotencyKey: 'commit-1' }), 'commit (staged)');
   assert.equal(staged.staged, true);
   assert.equal(countEntries(deps, wid), before, 'the staged commit writes nothing');
-  deps.store.db.prepare('UPDATE migration_plan SET backup_ref = ? WHERE id = ?').run('backup-1', planId);
+  grantRealBackup(deps, planId, 'backup-1');
   must(call(deps, 'migration_record_approval', { workspaceId: wid, planId, stepId, checkHash: staged.checkHash, idempotencyKey: 'commit-appr' }), 'approval');
   const committed = must(call(deps, 'migration_commit_step', { workspaceId: wid, planId, stepId, idempotencyKey: 'commit-1' }), 'commit');
   assert.ok(committed.openingEntryId, 'the commit did not report its opening entry');
@@ -185,7 +186,7 @@ test('the boundary: a Stichtag ON today is NOT pending and commits, it does not 
   const staged = must(call(deps, 'migration_commit_step', { workspaceId: wid, planId, stepId, idempotencyKey: 'today-1' }), 'commit (staged)');
   assert.equal(staged.staged, true);
   assert.equal(countEntries(deps, wid), before, 'the staged commit writes nothing');
-  deps.store.db.prepare('UPDATE migration_plan SET backup_ref = ? WHERE id = ?').run('backup-today', planId);
+  grantRealBackup(deps, planId, 'backup-today');
   must(call(deps, 'migration_record_approval', { workspaceId: wid, planId, stepId, checkHash: staged.checkHash, idempotencyKey: 'today-appr' }), 'approval');
   const committed = must(call(deps, 'migration_commit_step', { workspaceId: wid, planId, stepId, idempotencyKey: 'today-1' }), 'commit');
   assert.ok(committed.openingEntryId, 'a Stichtag of today must COMMIT, not wait');

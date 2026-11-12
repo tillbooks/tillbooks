@@ -137,6 +137,60 @@ export const SETTINGS: readonly SettingDef[] = [
       'de-CH': 'Welche besonderen Lohnbuchungen einen Grund brauchen: keine, nur Korrekturen (Standard) oder jeder Bonus, 13. Monatslohn und jede Korrektur.',
     },
   },
+  // --- H06, the asset disposal ---------------------------------------------------------------------
+  // D191 (owner Q4, 15.10.2026): what `asset_transaction_reverse` does with a disposal whose linked
+  // proceeds document (an invoice or an incoming payment) still stands. `refuse` is the decided rule
+  // (`proceeds_settled`, undo the money act first; one case may differ by the audited
+  // `overrideProceedsCheck`); `warn` reverses and names the standing document in `warnings`; `off` does
+  // not check. It changes what money does, so it is owned by `post` and drafts under the `post` family,
+  // the capability and family `asset_transaction_reverse` itself uses (never cheaper).
+  {
+    key: 'assets.proceeds_check',
+    schema: { type: 'enum', values: ['refuse', 'warn', 'off'] },
+    default: 'refuse',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    area: { id: 'H06', label: { en: 'Fixed assets', 'de-CH': 'Anlagen' } },
+    label: { en: 'Reversing a disposal whose proceeds document stands', 'de-CH': 'Abgang stornieren, solange sein Erlösbeleg gilt' },
+    description: {
+      en: 'When a disposal names its proceeds invoice or payment and that document still stands: refuse the reversal (default), reverse with a warning, or do not check.',
+      'de-CH': 'Wenn ein Abgang seine Erlösrechnung oder Zahlung nennt und dieser Beleg noch gilt: das Stornieren ablehnen (Standard), mit Warnung stornieren oder nicht prüfen.',
+    },
+  },
+  // D192 (owner 09.11.2026, D191 point 8): how a disposal linked to an invoice books its proceeds.
+  // `clear_via_document` (default) derives the proceeds from the invoice's one sale line and debits that
+  // line's account, so the sale and its VAT count once, on the invoice; `book_proceeds` is D191's
+  // behaviour (the caller's account and amount, warned when that double counts). It changes what money
+  // does, so it is owned by `post` and drafts under the `post` family, as `asset_dispose` does.
+  {
+    key: 'assets.proceeds_booking',
+    schema: { type: 'enum', values: ['clear_via_document', 'book_proceeds'] },
+    default: 'clear_via_document',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    area: { id: 'H06', label: { en: 'Fixed assets', 'de-CH': 'Anlagen' } },
+    label: { en: 'Proceeds of a disposal linked to an invoice', 'de-CH': 'Erlös eines Abgangs mit Rechnung' },
+    description: {
+      en: 'Clear via the invoice: the disposal takes its proceeds from the invoice and counts the sale once (default). Book proceeds: the disposal books the proceeds you enter.',
+      'de-CH': 'Über die Rechnung ausgleichen: Der Abgang übernimmt den Erlös aus der Rechnung und zählt den Verkauf einmal (Standard). Erlös buchen: Der Abgang bucht den Erlös, den du eingibst.',
+    },
+  },
+  // D192 point 11 (owner option b, 10.11.2026): a disposal whose invoice falls in the other financial
+  // year. `post_abgrenzung` (default) posts the A38 Abgrenzung in the same transaction, so both years are
+  // right; `refuse` asks the person to date the disposal in the invoice's year. Both give correct books.
+  {
+    key: 'assets.cross_year_sale',
+    schema: { type: 'enum', values: ['post_abgrenzung', 'refuse'] },
+    default: 'post_abgrenzung',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    area: { id: 'H06', label: { en: 'Fixed assets', 'de-CH': 'Anlagen' } },
+    label: { en: 'Disposal and invoice in different financial years', 'de-CH': 'Abgang und Rechnung in verschiedenen Geschäftsjahren' },
+    description: {
+      en: 'Post the Abgrenzung with the disposal, so both years are right (default), or refuse and ask for a date in the invoice\'s year.',
+      'de-CH': 'Die Abgrenzung mit dem Abgang buchen, damit beide Jahre stimmen (Standard), oder ablehnen und ein Datum im Jahr der Rechnung verlangen.',
+    },
+  },
   // --- A15, the Mahnwesen --------------------------------------------------------------------------
   // D174 (owner Q1, 15.10.2026): what a fee reversal does to the run's UNSENT letters. `re-issue` is the
   // decided rule (the critic-passed behaviour: re-frozen without the fee, then sendable); `hold` is
@@ -1263,6 +1317,30 @@ export const SETTINGS: readonly SettingDef[] = [
     description: {
       en: 'on (default): a booking or a bank-line booking answers with the call that undoes it (reverse_entry, reopen_bank_line). off: no hint.',
       'de-CH': 'on (Standard): Eine Buchung oder eine gebuchte Bankzeile antwortet mit dem Aufruf, der sie rückgängig macht (reverse_entry, reopen_bank_line). off: kein Hinweis.',
+    },
+  },
+  // --- E04, the local mail store ------------------------------------------------------------------
+  // D172 (critic R2-M1 on the aux-durability port): what the busy check before a Thunderbird mbox Drafts
+  // write does (`MBOX_CLIENT_GUARDS` in `src/core/mail/adapters.ts`). `refuse` is the critic-R1-L1 rule:
+  // refuse when a mail client holds the mbox or its profile, and when `lsof` cannot answer.
+  // `refuse_running` refuses only a proven holder (a sandboxed TILL.app or a box without lsof would
+  // otherwise never write a Drafts mbox again); `off` does not check. The rename-time change check stays
+  // under every value, so a draft the client saved meanwhile is never overwritten. Owned by `mail.write`,
+  // the capability `mail_draft_write` itself needs. HUMAN-ONLY (critic r3 nit 1): it guards writes into
+  // the user's own mail file, so an agent seat can neither loosen it nor draft a Vorschlag to, under any
+  // dial. There is no mail dial family to gate it by (`payroll.month_guard` drafts under `post`).
+  {
+    key: 'mail.mbox_client_guard',
+    schema: { type: 'enum', values: ['refuse', 'refuse_running', 'off'] },
+    default: 'refuse',
+    owningCapability: 'mail.write',
+    dialCapability: 'customize',
+    humanOnly: true,
+    area: { id: 'E04', label: { en: 'Mail', 'de-CH': 'Mail' } },
+    label: { en: 'Mail app check before writing a draft', 'de-CH': 'Mail-Programm prüfen vor einem Entwurf' },
+    description: {
+      en: 'Before TILL writes a draft into a Thunderbird mbox Drafts file: refuse while a mail app has it open or when the check cannot answer (default), refuse only while a mail app is proven to have it open, or do not check. A Drafts file that changed meanwhile is always refused.',
+      'de-CH': 'Bevor TILL einen Entwurf in eine Thunderbird-Entwurfsdatei (mbox) schreibt: ablehnen, solange ein Mail-Programm sie offen hat oder die Prüfung keine Antwort gibt (Standard), nur ablehnen, wenn ein Mail-Programm sie nachweislich offen hat, oder nicht prüfen. Eine Entwurfsdatei, die sich inzwischen geändert hat, wird immer abgelehnt.',
     },
   },
 ];

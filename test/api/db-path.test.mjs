@@ -29,3 +29,23 @@ test('a blank TILL_DB_PATH is a misconfiguration, not a request for a file named
 test(':memory: is honoured verbatim, for a throwaway run', () => {
   assert.equal(resolveDbPath({ TILL_DB_PATH: MEMORY_DB }), MEMORY_DB);
 });
+
+test('critic R4-L1: an adopted book emptied to 0 bytes is unavailable (unopenable), resolves to :memory: and is left untouched', async () => {
+  const { chmodSync, rmSync, statSync, writeFileSync } = await import('node:fs');
+  const { ensureDbChoice, adoptedUnavailableRefusal } = await import('../../dist/api/db-path.js');
+  const support = mkdtempSync(join(tmpdir(), 'till-dbpath-0b-'));
+  try {
+    const book = join(support, 'Buchhaltung.till');
+    writeFileSync(book, '');
+    writeFileSync(join(support, 'book.json'), JSON.stringify({ dbPath: book }));
+    chmodSync(join(support, 'book.json'), 0o600);
+    const choice = ensureDbChoice({ TILL_SUPPORT_DIR: support });
+    assert.equal(choice.source, 'adopted');
+    assert.equal(choice.path, MEMORY_DB, 'nothing is opened, so nothing is created');
+    assert.deepEqual(choice.adoptedUnavailable, { path: book, reason: 'unopenable' });
+    assert.match(adoptedUnavailableRefusal('till mcp', choice.adoptedUnavailable), /cannot be opened/);
+    assert.equal(statSync(book).size, 0, 'the emptied file is left as it was');
+  } finally {
+    rmSync(support, { recursive: true, force: true });
+  }
+});

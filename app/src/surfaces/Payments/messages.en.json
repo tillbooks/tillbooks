@@ -204,7 +204,8 @@
     "noSuggestion": "No item matches exactly.",
     "showAll": "Show all open items ({n})",
     "showSuggestions": "Show suggestions only",
-    "pick": "Assign {number}"
+    "pick": "Assign {number}",
+    "clearedByDisposal": "The disposal of fixed asset {asset} on {date} cleared this invoice: a Skonto or write-off stays on its account, and the disposal's gain is stated before it."
   },
   "help": {
     "Payments": {

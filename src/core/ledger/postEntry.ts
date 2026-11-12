@@ -754,8 +754,13 @@ export const FX_SOURCE = 'fx';
  * Steuerrückstellung on 8900 is not a bookkeeping mistake and must not turn the year's checklist
  * red the moment the closing entries post (measured at the N4 build, 2026-09-10: the Nomadik walk
  * flagged its own accrual). A manual entry stays scanned: that is the mistake the scan exists for.
+ *
+ * D192: `asset_disposal` too. H06 posts no VAT by design (the invoice carries it), so its gain or loss
+ * line and (D192) its clearing line sit on VAT-defaulted accounts without a tax code; before D192 every
+ * disposal with a gain or a loss already tripped `missing_tax_code` and turned G22's
+ * `no_missing_tax_codes` row red (critic r1, a defect this fixes).
  */
-export const VAT_FREE_ENTRY_SOURCES: readonly string[] = ['reversal', 'close', FX_SOURCE, 'asset_depreciation', 'accrual', 'provision', VAT_SETTLEMENT_SOURCE];
+export const VAT_FREE_ENTRY_SOURCES: readonly string[] = ['reversal', 'close', FX_SOURCE, 'asset_depreciation', 'asset_disposal', 'accrual', 'provision', VAT_SETTLEMENT_SOURCE];
 
 /**
  * The ONLY accounts a `source='vat_settlement'` line may name (A38 §4.6, the second of the three

@@ -28,7 +28,7 @@
 import type { WorkspaceContext } from '../context.js';
 import { previewDepreciation } from '../assets/index.js';
 import { listVatPeriods } from '../vat/index.js';
-import { settlementModelOf } from '../accruals/index.js';
+import { settlementModelOf, DISPOSAL_SOURCE_REF_PREFIX } from '../accruals/index.js';
 import { lockOnMonth, lockOnYear, sealOnYear } from './checks.js';
 import { monthsBetween, type ChecklistPeriod } from './periods.js';
 import type { ChecklistProbeKey } from './types.js';
@@ -155,9 +155,15 @@ interface AccrualProbeRow {
 
 function accrualsPosted(ctx: WorkspaceContext, period: ChecklistPeriod): ProbeResult {
   const key = 'accruals_posted';
+  // D192 (critic r3 C3): an Abgrenzung a disposal posted itself is H06's half of a sale across the year
+  // end, not one the person booked, so it never turns "Abgrenzungen gebucht" green.
   const rows = ctx.store.db
-    .prepare('SELECT id, status, entry_id, reversal_entry_id, reversal_date FROM accrual WHERE workspace_id = ? AND period_end = ? ORDER BY created_at ASC, id ASC')
-    .all(ctx.workspaceId, period.periodEnd) as AccrualProbeRow[];
+    .prepare(
+      `SELECT id, status, entry_id, reversal_entry_id, reversal_date FROM accrual
+        WHERE workspace_id = ? AND period_end = ? AND (source_ref IS NULL OR substr(source_ref, 1, ?) <> ?)
+        ORDER BY created_at ASC, id ASC`,
+    )
+    .all(ctx.workspaceId, period.periodEnd, DISPOSAL_SOURCE_REF_PREFIX.length, DISPOSAL_SOURCE_REF_PREFIX) as AccrualProbeRow[];
   const drafts = rows.filter((r) => r.status === 'draft').map((r) => r.id);
   const posted = rows.filter((r) => r.status === 'posted');
   const reversed = rows.filter((r) => r.status === 'reversed').map((r) => r.id);

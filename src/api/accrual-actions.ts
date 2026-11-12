@@ -66,7 +66,7 @@ export function accrualActions(h: AccrualActionHelpers): ActionDef[] {
     ctxAction(
       'accrual_create',
       'write:reversible:internal',
-      "Describe an Abgrenzung (OR Art. 958b) and save it as a DRAFT: `kind` is one of prepaid_expense (Aufwand vorausbezahlt, Dr 1300), accrued_income (Ertrag noch nicht fakturiert, Dr 1300), accrued_expense (Aufwand noch nicht fakturiert, Cr 2300) or deferred_income (Ertrag vorausbezahlt erhalten, Cr 2300); `contraAccount` is the P&L account (number or id, income for the income kinds, expense for the expense kinds); `amountMinor` is integer Rappen; `periodEnd` is the balance-sheet date. Returns the draft with the exact lines the post will write and the reversal lines dated the day after. Nothing is posted.",
+      "Describe an Abgrenzung (OR Art. 958b) and save it as a DRAFT: `kind` is one of prepaid_expense (Aufwand vorausbezahlt, Dr 1300), accrued_income (Ertrag noch nicht fakturiert, Dr 1300), accrued_expense (Aufwand noch nicht fakturiert, Cr 2300) or deferred_income (Ertrag vorausbezahlt erhalten, Cr 2300); `contraAccount` is the P&L account (number or id, income for the income kinds, expense for the expense kinds); `amountMinor` is integer Rappen; `periodEnd` is the balance-sheet date. Returns the draft with the exact lines the post will write and the reversal lines dated the day after. Nothing is posted. A `sourceRef` beginning `asset_transaction:` is reserved for the Abgrenzung a fixed-asset disposal posts itself (D192) and refused `reserved_source_ref`.",
       ctxSchema(
         {
           kind: STR,
@@ -93,7 +93,7 @@ export function accrualActions(h: AccrualActionHelpers): ActionDef[] {
     ctxAction(
       'accrual_reverse',
       'write:correctable:books',
-      "Revert a posted Abgrenzung without editing history: posts the MIRROR pair (the Storno dated `periodEnd`, its own reversal dated the day after), so all four entries net to zero on every account in both periods. Refuses `already_reversed` a second time and `not_posted` on a draft.",
+      "Revert a posted Abgrenzung without editing history: posts the MIRROR pair (the Storno dated `periodEnd`, its own reversal dated the day after), so all four entries net to zero on every account in both periods. Refuses `already_reversed` a second time and `not_posted` on a draft. D192: an Abgrenzung a fixed-asset disposal posted itself (sourceRef `asset_transaction:<id>`) is refused `accrual_backs_disposal`: reverse the disposal, which takes it back with it.",
       ctxSchema({ accrualId: STR, reason: STR, idempotencyKey: STR }, ['accrualId', 'idempotencyKey']),
       (ctx, input) => accrualReverse(ctx, input as never),
     ),

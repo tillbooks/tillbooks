@@ -1261,6 +1261,14 @@ export function PaymentAllocator({ mode, paymentId, prefill, onClose, onPosted }
                 {confirmNotice}
               </p>
             )}
+            {/* D192 point 2: before the click, the engine names the disposal that cleared the invoice. */}
+            {(preview?.warnings ?? [])
+              .filter((w) => w.code === 'invoice_cleared_by_disposal')
+              .map((w) => (
+                <p className="pay-hint" role="status" key={`cleared-${w.assetNumber ?? ''}`}>
+                  {t('payment.clearedByDisposal', { asset: w.assetNumber ?? '', date: w.disposalDate === undefined ? '' : formatDate(w.disposalDate) })}
+                </p>
+              ))}
           </aside>
         </div>
       </div>

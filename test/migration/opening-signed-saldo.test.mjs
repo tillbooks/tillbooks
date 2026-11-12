@@ -19,6 +19,7 @@ import assert from 'node:assert/strict';
 
 import { getAction } from '../../dist/api/registry.js';
 import { freshDeps, mintWorkspace } from '../api/support.mjs';
+import { grantRealBackup } from './backup-support.mjs';
 
 const call = (deps, name, input) => getAction(name).run(deps, input);
 const must = (res, what) => {
@@ -59,7 +60,7 @@ function rowCounts(deps, wid) {
 
 /** Bind the G04 backup seam the way the G09 suites do, so a first live money-path commit is allowed. */
 function grantBackup(deps, planId) {
-  deps.store.db.prepare('UPDATE migration_plan SET backup_ref = ? WHERE id = ?').run('backup-1', planId);
+  grantRealBackup(deps, planId);
 }
 
 /**

@@ -16,6 +16,7 @@ import { getAction } from '../../dist/api/registry.js';
 import { detectAdapterFromHeaders, SOURCE_ADAPTERS } from '../../dist/core/migration/adapters/registry.js';
 import { normalizeToken } from '../../dist/core/migration/locale/registry.js';
 import { freshDeps, mintWorkspace } from '../api/support.mjs';
+import { grantRealBackup } from './backup-support.mjs';
 
 const call = (deps, name, input) => getAction(name).run(deps, input);
 const must = (res, what) => {
@@ -149,7 +150,7 @@ test('end to end: the classified bexio Saldenliste COMMITS one balanced opening 
   const before = deps.store.db.prepare('SELECT COUNT(*) AS n FROM journal_entry WHERE workspace_id = ?').get(workspaceId).n;
   const staged = must(call(deps, 'migration_commit_step', { workspaceId, planId, stepId, idempotencyKey: 'bhp-commit-1' }), 'commit (staged)');
   assert.equal(staged.staged, true);
-  deps.store.db.prepare('UPDATE migration_plan SET backup_ref = ? WHERE id = ?').run('bhp-backup', planId);
+  grantRealBackup(deps, planId);
   must(call(deps, 'migration_record_approval', { workspaceId, planId, stepId, checkHash: staged.checkHash, idempotencyKey: 'bhp-appr' }), 'approval');
   const committed = must(call(deps, 'migration_commit_step', { workspaceId, planId, stepId, idempotencyKey: 'bhp-commit-1' }), 'commit');
 

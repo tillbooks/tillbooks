@@ -44,6 +44,8 @@ import { computeLineTax } from '../vat/applyVat.js';
 import { apportionNet } from './apportion.js';
 import { createDocument, transitionDocument, getDocument, lineSupplyDate } from './document.js';
 import type { DocumentRow, DocumentPoster, DocumentLineInput } from './document.js';
+// D192: a LEAF of the assets module (it imports nothing from sales or payments), so no cycle.
+import { invoiceClearedByDisposal } from '../assets/invoiceClearing.js';
 // G05: the template seam (layout-only footer lines; see the A11 note on `resolveRenderTemplate`).
 import { resolveRenderTemplate } from '../customization/documentTemplates.js';
 import {
@@ -318,7 +320,10 @@ export function createCreditNote(ctx: WorkspaceContext, input: CreateCreditNoteI
     ctx.store.db
       .prepare('UPDATE document SET credited_document_id = ? WHERE workspace_id = ? AND id = ?')
       .run(invoice.id, ctx.workspaceId, documentId);
-    return getDocument(ctx, { documentId });
+    const doc = getDocument(ctx, { documentId });
+    // D192 point 2: a credit note on an invoice a fixed-asset disposal cleared says so before it is issued.
+    const cleared = invoiceClearedByDisposal(ctx, invoice.id);
+    return doc.ok && cleared !== null ? { ...doc, warnings: [cleared] } : doc;
   };
 
   try {
@@ -344,11 +349,17 @@ export function issueCreditNote(
   const row = readDocRow(ctx, input.creditNoteId);
   if (row === undefined) return err('not_found', { creditNoteId: input.creditNoteId });
   if (row.type !== 'credit_note') return err('not_a_credit_note', { creditNoteId: input.creditNoteId, type: row.type });
-  return transitionDocument(ctx, {
+  // D192 point 2: the issued credit note names the disposal that cleared its invoice, too.
+  const credited = (ctx.store.db
+    .prepare('SELECT credited_document_id AS id FROM document WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, input.creditNoteId) as { id: string | null } | undefined)?.id ?? null;
+  const cleared = credited === null ? null : invoiceClearedByDisposal(ctx, credited);
+  const issued = transitionDocument(ctx, {
     documentId: input.creditNoteId,
     to: 'issued',
     idempotencyKey: input.idempotencyKey as string,
   });
+  return issued.ok && cleared !== null ? { ...issued, warnings: [cleared] } : issued;
 }
 
 /**

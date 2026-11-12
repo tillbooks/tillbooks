@@ -286,7 +286,11 @@
       "empty": {
         "title": "No financial events yet",
         "hint": "Record the acquisition or an opening balance to capitalise this asset."
-      }
+      },
+      "proceedsSettled": "The proceeds document of this disposal still stands. Reverse the payment, or cancel or fully credit the invoice, first, then the disposal.",
+      "proceedsOverride": "Reverse anyway in this case",
+      "proceedsOverrideReason": "Reason for the exception",
+      "proceedsStandsWarn": "The proceeds document of this disposal still stands. The reversal goes ahead (workspace setting) and names it."
     },
     "reconciliation": {
       "title": "Asset reconciliation",
@@ -536,7 +540,51 @@
       "gain": "Book gain",
       "loss": "Book loss",
       "journalPreview": "Journal",
-      "post": "Dispose"
+      "post": "Dispose",
+      "proceedsDoc": "Proceeds document (optional)",
+      "proceedsDocNoneOption": "No document",
+      "proceedsDocInvoice": "Invoice",
+      "proceedsDocPayment": "Incoming payment",
+      "proceedsDocNone": "Without a proceeds document, reversing this disposal later checks no proceeds.",
+      "proceedsDocLinked": "While this document stands, the disposal cannot be reversed: reverse the payment, or cancel or fully credit the invoice, first.",
+      "proceedsDocInvalid": "This document cannot be linked.",
+      "warning": {
+        "proceeds_amount_differs": "The document amount differs from the proceeds (an invoice includes VAT). The proceeds are booked as entered.",
+        "proceeds_currency_differs": "The document is in a different currency from the proceeds.",
+        "counterparty_differs": "The document counterparty differs from the one entered.",
+        "proceeds_payment_spans_invoices": "This payment settles several invoices. The payment is linked, not an invoice.",
+        "proceeds_double_counted": "The invoice already books this sale. Booking the proceeds on this account as well counts the sale twice.",
+        "proceeds_payment_partly_unallocated": "This payment is not wholly on one invoice. The payment is linked, not the invoice.",
+        "proceeds_exceed_sale_line": "More than the largest sale line on this account: other turnover of the invoice would be cleared too.",
+        "sale_reduced": "A credit note, a Skonto or a write-off is booked on the invoice. The gain is stated before these reductions.",
+        "sale_in_other_month": "The disposal and the invoice fall in different months.",
+        "sale_in_other_financial_year": "The disposal and the invoice fall in different financial years.",
+        "abgrenzung_period_locked": "The Abgrenzung falls in a locked period: the disposal is refused until it is open again."
+      },
+      "proceedsDocReason": {
+        "not_found": "This document was not found in this book.",
+        "not_an_invoice": "Only a sales invoice can be linked, not a quote or a credit note.",
+        "not_issued": "This invoice is still a draft. Issue it first.",
+        "not_incoming": "Only an incoming payment can be linked.",
+        "not_standing": "This document is already cancelled, credited or reversed.",
+        "payment_not_for_invoice": "This payment does not settle the chosen invoice.",
+        "no_proceeds": "A disposal without proceeds has no proceeds document.",
+        "no_sale_line": "This invoice has no posted sale line. Book the proceeds yourself (proceeds booking with a reason).",
+        "sale_not_single_line": "This invoice has several positions. Invoice the asset on its own, or book the proceeds yourself (proceeds booking with a reason).",
+        "proceeds_needs_invoice": "This payment is not on one invoice. Issue the invoice, apply the payment to it, then pick the invoice.",
+        "invoice_already_cleared": "This invoice already belongs to another disposal."
+      },
+      "proceedsDocClears": "The proceeds come from the invoice: the disposal clears its sale line, so the sale and its VAT count once.",
+      "proceedsFromInvoice": "Proceeds from the invoice",
+      "abgrenzung": "Abgrenzung as of {date}, reversed on {reversal}",
+      "refusal": {
+        "proceeds_from_document": "The proceeds come from the invoice and differ from the ones entered.",
+        "sale_in_other_financial_year": "The disposal and the invoice fall in different financial years. The invoice date is filled in.",
+        "years_not_adjacent": "More than one year end lies between the disposal and the invoice.",
+        "disposal_date_in_future": "A disposal is booked on the day the asset leaves, at the latest today.",
+        "period_locked": "The period of this date is locked.",
+        "disposal_date_before_reversal": "An earlier disposal of this asset was reversed. Date the new disposal on or after the day of the reverse."
+      }
     },
     "depreciationRun": {
       "title": "Depreciation runs",

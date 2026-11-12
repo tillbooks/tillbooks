@@ -113,8 +113,13 @@ export function egressSelfTest(ctx: WorkspaceContext): Result {
     probe.uninstall();
   }
 
-  const socketsOpened = probe.violations.length;
-  const offenders = probe.violations.map((v) => {
+  // The allow-listed `lsof` busy check (probe.ts, ALLOWED_LOCAL_SUBPROCESSES) is recorded but is not
+  // a violation: it opens no socket. It is reported by name on every outcome, so the run never claims
+  // that no subprocess ran when one did.
+  const violations = probe.violations.filter((v) => v.allowed !== true);
+  const localSubprocesses = [...new Set(probe.violations.filter((v) => v.allowed === true).map((v) => v.target))];
+  const socketsOpened = violations.length;
+  const offenders = violations.map((v) => {
     const [host, port] = v.target.split(':');
     return { kind: v.kind, host, port: port ?? '', target: v.target, stack: v.stack };
   });
@@ -128,6 +133,7 @@ export function egressSelfTest(ctx: WorkspaceContext): Result {
       passed: false,
       socketsOpened,
       offenders,
+      localSubprocesses,
       steps: SELF_TEST_STEPS.map((name) => ({ name, completed: false })),
     });
   }
@@ -139,6 +145,7 @@ export function egressSelfTest(ctx: WorkspaceContext): Result {
     return err('self_test_incomplete', {
       reason: draftResult.error,
       socketsOpened: 0,
+      localSubprocesses,
       steps: SELF_TEST_STEPS.map((name) => ({ name, completed: false })),
     });
   }
@@ -150,6 +157,7 @@ export function egressSelfTest(ctx: WorkspaceContext): Result {
     state: 'local',
     socketsOpened: 0,
     offenders: [],
+    localSubprocesses,
     steps: SELF_TEST_STEPS.map((name) => ({ name, completed: true })),
     draftId,
   });
