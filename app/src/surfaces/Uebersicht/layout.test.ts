@@ -5,11 +5,14 @@ import {
   arrangement,
   asBankPlace,
   asContent,
+  isDouble,
+  isFull,
   moveSlot,
   moveSlotTo,
   seriesWindow,
   tileArrangement,
   toggleSlot,
+  toggleTileWidth,
   toggleWidth,
   viewLayout,
   withSlots,
@@ -151,5 +154,37 @@ describe('Übersicht prefs and the charts\' window', () => {
     expect(seriesWindow('2026-07-15')).toEqual({ from: '2025-08-01', to: '2026-07-31' });
     expect(seriesWindow('2026-12-01')).toEqual({ from: '2026-01-01', to: '2026-12-31' });
     expect(seriesWindow('2028-02-10')).toEqual({ from: '2027-03-01', to: '2028-02-29' });
+  });
+});
+
+describe('D201: the suggestions card in the tile zone', () => {
+  it('leads by default, and leads a list saved before it existed too', () => {
+    expect(ids(tileArrangement([], ['suggestions', 'revenue', 'cash']))).toEqual(['suggestions', 'revenue', 'cash']);
+    // A stored list that never names it: the card still comes first, the person's order follows.
+    const old = tileArrangement([{ id: 'cash', on: true }, { id: 'revenue', on: true }], ['suggestions', 'revenue', 'cash']);
+    expect(ids(old)).toEqual(['suggestions', 'cash', 'revenue']);
+    // Once the person placed it, their place wins.
+    const placed = tileArrangement([{ id: 'revenue', on: true }, { id: 'suggestions', on: true }], ['suggestions', 'revenue']);
+    expect(ids(placed)).toEqual(['revenue', 'suggestions']);
+  });
+
+  it('spans the whole row by default and toggles between the row and two columns; a figure stays single or double', () => {
+    const [sugg, revenue] = tileArrangement([], ['suggestions', 'revenue']);
+    expect(isFull(sugg!)).toBe(true);
+    expect(isDouble(sugg!)).toBe(false);
+    const half = toggleTileWidth([sugg!, revenue!], 'suggestions');
+    expect(half[0]).toMatchObject({ id: 'suggestions', w: 'double' });
+    expect(isFull(half[0]!)).toBe(false);
+    expect(isDouble(half[0]!)).toBe(true);
+    expect(toggleTileWidth(half, 'suggestions')[0]).toMatchObject({ w: 'full' });
+    // `full` is only the suggestions card's: a stored full on a figure is read as its default.
+    const figure = tileArrangement([{ id: 'revenue', on: true, w: 'full' }], ['revenue']);
+    expect(figure[0]).toEqual({ id: 'revenue', on: true });
+    expect(isFull(figure[0]!)).toBe(false);
+  });
+
+  it('an old layout view that hides what it does not name leaves the suggestions card alone', () => {
+    const layout = viewLayout({ columns: ['revenue'], filters: { widgets: [] } });
+    expect(layout.tiles?.some((s) => s.id === 'suggestions')).toBe(false);
   });
 });

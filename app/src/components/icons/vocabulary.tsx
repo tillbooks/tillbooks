@@ -1,7 +1,7 @@
 /**
  * The closed icon vocabulary of Ruhig 3 (D154, DESIGN.md "Icon vocabulary").
  *
- * These thirty-three glyphs (D154's twelve, D177's five, D180's five, A41.5's Freigeben, D186's Vergleichen and Verlauf, and D187's eight), and only these, may stand alone on a button. Each means one thing everywhere,
+ * These thirty-six glyphs (D154's twelve, D177's five, D180's five, A41.5's Freigeben, D186's Vergleichen and Verlauf, D187's eight, D197's Ablehnen and the settings row's Auf Standard zurück and Änderungen), and only these, may stand alone on a button. Each means one thing everywhere,
  * and its German name is the button's accessible name and the first line of its tooltip, so the same
  * pencil never reads "Bearbeiten" here and "Ändern" there. `IconButton` takes a key of this table and
  * nothing else: a glyph outside it needs a word beside it, and a money commit (Buchen, Ausstellen,
@@ -15,6 +15,10 @@
  *
  * A41.5 (07.11.2026, the owner's ruling D184 point 7) adds Freigeben, a check in a ring: the bank inbox row's
  * approve. It is the one money commit that may stand as a glyph, and only there (DESIGN.md "Icon vocabulary").
+ *
+ * D197 (12.11.2026, owner) adds Ablehnen, a ring with one diagonal stroke: the agent's Vorschlag declined, on
+ * the Vorschläge screen and the Pendenzen row, beside Freigeben. It books nothing and deletes nothing: the
+ * Vorschlag is closed unexecuted, and its one step asks for the optional reason first.
  *
  * D180 (24.10.2026) adds five, for arranging the Übersicht in place: Anpassen (the header toggle into
  * edit mode), Fertig (its twin, which leaves it), Ausblenden and Einblenden (the eye on an item) and
@@ -370,6 +374,47 @@ function ShareGlyph(props: GlyphProps) {
   );
 }
 
+/**
+ * Ablehnen (D197, owner 12.11.2026): a ring with one diagonal stroke, the agent's Vorschlag declined. Drawn
+ * as Freigeben's twin (the same ring), never the bare cross of Schliessen or the small cross of Ignorieren.
+ */
+function RejectGlyph(props: GlyphProps) {
+  return (
+    <svg {...glyphBase(props)}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M6.2 17.8L17.8 6.2" />
+    </svg>
+  );
+}
+
+/*
+ * The settings row (owner, 18.11.2026, the Einstellungen redesign, pick A): two glyphs that appear on a
+ * row's hover or focus. Auf Standard zurück replaces the visible word "Standard", Änderungen replaces the
+ * rising line (Verlauf, which keeps its one meaning on the key figures). With Wiederherstellen they read as
+ * one family: the arrow alone goes back to the default, the clock alone shows the past, and the arrow round
+ * the clock goes back to an earlier state.
+ */
+
+/** Auf Standard zurück: a counter-clockwise arrow without a clock face, a setting back to its default. */
+function ResetGlyph(props: GlyphProps) {
+  return (
+    <svg {...glyphBase(props)}>
+      <path d="M5.5 12a6.5 6.5 0 1 0 1.9-4.6" />
+      <path d="M5.2 5.4v3.5h3.5" />
+    </svg>
+  );
+}
+
+/** Änderungen: a clock face, who changed a setting, from what to what, and when. */
+function HistoryGlyph(props: GlyphProps) {
+  return (
+    <svg {...glyphBase(props)}>
+      <circle cx="12" cy="12" r="8" />
+      <path d="M12 7.5V12l3 2" />
+    </svg>
+  );
+}
+
 /** One entry of the vocabulary: the name a person reads and the glyph drawn for it. */
 export interface VocabularyEntry {
   /** The accessible name and the tooltip's first line. A verb or a noun of action, never a sentence. */
@@ -377,7 +422,7 @@ export interface VocabularyEntry {
   glyph: (props: GlyphProps) => ReactElement;
 }
 
-/** The thirty-three, in the order DESIGN.md lists them. Frozen: a new key is a design-law change. */
+/** The thirty-six, in the order DESIGN.md lists them. Frozen: a new key is a design-law change. */
 export const VOCABULARY = Object.freeze({
   edit: { name: 'Bearbeiten', glyph: EditGlyph },
   attach: { name: 'Anhängen', glyph: AttachGlyph },
@@ -412,6 +457,9 @@ export const VOCABULARY = Object.freeze({
   sort: { name: 'Sortieren', glyph: SortGlyph },
   folder: { name: 'Ordner öffnen', glyph: FolderGlyph },
   share: { name: 'Teilen', glyph: ShareGlyph },
+  reject: { name: 'Ablehnen', glyph: RejectGlyph },
+  reset: { name: 'Auf Standard zurück', glyph: ResetGlyph },
+  history: { name: 'Änderungen', glyph: HistoryGlyph },
 } satisfies Record<string, VocabularyEntry>);
 
 /** A key of the closed vocabulary: the only thing `IconButton` accepts as its icon. */

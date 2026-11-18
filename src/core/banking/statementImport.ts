@@ -36,9 +36,11 @@ import { comparePositions, dayEndPosition, isEbicsFedAccount } from './ebics/fee
 import type { FeedPosition } from './ebics/feed.js';
 import { looksLikeMt940, parseMt940 } from './mt940.js';
 import type { ParsedMt940Statement } from './mt940.js';
-import { csvStatementOf, decodeStatementBytes, readCsvTable } from './csvStatement.js';
+import { csvStatementOf, decodeStatementBytes, separatorMismatch } from './csvStatement.js';
+import { isTabularFailure, readTable, readXlsxTable, sniffTabular, TABULAR_MAX_ROWS } from '../tabular/index.js';
+import type { TabularFailure } from '../tabular/index.js';
 import type { CsvTable, DetectedCsvEncoding } from './csvStatement.js';
-import { checkMappingAgainst, guessCsvMapping, presetFor, readCsvMapping, readStoredCsvMapping, writeCsvMapping } from './csvMapping.js';
+import { checkMappingAgainst, guessCsvMapping, presetFor, profileFor, readCsvMapping, readStoredCsvMapping, writeCsvMapping } from './csvMapping.js';
 import type { CsvMapping, CsvMissingField, CsvPresetId } from './csvMapping.js';
 import {
   decideFillDuplicates,
@@ -48,17 +50,19 @@ import {
   fillRowsOf,
   fillStatementOf,
   feedEndOf,
+  fillProofMode,
+  fillProofOf,
   fillTargetsOf,
   planFillParts,
   readFillScope,
   tieFillParts,
 } from './csvGapFill.js';
-import type { CsvFillBalanceTieMode, CsvFillDuplicateMode, CsvFillScope, FillPart, FillProblem, FillTarget, FillTie } from './csvGapFill.js';
+import type { CsvFillBalanceTieMode, CsvFillDuplicateMode, CsvFillProofMode, CsvFillScope, FillPart, FillProblem, FillProof, FillTarget, FillTie } from './csvGapFill.js';
 import { accountStatementGaps } from './statementGaps.js';
 import type { PossibleDuplicate } from './statementDedupe.js';
 
-/** The formats a caller may name (`auto` detects). */
-export const STATEMENT_IMPORT_FORMATS = ['auto', 'camt', 'mt940', 'csv'] as const;
+/** The formats a caller may name (`auto` detects; A20 §13.1: an XLSX is read in the CSV family). */
+export const STATEMENT_IMPORT_FORMATS = ['auto', 'camt', 'mt940', 'csv', 'xlsx'] as const;
 export type StatementImportFormat = (typeof STATEMENT_IMPORT_FORMATS)[number];
 
 /** The largest file one call takes (a year of day-end statements, with room). */
@@ -120,6 +124,10 @@ export type ImportBankStatementOk = {
   /** CSV: the mapping this call read the file with, and whether it was saved for the account. */
   mapping?: CsvMapping;
   mappingSaved: boolean;
+  /** A20 §13.1: an Excel workbook (read as a CSV, `format` `csv`): its container, every worksheet and the one read. */
+  container?: 'xlsx';
+  sheets?: string[];
+  sheet?: string;
   /** A20 §12: present for a gap fill (`fill`): every stretch, its proof and whether it closed. */
   fill?: CsvFillReport;
 };
@@ -174,7 +182,13 @@ export interface CsvFillPartReport {
   /** The two neighbours in the books, and how the CSV's balances stand against them. */
   before: FillTie;
   after: FillTie;
-  problems: { code: FillProblem; row?: number; side?: 'before' | 'after'; differenceMinor?: number }[];
+  problems: { code: FillProblem; row?: number; side?: 'before' | 'after'; differenceMinor?: number; day?: string }[];
+  /** A20 §13.3: the proof the stretch is (or would be) stored with, or null when it proves nothing. */
+  proof: FillProof | null;
+  /** A20 §13.3, the neighbour sum: T (the two statements' difference), S (the kept rows), S - T, and the rows held in P or N. */
+  sum: { expectedMinor: number; actualMinor: number; differenceMinor: number; heldBeforeMinor: number; heldAfterMinor: number } | null;
+  /** A20 §13.3: only on a boundary mismatch, each day with the export's rows and the books' lines the other lacks. */
+  boundary?: { side: 'before' | 'after'; day: string; exportOnlyRows: number[]; booksOnlyTxnIds: string[] }[];
   /** The stretch ties both neighbouring statements and covers every day asked for. */
   closesTarget: boolean;
   /** After the import: the numbered gaps this stretch closed (`statementGaps` no longer lists them). */
@@ -189,6 +203,7 @@ export interface CsvFillReport {
   range: { from: string; to: string } | null;
   /** The settings this answer was decided under (D172). */
   balanceTie: CsvFillBalanceTieMode;
+  proofMode: CsvFillProofMode;
   duplicates: CsvFillDuplicateMode;
   /** The order the file's rows stood in. */
   rowOrder: 'newest_first' | 'oldest_first';
@@ -202,17 +217,49 @@ export interface CsvFillReport {
 export const FILL_LINES_SHOWN = 50;
 
 /** The problems that keep a stretch out of the books under `bank.csv_fill_balance_tie` = `required`. */
-const BLOCKING_PROBLEMS: ReadonlySet<FillProblem> = new Set(['no_balance_column', 'chain_broken', 'untied', 'open_end']);
+const BLOCKING_PROBLEMS: ReadonlySet<FillProblem> = new Set(['no_balance_column', 'chain_broken', 'untied', 'open_end', 'unreadable_row', 'boundary_mismatch']);
+
+/**
+ * A20 §13.3 (critic round 1, M1): a stretch no setting may write. On the sum path an OPEN END (the export does not
+ * reach past both ends) is not a stretch TILL can judge at all: written under `warn` it would hold the days of the
+ * whole target without balances, and a later, complete export could never fill them. It is refused under `warn` too.
+ */
+function neverWritten(part: FillPart): boolean {
+  return part.path === 'neighbour_sum' && part.problems.some((p) => p.code === 'open_end');
+}
+
+/** Is a stretch kept out of the books under the balance-tie setting? */
+function keptOut(part: FillPart, tieMode: CsvFillBalanceTieMode): boolean {
+  return neverWritten(part) || (tieMode === 'required' && part.problems.some((p) => BLOCKING_PROBLEMS.has(p.code)));
+}
 
 /** The refusal code and sentence of a blocked stretch: its first problem. */
 function fillRefusalOf(part: FillPart): { code: string; reason: string } {
   const p = part.problems.find((x) => BLOCKING_PROBLEMS.has(x.code));
   switch (p?.code) {
     case 'no_balance_column':
-      return { code: 'csv_fill_needs_balance', reason: 'the mapping names no balance column, so nothing proves these days are complete: map the running balance (Saldo)' };
+      return p.side === undefined || part.path !== 'neighbour_sum'
+        ? { code: 'csv_fill_needs_balance', reason: 'the mapping names no balance column, so nothing proves these days are complete: map the running balance (Saldo)' }
+        : {
+            code: 'csv_fill_needs_balance',
+            reason: `no balance column, and ${p.side === 'before' ? 'the day before these days' : 'the day after these days'} ends no stored statement with one balance, so the sum proves nothing: map the running balance (Saldo), or import that statement first`,
+          };
+    case 'unreadable_row':
+      return { code: 'csv_fill_unreadable_row', reason: `row ${p.row ?? '?'} of the export cannot be read (a date, an amount, or another currency), so the sum of the rows proves nothing: nothing of these days was imported` };
+    case 'boundary_mismatch':
+      return {
+        code: 'csv_fill_boundary_mismatch',
+        reason: `on ${p.day ?? '?'} (the day ${p.side === 'before' ? 'before' : 'after'} these days) the export and the books do not hold the same amounts (the export may be filtered, or dated differently): nothing of these days was imported`,
+      };
     case 'chain_broken':
       return { code: 'csv_fill_chain_broken', reason: `the running balance does not add up at row ${p.row ?? '?'} (a row missing or unreadable, or the rows out of order): nothing of these days was imported` };
     case 'untied': {
+      if (part.sum !== null) {
+        return {
+          code: 'csv_fill_untied',
+          reason: `the export's rows on these days sum to ${part.sum.actualMinor} Rappen, the statements before and after leave ${part.sum.expectedMinor} Rappen open: ${part.sum.differenceMinor} Rappen differ, nothing of these days was imported`,
+        };
+      }
       const tie = p.side === 'before' ? part.before : part.after;
       const which = tie.kind === 'statement' ? `the statement of ${tie.date}` : 'the books';
       return {
@@ -221,6 +268,12 @@ function fillRefusalOf(part: FillPart): { code: string; reason: string } {
       };
     }
     case 'open_end':
+      if (part.path === 'neighbour_sum') {
+        return {
+          code: 'csv_fill_open_end',
+          reason: p.side === 'before' ? 'the export starts inside these days, so it may lack rows: export from a day earlier' : 'the export ends inside these days, so it may lack rows: export a few days more',
+        };
+      }
       return { code: 'csv_fill_open_end', reason: `the export ends on ${part.to}, inside the days asked for, so their end is not stated: export a few days more, or end the range a day earlier` };
     default:
       return { code: 'refused', reason: 'not imported' };
@@ -269,6 +322,9 @@ function partReportOf(part: FillPart, status: CsvFillPartStatus, extra: { part?:
     before: part.before,
     after: part.after,
     problems: part.problems,
+    proof: fillProofOf(part),
+    sum: part.sum,
+    ...(part.boundary.length > 0 ? { boundary: part.boundary } : {}),
     closesTarget: part.closesTarget,
     closedGapIds: extra.closedGapIds ?? [],
     statementId: extra.statementId ?? null,
@@ -281,7 +337,8 @@ function planFill(ctx: WorkspaceContext, account: AccountRow, table: CsvTable, m
   const rows = fillRowsOf(table, mapping, account.currency);
   const gaps = scope.kind === 'gaps' ? accountStatementGaps(ctx, account.id).filter((g) => !g.confirmed && g.filledBy === undefined) : [];
   const targets = fillTargetsOf(ctx, account, scope, gaps, isEbicsFedAccount(ctx, account.id) ? feedEndOf(ctx, account.id) : undefined);
-  const parts = planFillParts(rows, targets);
+  const proofMode = fillProofMode(ctx);
+  const parts = planFillParts(rows, targets, proofMode);
   const duplicates = fillDuplicateMode(ctx);
   if (duplicates === 'skip_proven') decideFillDuplicates(ctx, account.id, mapping, parts);
   tieFillParts(ctx, account, parts);
@@ -292,6 +349,7 @@ function planFill(ctx: WorkspaceContext, account: AccountRow, table: CsvTable, m
       scope: scope.kind,
       range: scope.kind === 'range' ? { from: scope.from, to: scope.to } : null,
       balanceTie: fillBalanceTieMode(ctx),
+      proofMode,
       duplicates,
       rowOrder: rows.order,
       rowsInFile: rows.rows.length,
@@ -303,7 +361,7 @@ function planFill(ctx: WorkspaceContext, account: AccountRow, table: CsvTable, m
 /** A stretch's status before anything is written. */
 function plannedStatus(ctx: WorkspaceContext, account: AccountRow, part: FillPart, tieMode: CsvFillBalanceTieMode, mappingDigest: string): { status: CsvFillPartStatus; statementId: string | null } {
   if (part.problems.some((p) => p.code === 'not_in_file')) return { status: 'not_in_file', statementId: null };
-  if (tieMode === 'required' && part.problems.some((p) => BLOCKING_PROBLEMS.has(p.code))) return { status: 'blocked', statementId: null };
+  if (keptOut(part, tieMode)) return { status: 'blocked', statementId: null };
   const stmt = fillStatementOf(part, account.currency, mappingDigest, tieMode);
   const answered = existingStatementAnswer(ctx, account.id, stmt, hashCamtStatement(stmt));
   if (answered !== null && answered.ok) return { status: 'already_imported', statementId: answered.statementId };
@@ -341,7 +399,7 @@ function importCsvFill(
         continue;
       }
       const n = outcomes.length + 1;
-      if (tieMode === 'required' && part.problems.some((p) => BLOCKING_PROBLEMS.has(p.code))) {
+      if (keptOut(part, tieMode)) {
         const why = fillRefusalOf(part);
         outcomes.push({ part: n, outcome: 'refused', fromDate: part.from, toDate: part.to, txnCount: 0, duplicates: 0, refusedLines: part.rows.length, warnings: [], code: why.code, reason: why.reason });
         reports.push(partReportOf(part, 'refused', { part: n }));
@@ -392,6 +450,8 @@ export interface ImportBankStatementInput {
   allowDuplicateEntries?: unknown;
   /** A20 §12: fill statement gaps from a CSV: `{}` for the gaps TILL knows, `{ from, to }` for one range. */
   fill?: unknown;
+  /** A20 §13.1: the worksheet of an XLSX to read (the first by default). */
+  sheet?: unknown;
   idempotencyKey?: unknown;
 }
 
@@ -421,6 +481,7 @@ function importScopeKey(accountId: string, input: ImportBankStatementInput, dige
       saveMapping: input.saveMapping ?? true,
       allowDuplicateEntries: input.allowDuplicateEntries ?? false,
       fill: input.fill ?? null,
+      sheet: input.sheet ?? null,
     }),
   );
   return JSON.stringify(['import_bank_statement', accountId, input.idempotencyKey, digest, asked]);
@@ -454,6 +515,27 @@ function readPayload(input: { content?: unknown; contentBase64?: unknown }): Pay
   if (bytes.length > STATEMENT_IMPORT_MAX_BYTES) return err('invalid_input', { field: 'contentBase64', reason: `at most ${STATEMENT_IMPORT_MAX_BYTES} bytes` });
   const decoded = decodeStatementBytes(bytes);
   return { bytes, text: decoded.text, encoding: decoded.encoding, digest: sha256(bytes) };
+}
+
+/** The format of a file as the reader takes it: A20 §13.1 adds the workbook, read in the CSV family. */
+type ReadFormat = 'camt' | 'mt940' | 'csv' | 'xlsx';
+
+/**
+ * The format a call reads: the named one, else (`auto`) what the CONTENT says, never the name: a zip or an
+ * OLE compound file is a workbook (A20 §13.1; an OLE file then answers `xls_unsupported`), else
+ * `detectStatementFormat` on the text.
+ */
+function formatOf(named: StatementImportFormat, payload: Payload): ReadFormat {
+  if (named !== 'auto') return named;
+  if (payload.bytes !== null && sniffTabular(payload.bytes) !== 'text') return 'xlsx';
+  return detectStatementFormat(payload.text);
+}
+
+/** The worksheet input, read: undefined when absent, else the name, or the refusal. */
+function sheetOf(input: { sheet?: unknown }): string | undefined | Err {
+  if (input.sheet === undefined || input.sheet === null || input.sheet === '') return undefined;
+  if (typeof input.sheet !== 'string' || input.sheet.length > 200) return err('invalid_input', { field: 'sheet', reason: 'the name of a worksheet of the workbook' });
+  return input.sheet;
 }
 
 /** camt (an XML with a camt Stmt/Ntfctn/Rpt), MT940 (`:20:` and `:25:`/`:61:`), else CSV. */
@@ -675,21 +757,43 @@ function mappingFor(ctx: WorkspaceContext, accountId: string, raw: unknown): { m
   return stored === null ? null : { mapping: stored.mapping, given: false };
 }
 
-function tableOf(payload: Payload, mapping: Pick<CsvMapping, 'headerRow' | 'delimiter' | 'encoding'> | null): CsvTable {
+/**
+ * The table a CSV-family file is read into. A20 §13.1: a workbook (`xlsx`) is read from its bytes, the named
+ * worksheet or the first, through the same layout detection (its separator and encoding are fixed, so a
+ * mapping's are not applied); a legacy `.xls`, an encrypted workbook or an OpenDocument sheet refuses
+ * `xls_unsupported`, an unknown worksheet `invalid_input` naming the sheets.
+ */
+function tableOf(payload: Payload, mapping: Pick<CsvMapping, 'headerRow' | 'delimiter' | 'encoding'> | null, format: 'csv' | 'xlsx' = 'csv', sheet?: string): CsvTable | Err {
+  if (format === 'xlsx') {
+    if (payload.bytes === null) return err('invalid_input', { field: 'contentBase64', reason: 'an xlsx workbook is sent as its bytes (contentBase64)' });
+    const read = readXlsxTable(payload.bytes, { ...(mapping?.headerRow !== undefined ? { headerRow: mapping.headerRow } : {}), ...(sheet !== undefined ? { sheet } : {}) });
+    if (isTabularFailure(read)) return tableRefusal(read);
+    return read;
+  }
   const opts = {
     ...(mapping?.headerRow !== undefined ? { headerRow: mapping.headerRow } : {}),
     ...(mapping?.delimiter !== undefined ? { delimiter: mapping.delimiter } : {}),
     ...(mapping?.encoding !== undefined ? { encoding: mapping.encoding } : {}),
   };
-  return payload.bytes !== null ? readCsvTable({ bytes: payload.bytes }, opts) : readCsvTable({ text: payload.text }, opts);
+  // A20 §13.1: the limits live in the tabular reader, one place for both containers.
+  const table = readTable(payload.bytes !== null ? { bytes: payload.bytes } : { text: payload.text }, { ...opts, container: 'csv' });
+  return isTabularFailure(table) ? tableRefusal(table) : table;
+}
+
+/** A tabular reader's refusal as the verb's (A20 §13.1). */
+function tableRefusal(read: TabularFailure): Err {
+  if (read.code === 'sheet_not_found') return err('invalid_input', { field: 'sheet', allowed: read.sheets ?? [], reason: read.reason });
+  if (read.code === 'too_many_rows') return err('table_too_many_rows', { maxRows: read.limit ?? TABULAR_MAX_ROWS, reason: read.reason });
+  if (read.code === 'too_large') return err('table_too_large', { maxBytes: read.limit ?? null, reason: read.reason });
+  return err('xls_unsupported', { kind: read.kind, reason: read.reason });
 }
 
 /** A20 §12: the `fill` input, read: null when absent, the scope, or the refusal (a fill reads a CSV only). */
-function fillOf(input: { fill?: unknown }, format: 'camt' | 'mt940' | 'csv'): CsvFillScope | null | Err {
+function fillOf(input: { fill?: unknown }, format: ReadFormat): CsvFillScope | null | Err {
   if (input.fill === undefined || input.fill === null || input.fill === false) return null;
   const read = readFillScope(input.fill);
   if ('field' in read) return err('invalid_input', { field: read.field, reason: read.reason });
-  if (format !== 'csv') return err('invalid_input', { field: 'fill', reason: `a gap fill reads a bank CSV export; this file is ${format === 'camt' ? 'a camt' : 'an MT940'}: import it without fill` });
+  if (format !== 'csv' && format !== 'xlsx') return err('invalid_input', { field: 'fill', reason: `a gap fill reads a bank CSV export; this file is ${format === 'camt' ? 'a camt' : 'an MT940'}: import it without fill` });
   return read.scope;
 }
 
@@ -697,17 +801,17 @@ function fillOf(input: { fill?: unknown }, format: 'camt' | 'mt940' | 'csv'): Cs
  * D139 item 6: an account fed over EBICS takes camt only. A20 §12: a gap FILL is the one exception, for the
  * days the feed never delivered, unless `bank.csv_fill_fed_accounts` is `refuse`.
  */
-function feedRefusal(ctx: WorkspaceContext, account: AccountRow, format: 'camt' | 'mt940' | 'csv', fill: CsvFillScope | null): Err | null {
+function feedRefusal(ctx: WorkspaceContext, account: AccountRow, format: ReadFormat, fill: CsvFillScope | null): Err | null {
   if (format === 'camt' || !isEbicsFedAccount(ctx, account.id)) return null;
   if (fill !== null && fillFedAccountMode(ctx) === 'allow') return null;
   return err('bank_feed_account', {
     bankAccountId: account.id,
     name: account.name,
-    format,
+    format: format === 'xlsx' ? 'csv' : format,
     reason:
       fill !== null
         ? 'this Bankkonto is fed over EBICS and the setting bank.csv_fill_fed_accounts is refuse: its statements come from the bank feed only'
-        : format === 'csv'
+        : format === 'csv' || format === 'xlsx'
           ? 'this Bankkonto is fed over EBICS: its statements come from the bank feed as camt.053; a CSV export fills only the days the feed never delivered (import it with fill)'
           : 'this Bankkonto is fed over EBICS: its statements come from the bank feed as camt.053, so an MT940 or CSV is not imported here',
   });
@@ -729,6 +833,8 @@ export function importBankStatement(ctx: WorkspaceContext, input: ImportBankStat
     if (input[flag] !== undefined && typeof input[flag] !== 'boolean') return err('invalid_input', { field: flag });
   }
   if (input.fileName !== undefined && (typeof input.fileName !== 'string' || input.fileName.length > 255)) return err('invalid_input', { field: 'fileName' });
+  const sheet = sheetOf(input);
+  if (sheet !== undefined && isErr(sheet)) return sheet;
   const account = readAccount(ctx, input.bankAccountId);
   if (isErr(account)) return account;
   if (account.archived === 1) return err('bank_account_archived', { bankAccountId: account.id, name: account.name });
@@ -739,8 +845,7 @@ export function importBankStatement(ctx: WorkspaceContext, input: ImportBankStat
   const replayed = ctx.store.recallIdempotent<Result<ImportBankStatementOk>>(ctx.workspaceId, scopedKey, 'import_bank_statement');
   if (replayed !== undefined) return replayed;
 
-  const named = (input.format ?? 'auto') as StatementImportFormat;
-  const format = named === 'auto' ? detectStatementFormat(payload.text) : named;
+  const format = formatOf((input.format ?? 'auto') as StatementImportFormat, payload);
   const allowDuplicateEntries = input.allowDuplicateEntries === true;
   const fileName = typeof input.fileName === 'string' ? input.fileName : null;
   const fill = fillOf(input, format);
@@ -754,6 +859,7 @@ export function importBankStatement(ctx: WorkspaceContext, input: ImportBankStat
   let mappingSaved = false;
   let fillReport: CsvFillReport | undefined;
   let reportFormat: ImportBankStatementOk['format'];
+  let workbook: { container: 'xlsx'; sheets: string[]; sheet: string } | undefined;
 
   if (format === 'camt') {
     reportFormat = 'camt053';
@@ -821,7 +927,9 @@ export function importBankStatement(ctx: WorkspaceContext, input: ImportBankStat
     reportFormat = 'csv';
     const resolved = mappingFor(ctx, account.id, input.mapping);
     if (resolved !== null && isErr(resolved)) return resolved;
-    const table = tableOf(payload, resolved?.mapping ?? null);
+    const table = tableOf(payload, resolved?.mapping ?? null, format, sheet);
+    if (isErr(table)) return table;
+    if (table.container === 'xlsx') workbook = { container: 'xlsx', sheets: table.sheets ?? [], sheet: table.sheet ?? '' };
     if (resolved === null) {
       const guessed = guessCsvMapping(table.headers, table.records);
       return err('csv_mapping_required', {
@@ -830,6 +938,7 @@ export function importBankStatement(ctx: WorkspaceContext, input: ImportBankStat
         guessedMapping: guessed,
         missing: checkMappingAgainst(guessed, table.headers).missing,
         reason: 'this Bankkonto has no saved CSV mapping: preview the file (bank_csv_preview) and import it with a mapping',
+        ...(workbook !== undefined ? { sheets: workbook.sheets, sheet: workbook.sheet } : {}),
       });
     }
     const check = checkMappingAgainst(resolved.mapping, table.headers);
@@ -842,10 +951,14 @@ export function importBankStatement(ctx: WorkspaceContext, input: ImportBankStat
         reason: missingSentence(check.missing, check.unknownColumns),
       });
     }
+    const contradiction = separatorMismatch(table, resolved.mapping);
+    if (contradiction !== null) return separatorRefusal(account.id, resolved.mapping, contradiction);
     mappingUsed = resolved.mapping;
     if (fill !== null) {
       // A20 §12: only the days no statement holds, each stretch proven by the running balance.
-      if (fillBalanceTieMode(ctx) === 'required' && resolved.mapping.columns.balance === undefined) {
+      // A20 §13.3: without a balance column only `running_balance_only` refuses the whole file; under `auto`
+      // the neighbour sum decides stretch by stretch.
+      if (fillBalanceTieMode(ctx) === 'required' && fillProofMode(ctx) === 'running_balance_only' && resolved.mapping.columns.balance === undefined) {
         return err('csv_fill_needs_balance', {
           bankAccountId: account.id,
           headers: table.headers,
@@ -872,7 +985,7 @@ export function importBankStatement(ctx: WorkspaceContext, input: ImportBankStat
     bankAccountId: account.id,
     format: reportFormat,
     fileName,
-    encoding: payload.encoding,
+    encoding: workbook !== undefined ? null : payload.encoding,
     statements: outcomes,
     imported: outcomes.reduce((n, o) => n + o.txnCount, 0),
     duplicates: outcomes.reduce((n, o) => n + o.duplicates, 0),
@@ -880,6 +993,7 @@ export function importBankStatement(ctx: WorkspaceContext, input: ImportBankStat
     skipped: skips,
     ...(mappingUsed !== undefined ? { mapping: mappingUsed } : {}),
     mappingSaved,
+    ...(workbook !== undefined ? workbook : {}),
     ...(fillReport !== undefined ? { fill: fillReport } : {}),
   };
   return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'import_bank_statement', () => ok<ImportBankStatementOk>(body));
@@ -904,6 +1018,8 @@ export function prevalidateImportBankStatement(ctx: WorkspaceContext, input: Imp
   for (const flag of ['saveMapping', 'allowDuplicateEntries'] as const) {
     if (input[flag] !== undefined && typeof input[flag] !== 'boolean') return err('invalid_input', { field: flag });
   }
+  const sheet = sheetOf(input);
+  if (sheet !== undefined && isErr(sheet)) return sheet;
   const account = readAccount(ctx, input.bankAccountId);
   if (isErr(account)) return account;
   if (account.archived === 1) return err('bank_account_archived', { bankAccountId: account.id, name: account.name });
@@ -911,8 +1027,7 @@ export function prevalidateImportBankStatement(ctx: WorkspaceContext, input: Imp
   if (isErr(payload)) return payload;
   const scopedKey = importScopeKey(account.id, input, payload.digest);
   if (ctx.store.recallIdempotent(ctx.workspaceId, scopedKey, 'import_bank_statement') !== undefined) return undefined;
-  const named = (input.format ?? 'auto') as StatementImportFormat;
-  const format = named === 'auto' ? detectStatementFormat(payload.text) : named;
+  const format = formatOf((input.format ?? 'auto') as StatementImportFormat, payload);
   const fill = fillOf(input, format);
   if (fill !== null && isErr(fill)) return fill;
   const fed = feedRefusal(ctx, account, format, fill);
@@ -930,7 +1045,8 @@ export function prevalidateImportBankStatement(ctx: WorkspaceContext, input: Imp
     return isErr(plan) ? plan : undefined;
   }
   if (input.mapping === undefined || input.mapping === null) {
-    const table = tableOf(payload, null);
+    const table = tableOf(payload, null, format, sheet);
+    if (isErr(table)) return table;
     return err('csv_mapping_required', {
       bankAccountId: account.id,
       headers: table.headers,
@@ -941,7 +1057,8 @@ export function prevalidateImportBankStatement(ctx: WorkspaceContext, input: Imp
   }
   const read = readCsvMapping(input.mapping);
   if (!read.ok) return read;
-  const table = tableOf(payload, read.mapping);
+  const table = tableOf(payload, read.mapping, format, sheet);
+  if (isErr(table)) return table;
   const check = checkMappingAgainst(read.mapping, table.headers);
   if (check.missing.length > 0 || check.unknownColumns.length > 0) {
     return err('csv_mapping_invalid', {
@@ -952,10 +1069,27 @@ export function prevalidateImportBankStatement(ctx: WorkspaceContext, input: Imp
       reason: missingSentence(check.missing, check.unknownColumns),
     });
   }
-  if (fill !== null && fillBalanceTieMode(ctx) === 'required' && read.mapping.columns.balance === undefined) {
+  const contradiction = separatorMismatch(table, read.mapping);
+  if (contradiction !== null) return separatorRefusal(account.id, read.mapping, contradiction);
+  if (fill !== null && fillBalanceTieMode(ctx) === 'required' && fillProofMode(ctx) === 'running_balance_only' && read.mapping.columns.balance === undefined) {
     return err('csv_fill_needs_balance', { bankAccountId: account.id, headers: table.headers });
   }
   return undefined;
+}
+
+/** A20 §13.1 (critic round 1, M3): a mapping whose decimal separator the file's text amounts contradict. */
+function separatorRefusal(bankAccountId: string, mapping: CsvMapping, at: { row: number; column: string }): Err {
+  return err('csv_mapping_separator_mismatch', {
+    bankAccountId,
+    row: at.row,
+    column: at.column,
+    decimalSeparator: mapping.decimalSeparator ?? null,
+    reason: separatorSentence(mapping, at),
+  });
+}
+
+function separatorSentence(mapping: CsvMapping, at: { row: number; column: string }): string {
+  return `row ${at.row}, column "${at.column}": the amount is written with ${mapping.decimalSeparator === ',' ? 'a point' : 'a comma'} as its decimal separator, the mapping says ${mapping.decimalSeparator === ',' ? 'a comma' : 'a point'}: correct the decimal separator`;
 }
 
 const MISSING_TEXT: Readonly<Record<CsvMissingField, string>> = {
@@ -1006,34 +1140,62 @@ export type BankCsvPreviewOk = {
   unknownColumns: string[];
   /** The sentence that names what is missing, or null when the mapping reads the file. */
   blocking: string | null;
+  /** A20 §13.1: the first text amount cell whose decimal separator contradicts the mapping's, or null. */
+  separatorMismatch: { row: number; column: string } | null;
+  /** The file line of each of `rows`, so a sample row (`sample[].row`) meets its raw cells. */
+  lines: number[];
   sample: CsvPreviewSampleRow[];
   /** A20 §12: the preset whose every column the file carries (offered as the guess), or null. */
   preset: CsvPresetId | null;
+  /** A20 §13.4: that preset as the built-in import profile it is (its id and label), or null. */
+  profile: { id: string; label: string } | null;
   /** A20 §12: the Bankkonto is fed over EBICS (a CSV goes in only as a gap fill). */
   fedAccount: boolean;
   /** A20 §12: with `fill`, what a fill would write, stretch by stretch (statuses `ready`, `blocked`, `not_in_file`, `already_imported`). */
   fill?: CsvFillReport;
+  /** A20 §13.1: the file is a workbook (`xlsx`) or a delimited file (`csv`). */
+  container: 'csv' | 'xlsx';
+  /** A20 §13.1, a workbook: every worksheet name in workbook order, and the one read. */
+  sheets?: string[];
+  sheet?: string;
 };
+
+/** The formats `bank_csv_preview` reads (A20 §13.1). */
+export const CSV_PREVIEW_FORMATS = ['auto', 'csv', 'xlsx'] as const;
 
 /**
  * `bank_csv_preview` (A20 §11.3): read a CSV the way the import would, writing nothing: the encoding,
  * separator and header row, the first rows, the mapping (handed in, saved, or guessed) with what it
- * lacks, and the first rows as the import would read them, each with its error.
+ * lacks, and the first rows as the import would read them, each with its error. A20 §13.1: an XLSX
+ * workbook (`format: 'xlsx'`, or found from its bytes) is read the same way, the worksheet `sheet` or the
+ * first, and the answer names every worksheet (`sheets`).
  */
-export function bankCsvPreview(ctx: WorkspaceContext, input: { bankAccountId?: unknown; content?: unknown; contentBase64?: unknown; mapping?: unknown; fill?: unknown }): Result<BankCsvPreviewOk> {
+export function bankCsvPreview(
+  ctx: WorkspaceContext,
+  input: { bankAccountId?: unknown; content?: unknown; contentBase64?: unknown; mapping?: unknown; fill?: unknown; format?: unknown; sheet?: unknown },
+): Result<BankCsvPreviewOk> {
+  if (input.format !== undefined && (typeof input.format !== 'string' || !(CSV_PREVIEW_FORMATS as readonly string[]).includes(input.format))) {
+    return err('invalid_input', { field: 'format', allowed: [...CSV_PREVIEW_FORMATS] });
+  }
+  const sheet = sheetOf(input);
+  if (sheet !== undefined && isErr(sheet)) return sheet;
   const account = readAccount(ctx, input.bankAccountId);
   if (isErr(account)) return account;
   const payload = readPayload(input);
   if (isErr(payload)) return payload;
-  const fill = fillOf(input, 'csv');
+  const named = (input.format ?? 'auto') as (typeof CSV_PREVIEW_FORMATS)[number];
+  const format: 'csv' | 'xlsx' = named === 'xlsx' || (named === 'auto' && payload.bytes !== null && sniffTabular(payload.bytes) !== 'text') ? 'xlsx' : 'csv';
+  const fill = fillOf(input, format);
   if (fill !== null && isErr(fill)) return fill;
   const resolved = mappingFor(ctx, account.id, input.mapping);
   if (resolved !== null && isErr(resolved)) return resolved;
-  const table = tableOf(payload, resolved?.mapping ?? null);
+  const table = tableOf(payload, resolved?.mapping ?? null, format, sheet);
+  if (isErr(table)) return table;
   const guessed = guessCsvMapping(table.headers, table.records);
   const mapping = resolved?.mapping ?? guessed;
   const source: BankCsvPreviewOk['mappingSource'] = resolved === null ? 'guessed' : resolved.given ? 'given' : 'saved';
   const check = checkMappingAgainst(mapping, table.headers);
+  const contradiction = check.missing.length === 0 && check.unknownColumns.length === 0 ? separatorMismatch(table, mapping) : null;
   const head: CsvTable = { ...table, records: table.records.slice(0, CSV_PREVIEW_ROWS), lines: table.lines.slice(0, CSV_PREVIEW_ROWS) };
   const sample: CsvPreviewSampleRow[] = [];
   if (check.missing.length === 0 && check.unknownColumns.length === 0) {
@@ -1063,7 +1225,7 @@ export function bankCsvPreview(ctx: WorkspaceContext, input: { bankAccountId?: u
   }
   return ok<BankCsvPreviewOk>({
     bankAccountId: account.id,
-    encoding: payload.encoding,
+    encoding: format === 'xlsx' ? null : payload.encoding,
     delimiter: table.delimiter,
     headerRow: table.headerRow,
     headers: table.headers,
@@ -1074,10 +1236,15 @@ export function bankCsvPreview(ctx: WorkspaceContext, input: { bankAccountId?: u
     guessedMapping: guessed,
     missing: check.missing,
     unknownColumns: check.unknownColumns,
-    blocking: check.missing.length > 0 || check.unknownColumns.length > 0 ? missingSentence(check.missing, check.unknownColumns) : null,
+    blocking: check.missing.length > 0 || check.unknownColumns.length > 0 ? missingSentence(check.missing, check.unknownColumns) : contradiction !== null ? separatorSentence(mapping, contradiction) : null,
+    separatorMismatch: contradiction,
+    lines: head.lines,
     sample,
     preset: presetFor(table.headers)?.id ?? null,
+    profile: ((p) => (p === null ? null : { id: p.id, label: p.label }))(profileFor(table.headers)),
     fedAccount: isEbicsFedAccount(ctx, account.id),
+    container: format,
+    ...(table.container === 'xlsx' ? { sheets: table.sheets ?? [], sheet: table.sheet ?? '' } : {}),
     ...(fill !== null && check.missing.length === 0 && check.unknownColumns.length === 0 ? { fill: previewFill(ctx, account, table, mapping, fill) } : {}),
   });
 }

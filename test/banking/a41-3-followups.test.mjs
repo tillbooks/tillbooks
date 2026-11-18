@@ -33,6 +33,7 @@ import { ok, err } from '../../dist/core/result.js';
 import { must, secondWorkspace, assertClaimInvariantHolds } from './bank-inbox-support.mjs';
 import { ruleWorld, debits, bookAsProposed, autopilot, decisionOf, at, TELCO, TELCO_IBAN } from './n04-autobook-support.mjs';
 import { receipt, confirmedReceipt, assignBeleg, activeOf, assignmentsOf } from './a41-beleg-support.mjs';
+import { assertNotApplied } from '../settings/support.mjs';
 
 afterEach(assertClaimInvariantHolds);
 
@@ -154,7 +155,9 @@ test('a file the D142 path already filed on the open line is captured in place, 
 test('belege.drop_on_open_line: assign by default, human-only; assign_if_stated files and captures without an amount; file only files', () => {
   const w = world();
   assert.equal(getSetting(w.t.ctx, DROP_ON_OPEN_LINE_SETTING), 'assign');
-  assert.equal(handleRest('settings_set', { workspaceId: w.t.workspaceId, key: DROP_ON_OPEN_LINE_SETTING, value: 'file', reason: 'x', idempotencyKey: `${w.tag}-ag` }, { ...w.t.deps, actor: 'agent' }).body.error, 'human_only');
+  // D202 point 5: the agent only proposes a protected setting, a person approves it.
+  assertNotApplied(handleRest('settings_set', { workspaceId: w.t.workspaceId, key: DROP_ON_OPEN_LINE_SETTING, value: 'file', reason: 'x', idempotencyKey: `${w.tag}-ag` }, { ...w.t.deps, actor: 'agent' }).body, DROP_ON_OPEN_LINE_SETTING);
+  assert.equal(getSetting(w.t.ctx, DROP_ON_OPEN_LINE_SETTING), 'assign');
   must(settingsSet(w.t.ctx, { key: DROP_ON_OPEN_LINE_SETTING, value: 'assign_if_stated', reason: 'test', idempotencyKey: `${w.tag}-s1` }));
   const unstated = upload(w);
   const r1 = must(drop(w, unstated));
@@ -312,9 +315,7 @@ test('receipt guard (N02 book-again rule): bytes a live booking holds are asked 
   let before = snapshot(w);
   const asked = drop(w, twin);
   assert.equal(asked.error, 'receipt_already_booked', JSON.stringify(asked));
-  assert.equal(typeof asked.override, 'string', 'under confirm the person is asked for a reason');
-  assert.deepEqual(snapshot(w), before);
-  assert.equal(drop(w, twin, { bookAgain: true }).error, 'reason_required');
+  assert.equal(typeof asked.override, 'string', 'under confirm the person is asked to confirm (D204: no reason)');
   assert.deepEqual(snapshot(w), before);
   must(settingsSet(w.t.ctx, { key: 'files.duplicate_beleg', value: 'refuse', reason: 'test', idempotencyKey: `${w.tag}-dr` }));
   const refused = drop(w, twin, { bookAgain: true, overrideReason: 'Teilzahlung' });

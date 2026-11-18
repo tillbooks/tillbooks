@@ -532,7 +532,7 @@ test('validations: a block refuses check_not_passed and holds its dependents; a 
   assert.equal(cl.validationResult.figures.equityMinor, 4000000);
   assert.equal(cl.validationResult.figures.thresholdMinor, 5000000);
   assert.equal(cl.status, 'open');
-  refuse(complete(w, run.runId, 'capital_loss_check', { kind: 'signoff' }), 'acknowledge_needs_reason', 'a warn needs a reason');
+  refuse(complete(w, run.runId, 'capital_loss_check', { kind: 'note' }), 'evidence_required', 'a warn is acknowledged by a sign-off');
   const ack = must(complete(w, run.runId, 'capital_loss_check', { kind: 'signoff', ref: 'Kapitalerhöhung im Juli beschlossen' }), 'acknowledge');
   assert.equal(ack.item.status, 'done');
   assert.equal(ack.item.signoff.kind, 'validation_acknowledged');
@@ -627,15 +627,13 @@ test('the statements sign-off binds the anchor: it moves on a posting inside the
 
 // --- The GV attestation and choice_locked -------------------------------------------------------
 
-test('gv_attestation: a date before the statements sign-off needs a reason (a warn, never a refusal), already_attested on a second, and the governing choice is then locked', () => {
+test('gv_attestation: a date before the statements sign-off warns (never a refusal) and keeps a given reason, already_attested on a second, and the governing choice is then locked', () => {
   const w = world('gv');
   const run = start(w);
   refuse(complete(w, run.runId, 'gv_approved', { kind: 'gv_attestation', ref: '2026-07-10' }), 'prerequisite_open', 'waits on the sign-off');
   must(complete(w, run.runId, 'statements_signed', { kind: 'statements_signoff' }), 'sign');
   refuse(complete(w, run.runId, 'gv_approved', { kind: 'signoff', ref: '2026-07-10' }), 'evidence_required', 'wrong evidence kind');
   refuse(complete(w, run.runId, 'gv_approved', { kind: 'gv_attestation', ref: '10.07.2026' }), 'evidence_required', 'not an ISO day');
-  const early = refuse(complete(w, run.runId, 'gv_approved', { kind: 'gv_attestation', ref: '2026-07-10' }), 'acknowledge_needs_reason', 'before the sign-off');
-  assert.equal(early.statementsSignedAt, '2026-07-16');
   const gv = must(complete(w, run.runId, 'gv_approved', { kind: 'gv_attestation', ref: '2026-07-10', reason: 'GV fand vor der Migration statt' }), 'attest with reason');
   assert.equal(gv.warnedBeforeStatements, true);
   assert.equal(gv.item.status, 'done');
@@ -655,6 +653,33 @@ test('gv_attestation: a date before the statements sign-off needs a reason (a wa
   const view = get(w, run.runId);
   assert.equal(item(view, 'gv_approved').status, 'excluded');
   assert.equal(item(view, 'capital_loss_check').status, 'excluded');
+});
+
+test('D204 checklists: a warn is acknowledged and a GV before the sign-off attested with no reason; the sign-off rows keep who and when', async () => {
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
+  const w = world('d204');
+  let run = start(w);
+  post(w, { date: '2026-01-10', debit: '1020', credit: '2800', amount: 10000000, tag: 'cap' });
+  post(w, { date: '2026-06-05', debit: '6500', credit: '1020', amount: 6000000, tag: 'loss' });
+  const cl = item(get(w, run.runId), 'capital_loss_check');
+  assert.equal(cl.validationResult.result, 'fail');
+  const ack = must(complete(w, run.runId, 'capital_loss_check', { kind: 'signoff' }), 'acknowledge without a reason');
+  assert.equal(ack.item.status, 'done', 'what changed: open -> done');
+  assert.equal(ack.item.signoff.kind, 'validation_acknowledged');
+  assert.equal(ack.item.signoff.hash, cl.validationResult.hash, 'bound to the figures');
+  assert.equal(ack.item.signoff.evidenceRef, '');
+  const row = w.deps.store.db.prepare('SELECT actor, created_at FROM checklist_signoff WHERE id = ?').get(ack.signoffId);
+  assertWhoWhen(row.actor, row.created_at, 'studio');
+  assertPermission('checklist_item_complete', { itemId: 'capital_loss_check' });
+
+  const w2 = world('d204-gv');
+  run = start(w2);
+  must(complete(w2, run.runId, 'statements_signed', { kind: 'statements_signoff' }), 'sign');
+  const gv = must(complete(w2, run.runId, 'gv_approved', { kind: 'gv_attestation', ref: '2026-07-10' }), 'attest before the sign-off, no reason');
+  assert.equal(gv.warnedBeforeStatements, true, 'still a warning');
+  assert.equal(gv.item.signoff.evidenceRef, '2026-07-10');
+  const gvRow = w2.deps.store.db.prepare('SELECT actor, created_at FROM checklist_signoff WHERE id = ?').get(gv.signoffId);
+  assertWhoWhen(gvRow.actor, gvRow.created_at, 'studio');
 });
 
 test('gv_attestation: a stale attestation is refreshed by the same date and actor (the old one voided hash_changed), and a replay while it stands is alreadyDone', () => {

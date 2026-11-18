@@ -35,6 +35,8 @@ export interface AuditRow {
   action: string;
   actor: string;
   at: string;
+  /** D209: on an `approve_on_owner_word` row, the owner's words the agent approved the Vorschlag on. */
+  ownerWord?: { quote: string; saidAt: string };
 }
 
 type PanelState =
@@ -172,7 +174,18 @@ export function AuditPanel() {
     {
       key: 'action',
       header: t('audit.col.action'),
-      render: (row) => tStrict(`audit.action.${row.action}`),
+      render: (row) =>
+        row.ownerWord !== undefined ? (
+          <>
+            {tStrict(`audit.action.${row.action}`)}
+            {/* D209: the owner's words, verbatim; the whole quote and when it was said on hover. */}
+            <span className="audit-owner-word" title={`${t('audit.ownerWord', { quote: row.ownerWord.quote })}, ${formatDate(row.ownerWord.saidAt)}`}>
+              {t('audit.ownerWord', { quote: row.ownerWord.quote })}
+            </span>
+          </>
+        ) : (
+          tStrict(`audit.action.${row.action}`)
+        ),
     },
     { key: 'actor', header: t('audit.col.actor'), render: (row) => displayName(row.actor, members, t).label },
   ];

@@ -35,7 +35,7 @@
  * The props are unchanged: `Bank.tsx` mounts the dialog and hears `onImported` (one statement) or
  * `onImportedFiles` (several) exactly as before.
  */
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useClient } from '../../lib/client-context';
@@ -45,13 +45,13 @@ import { useT } from '../../i18n';
 import { Modal } from '../../components/Modal';
 import { Select } from '../../components/Select';
 import { FileDrop } from '../../components/FileDrop';
-import '../../components/DataTable.css';
 import type { BankAccountOption } from './model';
 import { formatIban, ibanOfCamt } from './model';
 import { RefusalNote } from './RefusalNote';
 import type { NumberJump } from '../BankAccounts/channelWording';
 import { outcomeText, parseFileOutcomes, type FileOutcome } from './importOutcomes';
 import { CsvFillStep, problemSentence, readFillView, stretchName, type CsvFillMode, type CsvFillView } from './CsvFillStep';
+import { CsvMappingStep, bytesToBase64, fileBytesOf, sniffBytes, useCsvPreview, useMappingBlocking, type CsvMappingDraft, type TabularFile } from './CsvMappingStep';
 
 export interface ImportResult {
   bankAccountId: string;
@@ -81,74 +81,20 @@ export interface ImportDialogProps {
 }
 
 /** D178: every file the picker offers and a drop may hand over. */
-const ACCEPT = '.xml,text/xml,application/xml,.sta,.mt940,.txt,.csv,text/csv,text/plain';
+const ACCEPT = '.xml,text/xml,application/xml,.sta,.mt940,.txt,.csv,text/csv,text/plain,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel';
 
-type StatementKind = 'camt' | 'mt940' | 'csv';
+type StatementKind = 'camt' | 'mt940' | 'csv' | 'xlsx';
 
-/** The CSV target fields, in the order the mapping step lists them (the engine's `CSV_TARGET_FIELDS`). */
-const CSV_FIELDS = [
-  'bookingDate',
-  'valueDate',
-  'amount',
-  'debit',
-  'credit',
-  'text',
-  'counterparty',
-  'counterpartyIban',
-  'reference',
-  'currency',
-  'instructedAmount',
-  'instructedCurrency',
-  'rate',
-  'fee',
-  'balance',
-  'purpose',
-] as const;
-type CsvField = (typeof CSV_FIELDS)[number];
-const CSV_DATE_FORMATS = ['dd.mm.yyyy', 'dd.mm.yy', 'yyyy-mm-dd', 'dd/mm/yyyy'] as const;
-/** The amount group: one signed column, or debit and/or credit. */
-const AMOUNT_FIELDS: readonly CsvField[] = ['amount', 'debit', 'credit'];
-
-interface CsvMappingDraft {
-  columns: Partial<Record<CsvField, string>>;
-  dateFormat: string;
-  decimalSeparator?: '.' | ',';
-  headerRow?: number;
-  delimiter?: string;
-  encoding?: string;
-  /** A20 §12: carried as the engine gave them (a preset sets them); not edited here. */
-  rowOrder?: string;
-  referenceSuffix?: string;
-  counterpartyCut?: string;
-}
-
-interface CsvPreview {
-  headers: string[];
-  rows: string[][];
-  rowCount: number;
-  mapping: CsvMappingDraft;
-  mappingSource: 'given' | 'saved' | 'guessed';
-  /** The layout the file was read with (detected, or the one asked for). */
-  delimiter: string;
-  headerRow: number;
-  /** TILL's guess from the headings under that layout. */
-  guessedMapping: CsvMappingDraft | null;
-  /** A20 §12: the known export layout the headings are (`zkb_account_statement`), or null. */
-  preset: string | null;
-  /** A20 §12: the Bankkonto is fed over EBICS (a CSV goes in only as a gap fill). */
-  fedAccount: boolean;
-}
-
-/** The separators a person can pick when the detection chose wrong (critic M3). */
-const CSV_DELIMITER_CHOICES = ['semicolon', 'comma', 'tab'] as const;
-/** The rows a person can name as the one with the column names. */
-const CSV_HEADER_ROW_CHOICES = Array.from({ length: 30 }, (_, i) => i + 1);
 
 interface OtherFile {
   name: string;
-  kind: 'mt940' | 'csv';
+  /** A20 §13.1: `xlsx` is an Excel export, read like a CSV (`format: 'xlsx'`). */
+  kind: 'mt940' | 'csv' | 'xlsx';
   base64: string;
 }
+
+/** A CSV or an Excel export: the two the mapping step reads. */
+const isTabular = (kind: OtherFile['kind'] | undefined): kind is 'csv' | 'xlsx' => kind === 'csv' || kind === 'xlsx';
 
 interface StatementOutcome {
   part: number;
@@ -206,47 +152,7 @@ function ibanOfMt940(text: string): string | null {
   return null;
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(binary);
-}
 
-async function fileBytes(file: File, text: string): Promise<Uint8Array> {
-  if (typeof file.arrayBuffer === 'function') return new Uint8Array(await file.arrayBuffer());
-  return new TextEncoder().encode(text);
-}
-
-/** What a CSV mapping lacks against the file's headings, as the dialog names it. */
-function mappingGaps(mapping: CsvMappingDraft, headers: readonly string[]): { missing: ('bookingDate' | 'amount')[]; unknown: string[] } {
-  const missing: ('bookingDate' | 'amount')[] = [];
-  if (mapping.columns.bookingDate === undefined) missing.push('bookingDate');
-  if (AMOUNT_FIELDS.every((f) => mapping.columns[f] === undefined)) missing.push('amount');
-  const unknown = [...new Set(Object.values(mapping.columns).filter((h): h is string => h !== undefined && !headers.includes(h)))];
-  return { missing, unknown };
-}
-
-function readPreview(body: unknown): CsvPreview | null {
-  const b = body as Partial<CsvPreview> | null;
-  if (b === null || typeof b !== 'object' || !Array.isArray(b.headers) || !Array.isArray(b.rows) || b.mapping === undefined) return null;
-  const m = b.mapping as CsvMappingDraft;
-  const g = b.guessedMapping as CsvMappingDraft | null | undefined;
-  return {
-    headers: b.headers.filter((h): h is string => typeof h === 'string'),
-    rows: b.rows as string[][],
-    rowCount: typeof b.rowCount === 'number' ? b.rowCount : b.rows.length,
-    mapping: { ...m, columns: { ...(m.columns ?? {}) } },
-    mappingSource: b.mappingSource === 'given' || b.mappingSource === 'saved' ? b.mappingSource : 'guessed',
-    delimiter: typeof b.delimiter === 'string' ? b.delimiter : 'semicolon',
-    headerRow: typeof b.headerRow === 'number' ? b.headerRow : 1,
-    guessedMapping: g !== null && g !== undefined && typeof g === 'object' ? { ...g, columns: { ...(g.columns ?? {}) } } : null,
-    preset: typeof b.preset === 'string' ? b.preset : null,
-    fedAccount: b.fedAccount === true,
-  };
-}
-
-/** The presets the dialog names (the engine's `CSV_PRESET_IDS`). */
-const KNOWN_PRESETS = new Set(['zkb_account_statement']);
 
 function readSummary(body: unknown): StatementSummary {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -284,6 +190,8 @@ const KNOWN_WARNINGS = new Set([
   'csv_fill_chain_broken',
   'csv_fill_open_end',
   'csv_fill_needs_balance',
+  'csv_fill_unreadable_row',
+  'csv_fill_boundary_mismatch',
 ]);
 const KNOWN_REFUSALS = new Set(['account_mismatch', 'currency_mismatch', 'schema_invalid', 'statement_amended']);
 
@@ -308,12 +216,6 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, initialFiles, pr
   // D178: an MT940 or CSV file, its CSV preview and mapping, the one-at-a-time note, and the answer.
   const [other, setOther] = useState<OtherFile | null>(null);
   const [oneAtATime, setOneAtATime] = useState(false);
-  const [preview, setPreview] = useState<CsvPreview | null>(null);
-  const [previewBusy, setPreviewBusy] = useState(false);
-  const [mapping, setMapping] = useState<CsvMappingDraft | null>(null);
-  // Critic M3: the separator and header row a person asked for when the detection chose wrong.
-  const [layout, setLayout] = useState<{ delimiter?: string; headerRow?: number } | null>(null);
-  const layoutKey = layout === null ? '' : JSON.stringify(layout);
   const [summary, setSummary] = useState<StatementSummary | null>(null);
   // A20 §12: how much of a CSV to take, the range for `range`, and the engine's plan for the fill.
   const [fillMode, setFillMode] = useState<CsvFillMode>('all');
@@ -324,7 +226,20 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, initialFiles, pr
   const fillKey = fillMode === 'all' ? '' : JSON.stringify(fill);
   const key = useIdempotencyKey(['import_camt', accountId, file?.name ?? '', file?.xml.length ?? 0]);
   const manyKey = useIdempotencyKey(['import_camt_files', accountId, files.map((f) => [f.name, f.xml.length])]);
-  const otherKey = useIdempotencyKey(['import_bank_statement', accountId, other?.name ?? '', other?.base64.length ?? 0, JSON.stringify(mapping), fillMode, fillKey]);
+  // A20 §13.2: the one mapping step, shared with the gap dialog.
+  const tabular: TabularFile | null = useMemo(() => (other !== null && isTabular(other.kind) ? { name: other.name, format: other.kind, base64: other.base64 } : null), [other]);
+  const { preview, previewBusy, mapping, setMapping, setLayout, sheet, setSheet, parsed } = useCsvPreview({
+    client,
+    workspaceId,
+    accountId,
+    file: tabular,
+    onError: setError,
+    // An account fed over EBICS takes a CSV only as a gap fill: that is the one choice offered.
+    onPreview: (read) => {
+      if (read.fedAccount) setFillMode((m) => (m === 'all' ? 'gaps' : m));
+    },
+  });
+  const otherKey = useIdempotencyKey(['import_bank_statement', accountId, other?.name ?? '', other?.base64.length ?? 0, JSON.stringify(mapping), fillMode, fillKey, sheet ?? '']);
 
   const account = accounts.find((a) => a.id === accountId);
   const fileAccount = fileIban === null ? undefined : accounts.find((a) => a.iban.replace(/\s+/g, '').toUpperCase() === fileIban);
@@ -337,12 +252,11 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, initialFiles, pr
     setRejected(false);
     setOutcomes(null);
     setSummary(null);
-    setPreview(null);
-    setMapping(null);
-    setLayout(null);
     setOneAtATime(false);
     const firstText = await picked.text();
-    const kind = statementKindOf(picked.name, firstText);
+    const firstBytes = await fileBytesOf(picked);
+    // A20 §13.2: a workbook is told by its bytes, never its name.
+    const kind: StatementKind = sniffBytes(firstBytes) === 'xlsx' ? 'xlsx' : statementKindOf(picked.name, firstText);
     if (kind !== 'camt') {
       // D178: MT940 and CSV, one file at a time through `import_bank_statement`.
       setFile(null);
@@ -354,7 +268,7 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, initialFiles, pr
         const match = accounts.find((a) => a.iban.replace(/\s+/g, '').toUpperCase() === iban);
         if (match !== undefined) setAccountId(match.id);
       }
-      setOther({ name: picked.name, kind, base64: bytesToBase64(await fileBytes(picked, firstText)) });
+      setOther({ name: picked.name, kind, base64: bytesToBase64(firstBytes) });
       return;
     }
     setOther(null);
@@ -379,44 +293,14 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, initialFiles, pr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // D178: a CSV is previewed for the chosen Bankkonto, so its saved mapping (or the guess) preselects.
-  useEffect(() => {
-    if (other === null || other.kind !== 'csv' || accountId === '') return;
-    let live = true;
-    setPreviewBusy(true);
-    setError(null);
-    // A layout the person asked for is read with an empty mapping, so the headings it reveals are guessed afresh.
-    const asked = layoutKey === '' ? null : (JSON.parse(layoutKey) as { delimiter?: string; headerRow?: number });
-    const input: Record<string, unknown> = { workspaceId, bankAccountId: accountId, contentBase64: other.base64 };
-    if (asked !== null) input.mapping = { columns: {}, dateFormat: 'dd.mm.yyyy', ...asked };
-    void client.call('bank_csv_preview', input).then((response) => {
-      if (!live) return;
-      setPreviewBusy(false);
-      if (isErr(response.body)) {
-        setError(response.body);
-        return;
-      }
-      const read = readPreview(response.body);
-      setPreview(read);
-      // An account fed over EBICS takes a CSV only as a gap fill: that is the one choice offered.
-      if (read?.fedAccount === true) setFillMode((m) => (m === 'all' ? 'gaps' : m));
-      if (read === null) setMapping(null);
-      else if (asked === null) setMapping(read.mapping);
-      else setMapping({ ...(read.guessedMapping ?? read.mapping), ...asked });
-    });
-    return () => {
-      live = false;
-    };
-  }, [other, accountId, workspaceId, client, layoutKey]);
 
-  const gaps = preview !== null && mapping !== null ? mappingGaps(mapping, preview.headers) : null;
-  const blocking = gaps === null ? [] : [...gaps.missing.map((m) => t(`bankInbox.import.csv.missing.${m}`)), ...gaps.unknown.map((column) => t('bankInbox.import.csv.unknown', { column }))];
+  const { blocking } = useMappingBlocking(preview, mapping, parsed);
   const hasBalance = mapping?.columns.balance !== undefined;
   const mappingKey = JSON.stringify(mapping);
 
   // A20 §12: the engine's plan for the fill, read again whenever the mapping, the mode or the range changes.
   useEffect(() => {
-    if (other === null || other.kind !== 'csv' || accountId === '' || fillMode === 'all' || mappingKey === 'null' || blocking.length > 0 || !hasBalance) {
+    if (other === null || !isTabular(other.kind) || accountId === '' || fillMode === 'all' || mappingKey === 'null' || blocking.length > 0) {
       setFillPlan(null);
       return;
     }
@@ -427,7 +311,15 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, initialFiles, pr
     let live = true;
     setFillBusy(true);
     void client
-      .call('bank_csv_preview', { workspaceId, bankAccountId: accountId, contentBase64: other.base64, mapping: JSON.parse(mappingKey) as CsvMappingDraft, fill: JSON.parse(fillKey) as Record<string, string> })
+      .call('bank_csv_preview', {
+        workspaceId,
+        bankAccountId: accountId,
+        contentBase64: other.base64,
+        format: other.kind,
+        ...(sheet !== null ? { sheet } : {}),
+        mapping: JSON.parse(mappingKey) as CsvMappingDraft,
+        fill: JSON.parse(fillKey) as Record<string, string>,
+      })
       .then((response) => {
         if (!live) return;
         setFillBusy(false);
@@ -443,11 +335,11 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, initialFiles, pr
     };
     // `blocking` follows from the mapping; its length is read, not its identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [other, accountId, workspaceId, client, fillMode, fillKey, mappingKey, hasBalance, blocking.length]);
+  }, [other, accountId, workspaceId, client, fillMode, fillKey, mappingKey, hasBalance, blocking.length, sheet]);
 
   const submitOther = async () => {
     if (other === null || accountId === '' || busy) return;
-    if (other.kind === 'csv' && (mapping === null || blocking.length > 0)) return;
+    if (isTabular(other.kind) && (mapping === null || blocking.length > 0)) return;
     setBusy(true);
     setError(null);
     const response = await client.call('import_bank_statement', {
@@ -456,8 +348,9 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, initialFiles, pr
       contentBase64: other.base64,
       fileName: other.name,
       format: other.kind,
-      ...(other.kind === 'csv' && mapping !== null ? { mapping, saveMapping: true } : {}),
-      ...(other.kind === 'csv' && fillMode !== 'all' && fill !== null ? { fill } : {}),
+      ...(isTabular(other.kind) && mapping !== null ? { mapping, saveMapping: true } : {}),
+      ...(other.kind === 'xlsx' && sheet !== null ? { sheet } : {}),
+      ...(isTabular(other.kind) && fillMode !== 'all' && fill !== null ? { fill } : {}),
       idempotencyKey: otherKey,
     });
     setBusy(false);
@@ -539,17 +432,10 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, initialFiles, pr
   };
 
   const finished = outcomes !== null || summary !== null;
-  const fillReady = fillMode === 'all' || (hasBalance && !fillBusy && fillPlan !== null && fillPlan.parts.some((p) => p.status === 'ready'));
-  const otherNotReady = other !== null && other.kind === 'csv' && (previewBusy || preview === null || mapping === null || blocking.length > 0 || !fillReady);
+  // A20 §13.3: without a balance column the engine's plan decides per stretch (the neighbour sum), so the plan is read either way.
+  const fillReady = fillMode === 'all' || (!fillBusy && fillPlan !== null && fillPlan.parts.some((p) => p.status === 'ready'));
+  const otherNotReady = other !== null && isTabular(other.kind) && (previewBusy || preview === null || mapping === null || blocking.length > 0 || !fillReady);
   const canCommit = (file !== null || other !== null) && accountId !== '' && !busy && !unregistered && !otherNotReady;
-  const setColumn = (field: CsvField, header: string) => {
-    if (mapping === null) return;
-    const columns = { ...mapping.columns };
-    if (header === '') delete columns[field];
-    else columns[field] = header;
-    setMapping({ ...mapping, columns });
-  };
-  const columnOptions = [{ value: '', label: t('bankInbox.import.csv.none') }, ...(preview?.headers ?? []).map((h) => ({ value: h, label: h }))];
   const refusalText = (code: string | undefined) =>
     code !== undefined && KNOWN_REFUSALS.has(code) ? t(`bankInbox.import.result.refused.${code}`) : t('bankInbox.import.result.refused.other', { code: code ?? '' });
   const skipText = (reason: string) => (KNOWN_SKIPS.has(reason) ? t(`bankInbox.import.result.skip.${reason}`) : reason);
@@ -590,7 +476,7 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, initialFiles, pr
                 ? t('bankInbox.import.busy')
                 : other === null && files.length > 1
                   ? t('bankInbox.import.commitMany', { count: files.length })
-                  : other?.kind === 'csv' && fillMode !== 'all'
+                  : isTabular(other?.kind) && fillMode !== 'all'
                     ? t(fillMode === 'gaps' ? 'bankInbox.import.fill.commit' : 'bankInbox.import.fill.commitRange')
                     : t('bankInbox.import.commit')}
             </button>
@@ -651,7 +537,7 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, initialFiles, pr
             </div>
           </div>
         )}
-        {other?.kind === 'csv' && !finished && (
+        {isTabular(other?.kind) && !finished && (
           <section className="bank-field" aria-labelledby={`${baseId}-csv-title`}>
             <h3 className="bank-field__label" id={`${baseId}-csv-title`}>
               {t('bankInbox.import.csv.title')}
@@ -663,125 +549,20 @@ function ImportDialogBody({ workspaceId, accounts, initialFile, initialFiles, pr
                 {t('bankInbox.import.reading')}
               </p>
             ) : preview !== null && mapping !== null ? (
-              <>
-                <p className="bank-mode__lead">{t('bankInbox.import.csv.lead')}</p>
-                <p className="bank-import__match">
-                  {preview.mappingSource === 'guessed' && preview.preset !== null && KNOWN_PRESETS.has(preview.preset)
-                    ? t(`bankInbox.import.csv.preset.${preview.preset}`)
-                    : t(preview.mappingSource === 'saved' ? 'bankInbox.import.csv.saved' : 'bankInbox.import.csv.guessed')}
-                </p>
-                <label className="bank-field" htmlFor={`${baseId}-delimiter`}>
-                  <span className="bank-field__label">{t('bankInbox.import.csv.delimiter')}</span>
-                  <Select
-                    id={`${baseId}-delimiter`}
-                    value={mapping.delimiter ?? preview.delimiter}
-                    onChange={(v) => {
-                      setMapping({ ...mapping, delimiter: v });
-                      // Another separator re-reads the file; its header row is detected again.
-                      setLayout({ delimiter: v });
-                    }}
-                    ariaLabel={t('bankInbox.import.csv.delimiter')}
-                    options={CSV_DELIMITER_CHOICES.map((d) => ({ value: d, label: t(`bankInbox.import.csv.delimiterChoice.${d}`) }))}
-                  />
-                </label>
-                <label className="bank-field" htmlFor={`${baseId}-header-row`}>
-                  <span className="bank-field__label">{t('bankInbox.import.csv.headerRow')}</span>
-                  <Select
-                    id={`${baseId}-header-row`}
-                    value={String(mapping.headerRow ?? preview.headerRow)}
-                    onChange={(v) => {
-                      const headerRow = Number(v);
-                      setMapping({ ...mapping, headerRow, delimiter: mapping.delimiter ?? preview.delimiter });
-                      setLayout({ delimiter: mapping.delimiter ?? preview.delimiter, headerRow });
-                    }}
-                    ariaLabel={t('bankInbox.import.csv.headerRow')}
-                    options={CSV_HEADER_ROW_CHOICES.map((n) => ({ value: String(n), label: t('bankInbox.import.csv.headerRowN', { n }) }))}
-                  />
-                </label>
-                <div className="data-table-frame" style={{ overflowX: 'auto' }}>
-                  <table className="data-table">
-                    <caption className="visually-hidden">{t('bankInbox.import.csv.preview')}</caption>
-                    <thead>
-                      <tr>
-                        {preview.headers.map((h) => (
-                          <th key={h} scope="col">
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {preview.rows.slice(0, 6).map((row, i) => (
-                        <tr key={i}>
-                          {preview.headers.map((h, j) => (
-                            <td key={h}>{row[j] ?? ''}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="bank-import__match">{t('bankInbox.import.csv.rows', { count: preview.rowCount })}</p>
-                <p className="bank-mode__lead">{t('bankInbox.import.csv.amountRule')}</p>
-                {CSV_FIELDS.map((field) => {
-                  const required = field === 'bookingDate' || AMOUNT_FIELDS.includes(field);
-                  const label = `${t(`bankInbox.import.csv.field.${field}`)}${required ? ` (${t('bankInbox.import.csv.required')})` : ''}`;
-                  return (
-                    <label key={field} className="bank-field" htmlFor={`${baseId}-col-${field}`}>
-                      <span className="bank-field__label">{label}</span>
-                      <Select
-                        id={`${baseId}-col-${field}`}
-                        value={mapping.columns[field] ?? ''}
-                        onChange={(v) => setColumn(field, v)}
-                        ariaLabel={label}
-                        required={field === 'bookingDate'}
-                        invalid={(field === 'bookingDate' && gaps?.missing.includes('bookingDate') === true) || (AMOUNT_FIELDS.includes(field) && gaps?.missing.includes('amount') === true)}
-                        options={columnOptions}
-                      />
-                    </label>
-                  );
-                })}
-                <label className="bank-field" htmlFor={`${baseId}-date-format`}>
-                  <span className="bank-field__label">{t('bankInbox.import.csv.dateFormat')}</span>
-                  <Select
-                    id={`${baseId}-date-format`}
-                    value={mapping.dateFormat}
-                    onChange={(v) => setMapping({ ...mapping, dateFormat: v })}
-                    ariaLabel={t('bankInbox.import.csv.dateFormat')}
-                    options={CSV_DATE_FORMATS.map((f) => ({ value: f, label: f }))}
-                  />
-                </label>
-                <label className="bank-field" htmlFor={`${baseId}-decimal`}>
-                  <span className="bank-field__label">{t('bankInbox.import.csv.decimal')}</span>
-                  <Select
-                    id={`${baseId}-decimal`}
-                    value={mapping.decimalSeparator ?? ''}
-                    onChange={(v) => {
-                      const next: CsvMappingDraft = { ...mapping };
-                      if (v === '.' || v === ',') next.decimalSeparator = v;
-                      else delete next.decimalSeparator;
-                      setMapping(next);
-                    }}
-                    ariaLabel={t('bankInbox.import.csv.decimal')}
-                    options={[
-                      { value: '', label: t('bankInbox.import.csv.decimalAuto') },
-                      { value: '.', label: t('bankInbox.import.csv.decimalDot') },
-                      { value: ',', label: t('bankInbox.import.csv.decimalComma') },
-                    ]}
-                  />
-                </label>
-                {blocking.length > 0 && (
-                  <div className="bank-mode__warn" role="alert">
-                    {blocking.map((line) => (
-                      <p key={line}>{line}</p>
-                    ))}
-                  </div>
-                )}
-              </>
+              <CsvMappingStep
+                baseId={baseId}
+                preview={preview}
+                mapping={mapping}
+                onMapping={setMapping}
+                onLayout={setLayout}
+                onSheet={setSheet}
+                parsed={parsed}
+                currency={account?.currency ?? 'CHF'}
+              />
             ) : null}
           </section>
         )}
-        {other?.kind === 'csv' && !finished && preview !== null && mapping !== null && blocking.length === 0 && (
+        {isTabular(other?.kind) && !finished && preview !== null && mapping !== null && blocking.length === 0 && (
           <CsvFillStep
             mode={fillMode}
             onMode={setFillMode}

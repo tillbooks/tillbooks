@@ -1,6 +1,7 @@
-/* SettingRow, SettingGroup (D187, the owner's pick "Einstellungen A"). One calm column: the name and
-   its one-line explanation on the left, the control on the right, a hairline between rows, a small
-   heading over each group. Only --t-* tokens. */
+/* SettingRow, SettingGroup (the owner's pick A of the Einstellungen redesign, 18.11.2026; DESIGN.md
+   "The seven screen types", Settings). One visible line per setting, at least 40px tall: the label and
+   its changed dot on the left, the hover icons, then the control in one fixed 240px column on the right.
+   A hairline between rows, a small dim heading over each group. Only --t-* tokens. */
 
 .setting-group {
   display: grid;
@@ -8,7 +9,7 @@
 }
 
 .setting-group + .setting-group {
-  margin-top: var(--t-space-4);
+  margin-top: var(--t-space-3);
 }
 
 .setting-group-head {
@@ -16,45 +17,97 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--t-space-2);
-  min-height: 28px;
+  min-height: 24px;
 }
 
+/* 12px, dim: a heading names the run of rows below it and never competes with their labels. */
 .setting-group-title {
   margin: 0;
   font-size: var(--t-font-sm);
   line-height: var(--t-lh-sm);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--t-text-dim);
 }
 
 .setting-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto minmax(240px, max-content);
   align-items: center;
-  gap: var(--t-space-1) var(--t-space-4);
-  padding-block: var(--t-space-2);
+  column-gap: var(--t-space-1);
+  min-height: 40px;
+  padding-block: 4px;
   border-bottom: 1px solid var(--t-border);
 }
 
-.setting-row-text {
-  display: grid;
-  gap: 2px;
+.setting-row-name {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
   min-width: 0;
 }
 
-.setting-row-name {
+/* The tooltip's wrapper may shrink, so the label inside it can end in an ellipsis. */
+.setting-row-name > .tooltip-wrap {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.setting-row-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--t-font-body);
   line-height: var(--t-lh-body);
   font-weight: 500;
   color: var(--t-text);
 }
 
-.setting-row-desc {
-  margin: 0;
-  max-width: 52ch;
-  font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  color: var(--t-text-dim);
+.setting-row-label[tabindex]:focus-visible {
+  outline: none;
+  border-radius: var(--t-radius-sm);
+  box-shadow: var(--t-focus-ring);
+}
+
+/* Changed: a 6px dim dot after the label, never a word or a badge. An open question: the same dot in the
+   warn ink (the rail's dot), its words on the label's tooltip. */
+.setting-row-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--t-radius-full);
+  background: var(--t-text-faint);
+}
+
+.setting-row-dot--open {
+  background: var(--t-warn);
+}
+
+/* The row's icons appear on its hover or focus, and always on touch (DESIGN.md "Surface hierarchy"). */
+.setting-row-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--t-motion-hover) var(--t-ease-out);
+}
+
+.setting-row:hover .setting-row-tools,
+.setting-row:focus-within .setting-row-tools {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .setting-row-tools {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setting-row-tools {
+    transition: none;
+  }
 }
 
 .setting-row-control {
@@ -65,7 +118,31 @@
   min-width: 0;
 }
 
-/* "Standard" shows only while the value differs from the default: a quiet word, not an icon. */
+/* The rare visible line (`note`): read before the click, so it is not hidden behind the label. */
+.setting-row-note {
+  grid-column: 1 / -1;
+  margin: 0 0 var(--t-space-0-5);
+  max-width: 64ch;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+}
+
+/* A refusal, an open question, the history: under the whole row, never beside the control. */
+.setting-row-status {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.setting-row-status:empty {
+  display: none;
+}
+
+.setting-row-status > * {
+  margin: 0 0 var(--t-space-0-5);
+}
+
+/* MySettings' "reset the area" beside a group heading: a quiet word. */
 .setting-row-reset {
   height: 28px;
   padding: 0 var(--t-space-1);
@@ -83,12 +160,27 @@
   background: var(--t-bg-soft);
 }
 
+/* Phone width: a label wraps to two lines instead of cutting; the control stays below it. */
+@media (max-width: 600px) {
+  .setting-row-label {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
 @media (max-width: 767px) {
   .setting-row {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: var(--t-space-0-5);
+    padding-block: var(--t-space-1);
   }
 
   .setting-row-control {
+    grid-column: 1 / -1;
     justify-content: flex-start;
   }
 }

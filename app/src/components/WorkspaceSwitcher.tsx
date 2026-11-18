@@ -1,5 +1,5 @@
 /**
- * WorkspaceSwitcher: the rail-head workspace picker (D24, variant A).
+ * WorkspaceSwitcher: the rail-footer workspace picker (D24, variant A; in the footer since D201).
  *
  * `list_workspaces` is the one engine read that legitimately crosses the tenant boundary: it IS the
  * tenant list. This control gives it its GUI twin for SWITCHING (the Setup surface carries the
@@ -10,9 +10,12 @@
  * no workspace is selected the control renders NOTHING: the no-workspace states already route
  * people to Setup, and a switcher with nothing to switch from would only compete with them.
  *
- * Since K-01 (D137) it shares ONE 36px row with the "TILL Studio" wordmark in the rail head, so the
- * trigger is compact and the name truncates; the menu below spans the whole head row and shows every
- * name in full.
+ * D204 (16.11.2026): the footer is one row and the company is plain text; ONLY with 2 or more
+ * workspaces is it this button (with its chevron and menu). With one it is a non-focusable name.
+ *
+ * Since D201 (owner, 15.11.2026; amends K-01, D137) it sits in the rail FOOTER, on its own row above
+ * the "Live · main" pill, the full width of the rail; the name truncates in the trigger and the menu,
+ * which opens upward over the rail, shows every name in full.
  *
  * The keyboard model is the rail's shared menu button (`useMenuButton`, the OverflowMenu contract):
  * Enter/Space and ArrowDown open at the first item, ArrowUp at the last, arrows wrap, Home/End jump,
@@ -194,6 +197,17 @@ function SwitcherMenu({ workspaceId }: { workspaceId: string }) {
     entries[index]?.onSelect();
   }
 
+  // D204 (calm footer): with one workspace there is nothing to switch to, so the company is plain text,
+  // not focusable, no chevron, no menu. Until the list lands (or after a failed read) the control keeps
+  // its button so the way to "Neuer Arbeitsbereich" is never lost; only a ready list of one is text.
+  if (state.kind === 'ready' && workspaces.length < 2) {
+    return (
+      <div className="ws-switcher ws-switcher--text">
+        <span className="ws-switcher-name">{currentName ?? ''}</span>
+      </div>
+    );
+  }
+
   return (
     <div className="ws-switcher" ref={menu.rootRef}>
       <button
@@ -232,7 +246,7 @@ function SwitcherMenu({ workspaceId }: { workspaceId: string }) {
       </button>
 
       {menu.open && (
-        <div className="ws-switcher-pop">
+        <div className="ws-switcher-pop ws-switcher-pop--up">
           {state.kind === 'error' && (
             // Outside the role="menu" container on purpose: a menu's owned children are menu items
             // and separators, and neither a status sentence nor its retry is one. The retry keeps a

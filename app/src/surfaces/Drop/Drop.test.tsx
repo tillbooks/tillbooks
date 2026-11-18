@@ -160,15 +160,14 @@ describe('Drop page (N02)', () => {
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog.textContent).toMatch(/Buchung|entry/);
     expect(dialog.textContent).toMatch(/entry_9/);
-    // No reason, no second booking.
-    fireEvent.click(screen.getByRole('button', { name: /Trotzdem buchen|Book anyway/ }));
-    expect((await screen.findByText(/Gib einen Grund an|Enter a reason/)).textContent).toBeTruthy();
+    // D204: the confirmation alone books it a second time, no reason field.
     expect(calls.filter((c) => c.path.endsWith('/redeem'))).toHaveLength(1);
-    fireEvent.change(screen.getByLabelText(/^Grund$|^Reason$/), { target: { value: 'Zweite Position' } });
+    expect(screen.queryByLabelText(/Notiz|Note/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Trotzdem buchen|Book anyway/ }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     const second = calls.filter((c) => c.path.endsWith('/redeem'))[1];
-    expect(second?.body).toMatchObject({ bookAgain: true, overrideReason: 'Zweite Position', filename: 'r.jpg' });
+    expect(second?.body).toMatchObject({ bookAgain: true, filename: 'r.jpg' });
+    expect(second?.body).not.toHaveProperty('overrideReason');
   });
 
   it('unpaired browser: says so and offers to open TILL or copy the link', async () => {

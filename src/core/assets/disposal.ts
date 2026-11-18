@@ -221,7 +221,8 @@ interface AbgrenzungPlan {
 interface OverridePlan {
   setting: 'assets.proceeds_booking' | 'assets.cross_year_sale';
   value: string;
-  reason: string;
+  /** D204: optional; the override itself is audited and stamped whether or not a reason is given. */
+  reason: string | null;
   action: 'override_proceeds_booking' | 'override_cross_year_sale';
   stamp: string;
 }
@@ -289,8 +290,8 @@ function lastDayOfFiscalYear(label: string, start: string): string {
 
 /**
  * D172: the effective value of a setting for this call. The workspace value, unless the call names
- * another, which then needs its reason (`reason_required`). Returns the refusal, or the mode with the
- * override it amounts to (null when the call agrees with the setting or names none).
+ * another (audited and stamped; D204: its reason is optional). Returns the refusal of a bad value, or
+ * the mode with the override it amounts to (null when the call agrees with the setting or names none).
  */
 function effectiveMode<T extends string>(
   ctx: WorkspaceContext,
@@ -308,13 +309,10 @@ function effectiveMode<T extends string>(
     return err('invalid_input', { field, allowed: [...allowed] });
   }
   if (given === setting) return { mode: setting, override: null };
-  const why = typeof reason === 'string' ? reason.trim() : '';
-  if (why.length === 0) {
-    return err('reason_required', { field: `${field}Reason`, setting: key, settingValue: setting, value: given, hint: 'a value other than the workspace setting needs its reason; it is kept on the disposal and audited' });
-  }
+  const why = typeof reason === 'string' && reason.trim().length > 0 ? reason.trim() : null;
   return {
     mode: given as T,
-    override: { setting: key, value: given, reason: why, action, stamp: `${stampLabel}: ${why}` },
+    override: { setting: key, value: given, reason: why, action, stamp: why === null ? `${stampLabel} (${given})` : `${stampLabel}: ${why}` },
   };
 }
 

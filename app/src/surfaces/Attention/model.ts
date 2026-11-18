@@ -55,6 +55,34 @@ export interface Item {
   autobookDigest?: AutobookDigest;
   /** N04 (critic F5): a Dauerbuchung's Vorschlag: the schedule was set by an agent. */
   scheduledByAgent?: boolean;
+  /** D202: a settings Vorschlag in words: the setting, from what to what, and whether only a person decides. */
+  settingChange?: SettingChange;
+}
+
+/** D202: the engine's facts of a settings Vorschlag (`AttentionSettingChange`). */
+export interface SettingChange {
+  key: string;
+  label: { en: string; 'de-CH': string };
+  from: { en: string; 'de-CH': string };
+  to: { en: string; 'de-CH': string };
+  personOnly: boolean;
+  widensAgent: boolean;
+}
+
+function parseLocalised(raw: unknown): { en: string; 'de-CH': string } | undefined {
+  if (raw === null || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  return typeof r.en === 'string' && typeof r['de-CH'] === 'string' ? { en: r.en, 'de-CH': r['de-CH'] } : undefined;
+}
+
+export function parseSettingChange(raw: unknown): SettingChange | undefined {
+  if (raw === null || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  const label = parseLocalised(r.label);
+  const from = parseLocalised(r.from);
+  const to = parseLocalised(r.to);
+  if (typeof r.key !== 'string' || label === undefined || from === undefined || to === undefined) return undefined;
+  return { key: r.key, label, from, to, personOnly: r.personOnly === true, widensAgent: r.widensAgent === true };
 }
 
 /** N04 (D183): the engine's facts of an autobook offer (`AttentionAutobookOffer`). */
@@ -225,6 +253,7 @@ export function parseItem(raw: unknown): Item | null {
     ...(parseAutobookOffer(n.autobookOffer) !== undefined ? { autobookOffer: parseAutobookOffer(n.autobookOffer) as AutobookOffer } : {}),
     ...(n.scheduledBy !== null && typeof n.scheduledBy === 'object' ? { scheduledByAgent: (n.scheduledBy as Record<string, unknown>).agent === true } : {}),
     ...(parseAutobookDigest(n.autobookDigest) !== undefined ? { autobookDigest: parseAutobookDigest(n.autobookDigest) as AutobookDigest } : {}),
+    ...(parseSettingChange(n.settingChange) !== undefined ? { settingChange: parseSettingChange(n.settingChange) as SettingChange } : {}),
   };
 }
 

@@ -12,11 +12,15 @@
  * to its items' `useSortable`: switching then never remounts an item, never re-reads what it shows and
  * never replays an entrance.
  *
+ * D201 (owner, 15.11.2026): on a page arranged IN PLACE (no edit mode) the item's face stays live, so a click
+ * on it still drills; `mouse="handle"` then lets a mouse drag only from the item's `data-drag-handle` grip,
+ * while a touch keeps the long press anywhere on the item.
+ *
  * `strategy` picks how the neighbours make room: `vertical` for a list, `rect` for a grid. `renderOverlay`
  * draws the dragged item in a `DragOverlay` that follows the pointer while its slot stays in place; the
  * drop animation is dropped under reduced motion, like every other transition.
  */
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode, type Ref } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -76,6 +80,13 @@ export interface SortableListProps {
    * one pointer sensor after 4px, for a list that drags from its grips only.
    */
   touch?: 'longPress';
+  /**
+   * D201: with `touch="longPress"`, `handle` makes a MOUSE drag start only from a `data-drag-handle` grip
+   * (the item's face stays a live control); omitted, a mouse drags from anywhere on the item.
+   */
+  mouse?: 'handle';
+  /** The list element itself, for a caller that animates its items (`useArriveLeave`). */
+  listRef?: Ref<HTMLElement>;
 }
 
 /** The element a touch drags from at once (a grip); anywhere else a touch must rest first. */
@@ -92,6 +103,26 @@ class HandleAwareTouchSensor extends TouchSensor {
     const onHandle = target instanceof Element && target.closest(DRAG_HANDLE) !== null;
     super(onHandle ? { ...props, options: { ...props.options, activationConstraint: undefined } } : props);
   }
+}
+
+/** The mouse activator, kept: a handle-only sensor asks it once the press is on a grip. */
+const mouseActivator = MouseSensor.activators[0]!;
+
+/**
+ * D201: a mouse sensor that starts only from a `data-drag-handle` grip, so a click on the item's face
+ * stays a click (a drill) and a drag never begins from it.
+ */
+class HandleMouseSensor extends MouseSensor {
+  static activators = [
+    {
+      eventName: 'onMouseDown' as const,
+      handler: (event: ReactMouseEvent, options: Parameters<typeof mouseActivator.handler>[1]): boolean => {
+        const target = event.nativeEvent.target;
+        if (!(target instanceof Element) || target.closest(DRAG_HANDLE) === null) return false;
+        return mouseActivator.handler(event, options);
+      },
+    },
+  ];
 }
 
 /** A finished drag as a reorder: the dragged id and the id whose place it took, or null for none. */
@@ -113,9 +144,11 @@ export function SortableList({
   renderOverlay,
   overlayClassName,
   touch,
+  mouse: mouseFrom,
+  listRef,
 }: SortableListProps) {
   const pointer = useSensor(PointerSensor, { activationConstraint: { distance: 4 } });
-  const mouse = useSensor(MouseSensor, { activationConstraint: { distance: 4 } });
+  const mouse = useSensor(mouseFrom === 'handle' ? HandleMouseSensor : MouseSensor, { activationConstraint: { distance: 4 } });
   const longPress = useSensor(HandleAwareTouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } });
   // The list's kind is fixed for its life, so the sensor array keeps its length between renders.
   const sensors = useSensors(...(touch === 'longPress' ? [mouse, longPress] : [pointer]));
@@ -138,7 +171,7 @@ export function SortableList({
       onDragCancel={() => setActive(null)}
     >
       <SortableContext items={[...ids]} strategy={strategy === 'rect' ? rectSortingStrategy : verticalListSortingStrategy}>
-        <Tag className={className} aria-label={ariaLabel} style={style}>
+        <Tag className={className} aria-label={ariaLabel} style={style} ref={listRef as Ref<never>}>
           {children}
         </Tag>
       </SortableContext>

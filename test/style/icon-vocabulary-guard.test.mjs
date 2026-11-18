@@ -18,8 +18,8 @@
  *     ones that exist are frozen per file in FROZEN_ICON_ONLY_BUTTONS, as an exact count.
  *  3. **A money commit keeps its word** (D154 rule 2). An element carrying `data-money-commit` (the
  *     accent guard's contract) must contain visible text. No baseline: this already holds.
- *  4. **The vocabulary stays closed.** `icons/vocabulary.tsx` holds exactly the thirty-three names DESIGN.md
- *     lists (D154's twelve, D177's five, D180's five, A41.5's Freigeben, D186's Vergleichen and Verlauf, D187's eight), and no money commit or destructive act is among them, so
+ *  4. **The vocabulary stays closed.** `icons/vocabulary.tsx` holds exactly the thirty-six names DESIGN.md
+ *     lists (D154's twelve, D177's five, D180's five, A41.5's Freigeben, D186's Vergleichen and Verlauf, D187's eight, D197's Ablehnen), and no money commit or destructive act is among them, so
  *     `IconButton` cannot draw one. The one exception is Ignorieren, by the owner's ruling (D177 point 5):
  *     a bank line's ignore is undone in one click, so it may be a glyph at the row's right edge.
  *  5. **No frosted glass** (DESIGN.md's forbidden list, D154 lost option): no `backdrop-filter` in a
@@ -93,6 +93,11 @@ const VOCABULARY_NAMES = [
   'Sortieren',
   'Ordner öffnen',
   'Teilen',
+  // D197 (owner, 12.11.2026): the agent's Vorschlag declined, Freigeben's twin.
+  'Ablehnen',
+  // The settings row (owner, 18.11.2026, Einstellungen pick A): back to the default, and the row's history.
+  'Auf Standard zurück',
+  'Änderungen',
 ];
 
 /** D177 point 5: the one destructive act the owner ruled may be a glyph (it is undone in one click). */
@@ -169,8 +174,6 @@ const FROZEN_ICON_ONLY_BUTTONS = Object.freeze({
   'app/src/components/Modal.tsx': 1,
   'app/src/components/ThemeToggle.tsx': 1,
   'app/src/surfaces/Agent/Agent.tsx': 2,
-  // D167 (3864f0c2): the consequence tooltip trigger on the Vorschlag line; measured at the undo integration.
-  'app/src/surfaces/Agent/VorschlagLine.tsx': 1,
   'app/src/surfaces/Bank/InfoCard.tsx': 1,
   'app/src/surfaces/Documents/DocumentEditor.tsx': 1,
   'app/src/surfaces/Journal/ComposerParts.tsx': 2,

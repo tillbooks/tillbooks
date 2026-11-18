@@ -33,6 +33,7 @@ import { postEntry } from '../../dist/core/ledger/index.js';
 import { must, assertClaimInvariantHolds } from './bank-inbox-support.mjs';
 import { ruleWorld, debits, bookAsProposed, autopilot, decisionOf, at, entryCount, TELCO } from './n04-autobook-support.mjs';
 import { receipt, confirmedReceipt, assignBeleg, activeOf, assignmentsOf, verb } from './a41-beleg-support.mjs';
+import { assertNotApplied } from '../settings/support.mjs';
 
 afterEach(assertClaimInvariantHolds);
 
@@ -315,7 +316,10 @@ test('belege.assigned_move reads refuse by default and is human-only', () => {
   const w = world('person');
   const got = must(getAction('settings_get').run({ ...w.t.deps, actor: 'user_1' }, { workspaceId: w.t.workspaceId, key: 'belege.assigned_move' }));
   assert.equal(got.setting?.value ?? got.value, 'refuse');
-  assert.equal(CHANNELS.agent(w, 'settings_set', { key: 'belege.assigned_move', value: 'move', reason: 'x', idempotencyKey: `${w.tag}-ag` }).error, 'human_only');
+  // D202 point 5: the agent only proposes a protected setting, a person approves it.
+  assertNotApplied(CHANNELS.agent(w, 'settings_set', { key: 'belege.assigned_move', value: 'move', reason: 'x', idempotencyKey: `${w.tag}-ag` }), 'belege.assigned_move');
+  const after = must(getAction('settings_get').run({ ...w.t.deps, actor: 'user_1' }, { workspaceId: w.t.workspaceId, key: 'belege.assigned_move' }));
+  assert.equal(after.setting?.value ?? after.value, 'refuse');
 });
 
 test('a move onto a DRAFT bill: the old line never re-pairs or autobooks the same receipt while the draft holds it', () => {

@@ -390,4 +390,35 @@ BEGIN
   SELECT RAISE(ABORT, 'bank_standard: only the supersession stamp may be written, and only once');
 END;
 
+-- D208 point 8: the person's comment to the agent on a Buchungsregel, APPEND-ONLY. A table of its own rather
+-- than a column on \`bank_standard\`: a rule row is immutable and an edit writes a new version, which ends an
+-- N04 autopilot grant and restarts the clean-use count of the rule (\`autobook.ts\`). A comment changes nothing
+-- the rule books, so it must not cost the rule its autopilot. Each row names the rule VERSION it was written
+-- on; the comment in force for a version is the newest row along its \`replaces_id\` chain, so it follows the
+-- rule through every edit and ends with a clear (a rule set again later starts a new chain). A NULL note is a
+-- cleared comment. Every row stays: the rows of a chain are the comment's history. Free text the agent reads,
+-- never executed. A new table changes the SHAPE only (store/schemaShape.ts), never the generation.
+CREATE TABLE IF NOT EXISTS bank_standard_note (
+  id            TEXT PRIMARY KEY,
+  workspace_id  TEXT NOT NULL REFERENCES workspace(id),
+  standard_id   TEXT NOT NULL REFERENCES bank_standard(id),
+  note          TEXT,
+  set_by        TEXT,
+  set_at        TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS bank_standard_note_by_rule ON bank_standard_note (workspace_id, standard_id);
+
+CREATE TRIGGER IF NOT EXISTS bank_standard_note_no_update
+BEFORE UPDATE ON bank_standard_note
+BEGIN
+  SELECT RAISE(ABORT, 'bank_standard_note rows are never changed: write a new one');
+END;
+
+CREATE TRIGGER IF NOT EXISTS bank_standard_note_no_delete
+BEFORE DELETE ON bank_standard_note
+BEGIN
+  SELECT RAISE(ABORT, 'bank_standard_note rows are never deleted: write a new one');
+END;
+
 `;

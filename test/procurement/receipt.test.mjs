@@ -223,7 +223,7 @@ test('I02: a second receipt that completes the order advances the PO to received
   assert.equal(poStatus(ctx, w.poId), 'received');
 });
 
-test('I02: reversing a full receipt walks the ORDER back to sent, so the status stops claiming received', () => {
+test('D204 I02: reversing a full receipt with no reason walks the ORDER back to sent, so the status stops claiming received', async () => {
   const { ctx } = freshCtx();
   const w = sentPo(ctx, { seed: 'ro', qty: 6 });
   const gr = draft(ctx, w, 'ro');
@@ -231,7 +231,15 @@ test('I02: reversing a full receipt walks the ORDER back to sent, so the status 
   must(goodsReceiptPost(ctx, { grId: gr.id, idempotencyKey: 'ro-post' }), 'post');
   assert.equal(poStatus(ctx, w.poId), 'received');
 
-  must(goodsReceiptReverse(ctx, { grId: gr.id, reason: 'Fehllieferung', idempotencyKey: 'ro-rev' }), 'reverse');
+  // D204: the reverse needs no reason; the reversed event keeps who and when.
+  must(goodsReceiptReverse(ctx, { grId: gr.id, idempotencyKey: 'ro-rev' }), 'reverse');
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
+  const ev = ctx.store.db
+    .prepare("SELECT actor, created_at, reason FROM goods_receipt_doc_event WHERE workspace_id = ? AND gr_id = ? AND event_type = 'reversed'")
+    .get(ctx.workspaceId, gr.id);
+  assertWhoWhen(ev.actor, ev.created_at);
+  assert.equal(ev.reason, null);
+  assertPermission('goods_receipt_reverse');
 
   // The lines say nothing is received, so the header must say `sent` (the widened D02 edge). Reading
   // the counter alone would not catch this: it is the STATUS column every downstream reader trusts.
@@ -855,7 +863,8 @@ test('I02: a rejected line moves no stock and leaves the ordered quantity open',
   assert.equal(receivedQty(ctx, w.poLineId), 0, 'the ordered quantity stays open for a later delivery');
   assert.equal(rejected.lines[0].inspectionStatus, 'rejected');
   assert.equal(rejected.lines[0].rejectReason, 'Transportschaden');
-  assert.equal(goodsReceiptRejectLines(ctx, { grId: gr.id, lineIds: [withLines.lines[0].id], idempotencyKey: 'r-r2' }).error, 'invalid_input');
+  // D204: no reason is ever the refusal; a line that is no longer pending is.
+  assert.equal(goodsReceiptRejectLines(ctx, { grId: gr.id, lineIds: [withLines.lines[0].id], idempotencyKey: 'r-r2' }).error, 'invalid_transition');
 });
 
 test('I02: a non-stock PO line advances the ordered quantity and mints no movement', () => {

@@ -379,6 +379,32 @@ export interface EbicsKeystorePort {
 export type EbicsSigningKeystore = EbicsKeystorePort &
   Required<Pick<EbicsKeystorePort, 'sign' | 'decrypt' | 'publicKeyMaterial'>>;
 
+/**
+ * D198, THE SETTLEMENT FEED SEAM: how `pull_settlement` reaches a producer's `till-settlement/v1` feed and
+ * where the feed's token lives. The core holds only a LOCATOR (`settlement_source.token_ref`); the host
+ * resolves it. The shipped host (`src/api/settlement-feed-host.ts`) keeps the token in the macOS login
+ * Keychain and fetches in a child process that receives the token on stdin, so the token is never in the
+ * book, a file, a log or a process argument list. A host without a secret store wires no port, and the
+ * verbs say so; there is no fallback.
+ */
+export type SettlementFeedFetch =
+  /** The producer answered: its HTTP status and body text (at most `maxBytes`). */
+  | { kind: 'response'; status: number; body: string }
+  /** No answer: DNS, TLS, refused connection, timeout or an oversized body. `reason` is for a person. */
+  | { kind: 'unreachable'; reason: string }
+  /** The secret store holds no token under the locator. */
+  | { kind: 'no_token' };
+
+export interface SettlementFeedPort {
+  /** What holds the tokens (`keychain`, `memory` in the suites), for the answer to name. */
+  readonly secretStore: string;
+  storeToken(tokenRef: string, token: string): { ok: true } | { ok: false; reason: string };
+  deleteToken(tokenRef: string): { ok: true } | { ok: false; reason: string };
+  hasToken(tokenRef: string): boolean;
+  /** GET `url` with `Authorization: Bearer <the token under tokenRef>`. Synchronous: every door can call it. */
+  fetchFeed(req: { url: string; tokenRef: string; timeoutMs: number; maxBytes: number }): SettlementFeedFetch;
+}
+
 export interface WorkspaceContext {
   readonly workspaceId: string;
   readonly actor: string;
@@ -415,6 +441,8 @@ export interface WorkspaceContext {
    * side effects. There is NO stub: a local simulation of a paid tier would be a lie (spec §3).
    */
   readonly managedChannel?: ManagedChannelPort | undefined;
+  /** D198: the settlement feed's fetch and token store, when the host wired one. Absent: the pull degrades honestly. */
+  readonly settlementFeed?: SettlementFeedPort | undefined;
 }
 
 export interface ContextOverrides {
@@ -433,6 +461,7 @@ export interface ContextOverrides {
   ebicsTransport?: EbicsTransportPort;
   ebicsKeystore?: EbicsKeystorePort;
   managedChannel?: ManagedChannelPort;
+  settlementFeed?: SettlementFeedPort;
 }
 
 export function makeContext(store: SqliteStore, o: ContextOverrides): WorkspaceContext {
@@ -457,5 +486,6 @@ export function makeContext(store: SqliteStore, o: ContextOverrides): WorkspaceC
     ebicsTransport: o.ebicsTransport,
     ebicsKeystore: o.ebicsKeystore,
     managedChannel: o.managedChannel,
+    settlementFeed: o.settlementFeed,
   };
 }

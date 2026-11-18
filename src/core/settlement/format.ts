@@ -111,6 +111,8 @@ export interface RefusedSettlementEvent {
   reason: string;
   /** The amount when it could be read exactly, so the reconciliation still counts it. */
   amountMinor: number | null;
+  /** The day when it is a calendar date (D198 re-cut R4 `unreadable`), else null. */
+  day: string | null;
 }
 
 export interface SettlementDocument {
@@ -213,7 +215,7 @@ export function readSettlementDocument(raw: unknown, currency: string): { ok: tr
   const refused: RefusedSettlementEvent[] = [];
   events.forEach((e, index) => {
     const refuse = (code: string, id: string | null, kind: string | null, amountMinor: number | null): void => {
-      refused.push({ index, id, kind, code, reason: SETTLEMENT_EVENT_REFUSALS[code] ?? code, amountMinor });
+      refused.push({ index, id, kind, code, reason: SETTLEMENT_EVENT_REFUSALS[code] ?? code, amountMinor, day: isPlainObject(e) && isSettlementDay(e['day']) ? e['day'] : null });
     };
     if (!isPlainObject(e)) return refuse('invalid_event', null, null, null);
     const kindRaw = typeof e['kind'] === 'string' ? e['kind'] : null;

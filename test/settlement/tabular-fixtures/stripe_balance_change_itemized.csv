@@ -1,0 +1,6 @@
+balance_transaction_id,created,available_on,currency,gross,fee,net,reporting_category,description
+txn_inv0000000001,2026-08-03 09:00:00,2026-08-05 00:00:00,chf,216.20,6.57,209.63,charge,Kursbuchung Erfunden 1
+txn_inv0000000002,2026-08-04 11:20:00,2026-08-06 00:00:00,chf,108.10,3.44,104.66,charge,Kursbuchung Erfunden 2
+txn_inv0000000003,2026-08-10 16:45:00,2026-08-10 16:45:00,chf,-21.62,0.00,-21.62,refund,Rückerstattung Erfunden
+txn_inv0000000004,2026-08-15 00:00:00,2026-08-15 00:00:00,chf,-2.00,0.00,-2.00,fee,Monatsgebühr Erfunden
+txn_inv0000000005,2026-08-20 00:00:00,2026-08-20 00:00:00,chf,-10.00,0.00,-10.00,risk_reserved_funds,Reserve Erfunden

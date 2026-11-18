@@ -10,8 +10,9 @@
  * MOVES ARE A STAGE PICKER, NOT A DRAG. Every card carries a labelled stage select (the keyboard
  * fallback the spec demands is therefore the primary control; a drag layer is polish for the final
  * UX pass, D46). Picking an OPEN stage calls `deals_move`; picking the won/lost stage routes
- * through `deals_mark`, the engine's ONE door to a terminal status, with the lost reason collected
- * first (`lost_reason_required` is a form, not a surprise).
+ * through `deals_mark`, the engine's ONE door to a terminal status. Picking the lost stage saves at
+ * once (D204: no reason needed); only when the workspace asks for one (`audit.ask_reason = optional`)
+ * does a short optional note open first, and it never blocks the button.
  *
  * THE PERMISSION GATES HERE ARE A CONVENIENCE AND NOT THE ENFORCEMENT (the standing Studio rule):
  * `whoami` is the one source, it fails open, and the engine is the real gate. Without `deals.read`
@@ -47,6 +48,7 @@ import { Select } from '../../components/Select';
 import { Status, type StatusKind } from '../../components/Status';
 import { IconButton } from '../../components/IconButton';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, refusalText } from '../../components/states';
+import { optionalReason, useAskReason } from '../../lib/useAskReason';
 import './Deals.css';
 
 /** A fresh key per write, so a retry after a transport failure is a retry and not a second write. */
@@ -193,6 +195,7 @@ export function Deals() {
   const [activity, setActivity] = useState<ActivityDraft>(EMPTY_ACTIVITY);
   const [lostFor, setLostFor] = useState<string | null>(null);
   const [lostReason, setLostReason] = useState('');
+  const askReason = useAskReason();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newStage, setNewStage] = useState({ name: '', probability: '50' });
   const [viewName, setViewName] = useState('');
@@ -272,7 +275,37 @@ export function Deals() {
     }
   }, [write, draft]);
 
-  /** A stage pick: an open stage moves, the won stage marks, the lost stage asks for the reason. */
+  const markLost = useCallback(
+    async (dealId: string) => {
+      const reason = optionalReason(lostReason);
+      const body = await write('deals_mark', {
+        dealId,
+        status: 'lost',
+        ...(reason === undefined ? {} : { lostReason: reason }),
+        idempotencyKey: newKey(),
+      });
+      if (body !== null) {
+        setLostFor(null);
+        setLostReason('');
+      }
+    },
+    [write, lostReason],
+  );
+
+  /** D204: losing a deal saves at once, unless the workspace offers the optional note first. */
+  const startLost = useCallback(
+    (dealId: string) => {
+      if (askReason) {
+        setLostFor(dealId);
+        setLostReason('');
+      } else {
+        void markLost(dealId);
+      }
+    },
+    [askReason, markLost],
+  );
+
+  /** A stage pick: an open stage moves, the won stage marks, the lost stage marks lost (D204). */
   const pickStage = useCallback(
     async (deal: DealView, stageId: string) => {
       const stage = board?.stages.find((s) => s.id === stageId);
@@ -280,24 +313,12 @@ export function Deals() {
       if (stage.outcome === 'won') {
         await write('deals_mark', { dealId: deal.id, status: 'won', idempotencyKey: newKey() });
       } else if (stage.outcome === 'lost') {
-        setLostFor(deal.id);
-        setLostReason('');
+        startLost(deal.id);
       } else {
         await write('deals_move', { dealId: deal.id, stageId, idempotencyKey: newKey() });
       }
     },
-    [board, write],
-  );
-
-  const markLost = useCallback(
-    async (dealId: string) => {
-      const body = await write('deals_mark', { dealId, status: 'lost', lostReason, idempotencyKey: newKey() });
-      if (body !== null) {
-        setLostFor(null);
-        setLostReason('');
-      }
-    },
-    [write, lostReason],
+    [board, write, startLost],
   );
 
   const logActivity = useCallback(
@@ -333,7 +354,6 @@ export function Deals() {
     const known = [
       'contact_not_found',
       'stage_not_in_pipeline',
-      'lost_reason_required',
       'terminal_stage_use_mark',
       'deal_closed',
       'needs_fx_rate',
@@ -390,7 +410,7 @@ export function Deals() {
             }}
           >
             <Field label={t('deals.lost.reason')}>
-              <input className="field" type="text" value={lostReason} onChange={(e) => setLostReason(e.target.value)} required />
+              <input className="field" type="text" value={lostReason} onChange={(e) => setLostReason(e.target.value)} />
             </Field>
             <div className="deals-form-actions">
               <button type="submit" className="btn btn--secondary btn--sm">
@@ -730,7 +750,7 @@ export function Deals() {
                 </button>
               )}
               {selected.status === 'open' && (
-                <button type="button" className="btn btn--secondary btn--sm" onClick={() => setLostFor(selected.id)}>
+                <button type="button" className="btn btn--secondary btn--sm" onClick={() => startLost(selected.id)}>
                   {t('deals.action.markLost')}
                 </button>
               )}
@@ -764,7 +784,7 @@ export function Deals() {
               }}
             >
               <Field label={t('deals.lost.reason')}>
-                <input className="field" type="text" value={lostReason} onChange={(e) => setLostReason(e.target.value)} required />
+                <input className="field" type="text" value={lostReason} onChange={(e) => setLostReason(e.target.value)} />
               </Field>
               <div className="deals-form-actions">
                 <button type="submit" className="btn btn--secondary btn--sm">

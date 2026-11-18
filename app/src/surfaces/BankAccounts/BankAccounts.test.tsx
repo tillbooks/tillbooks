@@ -98,6 +98,8 @@ const HAPPY: Canned = {
   // genuine empty (not an error): a failed read now renders that panel's error banner + retry, which
   // is a DISTINCT state from empty and would otherwise collide with this surface's own retry control.
   bank_channel_status: ok({ channels: [] }),
+  // D198: the settlement feeds panel below it reads its sources the same way: a genuine empty.
+  get_settlement_source: ok({ sources: [], pullMode: 'manual', feedAvailable: true }),
 };
 
 interface RenderOptions {

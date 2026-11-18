@@ -31,14 +31,14 @@ connects to the TILL Studio running on your own machine:
 Start the Studio first, in a terminal, and leave it running:
 
 ```bash
-npx -y tillbooks@1.0.0-beta.5 up
+npx -y tillbooks@1.0.0-beta.6 up
 ```
 
 `npx` downloads the `tillbooks` package from the npm registry (registry.npmjs.org) the first time.
 The Studio listens on 127.0.0.1 only, so nothing outside your computer can reach it. You need
 Node.js 22 or newer on macOS or Linux.
 
-In Cursor, `mcp.json` starts the server itself over stdio (`npx -y tillbooks@1.0.0-beta.5 mcp`), so
+In Cursor, `mcp.json` starts the server itself over stdio (`npx -y tillbooks@1.0.0-beta.6 mcp`), so
 there the Studio is only needed to see and approve drafts.
 
 ## Use it
@@ -47,7 +47,7 @@ Ask your agent to set up a company, post an entry, draft an invoice or prepare t
 To see and approve its drafts, start the Studio in a terminal:
 
 ```bash
-npx -y tillbooks@1.0.0-beta.5 up
+npx -y tillbooks@1.0.0-beta.6 up
 ```
 
 It opens at `http://127.0.0.1:8788` and listens on your own machine only.
@@ -70,12 +70,18 @@ receives nothing from it.
 - **Usage and storage.** What you enter (your company, contacts, documents and postings) is stored in
   one SQLite file on your machine, `~/.till/till.db` or the path in `TILL_DB_PATH`. Diagnostics,
   backups and feedback reports you create stay in `~/.till` or `TILL_SUPPORT_DIR`. TILL itself opens
-  no outbound connection: the MCP server talks to your agent over stdio or over 127.0.0.1, and the Studio listens on 127.0.0.1 only.
+  no outbound connection unless you set one up: the MCP server talks to your agent over stdio or over
+  127.0.0.1, the Studio listens on 127.0.0.1 only, and a settlement source you save (macOS) is fetched
+  over HTTPS from the address you entered, when you ask or, if you choose `settlement.pull_mode` =
+  `daily`, once a day (retried if it fails).
 - **Third-party sharing.** TILL shares nothing with anyone. Two things leave your machine because
   other software sends them: `npx` downloads the package from the npm registry, under npm's terms,
   and what your agent reads through TILL's tools becomes part of your conversation with your AI
   provider, under that provider's terms. Files TILL writes for you (an eCH-0217 return, a pain.001
   payment file, an invoice PDF, a feedback report) leave only when you upload or send them yourself.
+  The one kind of request TILL sends itself goes to a settlement source you saved: it asks that address for
+  its settlements with the token you entered for it (kept in the macOS Keychain) and the date range.
+  Nothing from your books goes out with it.
 - **Data retention.** Your data stays on your disk until you delete it. Posted entries are
   append-only, as Swiss bookkeeping requires; a correction is a reversing entry. Deleting the
   database file and `~/.till` removes everything TILL stored. Keeping your books for the statutory

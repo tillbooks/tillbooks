@@ -45,4 +45,39 @@ export const APPEARANCE_PREFS: readonly PrefDef[] = [
       kompakt: { en: 'Compact', 'de-CH': 'Kompakt' },
     },
   },
+  // D195: how a date reads everywhere in the Studio (`formatDate`) and how the shared DateField parses one.
+  {
+    key: 'appearance.date_format',
+    schema: { type: 'enum', values: ['ch', 'iso', 'us'] },
+    default: 'ch',
+    scope: 'person',
+    area: APPEARANCE,
+    label: { en: 'Date format', 'de-CH': 'Datumsformat' },
+    description: {
+      en: 'How dates are shown and typed: 31.12.2026, 2026-12-31 or 12/31/2026.',
+      'de-CH': 'Wie Daten angezeigt und eingegeben werden: 31.12.2026, 2026-12-31 oder 12/31/2026.',
+    },
+    valueLabels: {
+      ch: { en: '31.12.2026', 'de-CH': '31.12.2026' },
+      iso: { en: '2026-12-31', 'de-CH': '2026-12-31' },
+      us: { en: '12/31/2026', 'de-CH': '12/31/2026' },
+    },
+  },
+  // D195: whether a signed amount (the bank list) carries a plus before money in, or only a minus before money out.
+  {
+    key: 'appearance.amount_sign',
+    schema: { type: 'enum', values: ['plus_minus', 'minus_only'] },
+    default: 'plus_minus',
+    scope: 'person',
+    area: APPEARANCE,
+    label: { en: 'Signs on amounts', 'de-CH': 'Vorzeichen bei Beträgen' },
+    description: {
+      en: 'Plus before money in and minus before money out, or only the minus.',
+      'de-CH': 'Plus vor Geld, das reinkommt, und Minus vor Geld, das rausgeht, oder nur das Minus.',
+    },
+    valueLabels: {
+      plus_minus: { en: '+ and −', 'de-CH': '+ und −' },
+      minus_only: { en: 'Only −', 'de-CH': 'Nur −' },
+    },
+  },
 ];

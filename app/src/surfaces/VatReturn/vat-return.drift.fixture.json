@@ -135,5 +135,73 @@
     "kind": "open",
     "unexplainedMinor": 14850
   },
+  "settlement": {
+    "missing": [],
+    "missingCount": 0,
+    "missingVatMinor": {
+      "sale": 0,
+      "refund": 0,
+      "input": 0
+    },
+    "bookedTwice": [],
+    "amended": [],
+    "overrideCheck": [],
+    "earlier": [],
+    "earlierCount": 0,
+    "beforeFromDate": {
+      "count": 0,
+      "vatMinor": 0
+    },
+    "templateSkipped": {
+      "count": 0,
+      "vatMinor": 0
+    },
+    "cancellingGroupsHidden": {
+      "groups": 0,
+      "events": 0,
+      "setting": "hide_test"
+    },
+    "unplaceable": {
+      "count": 0,
+      "items": []
+    },
+    "bookedTest": [],
+    "testExcluded": {
+      "sale": {
+        "events": 0,
+        "vatMinor": 0
+      },
+      "refund": {
+        "events": 0,
+        "vatMinor": 0
+      },
+      "input": {
+        "events": 0,
+        "vatMinor": 0
+      }
+    },
+    "ignored": {
+      "sale": {
+        "events": 0,
+        "vatMinor": 0
+      },
+      "refund": {
+        "events": 0,
+        "vatMinor": 0
+      },
+      "input": {
+        "events": 0,
+        "vatMinor": 0
+      }
+    },
+    "testActivity": {
+      "byKind": {},
+      "testResidueMinor": 0,
+      "unrefundedTestSales": [],
+      "unreversedTestTransfers": []
+    },
+    "uncoveredSources": [],
+    "hasFindings": false
+  },
   "ok": true
 }

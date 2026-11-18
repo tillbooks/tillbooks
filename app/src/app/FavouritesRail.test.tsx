@@ -17,7 +17,7 @@ import { axe } from 'jest-axe';
 import { resetPrefsModuleForTests, type PrefValue } from '../lib/prefs';
 import type { Theme } from './theme';
 import { FavouritesRail } from './FavouritesRail';
-import { MenuSection } from './NavTree';
+import { MenuCustomiseEntry, MenuSection } from './NavTree';
 import {
   NAV_EXPANDED_KEY_PREFIX,
   NAV_FAVOURITES_KEY_PREFIX,
@@ -34,6 +34,9 @@ const RAIL = (
   <nav aria-label="Hauptnavigation">
     <FavouritesRail />
     <MenuSection />
+    <div className="rail-footer">
+      <MenuCustomiseEntry />
+    </div>
   </nav>
 );
 
@@ -44,7 +47,13 @@ const settle = async (): Promise<void> => {
   });
 };
 
+/** D210: the section headings default to hidden; these suites test the (still supported) headed path,
+ *  so the fixture shows them unless a test says otherwise. `engineWithDefaults` leaves the defaults. */
 function engineWith(prefs: Record<string, unknown> = {}): FakePrefsEngine {
+  return engineWithDefaults({ 'nav.section_headers': 'shown', ...prefs });
+}
+
+function engineWithDefaults(prefs: Record<string, unknown> = {}): FakePrefsEngine {
   const engine = fakePrefsEngine();
   for (const [key, value] of Object.entries(prefs)) engine.put(WS, key, value as PrefValue);
   return engine;
@@ -101,6 +110,32 @@ describe('the section appears only when non-empty', () => {
   });
 });
 
+describe('D210: the section headings default to hidden', () => {
+  it('renders a pinned favourite with no Favoriten header button, no Menü header, and no pencil (the status menu carries it)', async () => {
+    const engine = engineWithDefaults({ 'nav.favourites': [{ navId: 'journal' }] });
+    await renderRail('/overview', { engine });
+    expect(within(lane()).getByRole('link', { name: 'Journal' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Favoriten' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Menü' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Bearbeiten' })).toBeNull();
+  });
+
+  it('keeps both sections open when headers are hidden, whatever a stored fold says', async () => {
+    const engine = engineWithDefaults({ 'nav.favourites': [{ navId: 'journal' }], 'nav.sections': { favourites: true, menu: true } });
+    await renderRail('/overview', { engine });
+    expect(within(lane()).getByRole('link', { name: 'Journal' })).toBeInTheDocument();
+    expect(tree()).toBeInTheDocument();
+  });
+
+  it('puts the pencil on the Menü header, and nowhere in the footer, once headers are shown', async () => {
+    const engine = engineWith({ 'nav.favourites': [{ navId: 'journal' }] });
+    await renderRail('/overview', { engine });
+    expect(screen.getByRole('button', { name: 'Favoriten' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Menü' })).toBeInTheDocument();
+    expect(document.querySelector('.rail-footer')!.querySelector('button')).toBeNull();
+  });
+});
+
 describe('pin and unpin', () => {
   it('unpins from the lane, removing the row and clearing the pin', async () => {
     const { engine } = await renderRail('/overview', { engine: engineWith({ 'nav.favourites': [{ navId: 'tasks' }] }) });
@@ -112,10 +147,10 @@ describe('pin and unpin', () => {
 
   it('reflects the pinned state on the tree star (aria-pressed)', async () => {
     await renderRail();
-    const star = within(tree()).getByRole('button', { name: 'Agent zu den Favoriten hinzufügen' });
+    const star = within(tree()).getByRole('button', { name: 'Pendenzen zu den Favoriten hinzufügen' });
     expect(star).toHaveAttribute('aria-pressed', 'false');
     await userEvent.click(star);
-    expect(within(tree()).getByRole('button', { name: 'Agent aus den Favoriten entfernen' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(tree()).getByRole('button', { name: 'Pendenzen aus den Favoriten entfernen' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('drops a pin whose surface this build does not know (validated on every read)', async () => {
@@ -265,8 +300,15 @@ describe('the three favourite styles (D178 point 15)', () => {
     engineWith({ 'nav.favourites': [{ navId: 'journal' }], ...(style === undefined ? {} : { 'nav.favourite_style': style }) });
   const row = () => within(lane()).getByRole('listitem');
 
-  it('icon_star (default): the page icon in the slot and a filled star at the right edge', async () => {
+  it('icon_only is the default (D210): the icon alone, no trailing star', async () => {
     await renderRail('/overview', { engine: styled() });
+    const link = within(row()).getByRole('link');
+    expect(link.querySelector('svg.rail-icon')).not.toBeNull();
+    expect(link.querySelector('.rail-fav-star, .rail-fav-slot-star')).toBeNull();
+  });
+
+  it('icon_star: the page icon in the slot and a filled star at the right edge', async () => {
+    await renderRail('/overview', { engine: styled('icon_star') });
     const link = within(row()).getByRole('link');
     expect(link.querySelector('svg.rail-icon')).not.toBeNull();
     expect(link.querySelector('.rail-fav-slot-star')).toBeNull();
@@ -288,7 +330,7 @@ describe('the three favourite styles (D178 point 15)', () => {
   });
 
   it('reserves no grip column: the grip overlays the slot and is hidden from assistive tech', async () => {
-    await renderRail('/overview', { engine: styled() });
+    await renderRail('/overview', { engine: styled('icon_star') });
     const grip = row().querySelector('.rail-fav-grip');
     expect(grip).not.toBeNull();
     expect(grip).toHaveAttribute('aria-hidden', 'true');
@@ -301,10 +343,10 @@ describe('the three favourite styles (D178 point 15)', () => {
 describe('the header styles (D178 point 17)', () => {
   const header = (name: string) => within(tree()).getAllByRole('treeitem', { name }).find((el) => el.hasAttribute('aria-expanded'))!;
 
-  it('text_14_bold (default) and label_12: a group header carries no icon', async () => {
-    for (const style of [undefined, 'label_12']) {
+  it('text_14_bold and label_12: a group header carries no icon (icon_14 is the default, D201)', async () => {
+    for (const style of ['text_14_bold', 'label_12']) {
       const { unmount } = await renderRail('/overview', {
-        engine: engineWith({ 'nav.favourites': [{ navId: 'agent' }], ...(style === undefined ? {} : { 'nav.group_header_style': style }) }),
+        engine: engineWith({ 'nav.favourites': [{ navId: 'agent' }], 'nav.group_header_style': style }),
       });
       expect(header('Stammdaten').querySelector('.rail-icon')).toBeNull();
       expect(screen.getByRole('button', { name: 'Favoriten' }).querySelector('.rail-icon')).toBeNull();
@@ -432,10 +474,10 @@ describe('a refused write never breaks the rail (storage refused)', () => {
     const engine = engineWith();
     engine.refuseAll('invalid_pref_value');
     await renderRail('/overview', { engine });
-    await userEvent.click(screen.getByRole('button', { name: 'Agent zu den Favoriten hinzufügen' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Pendenzen zu den Favoriten hinzufügen' }));
     await settle();
     expect(engine.get(WS, 'nav.favourites')).toBeUndefined();
-    expect(within(lane()).getByRole('link', { name: 'Agent' })).toBeInTheDocument();
+    expect(within(lane()).getByRole('link', { name: 'Pendenzen' })).toBeInTheDocument();
     const note = within(lane()).getByText(/Deine Favoriten konnten nicht gespeichert werden/);
     expect(note).toHaveAttribute('role', 'status');
   });

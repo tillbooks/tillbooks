@@ -6,7 +6,7 @@
  * catalogue rather than a literal typed here.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -154,13 +154,13 @@ describe('ThreeWayMatch, the exception list and the match panel', () => {
     expect(await screen.findByText(de.procurement.match.done.matched)).toBeInTheDocument();
   });
 
-  it('offers the override alertdialog on a variance and records it with a reason', async () => {
+  it('D204 offers the override alertdialog on a variance and records it with no reason field', async () => {
     const user = userEvent.setup();
     withCapabilities({ ...baseCanned(), match_three_way_evaluate: ok(EVAL({ status: 'variance', valueVarianceRappen: 20000, totalBilledRappen: 120000 })) });
     await user.click(await screen.findByRole('row', { name: 'Lieferant GmbH' }));
     await user.click(await screen.findByRole('button', { name: de.procurement.match.override }));
-    // The reason lives inside the override alertdialog and is mandatory.
-    await user.type(await screen.findByRole('textbox'), 'Preisdifferenz vereinbart');
+    // D204: the override needs no reason; the dialog shows no field under the default.
+    expect(within(await screen.findByRole('alertdialog')).queryByRole('textbox')).toBeNull();
     await user.click(screen.getByRole('button', { name: de.procurement.match.overrideConfirm }));
     expect(await screen.findByText(de.procurement.match.done.overridden)).toBeInTheDocument();
   });

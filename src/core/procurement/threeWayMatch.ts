@@ -512,8 +512,8 @@ export function matchThreeWayOverride(ctx: WorkspaceContext, input: MatchThreeWa
   const canOverride = ctx.capabilities.assert(OVERRIDE_CAP);
   if (!canOverride.ok) return canOverride;
 
-  const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
-  if (reason.length < 5) return err('reason_required', { billId: input.billId });
+  // D204: the override needs no reason; the record keeps who (`overridden_by`) and when. A given one is kept.
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : undefined;
 
   const key = input.idempotencyKey;
   if (typeof key === 'string' && key.length > 0) {
@@ -558,8 +558,8 @@ export function matchThreeWayReverse(ctx: WorkspaceContext, input: MatchThreeWay
   const capable = ctx.capabilities.assert(OVERRIDE_CAP);
   if (!capable.ok) return capable;
 
-  const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
-  if (reason.length < 5) return err('reason_required', { matchId: input.matchId });
+  // D204: the reversal needs no reason; the compensating record keeps who and when.
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
 
   const key = input.idempotencyKey;
   if (typeof key === 'string' && key.length > 0) {

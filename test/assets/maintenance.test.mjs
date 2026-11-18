@@ -226,11 +226,18 @@ test('cancel is idempotent: a second cancel is a no-op that keeps the first reas
   assert.equal(second.log.cancelReason, 'Falsch erfasst');
 });
 
-test('cancel requires a non-empty reason', () => {
+test('D204 assets: a maintenance entry cancels with no reason; the audit row names who and when', async () => {
+  const { assertAuditRow, assertPermission } = await import('../support/d204.mjs');
   const { ctx, draftAsset } = setup();
   const asset = draftAsset();
   const log = assetMaintenanceLogCreate(ctx, validLog(asset.id)).log;
-  assert.equal(assetMaintenanceLogCancel(ctx, { id: log.id, reason: '  ', idempotencyKey: 'k1' }).error, 'invalid_input');
+  const res = assetMaintenanceLogCancel(ctx, { id: log.id, reason: '  ', idempotencyKey: 'k1' });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(res.log.status, 'cancelled', 'what changed');
+  const row = ctx.store.db.prepare('SELECT cancel_reason FROM asset_maintenance_log WHERE id = ?').get(log.id);
+  assert.equal(row.cancel_reason, null);
+  assertAuditRow(ctx.store, ctx.workspaceId, { entityKind: 'asset_maintenance_log', entityId: log.id, action: 'cancel', actor: ctx.actor });
+  assertPermission('asset_maintenance_log_cancel');
 });
 
 // --- Update + soft-edit window -----------------------------------------------------------------

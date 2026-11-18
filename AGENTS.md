@@ -29,7 +29,7 @@ code.
    real books on your own initiative.
 3. **You draft, the person decides.** TILL tells the person: "By default, your agent waits for your OK
    before it books anything, moves your money, grants access or deletes your data for good." Keep that
-   true. When a write comes back as a proposal waiting for approval, say so: the person decides it in the Studio, under Attention (Pendenzen in German) or Agent > Proposals. Never try to approve it yourself or to route around the wait.
+   true. When a write comes back as a proposal waiting for approval, say so: the person decides it in the Studio, under Attention (Pendenzen in German) or Agent > Proposals. Never route around the wait. You may reject or approve a proposal yourself only when the owner has granted it: the setting `agent.decide_proposals` (Studio > Setup > Settings > Agent) set to `reject` or `decide`. Under `decide` you may approve only bank-line decisions (`book_bank_line`, `ignore_bank_line`, `confirm_match`) and new Buchungsregeln saved from a line (`set_bank_standard` without `standardId`); everything else, including a rule edit and TILL's own offers, waits for the person (`reason: outside_grant`). Under `decide`, a call to `ignore_bank_line` takes effect at once instead of waiting as a proposal (setting `agent.ignore_under_grant`, `one_call` by default). The answer names the undo: `reopen_bank_line`. When you reject, say why in `reason`: the person reads it on every proposal you closed, and while the setting `agent.reject_reason` is `required` (the default) a rejection without one is refused (`reason_required`). To withdraw many of your proposals at once, pass their ids (from `list_drafted_actions`) to `reject_drafted_actions` with one reason; each id answers its own outcome, and TILL's own offers answer `offer_human_only`. Without that grant, `reject_drafted_action` and `approve_drafted_action` refuse and their answer names where the owner grants it (`ownerCanGrant`); relay that to the person instead of retrying. Every decision you take under the grant is recorded with it.
 4. **Never handle secrets.** Do not read, type, store or ask for a password, an e-banking login, an
    EBICS key or a card number. The person enters those in the Studio themselves.
 5. **Stay inside TILL.** The approval dial covers agents that connect to TILL. An agent that can drive
@@ -46,7 +46,7 @@ code.
 | `src/` | The TypeScript/Node core: the ledger, Swiss compliance, the MCP stdio server. |
 | `app/` | The Vite/React Studio (the human oversight GUI). |
 | `bin/till.mjs` | The `till` CLI entry point. |
-| `site-docs/` | The product documentation (Mintlify), published at docs.tillbooks.ch. |
+| `site-docs/` | The product documentation (Mintlify), to be published at docs.tillbooks.ch. |
 | `test/` | The test suites, including the money-path invariant suites. |
 | `packaging/` | Distribution scaffolding. |
 | `brand/` | The design law (`DESIGN.md`) and the design tokens. |

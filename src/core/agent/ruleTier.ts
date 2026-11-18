@@ -192,6 +192,47 @@ function ruleWriteCandidates(ctx: WorkspaceContext, kind: 'create' | 'update' | 
 }
 
 /**
+ * D209 amendment (critic MEDIUM-1, 18.11.2026): EVERY dial family a rule-family write can reach, read against
+ * the book NOW, for the owner's-word exclusion. Unlike `governedDialCapability`, which picks the first
+ * candidate that would draft (so the stored `dial_capability` of a Vorschlag depends on the dial at draft
+ * time), this answers every candidate: the fired verb's tiers (every input-keyed tier when the template holds
+ * a placeholder) and the `customize` floor. `null` for a verb outside `RULE_FIRING_WRITES`; `unreadable` when
+ * the rule or run the write names cannot be read (the caller fails closed). A rule created disabled, or an
+ * update that changes nothing a rule does (a rename), reaches no fired verb.
+ */
+export function ruleWriteReach(ctx: WorkspaceContext, name: string, input: Readonly<Record<string, unknown>>): { families: string[] } | 'unreadable' | null {
+  const kind = RULE_FIRING_WRITES[name];
+  if (kind === undefined) return null;
+  if (kind === 'create') {
+    if (input.enabled === false) return { families: [] };
+    const action = isPlainObject(input.action) ? input.action : {};
+    return { families: [...new Set([...firedTiers(action.tool, action.inputTemplate ?? {}), FLOOR])] };
+  }
+  if (kind === 'update') {
+    const patch = input.patch;
+    if (!isPlainObject(patch)) return 'unreadable';
+    if (!('trigger' in patch) && !('condition' in patch) && !('action' in patch)) return { families: [] };
+    const row = readRuleRow(ctx, input.ruleId);
+    if (row === undefined) return 'unreadable';
+    const action = isPlainObject(patch.action) ? patch.action : undefined;
+    const tool = action?.tool ?? row.action_tool;
+    const template = action?.inputTemplate !== undefined ? action.inputTemplate : parseObject(row.action_input);
+    return { families: [...new Set([...firedTiers(tool, template), FLOOR])] };
+  }
+  if (kind === 'enable') {
+    const row = readRuleRow(ctx, input.ruleId);
+    if (row === undefined) return 'unreadable';
+    return { families: [...new Set([...firedTiers(row.action_tool, parseObject(row.action_input)), FLOOR])] };
+  }
+  if (typeof input.runId !== 'string' || input.runId.length === 0) return 'unreadable';
+  const run = ctx.store.db
+    .prepare('SELECT action_tool, action_input FROM automation_run WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, input.runId) as { action_tool: string; action_input: string } | undefined;
+  if (run === undefined) return 'unreadable';
+  return { families: [...new Set(firedTiers(run.action_tool, parseObject(run.action_input)))] };
+}
+
+/**
  * The dial capability governing ONE agent-seat call, read against the book. The transport seam
  * (`src/api/agent-gate.ts`) calls this and nothing else. For every verb outside the rule family it is
  * `dialCapabilityForCall`; for a rule-family write the input-only answer stays a candidate, so reading

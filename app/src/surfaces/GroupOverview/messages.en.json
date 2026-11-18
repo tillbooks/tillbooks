@@ -1,0 +1,15 @@
+{
+  "groupOverview": {
+    "search": "Search {area}",
+    "searchPlaceholder": "Find a page",
+    "overview": "Area overview"
+  },
+  "help": {
+    "GroupOverview": {
+      "title": "Area overview",
+      "body": "The area overview shows every page of a menu area as a tile. A click on a tile opens its page, and from there the arrow above the title brings you back here. The search on top finds a page as you start to type. Which pages an area shows, and in which order, you set under Customise the menu: the overview follows your menu.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

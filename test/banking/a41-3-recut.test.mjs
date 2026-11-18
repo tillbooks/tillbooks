@@ -18,7 +18,7 @@ import { ignoreBankLine, reopenBankLine } from '../../dist/core/banking/bankBook
 import { listBankInbox } from '../../dist/core/banking/index.js';
 import { assignBeleg as assignBelegEngine, reconcileEngineAssignments } from '../../dist/core/banking/belegAssignment.js';
 import { STATEMENT_COVERS_SQL } from '../../dist/core/banking/bankInbox.js';
-import { settingsSet } from '../../dist/core/settings/settings.js';
+import { settingsSet, getSetting } from '../../dist/core/settings/settings.js';
 import { DATA_MIGRATIONS } from '../../dist/core/store/migrations.js';
 import { ok, err } from '../../dist/core/result.js';
 import { enqueueDraftedAction } from '../../dist/core/agent/draftedActions.js';
@@ -26,6 +26,7 @@ import { withinFolderIntake } from '../../dist/core/purchase/intakeSeat.js';
 import { must, assertClaimInvariantHolds } from './bank-inbox-support.mjs';
 import { ruleWorld, debits, bookAsProposed, autopilot, decisionOf, at, entryCount, TELCO, TELCO_IBAN } from './n04-autobook-support.mjs';
 import { receipt, confirmedReceipt, confirmFigures, assignBeleg, assignmentsOf, activeOf, verb, seenOf } from './a41-beleg-support.mjs';
+import { assertNotApplied } from '../settings/support.mjs';
 
 afterEach(assertClaimInvariantHolds);
 
@@ -57,7 +58,9 @@ test('H1: an agent\'s figures under confirmed never assign; under agent (the own
   // The agent can neither confirm the figures nor switch the trust mode.
   const r2 = receipt(t, { amount: 1400, vendor: 'Nebenlieferant AG', date: '2026-03-01' });
   assert.equal(agentMcp(t, 'confirm_capture_figures', { captures: [seenOf(t, r2.captureId)], idempotencyKey: 'ag-c' }).error, 'human_only');
-  assert.equal(agentMcp(t, 'settings_set', { key: 'belege.autobook_figure_trust', value: 'agent', reason: 'x', idempotencyKey: 'ag-s' }).error, 'human_only');
+  // D202 point 5: the agent only proposes a protected setting, a person approves it.
+  assertNotApplied(agentMcp(t, 'settings_set', { key: 'belege.autobook_figure_trust', value: 'agent', reason: 'x', idempotencyKey: 'ag-s' }), 'belege.autobook_figure_trust');
+  assert.equal(getSetting(t.ctx, 'belege.autobook_figure_trust'), 'confirmed');
   must(settingsSet(t.ctx, { key: 'belege.autobook_figure_trust', value: 'agent', reason: 'owner accepts the risk', idempotencyKey: 'ft-agent' }));
   t.ap.tick();
   assert.equal(decisionOf(t, line)?.state, 'booked', 'under agent the same receipt backs the booking');
@@ -333,7 +336,7 @@ test('QR probe (b): a folder receipt\'s QR counts under belege.qr_trust_folder =
   assert.equal(t.store.db.prepare('SELECT intake_seat FROM captures WHERE id = ?').get(folder.captureId).intake_seat, 'folder');
   t.ap.tick();
   assert.deepEqual(assignmentsOf(t, line), [], 'off: a folder receipt needs Zahlen bestätigen');
-  assert.equal(agentMcp(t, 'settings_set', { key: 'belege.qr_trust_folder', value: 'on', reason: 'x', idempotencyKey: 'ag-qtf' }).error, 'human_only');
+  assertNotApplied(agentMcp(t, 'settings_set', { key: 'belege.qr_trust_folder', value: 'on', reason: 'x', idempotencyKey: 'ag-qtf' }), 'belege.qr_trust_folder');
   must(settingsSet(t.ctx, { key: 'belege.qr_trust_folder', value: 'on', reason: 'probe', idempotencyKey: 'qtf-on' }));
   t.ap.tick();
   assert.equal(decisionOf(t, line)?.state, 'booked', 'on: the owner\'s own channel counts');

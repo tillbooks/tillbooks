@@ -2,7 +2,7 @@
  * N02 (D183), RECEIPT UNIQUENESS (R1), the re-cut after three critic FAILs on one class of defect.
  *
  * THE RULE, one sentence: within a workspace one receipt (its sha256) evidences at most ONE live
- * accounting record, unless a PERSON confirms a second with a reason.
+ * accounting record, unless a PERSON confirms a second (D204: a reason optional).
  *
  * WHY ONE GUARD. Rounds 1 to 3 each found another door (attach, capture_commit, a pending Vorschlag)
  * through which the same receipt reached a second booking, because each door carried its own duplicate
@@ -79,7 +79,7 @@ export const RECEIPT_DOORS: Readonly<Record<string, string>> = {
   'src/core/purchase/vendorBill.ts#attachReceipt': 'attach_receipt: a receiptRef naming a stored file is linked through linkReceiptPointer',
   'src/core/hr/claims.ts#linkLineReceipt': 'the line\'s receipt is linked to its claim through linkFile (guarded; the confirmation is recorded there, once)',
   'src/core/hr/claims.ts#upsertLine': 'expense_line_upsert (and capture_commit to an expense line): a new receiptDocumentId is judged against the claim before the memo',
-  'src/core/files/files.ts#newFileVersion': 'files_new_version on a live booking: replacing its receipt is a person\'s act with a reason (receiptReplaceGuard); the old bytes stay a holder, new bytes booked elsewhere are judged',
+  'src/core/files/files.ts#newFileVersion': 'files_new_version on a live booking: replacing its receipt is a person\'s confirmed act (receiptReplaceGuard); the old bytes stay a holder, new bytes booked elsewhere are judged',
   'src/core/banking/bankLines.ts#insertDecision': 'the liveness transition: writeLineLink, the one caller, judges every file the line holds once a booked or matched decision exists (E1 applied)',
   'src/core/banking/belegAssignment.ts#assignBelegFile': 'assign_beleg_file (A41.3 follow-ups): files a filed file on an OPEN bank line through linkFile after its own hold plan (holdPlan, applied first) and the receipt guard over the open line (N02 book-again rule, the plan\'s releases excepted), then captures and assigns it; the line is judged again when it is booked',
   'src/core/banking/belegAssignment.ts#assignBeleg': 'assign_beleg (A41.3): files a captured receipt on an OPEN bank line through linkFile; it refuses bytes a live booking holds (receiptHolders) before linking, and the line is judged again when it is booked (the liveness transition)',
@@ -544,8 +544,9 @@ export function receiptHolderGuard(ctx: WorkspaceContext, sha256: string, target
   }
   if (mode === 'refuse') return err('receipt_already_booked', { holders, target, setting: 'files.duplicate_beleg' }) as Err;
   if (governed) return err('receipt_already_booked', { holders, target, proposeInstead: true }) as Err;
-  if (!bookAgain) return err('receipt_already_booked', { holders, target, override: 'bookAgain with overrideReason' }) as Err;
-  if (reason.length === 0) return err('reason_required', { field: 'overrideReason' }) as Err;
+  if (!bookAgain) return err('receipt_already_booked', { holders, target, override: 'bookAgain' }) as Err;
+  // D204: the person's `bookAgain` is the confirmation; a reason is optional. The override row keeps who
+  // and when, and the reason column (NOT NULL on stored books) holds the empty string when none is given.
   return {
     holders,
     record: () => {
@@ -596,8 +597,9 @@ export function isLiveReceiptTarget(ctx: WorkspaceContext, kind: string, id: str
  * the new bytes become it. The new bytes are judged by THE guard itself (`receiptHolderGuard`), so every
  * rule of a link holds here too: live holders and pending reservations, `refuse`, the agent seat, and at
  * an approval the holders as they are NOW (`holders_changed` for one the card did not show). On top of
- * that, and only that, replacing the receipt is a person's act with a reason: a governed seat is refused
- * `human_only`; a person passes `bookAgain` + `overrideReason` (`receipt_replace_needs_reason` otherwise),
+ * that, and only that, replacing the receipt is a person's confirmed act: a governed seat is refused
+ * `human_only`; a person passes `bookAgain` (`receipt_replace_needs_reason` otherwise; D204: the optional
+ * `overrideReason` is kept when given),
  * recorded like any confirmation. `allow` skips the rule. There is NO exemption (security review): E01's
  * signature completion of a file that is a live booking's receipt meets this guard like any other
  * replacement, the person's confirmation carried on `sign_requests_complete` itself. Read-only until
@@ -616,14 +618,13 @@ export function receiptReplaceGuard(
   const target: ReceiptTarget = { kind: file.entity_kind, id: file.entity_id };
   const judged = receiptHolderGuard(ctx, newSha, target, { exceptFileIds: [file.id] });
   if (isErr(judged)) return judged;
-  // The guard passed: no other holder, or a person confirmed them with a reason (its record() writes it).
+  // The guard passed: no other holder, or a person confirmed them (its record() writes who and when).
   if (judged.holders.length > 0) return judged;
   const current = frame();
   if (current?.bookAgain !== true) {
-    return err('receipt_replace_needs_reason', { fileId: file.id, entityKind: file.entity_kind, entityId: file.entity_id, holders: [], override: 'bookAgain with overrideReason' }) as Err;
+    return err('receipt_replace_needs_reason', { fileId: file.id, entityKind: file.entity_kind, entityId: file.entity_id, holders: [], override: 'bookAgain' }) as Err;
   }
   const reason = current.reason;
-  if (reason.length === 0) return err('reason_required', { field: 'overrideReason' }) as Err;
   return {
     holders: [],
     record: () => {

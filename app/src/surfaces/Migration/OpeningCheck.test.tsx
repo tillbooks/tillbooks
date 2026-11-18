@@ -8,8 +8,8 @@
  *   The colour law is asserted against the stylesheet's own text, because jsdom does not compute
  *   external CSS and a class-name assertion alone would prove nothing about ink.
  *
- *   A WAIVER NEEDS A REASON BEFORE THE CALL: the panel refuses a blank reason locally with the same
- *   sentence the engine's `waiver_needs_reason` stands for, and the verb is NOT called.
+ *   A WAIVER NEEDS NO REASON (D204): one click waives; the optional note opens first only when
+ *   `audit.ask_reason` is `optional`.
  *
  *   READINESS NEVER READS PLAIN-READY OVER WAIVERS: a clean check with one waiver renders
  *   "bereit, mit 1 Ausnahme".
@@ -158,17 +158,27 @@ describe('OpeningCheck panel', () => {
     expect(await screen.findByText(de.check.actionError.export)).toBeTruthy();
   });
 
-  it('refuses to waive without a reason, names why, and does NOT call the verb', async () => {
+  it('D204 waives in one click with no reason field, and the call carries no reason', async () => {
     const calls: string[] = [];
-    render(tree(canned([CONTROL({ controlId: 'migctl_w', declaredMinor: 90000, differenceMinor: 10000, status: 'failed' })]), calls));
-    const open = await screen.findByRole('button', { name: de.check.waive.action });
-    fireEvent.click(open);
-    const submit = await screen.findByRole('button', { name: de.check.waive.action });
-    fireEvent.click(submit);
-    expect(await screen.findByText(de.check.waive.needsReason)).toBeTruthy();
-    await waitFor(() => {
-      expect(calls.filter((c) => c === 'migration_waive_control')).toHaveLength(0);
-    });
+    const inputs: Record<string, unknown>[] = [];
+    const base = canned([CONTROL({ controlId: 'migctl_w', declaredMinor: 90000, differenceMinor: 10000, status: 'failed' })]);
+    render(
+      tree(
+        {
+          ...base,
+          migration_waive_control: (input) => {
+            inputs.push(input);
+            return ok({ controlId: 'migctl_w', status: 'waived' });
+          },
+          migration_check_step: ok({}),
+        },
+        calls,
+      ),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: de.check.waive.action }));
+    await waitFor(() => expect(calls.filter((c) => c === 'migration_waive_control')).toHaveLength(1));
+    expect(inputs[0]).not.toHaveProperty('reason');
+    expect(screen.queryByLabelText(de.check.waive.reason)).toBeNull();
   });
 
   it('never reads plain-ready over waivers: one waiver renders "bereit, mit 1 Ausnahme"', async () => {

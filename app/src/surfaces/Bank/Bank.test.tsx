@@ -686,19 +686,21 @@ describe('the bank inbox (B2)', () => {
     expect(await screen.findByText(/von einem neueren TILL geschrieben/)).toBeInTheDocument();
   });
 
-  it('a sure line carries its checkbox; once a pick is under way every row does, and the bar ignores them, one ignore_bank_line per line', async () => {
+  it('D195: every open line carries its checkbox at rest, and the bar ignores the picked ones, one ignore_bank_line per line', async () => {
     const ignore = vi.fn<Handler>(() => ok({ state: 'ignored' }));
     renderBank(fakeTransport(happy({ ignore_bank_line: ignore })));
     await settledRows();
-    expect(within(rowOf(/Alpina Telecom AG/)).queryByRole('checkbox')).toBeNull();
+    // D195: not only the sure line: every open row has its box, before any pick.
+    for (const party of [/Coworking Kafi AG/, /Alpina Telecom AG/, /Café Seeblick/]) expect(within(rowOf(party)).getByRole('checkbox')).toBeInTheDocument();
     await userEvent.click(within(rowOf(/Coworking Kafi AG/)).getByRole('checkbox', { name: /Coworking Kafi AG/ }));
     await userEvent.click(within(rowOf(/Alpina Telecom AG/)).getByRole('checkbox', { name: /Alpina Telecom AG/ }));
     await userEvent.click(within(rowOf(/Café Seeblick/)).getByRole('checkbox', { name: /Café Seeblick/ }));
     await userEvent.click(within(rowOf(/Coworking Kafi AG/)).getByRole('checkbox', { name: /Coworking Kafi AG/ }));
     const bar = screen.getByRole('region', { name: 'Ausgewählte Zeilen' });
     expect(within(bar).getByText('2 Zeilen ausgewählt')).toBeInTheDocument();
-    // Neither is ready to book: Alpina has no target yet, Café waits on the agent's Vorschlag.
+    // Neither is ready to book: Alpina has no target yet, Café waits on the agent's Vorschlag; the bar says so.
     expect(within(bar).getByRole('button', { name: 'Buchen' })).toBeDisabled();
+    expect(within(bar).getByText('Bleibt stehen: 1 ohne Konto, 1 mit offenem Vorschlag.')).toBeInTheDocument();
     await userEvent.click(within(bar).getByRole('button', { name: 'Ignorieren …' }));
     await userEvent.click(within(bar).getByRole('button', { name: '2 Zeilen ignorieren' }));
     await waitFor(() => expect(ignore).toHaveBeenCalledTimes(2));
@@ -715,13 +717,15 @@ describe('the bank inbox (B2)', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'Alle sichtbaren Zeilen auswählen' }));
     const bar = screen.getByRole('region', { name: 'Ausgewählte Zeilen' });
     expect(within(bar).getByText('3 Zeilen ausgewählt')).toBeInTheDocument();
-    expect(within(bar).getByText(/2 Zeilen sind nicht durch eine Referenz belegt/)).toBeInTheDocument();
+    expect(within(bar).getByText('Bleibt stehen: 1 ohne Konto, 1 mit offenem Vorschlag.')).toBeInTheDocument();
     await userEvent.click(within(bar).getByRole('button', { name: '1 freigeben' }));
     await waitFor(() => expect(book).toHaveBeenCalledTimes(1));
     expect(book.mock.calls[0]?.[0]).toMatchObject({ bankTxnId: 'bt_kafi', target: { kind: 'open_item', documentId: 'doc_34' } });
+    // D195: the acknowledgement names what stayed behind.
+    expect(await screen.findByText(/Stehen geblieben: 1 ohne Konto, 1 mit offenem Vorschlag\./)).toBeInTheDocument();
   });
 
-  it('the Ignoriert strip offers Wieder zu buchen, only through reopen_bank_line, with a reason', async () => {
+  it('D204 the Ignoriert strip offers Wieder zu buchen, only through reopen_bank_line, with no reason', async () => {
     const ignored = line('bt_ign', {
       state: 'ignored',
       amountMinor: -1_200,
@@ -739,7 +743,8 @@ describe('the bank inbox (B2)', () => {
     expect(within(form).getByText(/gebucht wird nichts/)).toBeInTheDocument();
     await userEvent.click(within(form).getByRole('button', { name: 'Wieder zu buchen' }));
     await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
-    expect(reopen.mock.calls[0]?.[0]).toMatchObject({ bankTxnId: 'bt_ign', reason: 'Versehentlich ignoriert' });
+    expect(reopen.mock.calls[0]?.[0]).toMatchObject({ bankTxnId: 'bt_ign' });
+    expect(reopen.mock.calls[0]?.[0]).not.toHaveProperty('reason');
     expect(typeof reopen.mock.calls[0]?.[0].idempotencyKey).toBe('string');
     expect(await screen.findByText(/Parkhaus Seeplatz ist wieder zu buchen/)).toBeInTheDocument();
   });
@@ -777,7 +782,8 @@ describe('the bank inbox (B2)', () => {
     const form = await screen.findByRole('form', { name: 'Stornieren' });
     await userEvent.click(within(form).getByRole('button', { name: 'Stornieren' }));
     await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
-    expect(reopen.mock.calls[0]?.[0]).toMatchObject({ bankTxnId: 'bt_booked', reason: 'Falsches Konto' });
+    expect(reopen.mock.calls[0]?.[0]).toMatchObject({ bankTxnId: 'bt_booked' });
+    expect(reopen.mock.calls[0]?.[0]).not.toHaveProperty('reason');
   });
 
   it('shows an agent\'s undecided reopen_bank_line Vorschlag on its DECIDED line, with its decision (critic L7)', async () => {
@@ -815,9 +821,32 @@ describe('the bank inbox (B2)', () => {
     expect(await screen.findByText(/lässt sich nicht mehr verwerfen/)).toBeInTheDocument();
   });
 
-  it('the pick bar books only the checked SURE lines: a line the person gave a target stays (spec §6, critic L6)', async () => {
+  it('D195 (bank.bulk_book_scope = bookable, the default): the pick bar books every ticked line complete as its row shows it', async () => {
     const book = vi.fn<Handler>(() => ok({ state: 'booked', entryId: 'je_4', remainder: null }));
     renderBank(fakeTransport(happy({ book_bank_line: book, list_drafted_actions: ok({ actions: [] }) })));
+    await findRow(/Alpina Telecom AG/);
+    // A target given by hand: not reference-proven, but complete, so the bulk books it too.
+    await userEvent.click(within(rowOf(/Alpina Telecom AG/)).getByRole('button', { name: /Buchen auf, Alpina Telecom AG/ }));
+    await userEvent.keyboard('6500{Enter}');
+    await waitFor(() => expect(screen.getByRole('combobox')).toHaveFocus());
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(within(rowOf(/Coworking Kafi AG/)).getByRole('checkbox', { name: /Coworking Kafi AG/ }));
+    await userEvent.click(within(rowOf(/Alpina Telecom AG/)).getByRole('checkbox', { name: /Alpina Telecom AG/ }));
+    const bar = screen.getByRole('region', { name: 'Ausgewählte Zeilen' });
+    expect(within(bar).queryByText(/Bleibt stehen/)).toBeNull();
+    await userEvent.click(within(bar).getByRole('button', { name: '2 freigeben' }));
+    await waitFor(() => expect(book).toHaveBeenCalledTimes(2));
+    const sent = book.mock.calls.map((c) => c[0]);
+    expect(sent.map((s) => s.bankTxnId).sort()).toEqual(['bt_alpina', 'bt_kafi']);
+    // One write per line, each its own key; Alpina books the account the person chose.
+    expect(new Set(sent.map((s) => s.idempotencyKey)).size).toBe(2);
+    expect(sent.find((s) => s.bankTxnId === 'bt_alpina')).toMatchObject({ target: { kind: 'accounts', legs: [{ accountId: expect.any(String) }] } });
+  });
+
+  it('bank.bulk_book_scope = sure: the pick bar books only the checked SURE lines: a line the person gave a target stays (spec §6, critic L6)', async () => {
+    const book = vi.fn<Handler>(() => ok({ state: 'booked', entryId: 'je_4', remainder: null }));
+    const settings = vi.fn<Handler>((input) => ok({ setting: { key: input.key, value: input.key === 'bank.bulk_book_scope' ? 'sure' : null } }));
+    renderBank(fakeTransport(happy({ book_bank_line: book, list_drafted_actions: ok({ actions: [] }), settings_get: settings })));
     await findRow(/Alpina Telecom AG/);
     // Give Alpina a target by hand: bookable, but not reference-proven.
     await userEvent.click(within(rowOf(/Alpina Telecom AG/)).getByRole('button', { name: /Buchen auf, Alpina Telecom AG/ }));
@@ -1227,7 +1256,7 @@ describe('Belege on bank lines (D142 in B2)', () => {
     await waitFor(() => expect(row).not.toHaveAttribute('data-just-committed'), { timeout: 2000 });
   });
 
-  it('N02 R1: a receipt already booked elsewhere is attached to the line only with the person\'s reason', async () => {
+  it('D204 N02 R1: a receipt already booked elsewhere is attached to the line after the person confirms, no reason', async () => {
     const { transport, calls } = recording(
       happy({
         list_drafted_actions: ok({ actions: [] }),
@@ -1245,12 +1274,12 @@ describe('Belege on bank lines (D142 in B2)', () => {
     fireEvent.drop(row, { dataTransfer: { files: [file], types: ['Files'], dropEffect: 'none' } });
     const ask = await screen.findByRole('alertdialog', { name: 'Beleg schon gebucht' });
     expect(within(ask).getByText('Kreditorenrechnung')).toBeInTheDocument();
-    fireEvent.change(within(ask).getByLabelText('Grund'), { target: { value: 'Sammelrechnung' } });
     fireEvent.click(within(ask).getByRole('button', { name: 'Trotzdem buchen' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     const links = calls.filter((c) => c.action === 'assign_beleg_file');
     expect(links).toHaveLength(2);
-    expect(links[1]?.input).toMatchObject({ bankTxnId: 'bt_alpina', bookAgain: true, overrideReason: 'Sammelrechnung' });
+    expect(links[1]?.input).toMatchObject({ bankTxnId: 'bt_alpina', bookAgain: true });
+    expect(links[1]?.input).not.toHaveProperty('overrideReason');
     expect(links[1]?.input.idempotencyKey).toBe(links[0]?.input.idempotencyKey);
   });
 
@@ -2791,7 +2820,8 @@ describe('D167: the reduced row', () => {
    * `needs` (an agent drafted it) never reaches the bulk button or the pick bar, whether the Studio's own
    * Vorschläge read is still in flight or the seat may not make it at all.
    */
-  const KAFI_NAMED = { ...KAFI, attention: 'needs' };
+  // D195: the engine names the pending Vorschlag too (`vorschlagActionId`), which the pick bar honours.
+  const KAFI_NAMED = { ...KAFI, attention: 'needs', vorschlagActionId: 'act_kafi' };
   // D167 polish 3: the bulk button shows from TWO counted lines, so each bulk test carries a second line of
   // the kind it counts; the exclusions it asserts are unchanged.
   const STD2 = { ...STD, bankTxnId: 'bt_std2', counterparty: { name: 'Gebühren Talbank', iban: null } };
@@ -2801,9 +2831,13 @@ describe('D167: the reduced row', () => {
     renderBank(transport);
     await findRow(/Kontoführung Seebank/);
     await transport.started('list_drafted_actions');
-    // Only the standard lines count; Kafi's sure proposal does not, and it carries no pick box.
+    // Only the standard lines count; Kafi's sure proposal does not. D195: its pick box is there, and the pick bar
+    // leaves it behind as waiting on its Vorschlag.
     expect(await screen.findByRole('button', { name: 'Alle vorgeschlagenen buchen (2)' })).toBeInTheDocument();
-    expect(within(rowOf(/Coworking Kafi AG/)).queryByRole('checkbox')).toBeNull();
+    await userEvent.click(within(rowOf(/Coworking Kafi AG/)).getByRole('checkbox'));
+    const bar = screen.getByRole('region', { name: 'Ausgewählte Zeilen' });
+    expect(within(bar).getByRole('button', { name: 'Buchen' })).toBeDisabled();
+    expect(within(bar).getByText('Bleibt stehen: 1 mit offenem Vorschlag.')).toBeInTheDocument();
   });
 
   it('critic D167-7: for a seat refused the Vorschläge read, a line the engine marks as drafted is not bulk-bookable', async () => {
@@ -2813,7 +2847,6 @@ describe('D167: the reduced row', () => {
     renderBank(transport);
     await findRow(/Kontoführung Seebank/);
     const bulk = await screen.findByRole('button', { name: 'Alle vorgeschlagenen buchen (2)' });
-    expect(within(rowOf(/Coworking Kafi AG/)).queryByRole('checkbox')).toBeNull();
     await userEvent.click(bulk);
     await waitFor(() => expect(calls.filter((c) => c.action === 'book_bank_line')).toHaveLength(2));
     expect(calls.filter((c) => c.action === 'book_bank_line').map((c) => c.input.bankTxnId).sort()).toEqual(['bt_std', 'bt_std2']);
@@ -2885,11 +2918,11 @@ describe('D167: the reduced row', () => {
     expect(row.querySelectorAll('.bank-cell--target .bank-src[data-source="history"]')).toHaveLength(1);
   });
 
-  it('polish 4: with a hovering pointer, the empty ☆ and the pick box rest hidden until hover, focus or a pick; a filled ★ never hides', () => {
+  it('polish 4: with a hovering pointer, the empty ☆ rests hidden until hover, focus or a pick; a filled ★ never hides; D195: the pick box never hides', () => {
     const css = readFileSync(resolve(process.cwd(), 'src/surfaces/Bank/Bank.css'), 'utf8');
     const block = /@media \(hover: hover\) \{([\s\S]*?opacity: 0;[\s\S]*?)\}\s*\}/.exec(css)?.[1] ?? '';
     expect(block).toMatch(/:not\(:hover\):not\(:focus-within\):not\(\[data-selected='true'\]\):not\(\[data-picked='true'\]\) \.bank-star:not\(\.bank-star--on\)/);
-    expect(block).toMatch(/\.bank-cell--pick \.check-cell/);
+    expect(block).not.toMatch(/bank-cell--pick/);
     expect(block).toMatch(/:not\(\[data-picking='true'\]\)/);
     // Hidden by opacity, so the controls keep their place and stay in the tab order.
     expect(block).not.toMatch(/display:\s*none|visibility:\s*hidden/);

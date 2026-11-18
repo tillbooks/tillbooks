@@ -383,7 +383,7 @@
   "help": {
     "BankAccounts": {
       "title": "Bankkonten",
-      "body": "Das Register deiner Bankkonten mit IBAN, QR-IBAN und Eröffnungssaldo. Eine QR-IBAN kann nur Zahlungen empfangen; für ausgehende Zahlungen braucht das Register zusätzlich eine normale IBAN, und die Oberfläche weist darauf hin, wenn sie fehlt. Hier verwaltest du auch den EBICS-Kanal und archivierst Konten, die nicht mehr gebraucht werden.",
+      "body": "Das Register deiner Bankkonten mit IBAN, QR-IBAN und Eröffnungssaldo. Eine QR-IBAN kann nur Zahlungen empfangen; für ausgehende Zahlungen braucht das Register zusätzlich eine normale IBAN, und die Oberfläche weist darauf hin, wenn sie fehlt. Hier verwaltest du auch den EBICS-Kanal und archivierst Konten, die nicht mehr gebraucht werden. Unter Abrechnungs-Feeds hinterlegst du, wo TILL die Abrechnung eines Zahlungsanbieters abholt; der Token bleibt im Schlüsselbund, und TILL bucht jedes Ereignis nach deiner Buchungsvorlage.",
       "concepts": [],
       "docsPath": "swiss/qr-bill"
     }
@@ -456,6 +456,106 @@
       "confirmGapConfirm": "Ja, nichts fehlt",
       "confirmGapReason": "Woran siehst du, dass nichts fehlt?",
       "closeGaps": "Lücken schliessen"
+    }
+  },
+  "settlementFeed": {
+    "title": "Abrechnungs-Feeds",
+    "hint": "Der Abrechnungs-Feed eines Zahlungsanbieters (till-settlement/v1): TILL holt ihn ab und bucht jedes Ereignis nach der Buchungsvorlage der Quelle. Der Token bleibt im Schlüsselbund.",
+    "add": "Abrechnungsquelle hinzufügen",
+    "edit": "Quelle bearbeiten",
+    "pull": "Jetzt abholen und buchen",
+    "pulled": "{booked} gebucht, {already} schon im Buch, {skipped} übersprungen, {refused} abgelehnt.",
+    "neverPulled": "Noch nie abgeholt",
+    "lastOk": "Vollständig bis {day}",
+    "incomplete": "Der Feed war unvollständig: nichts gebucht, hol ihn später nochmals ab.",
+    "lastFailed": "Letzter Abruf fehlgeschlagen: {why}",
+    "tokenStored": "Token im Schlüsselbund gespeichert",
+    "tokenMissing": "Kein Token gespeichert",
+    "editorLabel": "Abrechnungsquelle",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "field": {
+      "system": "System",
+      "processor": "Zahlungsanbieter",
+      "baseUrl": "Adresse",
+      "fromDate": "Ab",
+      "token": "Token (bleibt leer, wenn gespeichert)",
+      "feedPath": "Feed-Pfad",
+      "feedPathHint": "Optional; leer heisst {path}. Nur ein Pfad: keine Abfrage, kein Fragment, kein %2e, %2f oder %5c. Ein geänderter Pfad löscht den gespeicherten Token."
+    },
+    "refusal": {
+      "settlement_incomplete": "Die Datei ist unvollständig: exportiere sie nochmals, wenn sie vollständig ist.",
+      "human_only": "Nur eine Person kann eine Quelle speichern.",
+      "settlement_source_missing": "Speichere zuerst die Quelle.",
+      "settlement_template_missing": "Speichere zuerst eine Buchungsvorlage für diese Quelle.",
+      "token_missing": "Speichere zuerst den Token.",
+      "feed_transport_missing": "Dieses TILL kann keinen Abrechnungs-Feed erreichen.",
+      "secret_store_unavailable": "Dieser Computer hat keinen Schlüsselbund für den Token.",
+      "secret_store_failed": "Der Schlüsselbund hat den Token nicht gespeichert. Ist er entsperrt?",
+      "feed_unreachable": "Der Feed hat nicht geantwortet.",
+      "feed_unauthorized": "Der Feed hat den Token abgelehnt. Speichere den aktuellen Token neu.",
+      "feed_bad_request": "Der Feed hat den Zeitraum abgelehnt.",
+      "feed_http_error": "Der Feed hat mit einem Fehler geantwortet.",
+      "feed_schema": "Der Feed hat keine lesbare Abrechnungsdatei geschickt.",
+      "feed_source_mismatch": "Der Feed hat ein anderes System oder einen anderen Anbieter geschickt.",
+      "no_actor": "Niemand mit Buchungsrecht hat diese Quelle gespeichert.",
+      "unsupported_schema": "Die Datei ist kein Profil im Format till-import-profile/v1.",
+      "invalid_input": "Die Datei ist keine Tabellenzuordnung, die TILL lesen kann."
+    },
+    "type": {
+      "feed": "Feed: TILL holt ihn ab",
+      "table": "Tabelle: ein CSV- oder XLSX-Export",
+      "file": "Datei: eine till-settlement-Datei"
+    },
+    "editTemplate": "Buchungsvorlage bearbeiten",
+    "exportMapping": "Tabellenzuordnung als Profildatei exportieren",
+    "importMapping": "Tabellenzuordnung aus einer Profildatei importieren",
+    "profileImported": "Tabellenzuordnung gespeichert.",
+    "templateSaved": "Buchungsvorlage gespeichert."
+  },
+  "settlementTemplate": {
+    "title": "Buchungsvorlage",
+    "denied": "Eine Buchungsvorlage bearbeiten braucht das Recht zu buchen.",
+    "label": "Buchungsvorlage von {system} / {processor}",
+    "clearing": "Durchlaufkonto",
+    "pick": "Wählen",
+    "noVat": "Keine MWST",
+    "kinds": "Was jede Ereignisart bucht",
+    "col": {
+      "kind": "Art",
+      "action": "Buchung",
+      "account": "Konto",
+      "taxCode": "Steuercode"
+    },
+    "action": {
+      "book": "Buchen",
+      "skip": "Überspringen",
+      "attention": "Mich fragen",
+      "unmapped": "Nicht gesetzt"
+    },
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "saved": "Gespeichert",
+    "kind": {
+      "sale": "Verkauf",
+      "refund": "Rückerstattung",
+      "processing_fee": "Zahlungsgebühr",
+      "service_fee": "Servicegebühr",
+      "third_party_payout": "Überweisung",
+      "third_party_payout_reversal": "Überweisung zurück",
+      "reserve": "Reserve",
+      "bank_payout": "Auszahlung",
+      "bank_payout_summary": "Auszahlung (Summe)",
+      "other": "Anderes"
+    },
+    "refusal": {
+      "invalid_account": "Dieses Konto lässt sich hier nicht verwenden.",
+      "account_archived": "Dieses Konto ist archiviert.",
+      "unknown_tax_code": "Diesen Steuercode gibt es nicht.",
+      "archived_tax_code": "Dieser Steuercode ist archiviert.",
+      "tax_code_unsupported": "Eine Abrechnung bucht nur Umsatzsteuer-, Vorsteuer-, Null- oder befreite Codes.",
+      "invalid_input": "In der Vorlage fehlt etwas.",
+      "payout_not_turnover": "Eine Auszahlung ist nie Umsatz: buche sie auf ein Durchlaufkonto oder das Bankkonto, nicht auf ein Erlöskonto."
     }
   }
 }

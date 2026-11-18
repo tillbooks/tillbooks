@@ -15,15 +15,19 @@
  *     WHICH element. `useCommitAck` bridges a DataTable row (which only exposes `rowClassName`) to
  *     that stamp; `useCommitAckState` does the same for a hand-rolled `<tr>` that can set the
  *     attribute itself.
+ *   - `arriveLeave()` (D204, the fourth moment) plays an in-place change of a keyed list or grid: the
+ *     layout changes at once, an item that arrived fades and scales in, one that left fades out from a
+ *     detached copy, and every neighbour glides from its old place to the new one (FLIP on
+ *     `transform`, the Web Animations API). `useArriveLeave` wires it to a container and its keys.
  *
  * NO MOTION LIBRARY (DESIGN.md, Dependencies). CSS transitions and the native View Transitions API
- * only. Everything here is under 150 lines because that is the size of the problem.
+ * only. Everything here stays small because that is the size of the problem.
  *
  * REDUCED MOTION IS A KILL SWITCH. `tokens.css` zeroes every duration and delay under the setting;
  * this file additionally stamps nothing under it (no direction, no entrance class, no tint), so
  * nothing is ever scheduled that would have to be waited out.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
 import { usePref } from './prefs';
 
@@ -42,6 +46,9 @@ export const MOTION_TOKENS = {
   grow: '--t-motion-grow',
   growStandard: '--t-motion-grow-standard',
   growStagger: '--t-motion-grow-stagger',
+  arrive: '--t-motion-arrive',
+  leave: '--t-motion-leave',
+  shift: '--t-motion-shift',
 } as const;
 
 export type MotionToken = (typeof MOTION_TOKENS)[keyof typeof MOTION_TOKENS];
@@ -65,6 +72,9 @@ export const MOTION_DEFAULT_MS: Readonly<Record<MotionToken, number>> = {
   '--t-motion-grow': 700,
   '--t-motion-grow-standard': 400,
   '--t-motion-grow-stagger': 60,
+  '--t-motion-arrive': 200,
+  '--t-motion-leave': 120,
+  '--t-motion-shift': 200,
 };
 
 /** The class `rowClassName` stamps on the row `useCommitAck` should acknowledge. */
@@ -338,4 +348,158 @@ export function installMotionNavigation(router: NavigableRouter, order: readonly
     document.documentElement.setAttribute(NAV_DIRECTION_ATTR, direction);
     enterSurface();
   });
+}
+
+// --- Arrive and leave (D204, 15.11.2026) -----------------------------------------------------------
+
+/** The attribute that names an item `arriveLeave` follows (a card, a row). Its value is the item's key. */
+export const ARRIVE_KEY_ATTR = 'data-arrive-key';
+
+/** Where each keyed item stood, relative to its container, and the node itself (for its leave copy). */
+export interface ArriveLeaveSnapshot {
+  items: Map<string, { left: number; top: number; width: number; height: number; node: HTMLElement }>;
+}
+
+/** The glide `arriveLeave` started per element, so a second change starts from where the eye is. */
+const running = new WeakMap<Element, Animation>();
+
+/** The keyed items directly inside `container` (a nested list keeps its own keys to itself). */
+function keyedItems(container: HTMLElement, attr: string): HTMLElement[] {
+  return Array.from(container.children).filter((el): el is HTMLElement => el instanceof HTMLElement && el.hasAttribute(attr));
+}
+
+function rootToken(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback;
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return raw === '' ? fallback : raw;
+}
+
+/** True where the Web Animations API can run (jsdom has none): without it every change is instant. */
+function canAnimate(el: Element | null): boolean {
+  return el !== null && typeof (el as HTMLElement).animate === 'function';
+}
+
+/**
+ * Where every keyed item inside `container` stands NOW, as the eye sees it (a running glide included).
+ * Take it before the change and hand it to `arriveLeave` once the DOM has the new layout.
+ */
+export function snapshotArrangement(container: HTMLElement | null, attr: string = ARRIVE_KEY_ATTR): ArriveLeaveSnapshot | null {
+  if (container === null) return null;
+  const box = container.getBoundingClientRect();
+  const items: ArriveLeaveSnapshot['items'] = new Map();
+  for (const el of keyedItems(container, attr)) {
+    const key = el.getAttribute(attr);
+    if (key === null) continue;
+    const r = el.getBoundingClientRect();
+    items.set(key, { left: r.left - box.left, top: r.top - box.top, width: r.width, height: r.height, node: el });
+  }
+  return { items };
+}
+
+/** A static copy of an item that left, for its exit: no ids, nothing focusable, nothing a reader meets. */
+function leaveCopy(node: HTMLElement, at: { left: number; top: number; width: number; height: number }): HTMLElement {
+  const copy = node.cloneNode(true) as HTMLElement;
+  for (const el of [copy, ...copy.querySelectorAll<HTMLElement>('[id]')]) el.removeAttribute('id');
+  copy.removeAttribute(ARRIVE_KEY_ATTR);
+  copy.setAttribute('aria-hidden', 'true');
+  copy.setAttribute('inert', '');
+  copy.classList.add('motion-leave-copy');
+  copy.style.left = `${at.left}px`;
+  copy.style.top = `${at.top}px`;
+  copy.style.width = `${at.width}px`;
+  copy.style.height = `${at.height}px`;
+  return copy;
+}
+
+/**
+ * Play the change from `before` to the layout the DOM shows now (the Arrive and leave moment, D204).
+ *
+ *  - An item that is new fades in and scales from `--t-arrive-scale` in `--t-motion-arrive`, eased out.
+ *  - An item that left is gone from the layout at once; a detached copy of it fades and shrinks out in
+ *    `--t-motion-leave`, eased in, above the page and never in the pointer's way.
+ *  - Every item that stayed and moved plays its old-to-new offset on `transform` in `--t-motion-shift`.
+ *
+ * Only `transform` and `opacity` move. Under reduced motion, the Off level, or without the Web
+ * Animations API nothing is scheduled: the new layout simply stands.
+ */
+export function arriveLeave(container: HTMLElement | null, before: ArriveLeaveSnapshot | null, attr: string = ARRIVE_KEY_ATTR): void {
+  if (container === null || before === null || prefersReducedMotion() || !canAnimate(container)) return;
+  const items = keyedItems(container, attr);
+  // A glide still running would falsify where an item stands now: end it first, then measure.
+  for (const el of items) {
+    running.get(el)?.cancel();
+    running.delete(el);
+  }
+  const box = container.getBoundingClientRect();
+  const out = rootToken('--t-ease-out', 'cubic-bezier(0.2, 0, 0, 1)');
+  const scaleRaw = Number.parseFloat(rootToken('--t-arrive-scale', '0.98'));
+  const scale = Number.isFinite(scaleRaw) && scaleRaw > 0 ? scaleRaw : 0.98;
+  const seen = new Set<string>();
+  for (const el of items) {
+    const key = el.getAttribute(attr);
+    if (key === null || !canAnimate(el)) continue;
+    seen.add(key);
+    const was = before.items.get(key);
+    let anim: Animation | null = null;
+    if (was === undefined) {
+      anim = el.animate([{ opacity: 0, transform: `scale(${scale})` }, { opacity: 1, transform: 'none' }], { duration: motionMs(MOTION_TOKENS.arrive), easing: out });
+    } else {
+      const r = el.getBoundingClientRect();
+      const dx = was.left - (r.left - box.left);
+      const dy = was.top - (r.top - box.top);
+      if (Math.abs(dx) >= 0.5 || Math.abs(dy) >= 0.5) {
+        anim = el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: motionMs(MOTION_TOKENS.shift), easing: out });
+      }
+    }
+    if (anim !== null) {
+      const mine = anim;
+      running.set(el, mine);
+      mine.onfinish = () => {
+        if (running.get(el) === mine) running.delete(el);
+      };
+    }
+  }
+  for (const [key, was] of before.items) {
+    if (seen.has(key) || was.node.isConnected) continue;
+    const copy = leaveCopy(was.node, { left: box.left + was.left, top: box.top + was.top, width: was.width, height: was.height });
+    document.body.appendChild(copy);
+    if (!canAnimate(copy)) {
+      copy.remove();
+      continue;
+    }
+    const anim = copy.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: `scale(${scale})` }], {
+      duration: motionMs(MOTION_TOKENS.leave),
+      easing: rootToken('--t-ease-in', 'cubic-bezier(0.4, 0, 1, 1)'),
+      fill: 'forwards',
+    });
+    const drop = () => copy.remove();
+    anim.onfinish = drop;
+    anim.oncancel = drop;
+  }
+}
+
+/**
+ * Arrive and leave for a keyed list or grid: whenever `keys` change (an item shown, hidden, moved or
+ * gone), the container's items glide from where they stood to where they stand now. Each item carries
+ * `data-arrive-key` (`ARRIVE_KEY_ATTR`) with its key and is a DIRECT child of the container.
+ *
+ * The old arrangement is read while React renders the change (the DOM still shows the old layout then)
+ * and played once the new layout is committed, before the browser paints it.
+ */
+export function useArriveLeave(container: RefObject<HTMLElement | null>, keys: readonly string[], attr: string = ARRIVE_KEY_ATTR): void {
+  const signature = keys.join('\u0000');
+  const last = useRef<string | null>(null);
+  const before = useRef<ArriveLeaveSnapshot | null>(null);
+  if (last.current !== signature) {
+    // The first render has nothing to play from: the page arrives with the Navigate moment.
+    before.current = last.current === null ? null : snapshotArrangement(container.current, attr);
+    last.current = signature;
+  }
+  useLayoutEffect(() => {
+    const from = before.current;
+    before.current = null;
+    if (from !== null) arriveLeave(container.current, from, attr);
+    // The signature is the trigger; the container ref and the attribute are fixed for the list's life.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature]);
 }

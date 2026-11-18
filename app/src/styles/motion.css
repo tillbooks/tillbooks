@@ -165,6 +165,41 @@ tr[data-just-committed] > th {
   }
 }
 
+/* ─── Arrive and leave (D204, 15.11.2026) ──────────────────────────────────────────────────────────
+   `arriveLeave` in motion.ts moves keyed items with the Web Animations API (transform and opacity on
+   the item itself), so nothing here animates a card or a row. What lives here is the CSS half:
+
+   - the copy of an item that left, which fades out above the page for `--t-motion-leave`. It is fixed
+     where the item stood, never takes a click and never meets a reader (motion.ts sets `inert` and
+     `aria-hidden`);
+   - the height of a body that opens and closes in place (`.motion-height`): `grid-template-rows` from
+     0fr to 1fr in `--t-motion-arrive`, eased out, and back in `--t-motion-leave`, eased in. The closed
+     body carries `inert` (the caller sets it), so a keyboard never tabs into what is not shown. */
+.motion-leave-copy {
+  position: fixed;
+  z-index: var(--t-z-raised);
+  margin: 0;
+  pointer-events: none;
+  transform: none;
+  box-sizing: border-box;
+}
+
+.motion-height {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--t-motion-leave) var(--t-ease-in);
+}
+
+.motion-height > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.motion-height[data-open='true'] {
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--t-motion-arrive) var(--t-ease-out);
+}
+
 /* ─── Motion levels (D178 point 14) ───────────────────────────────────────────────────────────────
    The person's level is stamped as `data-motion` on <html> (motion.ts, `MotionLevelStamp`). Charts and
    tiles never read the level: they read the three properties below, which the level sets. Lively is

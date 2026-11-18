@@ -172,12 +172,21 @@ test('refund with the setting refuse: no refund until the call states the correc
   assert.equal(balanceOf(t.store, t.workspaceId, '1300'), 0);
 });
 
-test('refund with the setting warn: the refund books, the VAT stays, the answer warns; stating reverse needs a reason', () => {
+test('refund with the setting warn: the refund books, the VAT stays, the answer warns', () => {
   const { t, refund } = refundWorld(108100, 'warn');
-  refused(bookBankLine(t.ctx, { bankTxnId: refund, target: { kind: 'contact', contactId: t.customerId, refundVat: 'reverse' }, idempotencyKey: 'rf0' }), 'reason_required');
   const res = must(bookBankLine(t.ctx, { bankTxnId: refund, target: { kind: 'contact', contactId: t.customerId }, idempotencyKey: 'rf1' }), 'refund');
   assert.ok(res.warnings.includes('anzahlung_vat_refund_uncorrected'));
   assert.equal(balanceOf(t.store, t.workspaceId, '2200'), -8100);
+});
+
+test('D204 bank: under warn, stating reverse needs no reason; the refund books and the decision names who and when', async () => {
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
+  const { t, refund } = refundWorld(108100, 'warn');
+  const res = must(bookBankLine(t.ctx, { bankTxnId: refund, target: { kind: 'contact', contactId: t.customerId, refundVat: 'reverse' }, idempotencyKey: 'rf0' }), 'reverse without a reason');
+  assert.equal(res.ok, true);
+  const who = decisionWhoWhen(t, refund);
+  assertWhoWhen(who.actor, who.at);
+  assertPermission('book_bank_line', { bankTxnId: refund, target: { kind: 'contact', refundVat: 'reverse' } });
 });
 
 // Security review fix-forward (D178 E3, 21.10.2026), one test per finding.
@@ -206,7 +215,7 @@ function ctxWithout(t, withheld) {
   });
 }
 
-test('security 2: keeping the VAT under refuse needs manage_vat_config and a reason; A24 and the dial declare it', async () => {
+test('security 2: keeping the VAT under refuse needs manage_vat_config (D204: no reason); A24 and the dial declare it', async () => {
   const { requiredCapabilitiesFor } = await import('../../dist/core/access/index.js');
   assert.deepEqual(requiredCapabilitiesFor('book_bank_line', { bankTxnId: 'x', target: { kind: 'contact', refundVat: 'keep' } }), ['pay', 'manage_vat_config']);
   assert.deepEqual(requiredCapabilitiesFor('book_bank_line', { bankTxnId: 'x', target: { kind: 'contact' } }), ['pay']);
@@ -218,9 +227,8 @@ test('security 2: keeping the VAT under refuse needs manage_vat_config and a rea
   const keep = { kind: 'contact', contactId: t.customerId, refundVat: 'keep', overrideReason: 'Kunde bleibt' };
   const denied = refused(bookBankLine(ctxWithout(t, 'manage_vat_config'), { bankTxnId: refund, target: keep, idempotencyKey: 'k0' }), 'permission_denied');
   assert.equal(denied.capability, 'manage_vat_config');
-  refused(bookBankLine(t.ctx, { bankTxnId: refund, target: { ...keep, overrideReason: '  ' }, idempotencyKey: 'k1' }), 'reason_required');
   assert.deepEqual(rowCounts(t.store, t.workspaceId), counts, 'nothing written');
-  const res = must(bookBankLine(t.ctx, { bankTxnId: refund, target: keep, idempotencyKey: 'k2' }), 'keep with the right and a reason');
+  const res = must(bookBankLine(t.ctx, { bankTxnId: refund, target: { ...keep, overrideReason: '  ' }, idempotencyKey: 'k2' }), 'D204: keep with the right and no reason');
   assert.ok(res.warnings.includes('anzahlung_vat_refund_uncorrected'));
   assert.equal(balanceOf(t.store, t.workspaceId, '2200'), -8100);
 });
@@ -263,3 +271,10 @@ test('refund nets against the Guthaben: receipt 100, refund 100, then allocate_p
   must(reopenBankLine(t.ctx, { bankTxnId: rf['RF'], reason: 'falsch', idempotencyKey: 'rf-r' }), 'reopen');
   must(allocatePayment(q4, { paymentId: res.paymentId, allocations: [{ documentId: inv.id, amountMinor: inv.totalMinor }], intent: PAYMENT_INTENTS.allocate, idempotencyKey: 'apply2' }), 'apply after reopen');
 });
+
+/** D204: the live decision row of a bank line names who decided and when. */
+function decisionWhoWhen(t, bankTxnId) {
+  return t.store.db
+    .prepare('SELECT created_by AS actor, created_at AS at FROM bank_line_decision WHERE workspace_id = ? AND bank_txn_id = ? AND superseded_at IS NULL ORDER BY rowid DESC LIMIT 1')
+    .get(t.workspaceId, bankTxnId);
+}

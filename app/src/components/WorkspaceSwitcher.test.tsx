@@ -187,15 +187,22 @@ describe('WorkspaceSwitcher: rendering states', () => {
     expect(marked).toHaveLength(1);
   });
 
-  it('a single-workspace list shows that one row (current) plus the new-workspace item', async () => {
+  it('D204: with ONE workspace the company is plain text: no button, no chevron, no menu, not focusable', async () => {
     const single = { ...fixture, workspaces: [fixture.workspaces[2]] };
-    renderSwitcher({ routes: { list_workspaces: { status: 200, body: single as unknown as RestResponse['body'] } } });
-    await openedTrigger();
+    const { container } = renderSwitcher({
+      routes: { list_workspaces: { status: 200, body: single as unknown as RestResponse['body'] } },
+    });
+    expect(await screen.findByText('Muster Grafik')).toBeInTheDocument();
+    expect(container.querySelector('.ws-switcher--text')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: /Arbeitsbereich wechseln/ })).toBeNull();
+    expect(container.querySelector('.ws-switcher-chevron')).toBeNull();
+    expect(container.querySelector('.ws-switcher [tabindex]')).toBeNull();
+  });
 
-    const items = screen.getAllByRole('menuitem');
-    expect(items).toHaveLength(2);
-    expect(items[0]).toHaveAttribute('aria-current', 'true');
-    expect(items[1]).toHaveTextContent('Neuer Arbeitsbereich');
+  it('D204: with TWO or more workspaces the company is the switcher button', async () => {
+    renderSwitcher();
+    const trigger = await screen.findByRole('button', { name: 'Arbeitsbereich wechseln: Muster Grafik' });
+    expect(trigger.querySelector('.ws-switcher-chevron')).not.toBeNull();
   });
 
   it('on a load error the trigger shows no raw id and the menu still offers the way to Setup', async () => {

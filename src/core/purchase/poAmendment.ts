@@ -531,7 +531,7 @@ export function poAmendmentCancel(ctx: WorkspaceContext, input: AmendmentActionI
   return runTx(ctx, 'po_amendment_cancel', input.idempotencyKey, run);
 }
 
-/** `po_amendment_reject`: an approver refuses a draft/pending amendment with a reason (US-I01.6). */
+/** `po_amendment_reject`: an approver refuses a draft/pending amendment (US-I01.6); D204: a reason is optional, who and when are kept. */
 export function poAmendmentReject(ctx: WorkspaceContext, input: AmendmentActionInput): Result {
   const capable = ctx.capabilities.assert(WRITE_CAP);
   if (!capable.ok) return capable;
@@ -542,10 +542,10 @@ export function poAmendmentReject(ctx: WorkspaceContext, input: AmendmentActionI
     if (amendment.status !== 'draft' && amendment.status !== 'pending_approval') {
       return err('invalid_transition', { amendmentId: amendment.id, status: amendment.status });
     }
-    if (typeof input.reason !== 'string' || input.reason.length === 0) return err('invalid_input', { field: 'reason' });
+    const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
     ctx.store.db
       .prepare("UPDATE po_amendment SET status = 'rejected', rejected_by = ?, rejected_at = ?, reason = ? WHERE workspace_id = ? AND id = ?")
-      .run(ctx.actor ?? null, ctx.clock.now(), input.reason, ctx.workspaceId, amendment.id);
+      .run(ctx.actor ?? null, ctx.clock.now(), reason, ctx.workspaceId, amendment.id);
     return ok({ amendment: amendmentView(readAmendment(ctx, amendment.id) as PoAmendmentRow) });
   };
 

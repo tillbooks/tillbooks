@@ -2,9 +2,9 @@
 // decisions Q7 + Q8, 15.10.2026).
 //
 // `payroll.month_guard` (registry `src/core/settings/registry.ts`): `refuse` (default, Q7), `warn`
-// (posts, the result names the standing posting(s)), `off` (no check). `supplementary: true` with a
-// non-blank `supplementaryReason` skips the guard for one call, audited, the reason in the entry
-// description; without a reason it is refused `reason_required` on every face.
+// (posts, the result names the standing posting(s)), `off` (no check). `supplementary: true` skips the
+// guard for one call, audited; an optional `supplementaryReason` goes into the entry description (D204:
+// never required).
 //
 // SYNTHETIC BY CONSTRUCTION: no employee, no name, no AHV number; an invented aggregate on the shipped
 // KMU chart.
@@ -19,6 +19,7 @@ import { getAction } from '../../dist/api/registry.js';
 import { handleRest } from '../../dist/api/rest.js';
 import { fixture } from '../api/conformance-contract.mjs';
 import { setup, counts, wageLines, secondWorkspace } from './support.mjs';
+import { assertWhoWhen, assertPermission } from '../support/d204.mjs';
 
 const DATE = '2026-07-05';
 const KEY = 'payroll.month_guard';
@@ -119,24 +120,31 @@ test('D173 supplementary: with a reason it posts next to the standing journal, a
   assert.equal(auditRows(t.store, t.workspaceId, 'payroll_supplementary'), auditBefore + 1);
 });
 
-test('D173 supplementary without a reason: reason_required on the engine, preview included, writing nothing', () => {
+test('D204 payroll supplementary without a reason: posts on the engine, preview included, audited as its own row', () => {
   const t = setup();
-  must(post(t.ctx, 'a'));
-  const before = counts(t.store, t.workspaceId);
+  const first = must(post(t.ctx, 'a'));
+  const auditBefore = auditRows(t.store, t.workspaceId, 'payroll_supplementary');
   for (const reason of [undefined, '', '   ']) {
     const extra = reason === undefined ? { supplementary: true } : { supplementary: true, supplementaryReason: reason };
-    assert.equal(post(t.ctx, `x${String(reason).length}`, extra).error, 'reason_required');
     const pv = wageJournalPost(t.ctx, { lines: wageLines(), entryDate: DATE, idempotencyKey: 'pv', ...extra });
-    assert.equal(pv.error, 'reason_required', 'the preview refuses too');
+    assert.equal(pv.ok, true, `the preview answers: ${JSON.stringify(pv)}`);
+    const res = must(post(t.ctx, `x${String(reason).length}`, { ...extra, description: 'Lohn Juli' }));
+    assert.equal(res.supplementaryReason, null, 'no reason echoed as text');
+    const entry = t.store.db.prepare('SELECT description FROM journal_entry WHERE id = ?').get(res.postedEntryId);
+    assert.equal(entry.description, 'Lohn Juli (Nachtragsbuchung)', 'what: the override is named on the entry');
+    const row = t.store.db
+      .prepare("SELECT actor, at FROM audit_log WHERE workspace_id = ? AND entity_kind = 'payroll_supplementary' AND entity_id = ?")
+      .get(t.workspaceId, res.wageJournalPostId);
+    assertWhoWhen(row.actor, row.at, t.ctx.actor);
   }
-  // Even with the guard off, a reasonless supplementary call is refused (the reason is the audit).
-  setGuard(t.ctx, 'off');
-  assert.equal(post(t.ctx, 'y', { supplementary: true }).error, 'reason_required');
+  assert.equal(auditRows(t.store, t.workspaceId, 'payroll_supplementary'), auditBefore + 3);
+  assert.equal(t.store.db.prepare('SELECT COUNT(*) AS n FROM journal_line WHERE entry_id = ?').get(first.postedEntryId).n > 0, true, 'the standing posting is untouched');
+  assertPermission('wage_journal_post');
+  // A reason without the switch is still a shape error.
   assert.equal(post(t.ctx, 'z', { supplementaryReason: 'ohne Schalter' }).error, 'invalid_input');
-  assert.deepEqual(counts(t.store, t.workspaceId), before);
 });
 
-test('D173 supplementary without a reason: reason_required on the REST face and the MCP registry face', () => {
+test('D204 payroll supplementary without a reason: goes through on the REST face and the MCP registry face', () => {
   const fx = fixture();
   const lines = [
     { accountNumber: '5000', debitMinor: 500000 },
@@ -144,11 +152,10 @@ test('D173 supplementary without a reason: reason_required on the REST face and 
     { accountNumber: '2260', creditMinor: 550000 },
   ];
   const base = { workspaceId: fx.workspaceId, lines, entryDate: DATE, confirm: true };
+  const human = { ...fx.deps, actor: 'studio' };
   must(fx.call('wage_journal_post', { ...base, idempotencyKey: 'f-1' }), 'first');
-  const rest = handleRest('wage_journal_post', { ...base, supplementary: true, idempotencyKey: 'f-rest' }, fx.deps).body;
-  assert.equal(rest.error, 'reason_required', JSON.stringify(rest));
-  const mcp = getAction('wage_journal_post').run(fx.deps, { ...base, supplementary: true, supplementaryReason: ' ', idempotencyKey: 'f-mcp' });
-  assert.equal(mcp.error, 'reason_required', JSON.stringify(mcp));
-  const okRest = handleRest('wage_journal_post', { ...base, supplementary: true, supplementaryReason: 'Bonus nachgereicht', idempotencyKey: 'f-ok' }, fx.deps).body;
-  assert.equal(okRest.ok, true, JSON.stringify(okRest));
+  const rest = handleRest('wage_journal_post', { ...base, supplementary: true, idempotencyKey: 'f-rest' }, human).body;
+  assert.equal(typeof rest.wageJournalPostId, 'string', JSON.stringify(rest));
+  const mcp = getAction('wage_journal_post').run(human, { ...base, supplementary: true, supplementaryReason: ' ', idempotencyKey: 'f-mcp' });
+  assert.equal(mcp.ok, true, JSON.stringify(mcp));
 });

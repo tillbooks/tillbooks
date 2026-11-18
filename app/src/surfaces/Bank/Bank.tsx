@@ -108,8 +108,10 @@ import { DecidedRow, OpenRow } from './InboxRow';
 import { DetailsPanel, type PanelMode } from './DetailsPanel';
 import { SplitRows } from './SplitRows';
 import { DetailDrawer } from '../../components/DetailDrawer';
-import { bookingTextToSend, bookStateOf, defaultBookingText, splitStateOf, splitTargetOf, startSplit, type SplitDraft } from './rowState';
-import { ruleTargetOf } from './pickers';
+import { bookingTextToSend, bookStateOf, defaultBookingText, splitStateOf, splitTargetOf, startSplit, takesBookingText, type SplitDraft } from './rowState';
+import { activePreset, ruleTargetOf, type PickResult, type TurnoverPreset } from './pickers';
+import { InlineRow } from './InlineRow';
+import { InlineStrip } from './InlineStrip';
 import { TrustLine, TrustSummary } from './TrustLine';
 import { ImportDialog, type ImportResult } from './ImportDialog';
 import type { FileOutcome } from './importOutcomes';
@@ -136,7 +138,8 @@ import { DirectionFilter, ListCount, PeriodFilter, isoDateOrNull, periodInverted
 import { duplicateFlagOf } from './statementFacts';
 import { useDetailLayout, useMeasuredRoom, usePageFit } from './useDetailLayout';
 import { usePref } from '../../lib/prefs';
-import { useRowApproveMode, type FocusNav } from './BookingModes';
+import { useBulkBookScope, useRowApproveMode, type FocusNav } from './BookingModes';
+import { useIgnoreDefaultReason } from './useIgnoreDefaultReason';
 import './Bank.css';
 
 type Tab = 'open' | 'booked' | 'ignored';
@@ -161,6 +164,13 @@ function directionOf(dir: string | null, facet: string | null): Direction {
   const raw = dir ?? facet;
   return raw === 'in' || raw === 'out' ? raw : 'all';
 }
+
+/** D195: why a ticked line stays behind in a bulk Buchen, in the order the pick bar names them. */
+const BULK_SKIPS = ['target', 'incomplete', 'vorschlag', 'duplicate', 'single', 'right'] as const;
+type BulkSkip = (typeof BULK_SKIPS)[number];
+
+/** D195 (v12): the MWST column's default width in the row editor, enough for the code in words. */
+const INLINE_VAT_WIDTH = 184;
 
 const PAGE = 200;
 /** D167: the reason a Vorschlag is closed with when the person booked the line their own way. */
@@ -329,6 +339,10 @@ export function Bank() {
   const [bookingView] = usePref<string>('bank.booking_view');
   const [listHiddenPref, setListHidden] = usePref<boolean>('bank.focus_list_hidden');
   const whoami = useCapabilities().whoami;
+  // D195: what the pick bar's bulk Buchen books (`bank.bulk_book_scope`).
+  const bulkScope = useBulkBookScope(workspaceId);
+  // D195 + D196: Mehr's Ignorieren is one click with the workspace's `bank.ignore_default_reason`.
+  const ignoreDefault: IgnoreReason = useIgnoreDefaultReason();
 
   // --- view state -------------------------------------------------------------------------------
   const tab: Tab = params.get('tab') === 'booked' ? 'booked' : params.get('tab') === 'ignored' ? 'ignored' : 'open';
@@ -507,6 +521,8 @@ export function Bank() {
   const layout = useDetailLayout(counts.open, workspaceId, room);
   const dockDrag = useDockDrag(workspaceRef, layout.edge, layout.dock);
   const [lookups, setLookups] = useState<Lookups>(EMPTY_LOOKUPS);
+  // D195 (v12): the turnover presets (`get_settlement_template`) the row's account picker offers on money in.
+  const [presets, setPresets] = useState<readonly TurnoverPreset[]>([]);
   // D175: the rules link shows once the seat could read the rules; the sheet opens over the inbox.
   const [rulesReadable, setRulesReadable] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -680,8 +696,11 @@ export function Bank() {
       read('list_payment_batches', { status: 'generated' }),
       // A41.5: the rule-offer banner's second source (N04 autopilot offers). A refused read is "none".
       readCandidates(client, workspaceId),
-    ]).then(([chart, tax, items, bills, drafted, dial, standards, batches, autopilotRead]) => {
+      // D195 (v12): the settlement sources' templates are the turnover presets of the row's account picker.
+      read('get_settlement_template'),
+    ]).then(([chart, tax, items, bills, drafted, dial, standards, batches, autopilotRead, templates]) => {
       if (!live) return;
+      setPresets(parsePresets(t, templates));
       // A41.5: the banner's first source, the rule miner's pending drafts, from the same Vorschläge read.
       setMinedOffers(parseMinedOffers(drafted));
       setAutopilot(autopilotRead);
@@ -853,7 +872,6 @@ export function Bank() {
     () => (tab === 'open' ? visible.filter((l) => isSureAndUntouched(l, drafts[l.bankTxnId]) && !lookups.vorschlaege.has(l.bankTxnId)) : []),
     [visible, tab, drafts, lookups.vorschlaege],
   );
-  const sureIds = useMemo(() => new Set(sureLines.map((l) => l.bankTxnId)), [sureLines]);
   // D144: the open lines IN VIEW no reference and no history places, the ones the model may be asked
   // about. "Konten vorschlagen" sends exactly these (critic C1: "the lines in view", A39 §12), at most a page.
   const unplacedInView = useMemo(
@@ -1062,7 +1080,8 @@ export function Bank() {
     const pending = v === undefined ? [] : [v, ...(lookups.vorschlaege.get(line.bankTxnId) ?? []).filter((x) => x !== v)];
     if (v === undefined) return book(line, target, opts);
     const agentTarget = v.actionTool === 'book_bank_line' ? draftTargetOf(v.payload.target) : null;
-    const asDrafted = source === 'agent' && opts.text === undefined && agentTarget !== null && targetKey(agentTarget) === targetKey(target);
+    // D195: the row's own default text is no edit; a Vorschlag left as drafted is still approved as drafted.
+    const asDrafted = source === 'agent' && (opts.text === undefined || opts.text === defaultBookingText(line)) && agentTarget !== null && targetKey(agentTarget) === targetKey(target);
     // A Vorschlag is approved as the agent drafted it, its own attachments included: nothing is added to it.
     const { attach: _ownAttach, ...ownOpts } = opts;
     const own = whoami?.actor !== undefined && v.actor === whoami.actor;
@@ -1095,7 +1114,15 @@ export function Bank() {
       const action = ignoring ? 'ignore_bank_line' : 'book_bank_line';
       const input = ignoring
         ? { bankTxnId: line.bankTxnId, ...ignoreInputOf(target) }
-        : { bankTxnId: line.bankTxnId, target: bookTargetOf(bookingTargetFor(line, target, lookups.standardById.get(String(((line.proposal?.reasonParams ?? {}) as Record<string, unknown>).standardId ?? '')))) };
+        : {
+            bankTxnId: line.bankTxnId,
+            target: bookTargetOf(bookingTargetFor(line, target, lookups.standardById.get(String(((line.proposal?.reasonParams ?? {}) as Record<string, unknown>).standardId ?? '')))),
+            // D195: the same Buchungstext the row shows, so a bulk booking reads like a single one.
+            ...(() => {
+              const text = takesBookingText(target) ? bookingTextToSend(line, texts[line.bankTxnId]) : undefined;
+              return text === undefined ? {} : { text };
+            })(),
+          };
       const response = await client.call(action, { workspaceId, ...input, idempotencyKey: keyFor(line.bankTxnId, [action, input]) });
       if (isErr(response.body)) {
         refused += 1;
@@ -1118,19 +1145,61 @@ export function Bank() {
 
   // The picked lines a bulk Buchen sends: a target in balance, the right to book it, and no agent
   // Vorschlag waiting (only its approval books that one).
-  const readyPicked = pickedLines.filter((l) => {
-    // Spec §6 (critic L6 lean): the pick bar books the checked SURE lines, reference-proven and untouched;
-    // A41.6: and the learned lines the ENGINE says may join the bulk (`bulkBookable`, never decided here).
-    const target = drafts[l.bankTxnId]?.target ?? null;
-    const ready = isSureAndUntouched(l, drafts[l.bankTxnId]) || (l.bulkBookable === true && l.proposal?.certainty === 'learned' && isUntouched(l, drafts[l.bankTxnId]));
-    return ready && target !== null && isBookable(l, target) && canBookTarget(target) && !lookups.vorschlaege.has(l.bankTxnId);
-  });
   // A41.6: a picked line whose pending Vorschlag the engine evidence backs is taken by approving it.
   const approvablePicked = canDecideVorschlag
     ? pickedLines.filter((l) => l.bulkBookable === true && lookups.vorschlaege.has(l.bankTxnId) && lookups.vorschlaege.get(l.bankTxnId)?.[0]?.actor !== (whoami?.actor ?? null))
     : [];
-  // A41.7: the threshold is asked the moment a person ticks a learned line while it is unanswered.
-  const asksLearned = inbox !== null && inbox.bulkLearnedMin === null && pickedLines.some((l) => l.proposal?.certainty === 'learned' && !lookups.vorschlaege.has(l.bankTxnId));
+  const approvableIds = new Set(approvablePicked.map((l) => l.bankTxnId));
+  /** What a ticked line books as it stands on its row: a split under way books its positions. */
+  const pickedDraft = (l: BankInboxLine): RowDraft | undefined => {
+    const split = splits[l.bankTxnId];
+    return split === undefined ? drafts[l.bankTxnId] : { target: splitTargetOf(splitStateOf(l, split), split), source: 'edited' };
+  };
+  /**
+   * D195 (`bank.bulk_book_scope = bookable`): why a ticked line stays behind, or null when the bulk books it.
+   * Each check is one the row's own Buchen makes: a booking complete as it stands, the right to book it, no
+   * duplicate question open, and no agent Vorschlag waiting (only its approval takes that one).
+   */
+  const skipOf = (l: BankInboxLine): BulkSkip | null => {
+    if (approvableIds.has(l.bankTxnId)) return null;
+    if (duplicateFlagOf(l) !== null) return 'duplicate';
+    // The engine's own mark counts too (critic D167-7): while the Vorschläge read is out, or for a seat refused it.
+    if (lookups.vorschlaege.has(l.bankTxnId) || (l.vorschlagActionId ?? null) !== null) return 'vorschlag';
+    const target = pickedDraft(l)?.target ?? null;
+    if (target === null) return 'target';
+    // A "Nicht buchen" rule ignores its line with the rule's own reason: one line at a time, never in bulk.
+    if (target.kind === 'ignore') return 'single';
+    const split = splits[l.bankTxnId];
+    if ((split !== undefined && !splitStateOf(l, split).complete) || !isBookable(l, target)) return 'incomplete';
+    if (!canBookTarget(target)) return 'right';
+    return null;
+  };
+  const readyPicked = pickedLines.filter((l) => {
+    if (approvableIds.has(l.bankTxnId)) return false;
+    if (bulkScope === 'bookable') return skipOf(l) === null;
+    // Spec §6 (critic L6 lean), `bank.bulk_book_scope = sure`: the pick bar books the checked SURE lines,
+    // reference-proven and untouched; A41.6: and the learned lines the ENGINE says may join the bulk.
+    const target = drafts[l.bankTxnId]?.target ?? null;
+    const ready = isSureAndUntouched(l, drafts[l.bankTxnId]) || (l.bulkBookable === true && l.proposal?.certainty === 'learned' && isUntouched(l, drafts[l.bankTxnId]));
+    return ready && target !== null && isBookable(l, target) && canBookTarget(target) && !lookups.vorschlaege.has(l.bankTxnId);
+  });
+  /** D195: the lines the bulk leaves behind, counted by reason, in words ("2 ohne Konto, 1 mit offenem Vorschlag"). */
+  const skippedWords = (): string | null => {
+    if (bulkScope !== 'bookable') return null;
+    const counts = new Map<BulkSkip, number>();
+    for (const l of pickedLines) {
+      const why = skipOf(l);
+      if (why !== null) counts.set(why, (counts.get(why) ?? 0) + 1);
+    }
+    if (counts.size === 0) return null;
+    return BULK_SKIPS.filter((w) => counts.has(w))
+      .map((w) => plural(t, `bankInbox.pick.skip.${w}`, counts.get(w) ?? 0))
+      .join(', ');
+  };
+  // A41.7: the threshold is asked the moment a person ticks a learned line while it is unanswered (only where
+  // it decides something: under `bookable` a ticked line books whatever its certainty).
+  const asksLearned =
+    bulkScope === 'sure' && inbox !== null && inbox.bulkLearnedMin === null && pickedLines.some((l) => l.proposal?.certainty === 'learned' && !lookups.vorschlaege.has(l.bankTxnId));
 
   const runPicked = async (targets: readonly BankInboxLine[], action: 'book_bank_line' | 'ignore_bank_line', inputFor: (line: BankInboxLine) => Record<string, unknown> | null) => {
     if (workspaceId === null || targets.length === 0) return { done: 0, refused: 0 };
@@ -1164,16 +1233,23 @@ export function Bank() {
       const res = await client.call('approve_drafted_actions', { workspaceId, ids });
       if (!isErr(res.body)) approved = ids.length;
     }
+    // D195: said before the write, while the picks still stand (the write clears them).
+    const skipped = skippedWords();
     const result = await runPicked(readyPicked, 'book_bank_line', (line) => {
-      const target = drafts[line.bankTxnId]?.target ?? null;
-      return target === null ? null : { target: bookTargetOf(target) };
+      const target = pickedDraft(line)?.target ?? null;
+      if (target === null) return null;
+      // As the row's own Buchen sends it: a complete rule books as the rule, the person's Buchungstext rides along.
+      const sent = bookingTargetFor(line, target, lookups.standardById.get(String(((line.proposal?.reasonParams ?? {}) as Record<string, unknown>).standardId ?? '')));
+      const text = takesBookingText(target) ? bookingTextToSend(line, texts[line.bankTxnId]) : undefined;
+      return { target: bookTargetOf(sent), ...(text !== undefined ? { text } : {}) };
     });
     const done = result.done + approved;
     const refused = result.refused + (ids.length - approved);
+    const detail = [refused > 0 ? plural(t, 'bankInbox.ack.bulkRefused', refused) : '', skipped !== null ? t('bankInbox.ack.pickedSkipped', { list: skipped }) : ''].filter((x) => x !== '').join(' ');
     say({
-      tone: refused > 0 ? 'warn' : 'success',
+      tone: refused > 0 || skipped !== null ? 'warn' : 'success',
       message: plural(t, 'bankInbox.ack.pickedBooked', done),
-      ...(refused > 0 ? { detail: plural(t, 'bankInbox.ack.bulkRefused', refused) } : {}),
+      ...(detail !== '' ? { detail } : {}),
       quiet: true,
     });
   };
@@ -1228,11 +1304,12 @@ export function Bank() {
       t('bankInbox.ack.ignoredWhy', { party: partyOf(t, line), reason: t(`bankInbox.ignore.reason.${reason}.label`) }),
       { label: t('bankInbox.ack.undoShort'), run: () => void undoIgnore(line) },
     );
-  const reopen = (line: BankInboxLine, reason: string) =>
+  const reopen = (line: BankInboxLine, reason: string | undefined) =>
     void simpleWrite(
       line,
       'reopen_bank_line',
-      { reason },
+      // D204: a reopen needs no reason; a note travels only when the person wrote one.
+      reason === undefined ? {} : { reason },
       t(line.state === 'matched' ? 'bankInbox.ack.unmatched' : line.state === 'ignored' ? 'bankInbox.ack.unignored' : 'bankInbox.ack.reopened', { party: partyOf(t, line) }),
     );
 
@@ -1822,8 +1899,12 @@ export function Bank() {
     if (split === undefined) return drafts[line.bankTxnId];
     return { target: splitTargetOf(splitStateOf(line, split), split), source: 'edited' };
   };
-  /** The Buchungstext to send with a booking: only one the person changed (`bookingTextToSend`). */
+  /**
+   * The Buchungstext to send with a booking that writes one (accounts, a rule): the text as the row shows it
+   * (`bookingTextToSend`; D195: the Studio's default has no "Bank:" prefix, so it is sent).
+   */
   const textOpts = (line: BankInboxLine): { text?: string } => {
+    if (!takesBookingText(effectiveDraft(line)?.target ?? null)) return {};
     const text = bookingTextToSend(line, texts[line.bankTxnId]);
     return text === undefined ? {} : { text };
   };
@@ -1971,7 +2052,9 @@ export function Bank() {
   // D178 N2 (A39 §18.1): the detail area is there only while a line is selected; at rest the list takes the
   // whole workspace. Docked right, the table's MWST, paperclip and pick columns step aside (D177); docked at
   // the bottom the table keeps its full width and every column.
-  const areaOpen = wide && selectedLine !== undefined;
+  // D195 (v12): `inline` opens the line in place, in the list; no area docks and no drawer opens.
+  const inline = layout.inline;
+  const areaOpen = !inline && wide && selectedLine !== undefined;
   // D178 point 9 (A39 §20.2): the focus view, one line at a time. The stepper walks the list in view; "Liste
   // ausblenden" (a per-person preference) gives the area the whole workspace, except while a split's
   // positions are under way, which live in the list's rows.
@@ -2045,11 +2128,100 @@ export function Bank() {
     />
   );
 
+  /** A pick in a row's account picker: the same handling for the D177 row and the v12 row. */
+  const pickOnRow = (line: BankInboxLine, result: PickResult) => {
+    if (result.kind === 'mode') {
+      // D177 point 6: Aufteilen opens the position rows under the row; the other two decisions open their
+      // editor in the Details (D195: in the line's strip, under the row).
+      if (result.mode === 'split') {
+        beginSplit(line);
+        return;
+      }
+      setSelectedId(line.bankTxnId);
+      setMode(result.mode);
+      return;
+    }
+    if (result.kind === 'other') {
+      bookOtherwise(line);
+      return;
+    }
+    if (result.kind !== 'target') return;
+    endSplit(line);
+    setDrafts((d) => ({ ...d, [line.bankTxnId]: { target: result.target, source: result.source } }));
+    if (result.target.kind === 'rule') {
+      // A picked rule that asks for an amount opens the Details, its first field focused.
+      const lineId = line.bankTxnId;
+      if (result.target.asks.some((a) => a.computed === undefined)) {
+        select(lineId);
+        window.setTimeout(() => document.querySelector<HTMLInputElement>('[data-panel-for] .bank-ask__input')?.focus(), 0);
+      } else focusBookFor.current = lineId;
+      return;
+    }
+    // A control-account leg is said BEFORE the commit (critic A39-11): the Details open.
+    if (result.target.kind === 'accounts' && controlAccountsIn(lookups, result.target.legs).length > 0) select(line.bankTxnId);
+    const leg = result.target.kind === 'accounts' && result.target.legs.length === 1 ? result.target.legs[0] : undefined;
+    const vatShows = leg !== undefined && vatPickerShows(lookups, leg);
+    // D195: the v12 row's MWST is the shared Select, which takes no hand-over: focus goes to the check.
+    if (result.chainVat && vatShows && !inline) setOpenPicker({ lineId: line.bankTxnId, which: 'vat' });
+    else focusBookFor.current = line.bankTxnId;
+  };
+
+  /**
+   * D195 (v12): the strip under an opened line. A target that needs its own editor (a rule's amounts, a
+   * contact, Spesen, several documents, an entry to match), a mode other than the booking (Abgleichen,
+   * Ignorieren with a note, a rule's form, Stornieren) and every decided line show the Details' editor beside
+   * the facts; otherwise the strip holds only context.
+   */
+  const stripFor = (line: BankInboxLine, lead: number) => {
+    const draft = effectiveDraft(line);
+    const target = draft?.target ?? null;
+    const editorTarget =
+      target !== null &&
+      (target.kind === 'contact' ||
+        target.kind === 'expense_claims' ||
+        target.kind === 'allocations' ||
+        target.kind === 'existing_entry' ||
+        (target.kind === 'rule' && target.asks.some((a) => a.computed === undefined)));
+    const panel = line.state !== 'open' || mode !== 'details' || editorTarget ? panelFor(line) : null;
+    return (
+      <InlineStrip
+        workspaceId={workspaceId}
+        line={line}
+        draft={draft}
+        lookups={lookups}
+        vorschlag={lineVorschlag(line, lookups.vorschlaege)}
+        presetActive={activePreset(presets, target) !== null}
+        lead={lead}
+        panel={panel}
+        refusal={refusals[line.bankTxnId] ?? null}
+        onRefusalAction={(action) => onRefusalAction(line, action)}
+        canAttach={receipts.canAttach}
+        onAttach={() => pickReceiptFor(line)}
+        onAssignCandidate={line.state === 'open' && assigner.canAssign ? () => void attachCandidate(line) : null}
+        reader={
+          <LineBeleg
+            workspaceId={workspaceId}
+            line={line}
+            canAttach={receipts.canAttach}
+            onAttach={(files) => void attachTo({ bankTxnId: line.bankTxnId, party: partyOf(t, line) }, files)}
+            assigner={assigner}
+            onAssignChanged={() => {
+              ackLine(line.bankTxnId);
+              reload();
+            }}
+            onSaid={(tone, message) => say({ tone, message, quiet: true })}
+          />
+        }
+      />
+    );
+  };
+
   const pickBar =
     pickedLines.length === 0 ? null : (
       <PickBar
         count={pickedLines.length}
         ready={readyPicked.length + approvablePicked.length}
+        skipped={skippedWords()}
         askLearned={asksLearned && workspaceId !== null ? { workspaceId, onAnswered: () => reload() } : null}
         busy={bulkBusy}
         canPost={canPost}
@@ -2061,7 +2233,7 @@ export function Bank() {
 
   const rows =
     visible.length === 0 ? null : (
-      <table className="bank-table" aria-labelledby="bank-list-caption" data-picking={picked.size > 0 ? 'true' : undefined}>
+      <table className="bank-table" aria-labelledby="bank-list-caption" data-picking={picked.size > 0 ? 'true' : undefined} data-layout={inline ? 'inline' : undefined}>
         <caption id="bank-list-caption" className="visually-hidden">
           {t(`bankInbox.caption.${tab}`)}
         </caption>
@@ -2075,10 +2247,14 @@ export function Bank() {
             style={columns.widths.party !== null ? { width: columns.widths.party } : panelOpen ? { width: COMPACT_PARTY_WIDTH } : undefined}
           />
           <col className="bank-col--target" />
-          {!panelOpen && <col className="bank-col--vat" style={{ width: columns.widths.vat }} />}
-          {tab === 'open' && !panelOpen && <col className="bank-col--conf" style={{ width: DEFAULT_COLUMN_WIDTHS.conf }} />}
+          {!panelOpen && (
+            // D195 (v12): in the row editor MWST reads in words ("Vorsteuer 8.1 % (Betrieb)"); the default width grows to hold
+            // them, a width the person dragged stays theirs.
+            <col className="bank-col--vat" style={{ width: inline && columns.widths.vat === DEFAULT_COLUMN_WIDTHS.vat ? INLINE_VAT_WIDTH : columns.widths.vat }} />
+          )}
+          {tab === 'open' && !panelOpen && !inline && <col className="bank-col--conf" style={{ width: DEFAULT_COLUMN_WIDTHS.conf }} />}
           <col className="bank-col--amount" style={{ width: columns.widths.amount }} />
-          {!panelOpen && <col className="bank-col--clip" style={{ width: DEFAULT_COLUMN_WIDTHS.clip }} />}
+          {!panelOpen && !inline && <col className="bank-col--clip" style={{ width: DEFAULT_COLUMN_WIDTHS.clip }} />}
           <col className="bank-col--book" style={{ width: DEFAULT_COLUMN_WIDTHS.book }} />
           <col className="bank-col--ignore" style={{ width: DEFAULT_COLUMN_WIDTHS.ignore }} />
         </colgroup>
@@ -2116,7 +2292,7 @@ export function Bank() {
                 {resizer('vat', t('bankInbox.col.vat'))}
               </th>
             )}
-            {tab === 'open' && !panelOpen && (
+            {tab === 'open' && !panelOpen && !inline && (
               <th scope="col" className="bank-col-head--conf">
                 {t('bankInbox.col.confidence')}
               </th>
@@ -2125,7 +2301,7 @@ export function Bank() {
               {t('bankInbox.col.amount')}
               {resizer('amount', t('bankInbox.col.amount'))}
             </th>
-            {!panelOpen && (
+            {!panelOpen && !inline && (
               <th scope="col" className="bank-col-head--clip">
                 <span className="visually-hidden">{t('bankInbox.receipts.title')}</span>
               </th>
@@ -2143,6 +2319,131 @@ export function Bank() {
             const isSel = line.bankTxnId === selectedId;
             const accountName = accounts.length > 1 && accountFilter === '' ? accounts.find((a) => a.id === line.bankAccountId)?.name : undefined;
             const onDropFiles = receipts.canAttach ? (files: File[]) => void attachTo({ bankTxnId: line.bankTxnId, party: partyOf(t, line) }, files) : null;
+            if (inline && line.state === 'open') {
+              const draft = effectiveDraft(line);
+              const split = splits[line.bankTxnId];
+              const splitState = split === undefined ? null : splitStateOf(line, split);
+              const vorschlag = lineVorschlag(line, lookups.vorschlaege);
+              const target = draft?.target ?? null;
+              const accountsTarget = target?.kind === 'accounts' ? target : null;
+              const canSetRule = accountsTarget !== null && accountsTarget.legs.length > 0 && accountsTarget.legs.every((l) => l.accountId !== '') && (splitState === null || splitState.complete);
+              const recipeShaped = accountsTarget !== null && (accountsTarget.legs.length > 1 || (accountsTarget.viaAccountId ?? '') !== '');
+              const standardId = line.standardId ?? null;
+              const strip = isSel ? stripFor(line, 2) : null;
+              return (
+                <InlineRow
+                  key={line.bankTxnId}
+                  workspaceId={workspaceId}
+                  line={line}
+                  draft={draft}
+                  lookups={lookups}
+                  presets={presets}
+                  selected={isSel}
+                  onToggle={() => toggle(line)}
+                  onDropFiles={onDropFiles}
+                  {...(accountName !== undefined ? { accountName } : {})}
+                  fresh={freshStatement !== null && line.statementId === freshStatement}
+                  justCommitted={ackLineId === line.bankTxnId}
+                  busy={busyLine === line.bankTxnId || bulkBusy}
+                  showCurrency={showCurrency}
+                  vorschlag={vorschlag}
+                  canBook={canBookTarget}
+                  canPost={canPost}
+                  canAttach={receipts.canAttach}
+                  consequence={consequenceFor}
+                  openPicker={openPicker?.lineId === line.bankTxnId ? openPicker.which : null}
+                  onOpenPicker={(which) => setOpenPicker(which === null ? null : { lineId: line.bankTxnId, which })}
+                  onPick={(result) => pickOnRow(line, result)}
+                  onClear={() => {
+                    setOpenPicker(null);
+                    endSplit(line);
+                    setDrafts((d) => ({ ...d, [line.bankTxnId]: { target: null, source: 'edited' } }));
+                  }}
+                  onVat={(code) => setVat(line, code)}
+                  text={texts[line.bankTxnId] ?? defaultBookingText(line)}
+                  onText={(text) => setTexts((x) => ({ ...x, [line.bankTxnId]: text }))}
+                  onBook={() => approveLine(line)}
+                  approveMode={approveMode}
+                  onReview={() => select(line.bankTxnId)}
+                  onIgnore={() => ignore(line, ignoreDefault, '')}
+                  onSaveRule={
+                    standardId !== null
+                      ? () => openRule(standardId)
+                      : canSetRule
+                        ? () => {
+                            if (!recipeShaped) {
+                              void setStandard(line);
+                              return;
+                            }
+                            setSelectedId(line.bankTxnId);
+                            setMode('rule');
+                          }
+                        : null
+                  }
+                  onLink={() => {
+                    setSelectedId(line.bankTxnId);
+                    setMode('link');
+                  }}
+                  onAttach={() => pickReceiptFor(line)}
+                  onAgent={() => askAgent(line)}
+                  bookRef={(el) => {
+                    bookRefs.current.set(line.bankTxnId, el);
+                  }}
+                  picked={picked.has(line.bankTxnId)}
+                  onTogglePick={() => togglePick(line.bankTxnId)}
+                  split={splitState}
+                  after={
+                    <>
+                      {split !== undefined && splitState !== null && (
+                        <SplitRows
+                          line={line}
+                          split={split}
+                          state={splitState}
+                          lookups={lookups}
+                          busy={busyLine === line.bankTxnId || bulkBusy}
+                          withPick
+                          inline
+                          openPicker={splitPicker}
+                          onOpenPicker={setSplitPicker}
+                          onChange={(next) => setSplits((x) => ({ ...x, [line.bankTxnId]: next }))}
+                          onCancel={() => endSplit(line)}
+                        />
+                      )}
+                      {strip}
+                    </>
+                  }
+                />
+              );
+            }
+            if (inline) {
+              return (
+                <DecidedRow
+                  key={line.bankTxnId}
+                  line={line}
+                  selected={isSel}
+                  justCommitted={ackLineId === line.bankTxnId}
+                  onToggle={() => toggle(line)}
+                  onDropFiles={onDropFiles}
+                  {...(accountName !== undefined ? { accountName } : {})}
+                  showCurrency={showCurrency}
+                  summary={rowSummary(line)}
+                  undoLabel={line.state === 'ignored' ? t('bankInbox.decided.unignore') : line.state === 'matched' ? t('bankInbox.decided.unmatch') : t('bankInbox.decided.reopen')}
+                  canUndo={canPost && busyLine !== line.bankTxnId}
+                  canAttach={receipts.canAttach}
+                  onUndo={() => {
+                    setSelectedId(line.bankTxnId);
+                    setMode('reopen');
+                  }}
+                  onAttach={() => pickReceiptFor(line)}
+                  onAttachBeleg={() => void attachCandidate(line)}
+                  onOpenReceipts={() => openReceipts(line)}
+                  inline
+                  followUp={lineFollowUp(line)}
+                  followUpHref={(standardId) => `/journal?${new URLSearchParams({ vorlage: standardId, ...(lineDate(line) !== null ? { date: lineDate(line) as string } : {}) }).toString()}`}
+                  after={isSel ? stripFor(line, 1) : undefined}
+                />
+              );
+            }
             if (line.state === 'open') {
               const draft = effectiveDraft(line);
               const split = splits[line.bankTxnId];
@@ -2185,41 +2486,7 @@ export function Bank() {
                   consequence={consequenceFor}
                   openPicker={openPicker?.lineId === line.bankTxnId ? openPicker.which : null}
                   onOpenPicker={(which) => setOpenPicker(which === null ? null : { lineId: line.bankTxnId, which })}
-                  onPick={(result) => {
-                    if (result.kind === 'mode') {
-                      // D177 point 6: Aufteilen opens the position rows under the row; the other two
-                      // decisions open their editor in the Details panel.
-                      if (result.mode === 'split') {
-                        beginSplit(line);
-                        return;
-                      }
-                      setSelectedId(line.bankTxnId);
-                      setMode(result.mode);
-                      return;
-                    }
-                    if (result.kind === 'other') {
-                      bookOtherwise(line);
-                      return;
-                    }
-                    if (result.kind !== 'target') return;
-                    endSplit(line);
-                    setDrafts((d) => ({ ...d, [line.bankTxnId]: { target: result.target, source: result.source } }));
-                    if (result.target.kind === 'rule') {
-                      // A picked rule that asks for an amount opens the Details, its first field focused.
-                      const lineId = line.bankTxnId;
-                      if (result.target.asks.some((a) => a.computed === undefined)) {
-                        select(lineId);
-                        window.setTimeout(() => document.querySelector<HTMLInputElement>('[data-panel-for] .bank-ask__input')?.focus(), 0);
-                      } else focusBookFor.current = lineId;
-                      return;
-                    }
-                    // A control-account leg is said BEFORE the commit (critic A39-11): the Details open.
-                    if (result.target.kind === 'accounts' && controlAccountsIn(lookups, result.target.legs).length > 0) select(line.bankTxnId);
-                    const leg = result.target.kind === 'accounts' && result.target.legs.length === 1 ? result.target.legs[0] : undefined;
-                    const vatShows = leg !== undefined && vatPickerShows(lookups, leg);
-                    if (result.chainVat && vatShows) setOpenPicker({ lineId: line.bankTxnId, which: 'vat' });
-                    else focusBookFor.current = line.bankTxnId;
-                  }}
+                  onPick={(result) => pickOnRow(line, result)}
                   onClear={() => {
                     // × (D167): back to "Worauf buchen?", the person's own act.
                     setOpenPicker(null);
@@ -2251,7 +2518,7 @@ export function Bank() {
                   bookRef={(el) => {
                     bookRefs.current.set(line.bankTxnId, el);
                   }}
-                  showPick={sureIds.has(line.bankTxnId) || picked.size > 0}
+                  showPick
                   picked={picked.has(line.bankTxnId)}
                   onTogglePick={() => togglePick(line.bankTxnId)}
                   split={splitState}
@@ -2603,7 +2870,7 @@ export function Bank() {
       <div
         className="bank-workspace"
         ref={workspaceRef}
-        data-panel={areaOpen ? 'beside' : wide ? 'none' : 'drawer'}
+        data-panel={inline ? 'inline' : areaOpen ? 'beside' : wide ? 'none' : 'drawer'}
         data-dock={areaOpen ? layout.edge : undefined}
         data-list={listHidden ? 'hidden' : undefined}
         style={areaOpen ? ({ '--bank-area-size': `${layout.size}px` } as CSSProperties) : undefined}
@@ -2630,6 +2897,7 @@ export function Bank() {
               titleId={factsTitleId}
               facts={factsFor(selectedLine)}
               onDock={layout.dock}
+              bottomBlocked={layout.bottomBlocked}
               onClose={closeArea}
               onHeaderPointerDown={dockDrag.onHeaderPointerDown}
               dragging={dockDrag.dragging}
@@ -2641,7 +2909,7 @@ export function Bank() {
         {/* The drop preview of a header drag: the half of the workspace the area would dock in. */}
         {dockDrag.dragging && dockDrag.target !== null && <div className="bank-dock-preview" data-edge={dockDrag.target} aria-hidden="true" />}
       </div>
-      {!wide && selectedLine !== undefined && (
+      {!inline && !wide && selectedLine !== undefined && (
         <DetailDrawer open onClose={() => select(null)} title={partyOf(t, selectedLine)} closeLabel={t('bankInbox.panel.closeDetails')}>
           <DrawerArea facts={factsFor(selectedLine)} close={() => select(null)}>
             {panelFor(selectedLine)}
@@ -2700,6 +2968,24 @@ export function Bank() {
     </section>
     </TooltipPortalContext.Provider>
   );
+}
+
+/** D195 (v12): the settlement templates as turnover presets; a refused or unknown read is "none". */
+function parsePresets(t: (k: string, p?: Record<string, string | number>) => string, body: unknown): TurnoverPreset[] {
+  const list = typeof body === 'object' && body !== null ? (body as Record<string, unknown>).templates : undefined;
+  const out: TurnoverPreset[] = [];
+  for (const raw of Array.isArray(list) ? (list as unknown[]) : []) {
+    const r = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : null;
+    const tpl = r !== null && typeof r.template === 'object' && r.template !== null ? (r.template as Record<string, unknown>) : null;
+    if (r === null || tpl === null || typeof tpl.clearingAccountId !== 'string' || typeof r.system !== 'string') continue;
+    // The engine keeps a source's names folded to lower case; a person reads them capitalised ("Stripe").
+    const cap = (s: string) => (s === '' ? s : s.charAt(0).toUpperCase() + s.slice(1));
+    const system = cap(r.system);
+    const processor = typeof r.processor === 'string' ? cap(r.processor) : '';
+    const name = processor !== '' && processor.toLowerCase() !== system.toLowerCase() ? t('bankInbox.inline.presetNameVia', { system, processor }) : t('bankInbox.inline.presetName', { system });
+    out.push({ templateId: typeof r.templateId === 'string' ? r.templateId : `${system}:${processor}`, name, clearingAccountId: tpl.clearingAccountId });
+  }
+  return out;
 }
 
 /** The warnings a write or an import answers with (`control_account_leg`, `batch_payments_kept`, ...), in words. */

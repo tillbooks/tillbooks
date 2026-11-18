@@ -23,6 +23,7 @@ import {
   capCtx,
   secondWorkspace,
 } from './support.mjs';
+import { assertAuditRow, assertPermission } from '../support/d204.mjs';
 
 const AMOUNT = 4000;
 
@@ -151,12 +152,10 @@ test('D168: a locked period refuses period_locked before any write', () => {
   assert.equal(claimRow(t.store, t.workspaceId, claimId).status, 'approved');
 });
 
-test('D168: reason is required, the review and posting rights are required, and another tenant sees not_found', () => {
+test('D168: the review and posting rights are required, and another tenant sees not_found', () => {
   const t = setup();
   const { claimId } = approvedClaim(t, 'gate');
   const before = counts(t.store, t.workspaceId);
-  const noReason = reverseClaim(t.ctx, { claimId, reason: '  ', idempotencyKey: 'gate-1' });
-  assert.equal(noReason.error, 'reason_required');
   const noRight = reverseClaim(capCtx(t, 'viewer', ['post']), { claimId, reason: 'x', idempotencyKey: 'gate-2' });
   assert.equal(noRight.ok, false);
   assert.equal(noRight.error, 'permission_denied');
@@ -168,6 +167,29 @@ test('D168: reason is required, the review and posting rights are required, and 
   assert.equal(foreign.error, 'not_found');
   assert.deepEqual(counts(t.store, t.workspaceId), before);
   assert.equal(claimRow(t.store, t.workspaceId, claimId).status, 'approved');
+});
+
+test('D204 hr: a claim reverses with no reason; the mirror is a new entry, the trail keeps who, when, what and the permission, and a replay writes nothing', () => {
+  const t = setup();
+  const { claimId, entryId } = approvedClaim(t, 'd204');
+  const original = entryLines(t, entryId);
+  const before = counts(t.store, t.workspaceId);
+  const res = reverseClaim(t.ctx, { claimId, reason: '   ', idempotencyKey: 'd204-rev' });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(res.reason, null, 'a blank reason is absent, not a refusal');
+  const claim = claimRow(t.store, t.workspaceId, claimId);
+  assert.equal(claim.status, 'reversed', 'what changed: approved -> reversed');
+  assert.deepEqual(entryLines(t, entryId), original, 'append-only: the original entry is untouched');
+  const mirror = t.store.db.prepare('SELECT reverses_entry_id, description FROM journal_entry WHERE id = ?').get(res.reversalEntryId);
+  assert.equal(mirror.reverses_entry_id, entryId);
+  assert.equal(mirror.description, 'Storno Spesen Reise Zürich', 'no dangling colon without a reason');
+  assertAuditRow(t.store, t.workspaceId, { entityKind: 'expense_claim', entityId: claimId, action: 'reverse', actor: t.ctx.actor });
+  assertPermission('expense_claim_reverse');
+  const after = counts(t.store, t.workspaceId);
+  assert.equal(after.entries, before.entries + 1, 'exactly one mirror');
+  const replay = reverseClaim(t.ctx, { claimId, idempotencyKey: 'd204-rev' });
+  assert.equal(replay.reversalEntryId, res.reversalEntryId, 'idempotent: the same key replays');
+  assert.deepEqual(counts(t.store, t.workspaceId), after, 'a replay writes nothing');
 });
 
 test('D168 ownership: raw reverse_entry on an approved claim entry refuses owned_by expense_claim_reverse, and so does its mirror', () => {

@@ -294,6 +294,8 @@ test('refusals: a fill without a balance column, a fill on a camt file, a malfor
   const t = book();
   const noBalance = { ...MAPPING, columns: { ...MAPPING.columns } };
   delete noBalance.columns.balance;
+  // A20 §13.3: the file-level refusal is `running_balance_only`'s (under `auto` the neighbour sum decides).
+  must(settingsSet(t.ctx, { key: 'bank.csv_fill_proof', value: 'running_balance_only', idempotencyKey: 'rbo', reason: 'test' }));
   refused(fillIt(t, {}, { mapping: noBalance }), 'csv_fill_needs_balance');
   refused(importBankStatement(t.ctx, { bankAccountId: t.bankAccountId, content: camtDay({ id: 'X', seq: '99', date: '2026-05-01', open: 0, entries: [] }), fill: {}, idempotencyKey: key() }), 'invalid_input');
   for (const fill of [{ from: '2026-03-01' }, { from: '2026-03-31', to: '2026-03-01' }, { from: '2026-02-30', to: '2026-03-01' }, { from: '2026-03-01', to: '2026-03-02', extra: 1 }]) {

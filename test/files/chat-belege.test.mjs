@@ -9,6 +9,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertWhoWhen } from '../support/d204.mjs';
 import { execFileSync } from 'node:child_process';
 import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -24,6 +25,7 @@ import { readConfinedFile, sniffType } from '../../dist/core/files/index.js';
 import { fixedClock } from '../../dist/core/clock.js';
 import { freshDeps, mintWorkspace } from '../api/support.mjs';
 import { SCENARIOS, fixture } from '../api/conformance-contract.mjs';
+import { assertNotApplied } from '../settings/support.mjs';
 
 // --- synthetic bytes -------------------------------------------------------------------------------
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('synthetic receipt, Muster Papeterie')]);
@@ -234,13 +236,9 @@ test('a known receipt (R1): an unlinked twin is linked; a second booking needs a
     assert.equal(refused.error, 'receipt_already_booked', JSON.stringify(refused));
     assert.deepEqual(refused.holders.map((x) => [x.entityKind, x.entityId]), [['journal_entry', one.entryId]]);
     assert.equal(entryCount(deps, workspaceId), n, 'the refused booking posted nothing');
-    // A confirmation needs its reason.
-    const noReason = human(deps, 'post_entry', postInput(workspaceId, accId, 'k2', { bookAgain: true, attach: [{ sourcePath: '~/.claude/uploads/s1/b.jpg' }] }));
-    assert.equal(noReason.error, 'reason_required');
-    // Confirmed with a reason: booked, never moved off the first entry, the bytes stored once, the reason recorded.
-    const two = human(deps, 'post_entry', postInput(workspaceId, accId, 'k2', {
-      bookAgain: true, overrideReason: 'Teilzahlung, derselbe Beleg', attach: [{ sourcePath: '~/.claude/uploads/s1/b.jpg' }],
-    }));
+    // D204: the confirmation needs no reason: booked, never moved off the first entry, the bytes stored once,
+    // the override recorded with who and when.
+    const two = human(deps, 'post_entry', postInput(workspaceId, accId, 'k2', { bookAgain: true, attach: [{ sourcePath: '~/.claude/uploads/s1/b.jpg' }] }));
     assert.equal(two.ok, true, JSON.stringify(two));
     assert.equal(two.attached[0].duplicateOf, loose.file.id);
     assert.equal(filesOn(deps, workspaceId, 'journal_entry', one.entryId).length, 1, 'the first entry keeps its Beleg');
@@ -249,7 +247,8 @@ test('a known receipt (R1): an unlinked twin is linked; a second booking needs a
     assert.equal(blobs, 1, 'the bytes are stored once');
     const override = deps.store.db.prepare('SELECT * FROM receipt_override WHERE workspace_id = ?').all(workspaceId);
     assert.equal(override.length, 1);
-    assert.equal(override[0].reason, 'Teilzahlung, derselbe Beleg');
+    assert.equal(override[0].reason, '', 'D204: no reason, the override row still names who and when');
+    assertWhoWhen(override[0].actor, override[0].at);
     assert.equal(override[0].target_kind, 'journal_entry');
     assert.equal(JSON.parse(override[0].holders_json)[0].entityId, one.entryId);
     // An explicit fileId of a booked receipt is judged the same way.
@@ -399,15 +398,16 @@ test('the dial: post at auto still drafts a post_entry WITH attach (close-period
 
 // --- humanOnly ------------------------------------------------------------------------------------
 
-test('humanOnly: an agent can neither change nor propose files.source_roots or files.belegeingang_folder', () => {
+test('humanOnly: an agent never changes files.source_roots or files.belegeingang_folder; it only proposes them (D202)', () => {
   const deps = freshDeps();
   const { workspaceId } = mintWorkspace(deps);
   for (const key of ['files.source_roots', 'files.belegeingang_folder']) {
     const asAgent = agentMcp(deps, 'settings_set', { workspaceId, key, value: '~/', reason: 'alles lesen', idempotencyKey: `ho-${key}` });
-    assert.equal(asAgent.error, 'human_only', JSON.stringify(asAgent));
-    assert.equal(agentMcp(deps, 'settings_reset', { workspaceId, key, reason: 'zurück', idempotencyKey: `hr-${key}` }).error, 'human_only');
+    // D202 point 5 (reverses D183 for proposals): a person-only Vorschlag, never applied.
+    assertNotApplied(asAgent, key);
+    assertNotApplied(agentMcp(deps, 'settings_reset', { workspaceId, key, reason: 'zurück', idempotencyKey: `hr-${key}` }), key);
   }
-  assert.equal(deps.store.db.prepare('SELECT COUNT(*) AS n FROM agent_action').get().n, 0, 'not even a Vorschlag');
+  assert.equal(deps.store.db.prepare("SELECT COUNT(*) AS n FROM workspace_setting WHERE workspace_id = ? AND key LIKE 'files.%'").get(workspaceId).n, 0, 'nothing applied');
   // A direct registry call as the agent seat (the auto dial path) is refused by the engine too.
   const direct = getAction('settings_set').run({ ...deps, actor: 'agent' }, { workspaceId, key: 'files.source_roots', value: '~/', reason: 'r', idempotencyKey: 'ho-direct' });
   assert.equal(direct.error, 'human_only');
@@ -822,13 +822,13 @@ test('critic F1: keep leaves the capture waiting; capture_commit refuses a docum
     assert.equal(twice.error, 'receipt_already_booked', JSON.stringify(twice));
     assert.deepEqual(twice.holders.map((x) => x.entityId), [posted.entryId]);
     assert.equal(deps.store.db.prepare("SELECT status FROM captures WHERE id = ?").get(cap.captureId).status, 'needs_review', 'the refused commit rolled back');
-    // The audited per-call override books it anyway, with a reason, and never takes the entry's row.
-    assert.equal(human(deps, 'capture_commit', { ...commitInput, bookAgain: true }).error, 'reason_required');
-    const committed = human(deps, 'capture_commit', { ...commitInput, bookAgain: true, overrideReason: 'Zweite Lieferung, gleicher Beleg' });
+    // The audited per-call override books it anyway (D204: no reason needed), and never takes the entry's row.
+    const committed = human(deps, 'capture_commit', { ...commitInput, bookAgain: true });
     assert.equal(committed.ok, true, JSON.stringify(committed));
     assert.equal(filesOn(deps, workspaceId, 'journal_entry', posted.entryId).length, 1, 'the entry keeps its Beleg');
-    const override = deps.store.db.prepare('SELECT reason, target_kind, target_id, holders_json FROM receipt_override WHERE workspace_id = ?').get(workspaceId);
-    assert.equal(override.reason, 'Zweite Lieferung, gleicher Beleg');
+    const override = deps.store.db.prepare('SELECT reason, actor, at, target_kind, target_id, holders_json FROM receipt_override WHERE workspace_id = ?').get(workspaceId);
+    assert.equal(override.reason, '', 'D204: no reason given, the audit shape stays valid');
+    assertWhoWhen(override.actor, override.at);
     assert.deepEqual([override.target_kind, override.target_id], ['vendor_bill', committed.targetId]);
     assert.equal(JSON.parse(override.holders_json)[0].entityId, posted.entryId);
 
@@ -998,9 +998,8 @@ test('R1: two drafts of one receipt queue in order; the first approval books, th
     assert.equal(changed.error, 'holders_changed', JSON.stringify(changed));
     const again = human(deps, 'list_drafted_actions', { workspaceId }).actions.find((a) => a.id === d2.actionId || a.actionId === d2.actionId);
     assert.deepEqual(again.receiptHolders.map((x) => [x.entityKind, x.entityId]), [['journal_entry', entry1]]);
-    // Shown now, it needs the person's confirmation with a reason.
+    // Shown now, it needs the person's confirmation (D204: a reason optional, kept when given).
     assert.equal(human(deps, 'approve_drafted_action', { workspaceId, actionId: d2.actionId }).error, 'receipt_already_booked');
-    assert.equal(human(deps, 'approve_drafted_action', { workspaceId, actionId: d2.actionId, bookAgain: true }).error, 'reason_required');
     const second = human(deps, 'approve_drafted_action', { workspaceId, actionId: d2.actionId, bookAgain: true, overrideReason: 'Zwei Positionen auf einem Beleg' });
     assert.equal(second.ok, true, JSON.stringify(second));
     const override = deps.store.db.prepare('SELECT action_id, reason FROM receipt_override WHERE workspace_id = ?').get(workspaceId);

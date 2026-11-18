@@ -290,7 +290,7 @@ test('J03 F4: the inventory.setup gate on the three writes actually bites', () =
   assert.equal(must(inventoryValuationMethods(denied), 'methods').defaultMethod, 'weighted_average');
 });
 
-test('J03: an override over movements it would restate is blocked without force AND a reason', () => {
+test('D204 J03: an override over movements it would restate is blocked without force; force alone suffices and keeps who and when', async () => {
   const { ctx } = freshCtx();
   const itemId = stockItem(ctx);
   const loc = locationOf(ctx);
@@ -302,19 +302,17 @@ test('J03: an override over movements it would restate is blocked without force 
   assert.equal(blocked.affectedMovements, 1);
   assert.equal(assignmentCount(ctx), 0);
 
-  // Force alone is not enough: an unexplained restatement is the thing the history exists to prevent.
-  const noReason = inventoryValuationSetItemMethod(ctx, { itemId, method: 'fifo', effectiveFrom: '2026-05-01', forceRevaluation: true, idempotencyKey: 'sg-2' });
-  assert.equal(noReason.error, 'method_change_blocked_open_period');
-  const blankReason = inventoryValuationSetItemMethod(ctx, { itemId, method: 'fifo', effectiveFrom: '2026-05-01', forceRevaluation: true, reason: '   ', idempotencyKey: 'sg-3' });
-  assert.equal(blankReason.error, 'method_change_blocked_open_period', 'whitespace is not a reason');
-  assert.equal(assignmentCount(ctx), 0);
-
+  // D204: force is the explicit act; a reason is optional. A blank one is stored as null.
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
   const forced = must(
-    inventoryValuationSetItemMethod(ctx, { itemId, method: 'fifo', effectiveFrom: '2026-05-01', forceRevaluation: true, reason: 'Umstellung nach Prüfung', idempotencyKey: 'sg-4' }),
-    'forced',
+    inventoryValuationSetItemMethod(ctx, { itemId, method: 'fifo', effectiveFrom: '2026-05-01', forceRevaluation: true, reason: '   ', idempotencyKey: 'sg-2' }),
+    'forced without a reason',
   );
   assert.equal(forced.assignment.forceRevaluation, true);
-  assert.equal(forced.assignment.reason, 'Umstellung nach Prüfung');
+  assert.equal(forced.assignment.reason, null);
+  assertWhoWhen(forced.assignment.createdBy, forced.assignment.createdAt);
+  assertPermission('inventory_valuation_set_item_method');
+  assert.equal(assignmentCount(ctx), 1);
 });
 
 test('J03 Q3: the workspace default carries the SAME guard as an item override', () => {
@@ -334,18 +332,7 @@ test('J03 Q3: the workspace default carries the SAME guard as an item override',
   assert.equal(blocked.affectedMovements, 1);
   assert.equal(assignmentCount(ctx), 0, 'a refused default change writes nothing');
 
-  // Force alone is not enough, and neither is whitespace: an unexplained restatement is exactly what
-  // the history exists to prevent.
-  assert.equal(
-    inventoryValuationSetDefault(ctx, { method: 'fifo', effectiveFrom: '2026-05-01', forceRevaluation: true, idempotencyKey: 'wg-2' }).error,
-    'method_change_blocked_open_period',
-  );
-  assert.equal(
-    inventoryValuationSetDefault(ctx, { method: 'fifo', effectiveFrom: '2026-05-01', forceRevaluation: true, reason: '   ', idempotencyKey: 'wg-3' }).error,
-    'method_change_blocked_open_period',
-    'whitespace is not a reason',
-  );
-  assert.equal(assignmentCount(ctx), 0);
+  // D204: force alone is enough (who and when on the row); a given reason is what the history shows.
 
   const forced = must(
     inventoryValuationSetDefault(ctx, {
@@ -359,7 +346,7 @@ test('J03 Q3: the workspace default carries the SAME guard as an item override',
   );
   assert.equal(forced.assignment.forceRevaluation, true);
   assert.equal(forced.assignment.reason, 'Umstellung nach Prüfung des Abschlusses');
-  // And the reason is what the Stetigkeit history shows, which is the whole point of demanding it.
+  // And a given reason is what the Stetigkeit history shows.
   assert.equal(must(inventoryValuationMethodHistory(ctx, { scope: 'workspace' }), 'history').assignments[0].reason, 'Umstellung nach Prüfung des Abschlusses');
 });
 

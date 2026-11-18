@@ -1,6 +1,6 @@
 /**
  * G15 F-01: the row carries its decision, in D178's one row pattern (one button, the rest in the ⋯, the
- * reason and the consequence behind the (i)). Rendered through the whole hub from a canned grouped
+ * reason and the consequence open in place from the row's chevron, D201). Rendered through the whole hub from a canned grouped
  * `attention_list`, so every assertion is about what the person sees and what the hub SENDS:
  *
  *  - a credit with no candidate offers "Keine Kundenzahlung" and the Abgleich link, never an apply
@@ -10,7 +10,7 @@
  *    under the engine's per-item key; the hub re-reads and stays on its route;
  *  - a double click while the verb runs fires ONE call (the in-flight guard);
  *  - the agent row shows the verb's human label (never `override_qr_match`), approve-and-allow sends
- *    the D103 grant, reject confirms in place with a reason; the drafting actor sees no approve;
+ *    the D103 grant, reject is one click with no reason (D204); the drafting actor sees no approve;
  *  - an option whose clearing capability the actor lacks is hidden, the link stays;
  *  - a refusal renders the localized sentence and keeps the row;
  *  - the review flag row names who flagged it and why, opens the entry, resolves via approve_entry;
@@ -216,29 +216,37 @@ beforeEach(() => {
   window.localStorage.clear();
 });
 
+/** D201: open every row's detail in place (the chevron at the row's end), where the reasons now live. */
+function openDetails() {
+  for (const b of [...document.querySelectorAll<HTMLButtonElement>('.att-disclose[aria-expanded="false"], .vorschlag-line-disclose[aria-expanded="false"]')]) fireEvent.click(b);
+}
+
 describe('the credit row', () => {
   it('renders the reason sentence and the two exits, states NO posting on a dismiss-only row, and offers no apply the engine did not propose', async () => {
     renderHub({ attention_list: ok(summaryOf([creditItem('c1')])) });
     expect(await screen.findByText('Zahlung ohne Zuordnung')).toBeInTheDocument();
+    // The reason is words on demand: not on the face, in place behind the chevron.
+    expect(screen.queryByText(/Keine offene Rechnung zu dieser Referenz/)).toBeNull();
+    openDetails();
     expect(screen.getByText(/Keine offene Rechnung zu dieser Referenz/)).toBeInTheDocument();
     // "Keine Kundenzahlung" books nothing: the pay sentence would describe a write this row cannot make.
     expect(screen.queryByText('Bucht eine Zahlung und gleicht offene Posten aus.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Keine Kundenzahlung' })).toBeInTheDocument();
     // D178: ONE button per row; the link into the owning surface sits in the ⋯.
     expect(screen.queryByRole('button', { name: 'Im Abgleich öffnen' })).not.toBeInTheDocument();
-    // The reason is words on demand: in the (i), not on the face.
     expect(document.querySelector('.att-row-meta')?.textContent ?? '').not.toMatch(/Keine offene Rechnung/);
     expect(screen.queryByRole('button', { name: /^Übernehmen$/ })).not.toBeInTheDocument();
   });
 
-  it('D167 polish 11: an item whose only exit is a link carries it INSIDE its row, with the same quiet ⋯, no detached strip', async () => {
+  it('D167 polish 11: an item whose only exit is a link carries it INSIDE its row, no detached strip; D207: no ⋯ without another exit', async () => {
     const open = { id: 'open', verb: null, labelKey: 'attention.act.openReconciliation', role: 'link', input: {}, deepLink: { route: '/reconciliation', params: { creditId: 'c9' } } };
     renderHub({ attention_list: ok(summaryOf([creditItem('c9', { decisionOptions: [open], reasonKey: null })])) });
     const link = await screen.findByRole('button', { name: 'Im Abgleich öffnen' });
     expect(link.closest('.att-row-line')).not.toBeNull();
     expect(document.querySelector('.att-decide')).toBeNull();
-    const more = link.closest('.att-row-line')?.querySelector('.att-row-more button') as HTMLElement;
-    expect(more.className).toMatch(/quiet|ghost/);
+    // The ⋯ slot keeps its column (the rows stay aligned) but draws no menu with nothing in it.
+    expect(link.closest('.att-row-line')?.querySelector('.att-row-more')).not.toBeNull();
+    expect(link.closest('.att-row-line')?.querySelector('.att-row-more button')).toBeNull();
   });
 
   it('K-40: the decision button is the same secondary on the focused row and on every other row', async () => {
@@ -279,18 +287,18 @@ describe('the credit row', () => {
     expect(item.textContent ?? '').toMatch(/CHF\s?690\.00/);
     // Closed: the two payments are not on the page yet; the lone one of the other Bankkonto is its own row.
     expect(screen.getAllByRole('button', { name: 'Keine Kundenzahlung' })).toHaveLength(1);
-    // N4 M5: the button names the job, and the group has the (i) and the ⋯ every row has.
+    // N4 M5: the button names the job, and the group has the (i); D207: no hub triage ⋯.
     const open = within(item).getByRole('button', { name: 'Zahlungen zuordnen' });
     expect(open).toHaveAttribute('aria-expanded', 'false');
     expect(within(item).getByRole('button', { name: 'Info' })).toBeInTheDocument();
-    expect(within(item).getByRole('button', { name: /Aktionen für 2 Zahlungen ohne Zuordnung/ })).toBeInTheDocument();
-    // Its total is one signed figure, its sign (if any) in the danger ink only; no glyph in the lead column.
-    expect(item.querySelector('.att-lead')?.childElementCount).toBe(0);
+    expect(within(item).queryByRole('button', { name: /Aktionen für 2 Zahlungen ohne Zuordnung/ })).toBeNull();
+    // Its total is one signed figure, its sign (if any) in the danger ink only; D208: no lead glyph.
+    expect(item.querySelector('.att-lead .att-kind')).toBeNull();
     fireEvent.click(open);
     expect(within(item).getByRole('button', { name: 'Ausblenden' })).toHaveAttribute('aria-expanded', 'true');
     expect(within(item).getAllByRole('button', { name: 'Keine Kundenzahlung' })).toHaveLength(2);
-    // The section still adds up: the group row stands for its members, the members are not counted twice.
-    const units = [...container.querySelectorAll('[data-section="bank"] [data-row-count]')]
+    // The list still adds up: the group row stands for its members, the members are not counted twice.
+    const units = [...container.querySelectorAll('.att-list [data-row-count]')]
       .filter((r) => r.closest('[data-member]') === null)
       .reduce((n, r) => n + Number(r.getAttribute('data-row-count')), 0);
     expect(units).toBe(3);
@@ -301,10 +309,12 @@ describe('the credit row', () => {
     const item = creditItem('c2', { suggestedInvoiceId: 'doc_9', suggestedInvoiceNumber: 'R-2026-0009', reasonCode: 'exact_open', reasonKey: 'qrmatch.reason.exact_open', consequenceKey: 'agent.consequence.pay', consequence: 'Books a payment and settles open items.' });
     item.decisionOptions = [apply, ...(item.decisionOptions as Record<string, unknown>[]).map((o) => ({ ...o, role: o.id === 'dismiss' ? 'secondary' : o.role }))];
     const { calls } = renderHub({ attention_list: shrinkingSummary([item]), apply_qr_match: ok({ paymentId: 'p1' }) });
+    await screen.findByText('Zahlung ohne Zuordnung');
+    openDetails();
     expect(await screen.findByText(/Vorschlag: R-2026-0009/)).toBeInTheDocument();
     expect(screen.getByText(/Referenz und Betrag stimmen genau/)).toBeInTheDocument();
     // With an apply on the row, the apply's own engine sentence is due and renders (D118 C4, D156).
-    expect(screen.getByText(consequenceSentence('apply_qr_match', 'de-CH') as string)).toBeInTheDocument();
+    expect(document.querySelector('.att-row-detail')?.textContent).toContain(consequenceSentence('apply_qr_match', 'de-CH') as string);
     fireEvent.click(screen.getByRole('button', { name: 'Übernehmen' }));
     await screen.findByText('Zahlung übernommen und gebucht.');
     const sent = calls.find((c) => c.action === 'apply_qr_match');
@@ -322,7 +332,7 @@ describe('the credit row', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]?.input).toEqual({ workspaceId: 'ws_test', creditId: 'c1', action: 'dismiss', idempotencyKey: 'attention:dismiss:ws_test:c1:new', confirmed: true });
     // The list re-read and is empty: the celebratory state, on the same route.
-    expect(await screen.findByText('Nichts wartet auf dich.')).toBeInTheDocument();
+    expect(await screen.findByText('Nichts offen.')).toBeInTheDocument();
     expect(screen.getByTestId('where')).toHaveTextContent('/attention');
     expect(calls.filter((c) => c.action === 'attention_list').length).toBeGreaterThanOrEqual(2);
   });
@@ -374,74 +384,99 @@ describe('the credit row', () => {
 
 describe('the agent proposal row (D167: the Vorschlag line, decided here)', () => {
   const TITLE = 'Zuordnung der QR-Zahlung korrigieren';
-  const MORE = `Mehr zu: ${TITLE}`;
 
-  it('one line: the drafted verb in words (never the raw id), the agent named, Genehmigen as a secondary, the rest in the ⋯', async () => {
+  it('one line: the drafted verb in words (never the raw id), the agent named, Freigeben and Ablehnen as quiet icons, the chevron named Details, no ⋯ (D207)', async () => {
     renderHub({ attention_list: ok(summaryOf([draftItem('a1')])) });
     // N4 M4: the title is words; the line's one button is the way in.
     expect(await screen.findByText(TITLE)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: TITLE })).not.toBeInTheDocument();
-    expect(screen.getByText('Vorschlag des Agenten')).toBeInTheDocument();
     expect(screen.queryByText('override_qr_match')).not.toBeInTheDocument();
-    const approve = screen.getByRole('button', { name: 'Genehmigen' });
-    expect(approve.className).toContain('btn--secondary');
-    // Nothing else decides on the face: the grant and the reject sit in the one overflow.
-    expect(screen.queryByRole('button', { name: 'Genehmigen und künftig automatisch' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Ablehnen' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: MORE }));
-    const items = (await screen.findAllByRole('menuitem')).map((i) => i.textContent);
-    expect(items).toEqual(['Details', 'Genehmigen und künftig automatisch', 'Aufgabe erstellen', 'Referenz kopieren', 'Ablehnen']);
+    // D197 point 2: the two decisions are icons on the row, a list spends no accent.
+    const approve = screen.getByRole('button', { name: 'Freigeben' });
+    expect(approve).toHaveAttribute('data-icon', 'approve');
+    expect(approve.className).not.toMatch(/btn--(primary|accent)/);
+    expect(screen.getByRole('button', { name: 'Ablehnen' })).toHaveAttribute('data-icon', 'reject');
+    // D207: the third icon is a bank booking's only; no overflow menu at all.
+    expect(screen.queryByRole('button', { name: 'Freigeben und als Regel speichern' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Mehr zu/ })).toBeNull();
+    // D208: the row itself opens its one line; no chevron.
+    const row = screen.getByRole('button', { name: new RegExp(`^${TITLE}`) });
+    expect(row).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: /^Details: / })).toBeNull();
   });
 
-  it('the consequence sits behind the (i) as a real tooltip, and Genehmigen is described by the same words', async () => {
+  it('D207/D208: Freigeben\'s hover is one word; no consequence paragraph on the face or in the open line', async () => {
     renderHub({ attention_list: ok(summaryOf([draftItem('a1')])) });
-    const approve = await screen.findByRole('button', { name: 'Genehmigen' });
-    const info = screen.getByRole('button', { name: 'Was das bewirkt' });
-    const tip = document.getElementById(info.getAttribute('aria-describedby') ?? '');
-    expect(tip?.getAttribute('role')).toBe('tooltip');
-    const sentence = tip?.textContent ?? '';
-    expect(sentence.length).toBeGreaterThan(0);
-    expect(document.getElementById(approve.getAttribute('aria-describedby') ?? '')?.textContent).toBe(sentence);
-    // Not a paragraph on the face: the only visible copy is the tooltip bubble.
+    const approve = await screen.findByRole('button', { name: 'Freigeben' });
+    expect(approve.closest('.tooltip-wrap')?.querySelector('[role="tooltip"]')?.textContent).toBe('Freigeben');
     expect(document.querySelector('.att-decide-consequence')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${TITLE}`) }));
+    const sentence = consequenceSentence('override_qr_match', 'de-CH', 'pay') ?? '';
+    expect(sentence.length).toBeGreaterThan(20);
+    await waitFor(() => expect(document.querySelector('.pl-open')).not.toBeNull());
+    expect(document.querySelector('.pl-open')?.textContent ?? '').not.toContain('Bewirkt');
   });
 
-  it('Genehmigen sends the declared approve exactly as declared', async () => {
+  it('Freigeben sends the declared approve exactly as declared', async () => {
     const { calls } = renderHub({ attention_list: shrinkingSummary([draftItem('a1')]), approve_drafted_action: ok({}) });
-    fireEvent.click(await screen.findByRole('button', { name: 'Genehmigen' }));
-    expect(await screen.findByText('Vorschlag genehmigt und ausgeführt.')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Freigeben' }));
+    expect(await screen.findByText('Vorschlag freigegeben und ausgeführt.')).toBeInTheDocument();
     const sent = calls.filter((c) => c.action === 'approve_drafted_action');
     expect(sent).toHaveLength(1);
     expect(sent[0]?.input).toEqual({ workspaceId: 'ws_test', actionId: 'a1' });
   });
 
-  it('"Genehmigen und künftig automatisch" confirms in place with the grant sentence, then is ONE act sending allowFuture', async () => {
-    const { calls } = renderHub({ attention_list: shrinkingSummary([draftItem('a1')]), approve_drafted_action: ok({}) });
-    fireEvent.click(await screen.findByRole('button', { name: MORE }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Genehmigen und künftig automatisch' }));
-    expect(await screen.findByText(/bleibt jederzeit widerrufbar/)).toBeInTheDocument();
-    expect(calls.filter((c) => c.action === 'approve_drafted_action')).toHaveLength(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Genehmigen und erlauben' }));
-    expect(await screen.findByText(/Diese Art führt der Agent künftig direkt aus/)).toBeInTheDocument();
-    const sent = calls.filter((c) => c.action === 'approve_drafted_action');
-    expect(sent).toHaveLength(1);
-    expect(sent[0]?.input).toEqual({ workspaceId: 'ws_test', actionId: 'a1', allowFuture: true });
-  });
 
-  it('"Ablehnen" confirms in place with a reason and sends it; a rejected draft reports that nothing was posted', async () => {
+  it('"Ablehnen" (the icon) is ONE click that asks nothing and sends no reason (D204); a rejected draft reports that nothing was posted', async () => {
     const { calls } = renderHub({ attention_list: shrinkingSummary([draftItem('a1')]), reject_drafted_action: ok({}) });
-    fireEvent.click(await screen.findByRole('button', { name: MORE }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Ablehnen' }));
-    const field = await screen.findByLabelText('Begründung (optional)');
-    fireEvent.change(field, { target: { value: 'Falsche Rechnung' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Ja, ablehnen' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Ablehnen' }));
+    expect(document.querySelector('textarea')).toBeNull();
     expect(await screen.findByText('Vorschlag abgelehnt. Gebucht wurde nichts.')).toBeInTheDocument();
     const sent = calls.filter((c) => c.action === 'reject_drafted_action');
     expect(sent).toHaveLength(1);
-    expect(sent[0]?.input).toEqual({ workspaceId: 'ws_test', actionId: 'a1', reason: 'Falsche Rechnung' });
+    expect(sent[0]?.input).toEqual({ workspaceId: 'ws_test', actionId: 'a1' });
   });
 
-  it('Details: the drafted payload as label and value pairs, the Freigabe level from the dial, never JSON', async () => {
+  it('D204 "Nichts fehlt, bestätigen" confirms a statement gap with no reason field; the button is enabled and calls confirm_statement_gap', async () => {
+    const gapItem = {
+      queueId: 'statement_gap',
+      entityKind: 'bank_account',
+      entityId: 'ba_1',
+      titleKey: 'attention.item.agentAction.title',
+      titleParams: {},
+      since: '2026-09-05T07:00:00.000Z',
+      urgency: 'open',
+      deepLink: { route: '/bank-accounts', params: {} },
+      decisionOptions: [
+        {
+          id: 'confirm_gap',
+          verb: 'confirm_statement_gap',
+          labelKey: 'attention.act.confirmGap',
+          role: 'secondary',
+          input: { bankAccountId: 'ba_1', afterStatementId: 'st_1', beforeStatementId: 'st_2', idempotencyKey: 'attention:confirm-gap:ws_test:g1:0' },
+          humanConfirm: true,
+          reasonField: true,
+          confirmLabelKey: 'attention.act.confirmGapConfirm',
+          reasonPlaceholderKey: 'attention.act.confirmGapReason',
+          capability: 'pay',
+        },
+      ],
+      consequenceKey: null,
+      consequence: null,
+    };
+    const { calls } = renderHub({ attention_list: shrinkingSummary([gapItem]), confirm_statement_gap: ok({ confirmed: true }) });
+    fireEvent.click(await screen.findByRole('button', { name: 'Nichts fehlt, bestätigen' }));
+    const yes = await screen.findByRole('button', { name: 'Ja, nichts fehlt' });
+    expect(yes).toBeEnabled();
+    expect(screen.queryByLabelText('Grund')).toBeNull();
+    fireEvent.click(yes);
+    await waitFor(() => expect(calls.filter((c) => c.action === 'confirm_statement_gap')).toHaveLength(1));
+    const sent = calls.find((c) => c.action === 'confirm_statement_gap')?.input ?? {};
+    expect(sent).toMatchObject({ workspaceId: 'ws_test', bankAccountId: 'ba_1', confirmed: true });
+    expect(sent).not.toHaveProperty('reason');
+  });
+
+  it('D208: the open line says the drafted payload in words on one line, no labels, no settings note (D197), never JSON', async () => {
     const { container } = renderHub({
       attention_list: ok(summaryOf([draftItem('a1', 'post_entry')])),
       list_drafted_actions: ok({
@@ -461,24 +496,17 @@ describe('the agent proposal row (D167: the Vorschlag line, decided here)', () =
       // The PINNED recording (acc_50 is 6500, acc_2 is 1020), never hand-typed accounts.
       list_accounts: ok({ accounts: listAccountsFixture.accounts }),
     });
-    // Details open from the ⋯ (the title is words, N4 M4).
-    fireEvent.click(await screen.findByRole('button', { name: 'Mehr zu: Buchung erfassen' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Details' }));
-    await waitFor(() => expect(container.querySelector('.vorschlag-readback')?.textContent ?? '').toContain('Fragt nach'));
-    const text = container.querySelector('.vorschlag-readback')?.textContent ?? '';
-    expect(text).toContain('Datum04.09.2026');
-    // D167 polish 11: each leg one line, the side, the account in words, the money; no "Betrag" repeating them.
-    expect(text).toContain("Soll6500 Verwaltungs- und Bürokosten · CHF 500.00");
-    expect(text).not.toContain('Betrag');
-    expect(text).toContain('am 05.09.2026 von Agent');
+    // D201: Details open in place from the row's chevron (the title is words, N4 M4).
+    fireEvent.click(await screen.findByRole('button', { name: /^Buchung erfassen/ }));
+    await waitFor(() => expect(container.querySelector('.pl-readback')?.textContent ?? '').toContain('6500 Verwaltungs- und Bürokosten'));
+    const text = container.querySelector('.pl-readback')?.textContent ?? '';
+    // D197 (the judge): no settings note on a working surface; D208: no labels, no "Von" block.
+    expect(text).not.toContain('Fragt nach');
+    expect(text).toContain('04.09.2026');
+    expect(text).toContain('1020 Bankkonto');
+    expect(text).not.toMatch(/Datum|Von|Quelle|Betrag/);
     for (const raw of ['{', 'workspaceId', 'idempotencyKey', 'post_entry', 'debit', 'k-idem-1']) expect(text).not.toContain(raw);
-    // D167 browser walk: the accounts by number and name, the source in words, never an internal id.
-    await waitFor(() => expect(container.querySelector('.vorschlag-readback')?.textContent ?? '').toContain('6500 Verwaltungs- und Bürokosten'));
-    const named = container.querySelector('.vorschlag-readback')?.textContent ?? '';
-    expect(named).toContain('Haben1020 Bankkonto · CHF 500.00');
-    // No "Quelle" row (it read "Manuell" beside "von Agent").
-    expect(named).not.toContain('Quelle');
-    expect(named).not.toMatch(/acc_\d/);
+    expect(text).not.toMatch(/acc_\d/);
   });
 
   it('the drafting actor sees no approve on their own proposal, and the reason is named', async () => {
@@ -487,23 +515,21 @@ describe('the agent proposal row (D167: the Vorschlag line, decided here)', () =
       { whoami: { actor: 'agent', provisioned: true, isMember: true, memberId: 'm1', userId: 'u1', role: 'owner', capabilities: ['manage_agent_dial'] } },
     );
     await screen.findByText('Buchung erfassen');
-    expect(screen.queryByRole('button', { name: 'Genehmigen' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Freigeben' })).not.toBeInTheDocument();
     expect(screen.getByText('Der eigene Vorschlag braucht eine zweite Person zur Freigabe.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Mehr zu: Buchung erfassen' }));
-    await screen.findByRole('menuitem', { name: 'Details' });
-    expect(screen.queryByRole('menuitem', { name: 'Ablehnen' })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: 'Genehmigen und künftig automatisch' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ablehnen' })).toBeNull();
+    expect(screen.getByRole('button', { name: /^Buchung erfassen/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Freigeben und als Regel speichern' })).toBeNull();
   });
 
   it('an actor without manage_agent_dial sees no approve control at all (hidden, never refused); the line still opens its Details', async () => {
     renderHub({ attention_list: ok(summaryOf([draftItem('a1')])) }, { can: (cap) => cap !== 'manage_agent_dial' });
     await screen.findByText(TITLE);
-    expect(screen.queryByRole('button', { name: 'Genehmigen' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Freigeben' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ablehnen' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Benötigt: Agent-Freigabe' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: MORE }));
-    await screen.findByRole('menuitem', { name: 'Details' });
-    expect(screen.queryByRole('menuitem', { name: 'Ablehnen' })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: 'Genehmigen und künftig automatisch' })).toBeNull();
+    expect(screen.getByRole('button', { name: new RegExp(`^${TITLE}`) })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Freigeben und als Regel speichern' })).toBeNull();
   });
 
   it('a bank-line Vorschlag links to its line', async () => {
@@ -513,17 +539,28 @@ describe('the agent proposal row (D167: the Vorschlag line, decided here)', () =
         actions: [{ actionId: 'a1', actor: 'agent', dialCapability: 'pay', actionTool: 'book_bank_line', payload: { bankTxnId: 'btx_9', target: { kind: 'accounts', legs: [] } }, status: 'pending', createdAt: '2026-09-05T07:00:00.000Z' }],
       }),
     });
-    // D178: the meta line carries values only; the link to the line sits in the ⋯.
-    fireEvent.click(await screen.findByRole('button', { name: 'Mehr zu: Bankzeile buchen' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Zur Bankzeile' }));
+    // D208: the way to the line is Öffnen on the right of the opened line.
+    fireEvent.click(await screen.findByRole('button', { name: /^Bankzeile buchen/ }));
+    fireEvent.click(within(document.querySelector('.pl-open') as HTMLElement).getByRole('button', { name: 'Öffnen' }));
     await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('/bank?line=btx_9'));
   });
 });
 
 describe('the review flag row', () => {
+  it('D204 a flag without a reason reads "Markiert von X" with no dangling colon', async () => {
+    const item = flagItem('e9');
+    (item.subtitleParams as Record<string, unknown>).reason = '';
+    renderHub({ attention_list: shrinkingSummary([item]) });
+    expect(await screen.findByText('Buchung beanstandet')).toBeInTheDocument();
+    openDetails();
+    expect(screen.getByText('Markiert von Reto Muster')).toBeInTheDocument();
+    expect(screen.queryByText(/Markiert von Reto Muster:/)).toBeNull();
+  });
+
   it('names who flagged the entry and why, opens the entry, and resolves through approve_entry with no invented consequence', async () => {
     const { calls } = renderHub({ attention_list: shrinkingSummary([flagItem('e1')]), approve_entry: ok({}) });
     expect(await screen.findByText('Buchung beanstandet')).toBeInTheDocument();
+    openDetails();
     // A member is named by the display name the engine resolved, never by the served actor id.
     expect(screen.getByText('Markiert von Reto Muster: Falsches Konto: Aufwand statt Ertrag')).toBeInTheDocument();
     expect(screen.queryByText(/member:user_3/)).not.toBeInTheDocument();
@@ -551,6 +588,8 @@ describe('the review flag row', () => {
         flagItem('e3', { proposedBy: 'reto', proposedByKind: 'unknown', reviewer: '' }),
       ], 3)),
     });
+    await screen.findAllByText('Buchung beanstandet');
+    openDetails();
     expect(await screen.findByText('Markiert durch den Agenten: Falsches Konto: Aufwand statt Ertrag')).toBeInTheDocument();
     expect(screen.getByText('Markiert im Studio: Falsches Konto: Aufwand statt Ertrag')).toBeInTheDocument();
     expect(screen.getByText('Markiert: Falsches Konto: Aufwand statt Ertrag')).toBeInTheDocument();
@@ -562,6 +601,8 @@ describe('the review flag row', () => {
       { attention_list: ok(summaryOf([flagItem('e1')])) },
       { whoami: { actor: 'member:user_3', provisioned: true, isMember: true, memberId: 'm3', userId: 'user_3', role: 'treuhaender', capabilities: ['review'] } },
     );
+    await screen.findByText('Buchung beanstandet');
+    openDetails();
     expect(await screen.findByText('Von dir markiert: Falsches Konto: Aufwand statt Ertrag')).toBeInTheDocument();
   });
 
@@ -588,11 +629,12 @@ describe('the dunning run row', () => {
     expect(quiet).toHaveClass('btn--secondary');
     expect(quiet).not.toHaveClass('btn--accent');
     expect(quiet).not.toHaveAttribute('data-money-commit');
-    // D178: behind the (i) and as the description of its own commit, never a paragraph at rest.
+    // D201: in place behind the chevron and as the description of its own commit, never a paragraph at rest.
     const sentence = consequenceSentence('issue_dunning_run', 'de-CH') as string;
     const issueButton = screen.getByRole('button', { name: 'Mahnlauf ausstellen' });
     expect(document.getElementById(issueButton.getAttribute('aria-describedby') ?? '')?.textContent).toBe(sentence);
-    expect(screen.getByRole('button', { name: 'Info' }).closest('.tooltip-wrap')?.querySelector('[role="tooltip"]')?.textContent).toContain(sentence);
+    openDetails();
+    expect(document.querySelector('.att-row-detail')?.textContent).toContain(sentence);
     expect(screen.queryByText('issue_dunning_run')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Mahnlauf ausstellen' }));
     // C4 (D118): the row's button opens the confirm; nothing has left the surface.
@@ -722,5 +764,19 @@ describe('§H-TENANT: an act in flight does not outlive a workspace switch (crit
       release?.();
       await gate;
     });
+  });
+});
+
+describe('the shared Vorschlag row in Pendenzen (D197 fix round)', () => {
+  it('the row itself is the roving stop and marks itself selected; its actions are the row\'s, shown on the selected row', async () => {
+    renderHub({ attention_list: ok(summaryOf([draftItem('a1')])) });
+    await screen.findByText('Zuordnung der QR-Zahlung korrigieren');
+    const row = document.querySelector('.pl .pl-line') as HTMLElement;
+    const main = row.querySelector('button.pl-main') as HTMLButtonElement;
+    expect(main).toHaveAttribute('tabindex', '0');
+    act(() => main.focus());
+    await waitFor(() => expect(main).toHaveAttribute('aria-current', 'true'));
+    expect(row.closest('.pl')).toHaveClass('pl--current');
+    expect(row.querySelector('.pl-acts [data-icon="approve"]')).not.toBeNull();
   });
 });

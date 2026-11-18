@@ -33,7 +33,7 @@ import { CHAT_BELEGE_SCHEMA_SQL } from '../files/chatBelegeSchema.js';
 import { DUNNING_SCHEMA_SQL } from '../dunning/schema.js';
 import { RECURRING_SCHEMA_SQL } from '../recurring/schema.js';
 import { QR_MATCH_SCHEMA_SQL } from '../banking/qrMatchSchema.js';
-import { CAMT_SCHEMA_SQL } from '../banking/camtSchema.js';
+import { CAMT_SCHEMA_SQL, CAMT_ADDITIVE_COLUMNS } from '../banking/camtSchema.js';
 import { PAIN001_SCHEMA_SQL } from '../banking/pain001Schema.js';
 // A25 review & export: the entry_review sidecar (one table, one index), kept in A25's own module.
 import { REVIEW_SCHEMA_SQL } from '../review/schema.js';
@@ -202,7 +202,7 @@ import { VAT_SETTLEMENT_SCHEMA_SQL } from '../accruals/vatSettlementSchema.js';
 import { LIQUIDITY_SCHEMA_SQL } from '../liquidity/schema.js';
 // D172 workspace settings: `workspace_setting` (one row per overridden setting) and the append-only
 // `workspace_setting_change` history. Both reference only `workspace`, so they go at the end of the union.
-import { SETTINGS_SCHEMA_SQL } from '../settings/schema.js';
+import { SETTINGS_SCHEMA_SQL, SETTINGS_ADDITIVE_COLUMNS } from '../settings/schema.js';
 // N00 the Hausbuch: `hausbuch_note` (the house notes) and the append-only `hausbuch_note_change` history.
 // Both reference only `workspace` (and the history its note), so they go at the end of the union.
 import { HAUSBUCH_SCHEMA_SQL } from '../hausbuch/schema.js';
@@ -229,6 +229,8 @@ import { SETTLEMENT_SCHEMA_SQL } from '../settlement/schema.js';
  * ALTER TABLE ADD COLUMN supports, and it is exactly what "additive" means.
  */
 export const ADDITIVE_COLUMNS: readonly { table: string; column: string; ddl: string }[] = [
+  // A43 section 4: the path a settlement feed is served under; NULL (every row from before) is the default path.
+  { table: 'settlement_source', column: 'feed_path', ddl: 'feed_path TEXT' },
   // G21 (open-items migration): the carry-forward origin on the two money-path documents. Both are
   // `NOT NULL DEFAULT 'native'`, which is exactly what ALTER TABLE ADD COLUMN supports (a constant
   // default), so a pre-G21 `~/.till/till.db` widens on open with NO data migration and every existing
@@ -613,6 +615,10 @@ export const ADDITIVE_COLUMNS: readonly { table: string; column: string; ddl: st
   ...AUTOBOOK_ADDITIVE_COLUMNS,
   // A41.3 re-cut v2 (D184, I-G): who filed a file on its record, and whether that seat was a person then.
   ...BELEG_ASSIGNMENT_ADDITIVE_COLUMNS,
+  // A20 §13 (D205): the bank statement import's own additive columns.
+  ...CAMT_ADDITIVE_COLUMNS,
+  // D202 (I9): how a settings change came about, on its history row.
+  ...SETTINGS_ADDITIVE_COLUMNS,
 ];
 
 /**

@@ -145,6 +145,8 @@ export interface DetailAreaProps {
   titleId: string;
   facts: ReactNode;
   onDock: (edge: DockEdge) => void;
+  /** D195: the workspace is too short for the area at the bottom: "Unten" says so instead of snapping back. */
+  bottomBlocked?: boolean;
   onClose: () => void;
   /** A pointer pressed on the header (not on a control): the host starts the dock drag. */
   onHeaderPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
@@ -153,7 +155,7 @@ export interface DetailAreaProps {
   children: ReactNode;
 }
 
-export function DetailArea({ id, lineId, edge, size, titleId, facts, onDock, onClose, onHeaderPointerDown, dragging, children }: DetailAreaProps) {
+export function DetailArea({ id, lineId, edge, size, titleId, facts, onDock, bottomBlocked = false, onClose, onHeaderPointerDown, dragging, children }: DetailAreaProps) {
   const t = useT();
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Escape' || event.defaultPrevented) return;
@@ -186,7 +188,7 @@ export function DetailArea({ id, lineId, edge, size, titleId, facts, onDock, onC
           label={t('bankInbox.area.dockLabel')}
           options={[
             { value: 'right', label: t('bankInbox.area.dockRight') },
-            { value: 'bottom', label: t('bankInbox.area.dockBottom') },
+            { value: 'bottom', label: t('bankInbox.area.dockBottom'), disabled: bottomBlocked, reason: t('bankInbox.area.dockBottomBlocked') },
           ]}
           value={edge}
           onChange={onDock}

@@ -109,11 +109,14 @@ describe('F1: a workspace switch', () => {
 
     act(() => switchTo('ws_2'));
     await waitFor(() => expect(screen.getByRole('rowheader', { name: '303' })).toBeInTheDocument());
-    // let the ws_2 reads settle
-    await new Promise((r) => setTimeout(r, 50));
-    expect(exportsBy).toEqual(['ws_1']);
+    // Wait for the ws_2 reads to settle (a fixed 50 ms sleep raced the settlement read under a loaded gate,
+    // 16.11.2026): the journey line reaches step 3 only once they have landed, then one act-wrapped tick.
     // ws_2 never exported anything: it must be on step 3 with the filing one level down.
-    expect(line()).toMatch(/Schritt 3 von \d: exportieren/);
+    await waitFor(() => expect(line()).toMatch(/Schritt 3 von \d: exportieren/));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(exportsBy).toEqual(['ws_1']);
     expect(screen.queryByRole('button', { name: 'Als eingereicht markieren' })).toBeNull();
   });
 

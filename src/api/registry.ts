@@ -32,6 +32,7 @@ import type {
   EbicsTransportPort,
   EbicsKeystorePort,
   ManagedChannelPort,
+  SettlementFeedPort,
 } from '../core/context.js';
 import type { DiagnosticsPort } from '../core/ports.js';
 import { makeContext } from '../core/context.js';
@@ -197,6 +198,7 @@ import { recurringActions } from './recurring-actions.js';
 import { qrMatchActions } from './qr-match-actions.js';
 import { camtActions } from './camt-actions.js';
 import { settlementActions } from './settlement-actions.js';
+import { settlementFormatActions } from './settlement-format-actions.js';
 import { bankInboxActions } from './bank-inbox-actions.js';
 import { belegActions } from './beleg-actions.js';
 import { ruleLearningActions } from './rule-learning-actions.js';
@@ -205,6 +207,7 @@ import { pain001Actions } from './pain001-actions.js';
 import { getPaymentBatch } from '../core/banking/pain001.js';
 import { liquidityActions } from './liquidity-actions.js';
 import { settingsActions } from './settings-actions.js';
+import { releasesActions } from './releases-actions.js';
 import { prefsActions } from './prefs-actions.js';
 import { hausbuchActions } from './hausbuch-actions.js';
 import { workspaceActions } from './workspace-actions.js';
@@ -220,7 +223,9 @@ import { wayBackProblems } from '../core/agent/wayBack.js';
 import type { ActionKind, ConsequenceTag, Reversibility } from './actionKind.js';
 import { dataActions } from './data-actions.js';
 import type { CatalogAction } from '../core/data/index.js';
-import { assertEveryActionIsGated, capabilityPort, isGovernedSeat, requiredCapabilitiesFor } from '../core/access/index.js';
+import { assertCapability, assertEveryActionIsGated, capabilityPort, isGovernedSeat, requiredCapabilitiesFor } from '../core/access/index.js';
+import { withOwnerWords } from '../core/agent/draftedActions.js';
+import { DECISION_VERBS, OWNER_WORD_VERBS, agentDecisionGrantFor, carriesOwnerWord, isGrantableAgentSeat, ownerCanGrantHint, ownerWordGrantFor, ownerWordHint } from '../core/agent/decisionGrant.js';
 import {
   dispatchAutomationEvent,
   eventsEmittedBy,
@@ -312,6 +317,8 @@ export interface ApiDeps {
   bankActivationRunner?: ((deps: ApiDeps, input: ActionInput) => Promise<Result>) | undefined;
   /** A37's managed connectivity relay (OP4, owner-gated). Absent means the cloud tier is off: managed actions degrade to cloud_tier. */
   managedChannel?: ManagedChannelPort | undefined;
+  /** D198: the settlement feed's fetch and token store (`SettlementFeedPort`), when the host wired one. */
+  settlementFeed?: SettlementFeedPort | undefined;
   /**
    * G08's seam. Absent means nothing is recorded, which is the correct default for an embedder that
    * wired no host: the core notices a defect, it does not decide whether to write one down.
@@ -579,6 +586,7 @@ function ctxOf(deps: ApiDeps, input: ActionInput): WorkspaceContext {
     ...(deps.ebicsTransport !== undefined ? { ebicsTransport: deps.ebicsTransport } : {}),
     ...(deps.ebicsKeystore !== undefined ? { ebicsKeystore: deps.ebicsKeystore } : {}),
     ...(deps.managedChannel !== undefined ? { managedChannel: deps.managedChannel } : {}),
+    ...(deps.settlementFeed !== undefined ? { settlementFeed: deps.settlementFeed } : {}),
   });
 }
 
@@ -810,9 +818,41 @@ function assertActionCapability(
   const port = capabilityPort(deps.store, workspaceId, deps.actor, deps.identitySource);
   for (const capability of requiredCapabilitiesFor(name, input)) {
     const allowed = port.assert(capability);
-    if (!allowed.ok) return allowed;
+    if (allowed.ok) continue;
+    const delegated = delegatedDecision(name, deps, input, capability);
+    if (delegated === 'granted') continue;
+    if (delegated !== 'not_granted') return allowed;
+    // D209: a call carrying the owner's word is told where the owner's-word setting is switched on.
+    // Only an agent seat is told about the owner's word (critic LOW-5): a plugin call never rides it.
+    const ownerWord = OWNER_WORD_VERBS.has(name) && carriesOwnerWord(input as { ownerWord?: unknown }) && isGrantableAgentSeat(ctxOf(deps, input), deps.actor);
+    return { ...allowed, ownerCanGrant: ownerWord ? ownerWordHint() : ownerCanGrantHint(name) };
   }
   return undefined;
+}
+
+/**
+ * D196: the owner's grant for agent decisions (`core/agent/decisionGrant.ts`), at the one boundary. Only for
+ * a decision verb (`DECISION_VERBS`), only for `manage_agent_dial`, only for a governed seat. With a live
+ * grant covering the verb, the ONE resolver runs again with step 0 lifted (`governorDelegated`), so the
+ * seat's role still decides; without one the refusal stays and names where the owner grants it.
+ * D209: the owner's word is the second way in, for the approval verbs only: a call that carries `ownerWord`
+ * while the owner's setting `agent.approve_on_owner_word` is live passes here the same way, and the engine
+ * re-reads the setting inside the transaction that records the decision.
+ */
+function delegatedDecision(
+  name: string,
+  deps: ApiDeps,
+  input: ActionInput,
+  capability: string,
+): 'granted' | 'not_granted' | 'not_applicable' {
+  if (capability !== 'manage_agent_dial' || DECISION_VERBS[name] === undefined) return 'not_applicable';
+  if (!isGovernedSeat(deps.store, deps.actor)) return 'not_applicable';
+  const ctx = ctxOf(deps, input);
+  const grant = agentDecisionGrantFor(ctx, name) ?? ownerWordGrantFor(ctx, name, input as { ownerWord?: unknown });
+  if (grant === null) return 'not_granted';
+  return assertCapability(deps.store, String(input.workspaceId), deps.actor, capability, deps.identitySource, true).ok
+    ? 'granted'
+    : 'not_applicable';
 }
 
 /**
@@ -1740,7 +1780,8 @@ export const ACTIONS: readonly ActionDef[] = [
     'read',
     'Read the tamper-evident audit trail and its chain-verification status.',
     ctxSchema({ entityKind: STR, from: STR, to: STR }),
-    (ctx, input) => getAuditLog(ctx, as(input)),
+    // D209: an approval on the owner's word carries the owner's words beside its chain row.
+    (ctx, input) => withOwnerWords(ctx, getAuditLog(ctx, as(input))),
   ),
   listPeriodLocksAction,
 
@@ -2346,6 +2387,8 @@ export const ACTIONS: readonly ActionDef[] = [
   // D185, the settlement socket: import a till-settlement/v1 file through the owner's booking template,
   // and that template's save and read. Two writes and one read, spread in as one line.
   ...settlementActions({ ctxAction, ctxSchema, STR, withPrevalidate }),
+  // A43 section 5: validate_settlement, the contract's agent door (read, writes nothing). One line.
+  ...settlementFormatActions({ ctxAction, ctxSchema, STR }),
 
   // A39, the bank inbox: one line, one proposal, confirm, undo by reversal. Three writes and one read,
   // spread in as one line; the A20 verbs above stay as wrappers over the same core.
@@ -2384,6 +2427,9 @@ export const ACTIONS: readonly ActionDef[] = [
   // G00, per-person preferences (D178 point 7). The person's own looks and arrangements, keyed by the
   // calling seat: four verbs (two reads, two writes), spread in as one line.
   ...prefsActions({ ctxAction, ctxSchema, STR }),
+
+  // O00, What's new after an update (D199). Two verbs (a read and a ui-state write), spread in as one line.
+  ...releasesActions({ ctxAction, ctxSchema, STR }),
 
   // N00, the workspace brief and the Hausbuch. The one read an agent makes first, and the owner's house
   // notes it follows: four verbs (two reads, two writes), spread in as one line.

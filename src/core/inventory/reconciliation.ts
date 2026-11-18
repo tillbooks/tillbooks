@@ -721,8 +721,8 @@ export function inventoryValuationReverse(ctx: WorkspaceContext, input: Valuatio
   if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.length === 0) {
     return err('invalid_input', { field: 'idempotencyKey' });
   }
+  // D204: the reverse needs no reason; the reversing entry and the audit row keep who and when.
   const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
-  if (reason === null) return err('invalid_input', { field: 'reason' });
 
   const run = readRun(ctx, input.runId);
   if (run === undefined) return err('not_found', { runId: input.runId });

@@ -48,6 +48,7 @@ import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { Status, type StatusKind } from '../../components/Status';
 import { IconButton } from '../../components/IconButton';
 import { FilterBar, type FilterFacet } from '../../components/FilterBar';
+import { useAskReason } from '../../lib/useAskReason';
 import './Quotes.css';
 
 /** A fresh key per write, so a retry after a transport failure is a retry and not a second write. */
@@ -169,6 +170,7 @@ export function Quotes() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [decliningId, setDecliningId] = useState<string | null>(null);
   const [declineReason, setDeclineReason] = useState('');
+  const askReason = useAskReason();
   /** The accept link is scoped to the quote that produced it, so opening another quote's drawer
       never shows a stale link that belongs to a different quote. */
   const [acceptLink, setAcceptLink] = useState<{ quoteId: string; url: string } | null>(null);
@@ -651,14 +653,17 @@ export function Quotes() {
                 void doDecline(selected.id);
               }}
             >
-              <Field label={t('quotes.decline.reason')}>
-                <input
-                  type="text"
-                  className="field"
-                  value={declineReason}
-                  onChange={(e) => setDeclineReason(e.target.value)}
-                />
-              </Field>
+              {/* D204: no reason needed; the optional note shows only when the workspace asks for one. */}
+              {askReason && (
+                <Field label={t('quotes.decline.reason')}>
+                  <input
+                    type="text"
+                    className="field"
+                    value={declineReason}
+                    onChange={(e) => setDeclineReason(e.target.value)}
+                  />
+                </Field>
+              )}
               {/* The drawer's footer holds the view's one primary; this inline confirm is secondary. */}
               <div className="quotes-form-actions">
                 <button type="submit" className="btn btn--secondary btn--sm">

@@ -88,5 +88,21 @@
       "concepts": [],
       "docsPath": "introduction"
     }
+  },
+  "attention": {
+    "queue": {
+      "tasksDue": "Aufgaben: fällig"
+    },
+    "queueLabel": {
+      "tasks_due": "Aufgaben"
+    },
+    "item": {
+      "taskDue": {
+        "title": "{title}"
+      }
+    },
+    "act": {
+      "openTask": "Aufgabe öffnen"
+    }
   }
 }

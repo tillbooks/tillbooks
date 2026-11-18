@@ -105,7 +105,7 @@ describe('Personal surface', () => {
   // after an explicit confirm with a reason; nothing is sent before.
   const APPROVED = { ...CLAIM, status: 'approved' };
 
-  it('offers Stornieren on an approved claim and calls expense_claim_reverse only after the confirm with a reason', async () => {
+  it('D204 offers Stornieren on an approved claim and calls expense_claim_reverse after the confirm, with no reason', async () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     render(tree(base(['hr.read', 'spesen.approve', 'post'], {
       expense_claim_list: ok({ claims: [APPROVED], selfScoped: false }),
@@ -119,18 +119,16 @@ describe('Personal surface', () => {
     expect(dialog).toHaveTextContent('Korrekturbuchung');
     expect(asked.some((a) => a.action === 'expense_claim_reverse')).toBe(false);
     const confirm = screen.getByRole('button', { name: 'Abrechnung stornieren' });
-    expect(confirm).toBeDisabled();
+    expect(confirm).toBeEnabled();
     expect(confirm.className).toContain('btn--danger');
     expect(confirm).not.toHaveAttribute('data-money-commit');
-
-    await userEvent.type(screen.getByLabelText('Grund'), 'Doppelt erfasst');
-    expect(confirm).toBeEnabled();
+    expect(screen.queryByLabelText('Grund')).toBeNull();
     await userEvent.click(confirm);
     await waitFor(() => {
       const call = asked.find((a) => a.action === 'expense_claim_reverse');
       expect(call).toBeDefined();
       expect(call?.input.claimId).toBe('clm_1');
-      expect(call?.input.reason).toBe('Doppelt erfasst');
+      expect(call?.input).not.toHaveProperty('reason');
       expect(typeof call?.input.idempotencyKey).toBe('string');
     });
   });
@@ -169,8 +167,7 @@ describe('Personal surface', () => {
     await userEvent.click(await screen.findByRole('tab', { name: 'Spesen' }));
     await userEvent.click(await screen.findByRole('button', { name: /^Aktionen für Spesen/ }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Stornieren' }));
-    await userEvent.type(await screen.findByLabelText('Grund'), 'Falsch');
-    await userEvent.click(screen.getByRole('button', { name: 'Abrechnung stornieren' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Abrechnung stornieren' }));
     expect(await screen.findByText(/zuerst die Auszahlung stornieren/)).toBeInTheDocument();
   });
 });

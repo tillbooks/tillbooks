@@ -108,6 +108,7 @@ function capsWith(rights: string[]): Capabilities {
 
 function renderBank(transport: Transport, opts: { rights?: string[]; path?: string; prefs?: Record<string, string> } = {}) {
   const store = new PrefsStore(null, null, { useCache: false });
+  store.seed('bank.detail_position', 'automatic');
   for (const [k, v] of Object.entries(opts.prefs ?? {})) store.seed(k, v);
   return render(
     <CapabilitiesContext.Provider value={capsWith(opts.rights ?? ALL_RIGHTS)}>

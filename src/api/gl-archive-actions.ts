@@ -105,8 +105,8 @@ export function glArchiveActions(h: GlArchiveActionHelpers): readonly ActionDef[
     ctxAction(
       'gl_archive_purge',
       'write:final:erase',
-      "Purge archived periods whose OR 958f ten-year retention has expired, with a recorded reason. Deletes ARCHIVE data only (structurally incapable of touching a live journal row), keeps a purge record where the periods were, and refuses inside the retention window with the date, recording the refusal: that record is the answer a data subject receives. Requires confirmed:true.",
-      ctxSchema({ periodFrom: STR, periodTo: STR, reason: STR, confirmed: BOOL, idempotencyKey: STR }, ['periodFrom', 'periodTo', 'reason', 'idempotencyKey']),
+      "Purge archived periods whose OR 958f ten-year retention has expired; who and when are recorded, a reason only when given (D204: optional; the Studio has the person type the year to confirm). Deletes ARCHIVE data only (structurally incapable of touching a live journal row), keeps a purge record where the periods were, and refuses inside the retention window with the date, recording the refusal: that record is the answer a data subject receives. Requires confirmed:true.",
+      ctxSchema({ periodFrom: STR, periodTo: STR, reason: STR, confirmed: BOOL, idempotencyKey: STR }, ['periodFrom', 'periodTo', 'idempotencyKey']),
       (ctx, input) => archivePurge(ctx, as(input)),
     ),
   ];

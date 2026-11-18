@@ -28,7 +28,8 @@ import { SCHEMA_NEWER_THAN_RUNTIME, SchemaNewerThanRuntimeError, refusalFields }
 import { isBusyError } from '../core/store/sqlite-store.js';
 import { makeContext } from '../core/context.js';
 import type { WorkspaceContext } from '../core/context.js';
-import { capabilityPort, isGovernedSeat, requiredCapabilitiesFor } from '../core/access/index.js';
+import { capabilityFor, capabilityPort, isGovernedSeat, requiredCapabilitiesFor } from '../core/access/index.js';
+import { agentDecisionGrantFor } from '../core/agent/decisionGrant.js';
 import {
   governedDialCapability,
   dialCapabilitiesForVerb,
@@ -43,15 +44,19 @@ import {
   recordAgentCall,
 } from '../core/agent/index.js';
 import type { ActionDef, ActionInput, ApiDeps } from './registry.js';
-import { actionInputTypeMismatch, actionInputRequiredGap, normalizeActionInput, bindGovernedDispatch } from './registry.js';
+import { actionInputTypeMismatch, actionInputRequiredGap, normalizeActionInput, bindGovernedDispatch, getAction } from './registry.js';
 import { unknownFields, unknownFieldsMode, unknownFieldRefusal, type UnknownFieldWarning } from './input-boundary.js';
 import { undoHintFor, UNDO_HINTS_SETTING } from './undo-hints.js';
 import { getSetting } from '../core/settings/settings.js';
+import { assertCapability } from '../core/access/index.js';
+import { planAgentSettingsCall, refuseTooManyProposals, SETTINGS_WRITE_VERBS, type AgentSettingsPlan } from '../core/settings/agentAccess.js';
+import { dialCapabilityForSetting } from '../core/settings/registry.js';
 import { approvalPointer, HUMAN_DECISION_CAPABILITY, type ApprovalPointer } from './approval-pointer.js';
 import { isGrantLive, type PortalGrantRow } from '../core/portal/index.js';
 import type { DraftAttachPrep } from '../core/files/index.js';
 import { addVorschlagHolders, draftReceiptHolders, isProposeInstead, type ReceiptHolder } from '../core/files/receiptGuard.js';
 import { refuseReservedIdempotencyKey } from '../core/store/idempotencyArgs.js';
+import { stripSecretsDeep } from '../core/agent/secretArgs.js';
 
 /**
  * D161 (owner, via coordinator): the token verbs the seam governs although they take no
@@ -60,6 +65,12 @@ import { refuseReservedIdempotencyKey } from '../core/store/idempotencyArgs.js';
  * live token proposes it in the grant's own workspace and a person approves.
  */
 const TOKEN_WORKSPACE_VERBS: ReadonlySet<string> = new Set(['portal_quote_accept']);
+
+/*
+ * A42: the trace keeps no payer of a settlement document. That is enforced at the SINK, `insertCall`
+ * (`core/agent/tracePrivacy.ts`), for every branch below, never here (re-cut after three critic FAILs: a guard run
+ * where a caller remembers to run it missed a position each round).
+ */
 
 /**
  * The workspace a token verb acts in, when its token names a LIVE customer grant: the same global
@@ -164,7 +175,10 @@ function record(
         ? JSON.stringify({ ...entry.input, text: undefined, textOmitted: true })
         : TOKEN_WORKSPACE_VERBS.has(entry.verb)
           ? JSON.stringify({ ...entry.input, token: undefined, tokenOmitted: true })
-          : JSON.stringify(entry.input);
+          : // D198 re-cut R7 (critic r3 M1): a credential TILL keeps only in the OS secret store never reaches
+            // the trace, WHEREVER it sits (a `call_tool { args: { feedToken } }` included): every field the
+            // one secret-argument registry names is stripped at any depth (`stripSecretsDeep`).
+            JSON.stringify(stripSecretsDeep(entry.input));
     // Inside `store.tx`, so the generation guard's first-statement check covers the trace rows too
     // (M3, critic R1 F1): the session, turn and call rows commit together or, in a book a newer TILL
     // migrated meanwhile, not at all. A refusal here is a recorder failure like any other (below).
@@ -453,8 +467,25 @@ function planGoverned(deps: ApiDeps, action: ActionDef, input: ActionInput): Gov
   // ePortal attestation input of checklist_item_complete is governed under vat-file, the rest of the
   // verb is not), and for a write that lets an automation rule fire, the tier of the verb the STORED
   // rule fires with `customize` as a floor (`src/core/agent/ruleTier.ts`).
+  // D202 points 4 and 5: the agent seat's settings write takes its own route before the dial
+  // (`core/settings/agentAccess.ts`): a protected key is a person-only Vorschlag, a key in an area the owner
+  // opened applies at once, any other key keeps the dial of its family (named here, so the reason the verb no
+  // longer requires can never make the call slip past the dial's input-keyed rule).
+  let settingsDial: string | undefined;
+  if (action.kind === 'write') {
+    // An input too incomplete to draft is refused by the generic screen below (D156 F1), as for every verb.
+    const settingsPlan = undraftableField(action, input) === undefined ? planAgentSettingsCall(contextFor(deps, workspaceId), action.name, input) : null;
+    if (settingsPlan !== null) {
+      if (settingsPlan.route !== 'dial') return planSettingsRoute(deps, action, input, workspaceId, settingsPlan, started);
+      settingsDial = settingsPlan.dialCapability;
+    } else if (SETTINGS_WRITE_VERBS.has(action.name) && typeof input.key === 'string' && input.key.length > 0) {
+      // Every other governed seat (a plugin call): the key's own family, whatever the input holds beside the
+      // key, so no settings write of a governed seat is ever ungoverned (D202 security review).
+      settingsDial = dialCapabilityForSetting(input.key);
+    }
+  }
   const dialCapability =
-    action.kind === 'write' ? governedDialCapability(contextFor(deps, workspaceId), action.name, input) : undefined;
+    action.kind === 'write' ? (settingsDial ?? governedDialCapability(contextFor(deps, workspaceId), action.name, input)) : undefined;
 
   // F1: a call that cannot be drafted is refused, never run (see `undraftableField`), when its verb
   // CAN be dial-governed: governed by name, or carrying an input-keyed rule whose match an incomplete
@@ -520,7 +551,9 @@ function planGoverned(deps: ApiDeps, action: ActionDef, input: ActionInput): Gov
         });
         return { done: invalid };
       }
-      return { done: draftCall(deps, action, input, ctx, workspaceId, dialCapability, decision.reason, started) };
+      const drafted = draftCall(deps, action, input, ctx, workspaceId, dialCapability, decision.reason, started);
+      // D196 item 8: only the dial's own draft (never a receipt-holder draft, never `force_ask`).
+      return { done: decision.reason === 'dial_ask' ? decideInOneCall(deps, action, ctx, workspaceId, drafted) : drafted };
     }
     return {
       execute: (outcome) => {
@@ -554,6 +587,216 @@ function planGoverned(deps: ApiDeps, action: ActionDef, input: ActionInput): Gov
 }
 
 /**
+ * D202 points 4 and 5: the agent seat's settings write on a route of its own (G00 §11.5). Never reached for
+ * the dial route, which continues in `planGoverned` with the key's family.
+ *  - `refuse`: the pure screen failed (or an ask-first key): nothing is drafted, the trace says why.
+ *  - `propose`: a protected key. The seat's ROLE must hold the owning capability (A24 step 0 lifted for this
+ *    check only: proposing `agent.decide_proposals` is what D202 point 5 allows, approving it stays a
+ *    person's), the open cap holds (I8), the verb's own pre-draft screen runs (it claims the idempotency
+ *    arguments), and the call is drafted under every dial: a person-only Vorschlag (I1, I5).
+ *  - `standing`: a non-protected key in an area the owner opened. The A24 gate as for any write, then the
+ *    verb runs; its history row says `standing` and names the area.
+ */
+function planSettingsRoute(
+  deps: ApiDeps,
+  action: ActionDef,
+  input: ActionInput,
+  workspaceId: string,
+  plan: Exclude<AgentSettingsPlan, { route: 'dial' }>,
+  started: number,
+): GovernedPlan {
+  // Security review (no value oracle): a refusal of the screen and an `unchanged` answer come only after the
+  // A24 check the call's own route runs (step 0 lifted for a proposal, exactly as below), so a seat without the
+  // right is told `permission_denied` whatever the value or the setting's state.
+  if (plan.route === 'refuse' || plan.route === 'unchanged') {
+    for (const capability of requiredCapabilitiesFor(action.name, input)) {
+      const allowed = assertCapability(deps.store, workspaceId, deps.actor, capability, deps.identitySource, plan.delegated);
+      if (!allowed.ok) {
+        record(deps, workspaceId, {
+          verb: action.name, kind: action.kind, input, mode: 'deny', reason: 'permission_denied',
+          dialCapability: typeof input.key === 'string' ? dialCapabilityForSetting(input.key) : undefined,
+          result: allowed, durationMs: Date.now() - started,
+        });
+        return { done: withHumanDecisionPointer(deps, allowed) };
+      }
+    }
+  }
+  if (plan.route === 'refuse') {
+    record(deps, workspaceId, {
+      verb: action.name, kind: action.kind, input, mode: 'deny',
+      reason: plan.result.error === 'human_only' ? 'human_only' : 'not_draftable',
+      dialCapability: typeof input.key === 'string' ? dialCapabilityForSetting(input.key) : undefined,
+      result: plan.result, durationMs: Date.now() - started,
+    });
+    return { done: plan.result };
+  }
+  if (plan.route === 'unchanged') {
+    const result = ok(plan.result) as Result;
+    record(deps, workspaceId, {
+      verb: action.name, kind: action.kind, input, mode: 'execute', reason: 'unchanged', result, durationMs: Date.now() - started,
+    });
+    return { done: result };
+  }
+  const deny = (result: Result, dialCapability?: string): GovernedPlan => {
+    record(deps, workspaceId, {
+      verb: action.name, kind: action.kind, input, mode: 'deny', reason: result.ok ? 'not_draftable' : result.error === 'permission_denied' ? 'permission_denied' : 'not_draftable',
+      dialCapability, result, durationMs: Date.now() - started,
+    });
+    return { done: withHumanDecisionPointer(deps, result) };
+  };
+  if (plan.route === 'standing') {
+    const port = capabilityPort(deps.store, workspaceId, deps.actor, deps.identitySource);
+    for (const capability of requiredCapabilitiesFor(action.name, input)) {
+      const allowed = port.assert(capability);
+      if (!allowed.ok) return deny(allowed);
+    }
+    return {
+      execute: (outcome) => {
+        record(deps, workspaceId, {
+          verb: action.name, kind: action.kind, input, mode: 'execute', reason: 'standing_permission',
+          result: outcome, durationMs: Date.now() - started,
+        });
+        return withHumanDecisionPointer(deps, outcome);
+      },
+    };
+  }
+  // A person-only Vorschlag.
+  for (const capability of requiredCapabilitiesFor(action.name, input)) {
+    const allowed = assertCapability(deps.store, workspaceId, deps.actor, capability, deps.identitySource, true);
+    if (!allowed.ok) return deny(allowed, plan.dialCapability);
+  }
+  const ctx = contextFor(deps, workspaceId);
+  const crowded = refuseTooManyProposals(ctx, action.name, input);
+  if (crowded !== null) return deny(crowded, plan.dialCapability);
+  const invalid = action.prevalidate?.(deps, input);
+  if (invalid !== undefined) return deny(invalid, plan.dialCapability);
+  // The cap again, inside the draft's own transaction (critic L2): the check above answers early, this one
+  // holds against a second process that drafted meanwhile.
+  return {
+    done: draftCall(deps, action, input, ctx, workspaceId, plan.dialCapability, plan.reason, started, [], () => refuseTooManyProposals(ctx, action.name, input)),
+  };
+}
+
+/**
+ * D196 item 8 (owner, 12.11.2026): THE AGENT'S ONE-CALL IGNORIEREN. The verbs whose dial draft the agent seat's
+ * OWN call also approves under the owner's grant: a closed set of one. Nothing new is approvable: the approval
+ * is the registry's own `approve_drafted_action`, run as the same seat, with every check of the two-call path
+ * (the A24 boundary with step 0 lifted only for the decision verbs, the engine's grant re-check,
+ * `grantExclusionFor`, the record pin, the in-transaction re-read of the grant, `decided_under_grant`).
+ * `resolve_possible_duplicate`, which also ignores a line, is not in it. A widening adds ONE verb with its own
+ * critic review (D196 item 4b).
+ */
+export const ONE_CALL_UNDER_GRANT_VERBS: ReadonlySet<string> = new Set(['ignore_bank_line']);
+
+/** The D172 setting that carries it, and the value that turns it on (the default). */
+export const ONE_CALL_SETTING = 'agent.ignore_under_grant';
+
+/**
+ * D196 item 8: after the dial drafted an agent seat's `ignore_bank_line`, approve that draft in the same call
+ * when ALL hold: the setting is `one_call`; the owner's live grant answers `decide` for this seat
+ * (`agentDecisionGrantFor`: an agent seat, never a plugin call); the seat's ROLE carries `manage_agent_dial`
+ * with step 0 lifted (paper critic L7: else the registry refuses it every time, so it is not tried); the draft
+ * is pending; and the Vorschlag is THIS seat's own (paper critic L6: a same-key replay may answer another
+ * seat's row). Otherwise the draft answer stands, exactly as before.
+ *
+ * The approval's trace row names the Vorschlag in its arguments and entity, never in `agent_action_id`, which
+ * marks the DRAFTING call (paper critic M3). The answer is honest either way (paper critic M1): on success the
+ * verb's own result with the Vorschlag, the grant, the Vorschläge the draft replaced and the ones the decision
+ * closed; on a refusal the Vorschlag's ACTUAL status (pending, rejected with its closure, stale) and the
+ * refusal as `notDecided`.
+ */
+function decideInOneCall(deps: ApiDeps, action: ActionDef, ctx: WorkspaceContext, workspaceId: string, drafted: Result): Result {
+  if (!ONE_CALL_UNDER_GRANT_VERBS.has(action.name)) return drafted;
+  if (!drafted.ok || drafted.drafted !== true || drafted.status !== 'pending' || typeof drafted.actionId !== 'string') return drafted;
+  let mode: string;
+  try {
+    mode = getSetting<string>(ctx, ONE_CALL_SETTING);
+  } catch {
+    return drafted;
+  }
+  if (mode !== 'one_call') return drafted;
+  if (agentDecisionGrantFor(ctx, 'approve_drafted_action') === null) return drafted;
+  if (!capabilityFor(deps.store, workspaceId, deps.actor, 'manage_agent_dial', deps.identitySource, true)) return drafted;
+  const actionId = drafted.actionId;
+  const own = deps.store.db.prepare('SELECT actor FROM agent_action WHERE workspace_id = ? AND id = ?').get(workspaceId, actionId) as { actor: string } | undefined;
+  if (own === undefined || own.actor !== deps.actor) return drafted;
+
+  const approve = getAction('approve_drafted_action');
+  if (approve === undefined) return drafted;
+  const approveInput: ActionInput = { workspaceId, actionId };
+  const started = Date.now();
+  const approval = approve.run(deps, approveInput);
+  record(deps, workspaceId, {
+    verb: approve.name, kind: approve.kind, input: approveInput, mode: 'execute', reason: 'one_call_under_grant',
+    result: approval, durationMs: Date.now() - started,
+  });
+  const superseded = Array.isArray(drafted.supersededActionIds) ? { supersededActionIds: drafted.supersededActionIds } : {};
+  const row = deps.store.db
+    .prepare('SELECT status, closure_kind, history_json FROM agent_action WHERE workspace_id = ? AND id = ?')
+    .get(workspaceId, actionId) as { status: string; closure_kind: string | null; history_json: string | null } | undefined;
+  if (approval.ok && row?.status === 'executed') {
+    // An executed row answers its stored verb result on a replay, a fresh approval wraps it.
+    const verbResult = (approval.status === 'executed' && typeof approval.result === 'object' && approval.result !== null ? approval.result : approval) as Result;
+    if (verbResult.ok) return ok({ ...verbResult, ...oneCallFacts(deps, workspaceId, actionId, verbResult, row.history_json), ...superseded });
+  }
+  // Not decided: say where the Vorschlag actually stands, and why.
+  const refusal = approval.ok ? { error: 'not_executed' } : { error: approval.error, ...pick(approval, ['reason', 'grantExclusion', 'replayRefusal', 'ownerCanGrant']) };
+  return ok({
+    ...drafted,
+    status: row?.status ?? drafted.status,
+    ...(row?.closure_kind ? { closureKind: row.closure_kind } : {}),
+    notDecided: refusal,
+  });
+}
+
+/**
+ * D196 item 8: what a one-call decision adds to the verb's own answer: the Vorschlag, the grant it rode, and the
+ * Vorschläge of other seats THIS decision closed as "Zeile entschieden". An ignore that found the line already
+ * ignored decided nothing (code critic M1): it closed nothing, whatever that earlier decision closed.
+ */
+function oneCallFacts(deps: ApiDeps, workspaceId: string, actionId: string, verbResult: Result, historyJson: string | null): Record<string, unknown> {
+  const linkId = typeof verbResult.linkId === 'string' && verbResult.alreadyIgnored !== true ? verbResult.linkId : null;
+  const closed = linkId === null
+    ? []
+    : (deps.store.db
+        .prepare("SELECT id FROM agent_action WHERE workspace_id = ? AND closed_by_link_id = ? AND closure_kind = 'line_decided' ORDER BY id")
+        .all(workspaceId, linkId) as { id: string }[]).map((r) => r.id);
+  return { actionId, decidedUnderGrant: grantOnRow(historyJson), closedActionIds: closed };
+}
+
+/**
+ * D196 item 8 (code critic L2): a same-key retry of a one-call decision answers like the first call did, so an
+ * agent that lost the first answer still learns the Vorschlag and the grant.
+ */
+function withOneCallFacts(deps: ApiDeps, action: ActionDef, workspaceId: string, actionId: string | undefined, stored: Result): Result {
+  if (!ONE_CALL_UNDER_GRANT_VERBS.has(action.name) || actionId === undefined || !stored.ok) return stored;
+  const row = deps.store.db.prepare('SELECT history_json FROM agent_action WHERE workspace_id = ? AND id = ?').get(workspaceId, actionId) as { history_json: string | null } | undefined;
+  if (row === undefined) return stored;
+  return ok({ ...stored, ...oneCallFacts(deps, workspaceId, actionId, stored, row.history_json) });
+}
+
+/** The `decided_under_grant` entry on a Vorschlag's history (scope, grantor, moment), or null. */
+function grantOnRow(historyJson: string | null): { scope: unknown; grantedBy: unknown; grantedAt: unknown } | null {
+  try {
+    const history = JSON.parse(historyJson ?? '[]') as unknown;
+    if (!Array.isArray(history)) return null;
+    for (const e of history as Record<string, unknown>[]) {
+      if (e !== null && typeof e === 'object' && e.event === 'decided_under_grant') return { scope: e.scope, grantedBy: e.grantedBy, grantedAt: e.grantedAt };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/** The named fields of a refusal that are present. */
+function pick(source: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const k of keys) if (source[k] !== undefined) out[k] = source[k];
+  return out;
+}
+
+/**
  * R1: the dial capability a Vorschlag is filed under when an UNGOVERNED door met a receipt holder (no
  * dial names the verb): `close-period`, the one `files_link` takes to a booking record (`dialMap.ts`).
  */
@@ -574,6 +817,11 @@ function draftCall(
   reason: string,
   started: number,
   metHolders: readonly ReceiptHolder[] = [],
+  /**
+   * D202 critic L2: a check that must hold INSIDE the draft's own write transaction (BEGIN IMMEDIATE), so a
+   * second process cannot slip a row in between a check outside and the draft (the open-proposal cap).
+   */
+  guardInTx?: () => Result | null,
 ): Result {
   const decision = { reason };
   // N02 (D183): what the draft must store BEFORE it queues (a `sourcePath` receipt, read once and kept
@@ -593,6 +841,8 @@ function draftCall(
   let drafted: Result;
   try {
     drafted = ctx.store.tx(() => {
+      const guarded = guardInTx?.() ?? null;
+      if (guarded !== null) throw new DraftStagingRefused(guarded, true);
       const staged = staging?.stage();
       if (staged !== undefined && 'refusal' in staged) throw new DraftStagingRefused(staged.refusal, true);
       const queued = enqueueDraftedAction(ctx, {
@@ -655,7 +905,7 @@ function draftCall(
       verb: action.name, kind: action.kind, input, mode: 'execute', reason: 'idempotent_replay',
       dialCapability, result: stored, durationMs: Date.now() - started, agentActionId: actionId,
     });
-    return stored;
+    return withOneCallFacts(deps, action, workspaceId, actionId, stored);
   }
   // A fresh draft, or a replay of a draft still pending (or already rejected): the SAME Vorschlag,
   // named by the id the key minted the first time, never a second one (J3.10).

@@ -2,12 +2,16 @@
  * G15 Pendenzen after D178, the page: rendered from a canned grouped `attention_list`, so every assertion
  * is about what the surface shows and what it asks.
  *
- *  - the padlock (`visibleQueues == 0`) and the empty state ("Nichts wartet auf dich.") are different
+ *  - the padlock (`visibleQueues == 0`) and the empty state ("Nichts offen.") are different
  *    facts and never render together; a failed provider is named once and the empty state stays away;
- *  - the sections render with their counts, every row with its own, the page adds up (D178 point 11);
- *  - a section larger than its page reads the next page from the cursor, and the count stays the engine's;
- *  - the grouping control writes the person's pref and the page re-reads by kind;
- *  - "Stand" is Swiss time, in the refresh control's tooltip; no row is current on arrival; the "neu" marker;
+ *  - D207: three sections (Bankbuchungen, Weitere Vorschläge, Zu erledigen) in the engine's order, their rows
+ *    adding up to the header count; no hub triage in any ⋯ (no "Aufgabe erstellen", no "Referenz kopieren");
+ *  - D201: more rows behind a cursor
+ *    read on request; the filters (search, kind chips with counts, area and sender facets) narrow it
+ *    client-side, offer only what changes the list, end in a filtered-empty state with "Filter
+ *    zurücksetzen", and persist as the person's `attention.filters`;
+ *  - one line per row with the kind's glyph; the reason opens in place from the chevron;
+ *  - "Stand" is Swiss time, in the refresh control's tooltip; no row is current on arrival; no "neu" badge;
  *    no hub-side hide; an empty "Ereignisse" zone draws nothing;
  *  - the five states (skeleton, empty, error with retry, success, a paging section) and axe.
  */
@@ -86,8 +90,6 @@ function renderHub(canned: Canned, opts: { store?: PrefsStore } = {}) {
   return { ...view, calls, client };
 }
 
-const sectionOf = (key: string) => document.querySelector(`[data-section="${key}"]`) as HTMLElement | null;
-
 /** Each row's way in for the roving focus: its one button (no title is a button, the fresh-eyes judge N4 M4). */
 const focusTargets = () =>
   [...document.querySelectorAll<HTMLElement>('.att-row')].map((r) => r.querySelector('.att-row-action button') as HTMLButtonElement);
@@ -98,15 +100,15 @@ beforeEach(() => {
 });
 
 describe('Pendenzen: padlock vs empty vs work waiting', () => {
-  it('padlock: visibleQueues 0 shows the padlock and NEVER "Nichts wartet auf dich."', async () => {
+  it('padlock: visibleQueues 0 shows the padlock and NEVER "Nichts offen."', async () => {
     renderHub({ attention_list: ok(groupedOf([], { visibleQueues: 0 })) });
     expect(await screen.findByText('Hier gibt es nichts zu zeigen')).toBeInTheDocument();
-    expect(screen.queryByText('Nichts wartet auf dich.')).toBeNull();
+    expect(screen.queryByText('Nichts offen.')).toBeNull();
   });
 
   it('empty: everything readable and nothing waiting says so in one line, only when nothing failed', async () => {
     renderHub({ attention_list: ok(groupedOf([])) });
-    expect(await screen.findByText('Nichts wartet auf dich.')).toBeInTheDocument();
+    expect(await screen.findByText('Nichts offen.')).toBeInTheDocument();
     expect(screen.getByText('Was eine Entscheidung von dir braucht, erscheint hier.')).toBeInTheDocument();
     expect(document.querySelectorAll('[data-section]').length).toBe(0);
   });
@@ -115,7 +117,7 @@ describe('Pendenzen: padlock vs empty vs work waiting', () => {
     renderHub({ attention_list: ok(groupedOf([], { failed: ['dunning_run'] })) });
     expect(await screen.findByText('Mahnwesen konnte nicht geladen werden.')).toBeInTheDocument();
     expect(screen.getAllByText(/konnte nicht geladen werden/)).toHaveLength(1);
-    expect(screen.queryByText('Nichts wartet auf dich.')).toBeNull();
+    expect(screen.queryByText('Nichts offen.')).toBeNull();
     expect(screen.getByText('unvollständig', { exact: false })).toBeInTheDocument();
   });
 
@@ -134,79 +136,101 @@ describe('Pendenzen: padlock vs empty vs work waiting', () => {
   });
 });
 
-describe('Pendenzen: the sections add up (D178 point 11)', () => {
-  it('Bank first with its Vorschläge, then the lines; every section names its count and every row its own', async () => {
-    const rows = [
-      bankVorschlag('a1'),
-      bankVorschlag('a2'),
-      linesRow(5),
-      row('review_flag', 'e1'),
-      row('dunning_run', 'run_1'),
-    ];
+describe('Pendenzen: three sections (D207 point 2)', () => {
+  it('one read, three sections in the engine\'s order; the rows add up to the header count', async () => {
+    const rows = [bankVorschlag('a1'), bankVorschlag('a2'), linesRow(5), row('review_flag', 'e1'), row('dunning_run', 'run_1')];
     const { calls } = renderHub({ attention_list: ok(groupedOf(rows)) });
     await screen.findByText('5 Bankzeilen zu buchen');
-    expect(calls.find((c) => c.action === 'attention_list')?.input).toMatchObject({ workspaceId: 'ws_test', grouping: 'by_area' });
-    const sections = [...document.querySelectorAll('[data-section]')].map((s) => [s.getAttribute('data-section'), Number(s.getAttribute('data-count'))]);
-    expect(sections).toEqual([
-      ['bank', 7],
-      ['accounting', 1],
-      ['sales', 1],
-    ]);
-    // The arithmetic is on the page: the rows' own counts add up to each section's count.
-    for (const [key, count] of sections) {
-      const units = [...(sectionOf(String(key))?.querySelectorAll('[data-row-count]') ?? [])].reduce((n, r) => n + Number(r.getAttribute('data-row-count')), 0);
-      expect(units).toBe(count);
-    }
-    const bank = sectionOf('bank') as HTMLElement;
-    expect(within(bank).getByRole('heading', { level: 2 })).toHaveTextContent(/Bank\s*7/);
-    // No "Nach Bereich" index any more: the sections are the index.
-    expect(screen.queryByText('Alle Bereiche')).toBeNull();
+    expect(calls.filter((c) => c.action === 'attention_list')).toHaveLength(1);
+    expect(calls.find((c) => c.action === 'attention_list')?.input).toMatchObject({ workspaceId: 'ws_test', grouping: 'by_kind' });
+    // D207: the bank decisions, then the to-dos; no "Weitere Vorschläge" section without such a row.
+    expect([...document.querySelectorAll('[data-section]')].map((s) => s.getAttribute('data-section'))).toEqual(['bank', 'todo']);
+    expect(screen.getByRole('heading', { name: /Bankbuchungen/ })).toHaveTextContent('Bankbuchungen2');
+    expect(screen.getByRole('heading', { name: /Zu erledigen/ })).toHaveTextContent('Zu erledigen7');
+    const units = [...document.querySelectorAll('[data-row-count]')].reduce((n, r) => n + Number(r.getAttribute('data-row-count')), 0);
+    expect(units).toBe(9);
   });
 
-  it('a section larger than its page offers the rest and reads it from the cursor; the count stays the engine\'s', async () => {
+  it('more rows behind a cursor are read on request, from the cursor; the count stays the engine\'s', async () => {
     const first = groupedOf([row('dunning_run', 'run_1')], { more: { sales: { count: 2, nextCursor: '1' } } });
     const page2 = groupedOf([row('dunning_run', 'run_2'), row('dunning_run', 'run_3')]);
     const { calls } = renderHub({
       attention_list: (input) => ok(input.cursor === '1' ? { ...page2, sections: [{ ...(page2.sections as Record<string, unknown>[])[0], count: 3 }] } : first),
     });
     const more = await screen.findByRole('button', { name: 'Weitere 2 anzeigen' });
-    expect(sectionOf('sales')?.getAttribute('data-count')).toBe('3');
     await userEvent.click(more);
-    await waitFor(() => expect(sectionOf('sales')?.querySelectorAll('[data-row-count]')).toHaveLength(3));
-    expect(calls.filter((c) => c.action === 'attention_list').at(-1)?.input).toMatchObject({ grouping: 'by_area', section: 'sales', cursor: '1' });
+    await waitFor(() => expect(document.querySelectorAll('[data-row-count]')).toHaveLength(3));
+    expect(calls.filter((c) => c.action === 'attention_list').at(-1)?.input).toMatchObject({ section: 'sales', cursor: '1' });
     expect(screen.queryByRole('button', { name: /Weitere/ })).toBeNull();
   });
+});
 
-  it('the grouping control writes the person\'s pref and the page re-reads by kind', async () => {
+describe('Pendenzen: the filters (D201 point 4)', () => {
+  const rows = [bankVorschlag('a1'), bankVorschlag('a2'), linesRow(2), row('review_flag', 'e1'), row('dunning_run', 'run_1')];
+  // The fixture's engine kinds: two Vorschläge and the Mahnlauf (approve), the lines (do), the flag (note).
+  const shown = () => document.querySelectorAll('.att-list > li').length;
+
+  it('D208: the chips Alle / Bank / Erledigen name their counts; a chip shows its section alone and the search narrows it further', async () => {
+    renderHub({ attention_list: ok(groupedOf(rows)) });
+    await screen.findByText('2 Bankzeilen zu buchen');
+    const kinds = screen.getByRole('group', { name: 'Art' });
+    // No "Vorschläge" chip: no row of that section here (a chip only where it changes the list).
+    expect(within(kinds).getAllByRole('button').map((b) => b.textContent?.replace(/\s+/g, ''))).toEqual(['Alle6', 'Bank2', 'Erledigen4']);
+    await userEvent.click(within(kinds).getByRole('button', { name: /Erledigen/ }));
+    expect(shown()).toBe(3);
+    expect(screen.getByText('2 Bankzeilen zu buchen')).toBeInTheDocument();
+    await userEvent.click(within(kinds).getByRole('button', { name: /Alle/ }));
+    expect(shown()).toBe(5);
+    await userEvent.type(screen.getByRole('searchbox'), 'Mahnlauf');
+    expect(shown()).toBe(1);
+    expect(screen.getByText('Mahnlauf bereit zum Ausstellen')).toBeInTheDocument();
+  });
+
+  it('the area and the sender are facets under "+ Filter"; choosing one narrows the list', async () => {
+    renderHub({ attention_list: ok(groupedOf(rows)) });
+    await screen.findByText('2 Bankzeilen zu buchen');
+    await userEvent.click(document.querySelector('.facet-chip-add') as HTMLElement);
+    const options = screen.getAllByRole('menuitem').map((m) => m.textContent);
+    expect(options).toEqual(expect.arrayContaining(['Bank', 'Buchhaltung', 'Verkauf', 'Agent', 'TILL']));
+    await userEvent.click(screen.getAllByRole('menuitem').find((m) => m.textContent === 'Agent') as HTMLElement);
+    expect(shown()).toBe(2);
+  });
+
+  it('a filter that hides everything says so and offers "Filter zurücksetzen", which brings every row back', async () => {
+    renderHub({ attention_list: ok(groupedOf(rows)) });
+    await screen.findByText('2 Bankzeilen zu buchen');
+    await userEvent.type(screen.getByRole('searchbox'), 'gibt es nicht');
+    expect(screen.getByText('Keine Treffer.')).toBeInTheDocument();
+    const resets = screen.getAllByRole('button', { name: 'Filter zurücksetzen' });
+    await userEvent.click(resets[resets.length - 1] as HTMLElement);
+    expect(shown()).toBe(5);
+    expect(screen.getByRole('searchbox')).toHaveValue('');
+  });
+
+  it('the section, area and sender persist as the person\'s attention.filters; a stored filter reopens the list filtered', async () => {
     const prefWrites: Call[] = [];
     const prefsTransport: Transport = async (action, input) => {
-      if (action === 'prefs_list') return ok({ prefs: [], areas: [] });
+      if (action === 'prefs_list') {
+        return ok({ prefs: [{ key: 'attention.filters', value: { sections: ['todo'], area: 'all', actor: 'all' }, isDefault: false }], areas: [] });
+      }
       if (action === 'prefs_set') {
         prefWrites.push({ action, input: input as Record<string, unknown> });
-        return ok({ key: 'attention.grouping', value: (input as Record<string, unknown>).value, changed: true, isDefault: false });
+        return ok({ key: 'attention.filters', value: (input as Record<string, unknown>).value, changed: true, isDefault: false });
       }
       return ok();
     };
     const store = new PrefsStore(new TillClient(prefsTransport), 'ws_test', { useCache: false });
-    const rows = [bankVorschlag('a1'), linesRow(2), row('dunning_run', 'run_1')];
-    const { calls } = renderHub(
-      { attention_list: (input) => ok(groupedOf(rows, { grouping: input.grouping === 'by_kind' ? 'by_kind' : 'by_area' })) },
-      { store },
-    );
-    await screen.findByText('2 Bankzeilen zu buchen');
-    expect(screen.getByRole('radio', { name: 'Nach Bereich' })).toHaveAttribute('aria-checked', 'true');
-    await userEvent.click(screen.getByRole('radio', { name: 'Nach Art' }));
-    await waitFor(() => expect(sectionOf('approve')).not.toBeNull());
-    expect(prefWrites[0]?.input).toMatchObject({ key: 'attention.grouping', value: 'by_kind' });
-    expect(calls.filter((c) => c.action === 'attention_list').at(-1)?.input).toMatchObject({ grouping: 'by_kind' });
-    // A Mahnlauf waiting for approval is a Vorschlag to approve (round 2): it counts under Genehmigen.
-    expect([...document.querySelectorAll('[data-section]')].map((s) => s.getAttribute('data-section'))).toEqual(['approve', 'do']);
-    expect(within(sectionOf('approve') as HTMLElement).getByRole('heading', { level: 2 })).toHaveTextContent(/Genehmigen\s*2/);
+    renderHub({ attention_list: ok(groupedOf(rows)) }, { store });
+    await screen.findByText('Buchung beanstandet');
+    await waitFor(() => expect(shown()).toBe(3));
+    await userEvent.click(within(screen.getByRole('group', { name: 'Art' })).getByRole('button', { name: /Bank/ }));
+    await waitFor(() => expect(prefWrites.at(-1)?.input).toMatchObject({ key: 'attention.filters', value: { sections: ['bank'], area: 'all', actor: 'all' } }));
+    expect(shown()).toBe(2);
   });
 });
 
 describe('Pendenzen: one row pattern', () => {
-  it('a row is a title over one meta line, ONE real button, the reason behind the (i), the rest in the ⋯', async () => {
+  it('a row is one line: the kind\'s glyph, the title and its meta, ONE real button, the reason in place behind the chevron, the rest in the ⋯', async () => {
     const flag = {
       ...row('review_flag', 'e1'),
       subtitleParams: { date: '2026-07-03', description: 'Honorar Juli', reviewer: 'Reto Muster', reason: 'Falsches Konto' },
@@ -224,15 +248,17 @@ describe('Pendenzen: one row pattern', () => {
     expect(title.tagName).not.toBe('BUTTON');
     expect(screen.queryByRole('button', { name: 'Buchung beanstandet' })).toBeNull();
     const line = title.closest('.att-row') as HTMLElement;
-    // N4 H1: no glyph in the lead column of a row that has no batch box.
-    expect(line.querySelector('.att-lead')?.childElementCount).toBe(0);
+    // D208: no lead glyph column; the lead keeps only the box's slot, so every title starts on one edge.
+    expect(line.querySelector('.att-lead .att-kind')).toBeNull();
     // The meta line: values only, the date in Swiss form and LAST (one order on every row).
     expect(line.querySelector('.att-row-meta')).toHaveTextContent('Honorar Juli · 03.07.2026');
-    // Nothing explanatory at rest: the reason sentence is only in the (i)'s tooltip.
-    const info = within(line).getByRole('button', { name: 'Info' });
-    const tip = document.getElementById(info.getAttribute('aria-describedby') ?? '');
-    expect(tip).toHaveTextContent('Markiert von Reto Muster: Falsches Konto');
-    expect(line.querySelector('.att-row-meta')).not.toHaveTextContent('Falsches Konto');
+    // Nothing explanatory at rest: the reason opens in place from the chevron.
+    expect(line).not.toHaveTextContent('Falsches Konto');
+    const disclose = within(line).getByRole('button', { name: 'Details: Buchung beanstandet' });
+    expect(disclose).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(disclose);
+    expect(disclose).toHaveAttribute('aria-expanded', 'true');
+    expect(document.getElementById(disclose.getAttribute('aria-controls') ?? '')).toHaveTextContent('Markiert von Reto Muster: Falsches Konto');
     // ONE real button (an edge, never ghost text): the link here; the resolve sits in the ⋯.
     const action = within(line).getByRole('button', { name: 'Buchung öffnen' });
     expect(action.className).toContain('btn--secondary');
@@ -273,7 +299,7 @@ describe('Pendenzen: time, focus, marker, triage', () => {
     expect((await screen.findByText('Stand 10:21')).closest('[role="tooltip"]')).not.toBeNull();
   });
 
-  it('nothing is current on arrival; Tab lands on the first row, the arrows move across sections; Enter opens', async () => {
+  it('nothing is current on arrival; Tab lands on the first row, the arrows move down the list; Enter opens', async () => {
     renderHub({ attention_list: ok(groupedOf([linesRow(2), row('review_flag', 'e1'), row('dunning_run', 'run_1')])) });
     await screen.findByText('2 Bankzeilen zu buchen');
     expect(document.querySelector('[aria-current="true"]')).toBeNull();
@@ -288,49 +314,19 @@ describe('Pendenzen: time, focus, marker, triage', () => {
     expect(screen.getByTestId('where')).toHaveTextContent('/dunning?id=run_1');
   });
 
-  it('tags a row "neu" only when it is newer than the per-workspace last-seen marker', async () => {
+  it('no "neu" badge on any row (D186: no decoration words)', async () => {
     window.localStorage.setItem('till.attention.lastSeen.ws_test', '2026-08-01T12:00:00.000Z');
     renderHub({ attention_list: ok(groupedOf([{ ...row('dunning_run', 'run_1'), since: '2026-08-02' }, { ...row('dunning_run', 'run_2'), since: '2026-07-01' }])) });
     await screen.findAllByText('Mahnlauf bereit zum Ausstellen');
-    expect(screen.getAllByText('neu')).toHaveLength(1);
+    expect(screen.queryByText('neu')).toBeNull();
   });
 
-  // Ported from the pre-D178 suite (critic N4 L3): the behaviour is still live.
-  it('a missing marker renders zero "neu" tags (never everything tagged new)', async () => {
-    renderHub({ attention_list: ok(groupedOf([{ ...row('dunning_run', 'run_1'), since: '2026-08-10' }])) });
+  it('there is no hub-side hide, mute or snooze, and no hub triage (D207): a row with one exit draws no ⋯', async () => {
+    renderHub({ attention_list: ok(groupedOf([row('dunning_run', 'run_1'), bankVorschlag('a1')])) });
     await screen.findByText('Mahnlauf bereit zum Ausstellen');
-    expect(screen.queryByText('neu')).not.toBeInTheDocument();
-  });
-
-  it('there is no hub-side hide, mute or snooze; the ⋯ triages only', async () => {
-    renderHub({ attention_list: ok(groupedOf([row('dunning_run', 'run_1')])) });
-    await screen.findByText('Mahnlauf bereit zum Ausstellen');
-    await userEvent.click(screen.getByRole('button', { name: /Aktionen für Mahnlauf/ }));
-    const items = screen.getAllByRole('menuitem').map((m) => m.textContent);
-    expect(items).toContain('Referenz kopieren');
-    expect(items.join(' ')).not.toMatch(/ausblenden|stumm|später/i);
-  });
-
-  // Ported from the pre-D178 suite (critic N4 L3): the defer still sits in every row's ⋯.
-  it('a successful defer confirms it (a defer changes no visible row, so it NEEDS the banner)', async () => {
-    const { calls } = renderHub({ attention_list: ok(groupedOf([row('dunning_run', 'run_1')])), tasks_create: ok({ id: 'task_1' }) });
-    await screen.findByText('Mahnlauf bereit zum Ausstellen');
-    await userEvent.click(screen.getByRole('button', { name: /Aktionen für Mahnlauf/ }));
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Aufgabe erstellen' }));
-    expect(await screen.findByText('Aufgabe erstellt.')).toBeInTheDocument();
-    expect(calls.find((c) => c.action === 'tasks_create')?.input).toMatchObject({ workspaceId: 'ws_test', title: 'Mahnlauf bereit zum Ausstellen', entityKind: 'dunning_run', entityId: 'run_1' });
-  });
-
-  it('a failed tasks_create shows the refusal, NOT a silent success', async () => {
-    renderHub({
-      attention_list: ok(groupedOf([row('dunning_run', 'run_1')])),
-      tasks_create: { status: 422, body: { ok: false, error: 'permission_denied' } },
-    });
-    await screen.findByText('Mahnlauf bereit zum Ausstellen');
-    await userEvent.click(screen.getByRole('button', { name: /Aktionen für Mahnlauf/ }));
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Aufgabe erstellen' }));
-    expect(await screen.findByText('Dafür fehlt dir die Berechtigung.')).toBeInTheDocument();
-    expect(screen.queryByText('Aufgabe erstellt.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Aktionen für/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Mehr zu/ })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Referenz kopieren|Aufgabe erstellen|ausblenden|stumm|später/i);
   });
 
   it('a failed queue with no label at all is named by its readable id, never the dot path', async () => {
@@ -348,7 +344,7 @@ describe('Pendenzen: time, focus, marker, triage', () => {
     expect(screen.queryByRole('heading', { name: 'Ereignisse' })).toBeNull();
   });
 
-  it('has no axe violations with sections, the batch bar and rows rendered', async () => {
+  it('has no axe violations with the filters, the list and rows rendered', async () => {
     const { container } = renderHub({
       attention_list: ok(groupedOf([bankVorschlag('a1'), bankVorschlag('a2'), linesRow(5), row('review_flag', 'e1'), row('dunning_run', 'run_1')])),
       list_drafted_actions: ok({ actions: [] }),

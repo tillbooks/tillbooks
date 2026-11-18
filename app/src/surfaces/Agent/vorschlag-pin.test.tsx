@@ -16,7 +16,14 @@ import { TillClientProvider } from '../../lib/client-context';
 import { TillClient, type RestResponse, type Transport } from '../../lib/client';
 import { WorkspaceProvider } from '../../app/workspace';
 import { Agent } from './index';
-import { VorschlagLine } from './VorschlagLine';
+import { VorschlagDetail } from './VorschlagDetail';
+import { itemOf } from './vorschlagView';
+import type { AccountNameMap } from './vorschlagDetails';
+
+/** D197: the read-back a person judges before approving is the detail pane of the Vorschläge screen. */
+function Detail({ action, accountNames }: { action: DraftedAction; accountNames?: AccountNameMap; onApprove?: unknown; onReject?: unknown }) {
+  return <VorschlagDetail item={itemOf(action, action)} {...(accountNames !== undefined ? { accountNames } : {})} onApprove={() => undefined} onReject={() => undefined} />;
+}
 import { Turn } from './TurnList';
 import { parseDrafted, type AgentTurn, type DraftedAction } from './model';
 
@@ -63,7 +70,7 @@ const issueDraft: DraftedAction = {
 
 /** D167: the figures live in the line's Details disclosure, one click on the title. */
 function openDetails() {
-  fireEvent.click(document.querySelector('.vorschlag-line-title') as HTMLElement);
+  // D197: the detail pane shows the read-back without a disclosure.
 }
 
 const rows = () =>
@@ -82,48 +89,52 @@ describe('D162 point 1 on the line\'s face: the essentials without opening Detai
     ['acc_1020', '1020 Bank'],
     ['acc_6570', '6570 Informatik'],
   ]);
-  const face = () => document.querySelector('[data-figure="key"]')?.textContent;
+  // D197: the amount stands on its own above, the accounts and parties on the facts line beneath it.
+  const face = () => [document.querySelector('.vdet-amount')?.textContent, document.querySelector('[data-figure="key"]')?.textContent].filter(Boolean).join(' · ');
 
   it('an issue: the pinned counterparty, the recipient and the total', () => {
-    wrap(<VorschlagLine action={issueDraft} onApprove={() => undefined} onReject={() => undefined} />);
-    expect(document.querySelector('.vorschlag-readback')).toBeNull();
-    expect(face()).toBe("CHF 1'081.00 · Muster AG · an buchhaltung@muster.example");
+    wrap(<Detail action={issueDraft} onApprove={() => undefined} onReject={() => undefined} />);
+    // On the face, above the read-back: never behind a disclosure.
+    // The counterparty is the subject above, so the facts line names only what the subject does not.
+    expect(screen.getByRole('heading', { name: 'Muster AG' })).toBeInTheDocument();
+    expect(face()).toBe("CHF 1'081.00 · an buchhaltung@muster.example");
   });
 
   it('a posting with two lines: debit an credit in words, and the total', () => {
     const post: DraftedAction = { ...issueDraft, actionId: 'act_p', actionTool: 'post_entry', dialCapability: 'post', figures: null, payload: { workspaceId: 'ws_test', date: '2026-10-10', lines: [{ account: 'acc_6500', debit: 4850 }, { account: 'acc_1020', credit: 4850 }] } };
-    wrap(<VorschlagLine action={post} accountNames={names} onApprove={() => undefined} onReject={() => undefined} />);
-    expect(document.querySelector('.vorschlag-readback')).toBeNull();
+    wrap(<Detail action={post} accountNames={names} onApprove={() => undefined} onReject={() => undefined} />);
     expect(face()).toBe('CHF 48.50 · 6500 Büromaterial an 1020 Bank');
   });
 
   it('a posting with more lines says how many accounts; a bank booking says where it books', () => {
     const many: DraftedAction = { ...issueDraft, actionId: 'act_m', actionTool: 'post_entry', dialCapability: 'post', figures: null, payload: { lines: [{ account: 'acc_6500', debit: 4000 }, { account: 'acc_6570', debit: 850 }, { account: 'acc_1020', credit: 4850 }] } };
-    const { unmount } = wrap(<VorschlagLine action={many} accountNames={names} onApprove={() => undefined} onReject={() => undefined} />);
+    const { unmount } = wrap(<Detail action={many} accountNames={names} onApprove={() => undefined} onReject={() => undefined} />);
     expect(face()).toBe('CHF 48.50 · 3 Konten');
     unmount();
     const bank: DraftedAction = { ...issueDraft, actionId: 'act_b', actionTool: 'book_bank_line', dialCapability: 'post', figures: null, payload: { bankTxnId: 'bt_1', target: { kind: 'accounts', legs: [{ accountId: 'acc_6570', amountMinor: 1654, taxCode: 'VST-I' }] } } };
-    wrap(<VorschlagLine action={bank} accountNames={names} onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<Detail action={bank} accountNames={names} onApprove={() => undefined} onReject={() => undefined} />);
     expect(face()).toBe('CHF 16.54 · auf 6570 Informatik');
   });
 
   it('without the chart a posting still names its sides as "Konto", never an id', () => {
     const post: DraftedAction = { ...issueDraft, actionId: 'act_n', actionTool: 'post_entry', dialCapability: 'post', figures: null, payload: { lines: [{ account: 'acc_6500aaaa-0000-4000-8000-000000000001', debit: 4850 }, { account: 'acc_1020bbbb-0000-4000-8000-000000000002', credit: 4850 }] } };
-    wrap(<VorschlagLine action={post} onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<Detail action={post} onApprove={() => undefined} onReject={() => undefined} />);
     expect(face()).toBe('CHF 48.50 · Konto an Konto');
   });
 });
 
 describe('the card shows what is being approved', () => {
   it('leads with the frozen figures: Netto with currency, draft number, counterparty, line count', () => {
-    wrap(<VorschlagLine action={issueDraft} onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<Detail action={issueDraft} onApprove={() => undefined} onReject={() => undefined} />);
     openDetails();
     const shown = rows();
     expect(shown[0]?.[0]).toBe('Netto');
     expect(shown[0]?.[1]).toContain("1'000.00");
     expect(shown[0]?.[1]).toContain('CHF');
     expect(shown).toContainEqual(['Nummer', 'Entwurf, noch ohne Nummer']);
-    expect(shown).toContainEqual(['Gegenpartei', 'Muster AG']);
+    // The pinned counterparty is the detail's subject; the read-back does not repeat it (the judge, D197).
+    expect(screen.getByRole('heading', { name: 'Muster AG' })).toBeInTheDocument();
+    expect(shown.some(([, value]) => value === 'Muster AG')).toBe(false);
     expect(shown).toContainEqual(['Positionen', '2']);
     // Critic round 2: the recipient the send goes to, and VAT and gross beside the net.
     expect(shown).toContainEqual(['An', 'buchhaltung@muster.example']);
@@ -131,7 +142,7 @@ describe('the card shows what is being approved', () => {
     expect(shown.find(([term]) => term === 'Total')?.[1]).toContain("1'081.00");
     // The figure is the lead: it is not repeated by the payload-derived amount row.
     expect(shown.filter(([, value]) => value.includes("1'000.00"))).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Genehmigen' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Freigeben' })).not.toHaveAttribute('aria-disabled');
   });
 
   it('an issued number, a foreign currency and the plain amount label render as given', () => {
@@ -140,12 +151,12 @@ describe('the card shows what is being approved', () => {
       actionTool: 'payment_batch_transmit',
       figures: { number: 'R-2026-0007', numberPending: false, counterparty: null, recipient: null, amountMinor: 250050, amountBasis: 'amount', currency: 'EUR', taxMinor: null, grossMinor: null, lineCount: 3 },
     };
-    wrap(<VorschlagLine action={run} onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<Detail action={run} onApprove={() => undefined} onReject={() => undefined} />);
     openDetails();
     const shown = rows();
-    expect(shown[0]?.[0]).toBe('Betrag');
-    expect(shown[0]?.[1]).toContain('EUR');
-    expect(shown[0]?.[1]).toContain("2'500.50");
+    // D197: the plain amount is the header's, in its own currency, said once.
+    expect(document.querySelector('.vdet-amount')?.textContent).toBe("EUR 2'500.50");
+    expect(shown.some(([, value]) => value.includes("2'500.50"))).toBe(false);
     expect(shown).toContainEqual(['Nummer', 'R-2026-0007']);
     expect(shown.some(([term]) => term === 'Gegenpartei')).toBe(false);
     expect(shown.some(([term]) => term === 'MWST' || term === 'An')).toBe(false);
@@ -153,27 +164,23 @@ describe('the card shows what is being approved', () => {
 
   it('a Vorschlag with no frozen figures keeps the payload read-back it always had', () => {
     const plain: DraftedAction = { ...issueDraft, actionTool: 'record_payment', figures: null, payload: { workspaceId: 'ws_test', amountMinor: 120000 } };
-    wrap(<VorschlagLine action={plain} onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<Detail action={plain} onApprove={() => undefined} onReject={() => undefined} />);
     openDetails();
-    expect(rows()[0]?.[1]).toContain("1'200.00");
+    expect(document.querySelector('.vdet-amount')?.textContent).toBe("CHF 1'200.00");
     expect(rows().some(([term]) => term === 'Nummer')).toBe(false);
   });
 
   it('when the record changed since the proposal the card says so and holds the approve', () => {
-    const { container } = wrap(<VorschlagLine action={{ ...issueDraft, changedSinceProposal: true }} onApprove={() => undefined} onReject={() => undefined} />);
-    // Critic N4 L4: on /agent the sentence is VISIBLE under the line at rest, not only in a tooltip (only
-    // Pendenzen's compact line moves the explanation behind the (i)).
-    const said = container.querySelector('.vorschlag-line-changed');
-    expect(said).not.toBeNull();
-    expect(said?.closest('[role="tooltip"]')).toBeNull();
-    expect(said?.textContent).toContain('Seit dem Vorschlag geändert. Genehmigen würde nichts ausführen.');
-    openDetails();
-    expect(screen.getAllByText(/Seit dem Vorschlag geändert/).length).toBeGreaterThan(0);
-    expect(screen.queryByRole('button', { name: 'Genehmigen' })).toBeNull();
-    // Rejecting stays possible, from the overflow.
-    fireEvent.click(screen.getByRole('button', { name: 'Mehr zu: Rechnung ausstellen' }));
-    expect(screen.queryByRole('menuitem', { name: 'Genehmigen und künftig automatisch' })).toBeNull();
-    expect(screen.getByRole('menuitem', { name: 'Ablehnen' })).toBeEnabled();
+    wrap(<Detail action={{ ...issueDraft, changedSinceProposal: true }} onApprove={() => undefined} onReject={() => undefined} />);
+    // D197 (DESIGN.md rule 3 as amended by D177): Freigeben stays in
+    // place DISABLED with the whole reason on its tooltip, and Ablehnen stays possible.
+    // The reason is the disabled Freigeben's tooltip, said once (the judge: no caption repeating it).
+    const approve = screen.getByRole('button', { name: 'Freigeben' });
+    expect(approve).toHaveAttribute('aria-disabled', 'true');
+    expect(approve).toHaveAccessibleDescription('Seit dem Vorschlag geändert: Freigeben würde nichts ausführen');
+    expect(screen.getByRole('button', { name: 'Ablehnen' })).toBeEnabled();
+    // No standing grant on a changed record.
+    expect(screen.queryByRole('button', { name: /^Mehr zu:/ })).toBeNull();
   });
 
   it('parseDrafted reads the figures defensively: a malformed shape is absent, never guessed', () => {
@@ -211,14 +218,14 @@ describe('the stale refusal is named in words', () => {
     };
     const { container } = wrap(<Agent />, transport);
     fireEvent.click(await screen.findByRole('tab', { name: 'Vorschläge' }));
-    await screen.findAllByRole('article');
-    fireEvent.click(screen.getByRole('button', { name: 'Genehmigen' }));
-    const banner = await screen.findByText(/Nicht ausgeführt: Die Daten hinter diesem Vorschlag haben sich geändert/);
-    expect(banner).toBeInTheDocument();
-    expect(container.querySelector('.action-feedback--warn')).not.toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: /Muster AG/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Freigeben' }));
+    // D197: the outcome is the transient toast naming the row; it says nothing ran, never an approval.
+    const toast = await screen.findByText(/Nicht ausgeführt, seit dem Vorschlag geändert: Muster AG/);
+    expect(toast.closest('.vtoast')?.getAttribute('data-tone')).toBe('warn');
     expect(container.querySelector('[data-just-committed]')).toBeNull();
-    expect(screen.queryByText('Genehmigt und ausgeführt')).toBeNull();
-    await waitFor(() => expect(screen.queryAllByRole('article')).toHaveLength(0));
+    expect(screen.queryByText(/^Freigegeben:/)).toBeNull();
+    await waitFor(() => expect(container.querySelectorAll('.vq-list .vrow')).toHaveLength(0));
   });
 
   it('the trace names a void proposal beside its drafting call', () => {

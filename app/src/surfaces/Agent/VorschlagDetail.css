@@ -1,0 +1,139 @@
+/* D197: the detail pane of the Vorschläge screen. One surface layer: whitespace and alignment, no card. */
+.vdet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  min-width: 0;
+}
+
+.vdet-back {
+  align-self: flex-end;
+}
+
+.vdet-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--t-space-1) var(--t-space-4);
+}
+
+/* The subject keeps a readable width; a narrow pane puts the amount on its own line under it. */
+.vdet-title {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.vdet-subject {
+  margin: 0;
+  font-size: var(--t-font-xl);
+  line-height: var(--t-lh-xl);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.vdet-subject:focus {
+  outline: none;
+}
+
+.vdet-kind {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.vdet-amount {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: var(--t-font-xl);
+  line-height: var(--t-lh-xl);
+  font-weight: 600;
+}
+
+.vdet-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1) var(--t-space-3);
+  margin: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.vdet .vorschlag-line-reason {
+  -webkit-line-clamp: unset;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+}
+
+/* The decision: large icons in one row, their words on hover and focus. */
+.vdet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+.vdet-actions .icon-button {
+  width: 44px;
+  height: 44px;
+}
+
+/* DESIGN.md rule 3 as amended by D177: a commit that cannot act stays in place, faint, dashed, not-allowed. */
+.vdet-approve--disabled,
+.vdet-approve--disabled:hover {
+  color: var(--t-text-faint);
+  background: transparent;
+  border: 1px dashed var(--t-border-strong);
+  cursor: not-allowed;
+}
+
+.vdet-hint {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+}
+
+.vdet-change {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--t-space-1) var(--t-space-4);
+  margin: 0;
+}
+
+.vdet-change > div {
+  display: contents;
+}
+
+.vdet-change dt {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+}
+
+.vdet-change dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.vdet-change-new {
+  font-weight: 600;
+}
+
+.vdet-reason {
+  margin: 0;
+}
+
+.vdet-readback {
+  margin: 0;
+  padding-top: var(--t-space-3);
+  border-top: 1px solid var(--t-border);
+}
+
+/* The Beleg preview: in the detail a thumbnail a person can read, not a stamp. */
+.vdet .vorschlag-beleg-thumb {
+  max-height: 12rem;
+  max-width: 100%;
+}

@@ -19,6 +19,7 @@ import { wageJournalPost, wageJournalReverse, listPayrollHandoffs } from '../../
 import { bookBankLine, reopenBankLine } from '../../dist/core/banking/index.js';
 import { CAPABILITY_FOR_ACTION } from '../../dist/core/access/actionCapabilities.js';
 import { setup, capCtx, counts, wageLines, secondWorkspace } from './support.mjs';
+import { assertAuditRow, assertPermission } from '../support/d204.mjs';
 import { world as bankWorld, importLines, excuseClaimInvariant } from '../banking/bank-inbox-support.mjs';
 
 const DATE = '2026-07-05';
@@ -116,11 +117,30 @@ test('D171: a locked period refuses period_locked before any write', () => {
   assert.deepEqual(counts(t.store, t.workspaceId), before);
 });
 
-test('D171: a reason is required, post is required, an unknown id and another tenant see not_found', () => {
+test('D204 payroll: a wage journal reverses with no reason; the mirror is a new entry, the trail keeps who, when, what and the permission', () => {
   const t = setup();
   const p = posted(t);
   const before = counts(t.store, t.workspaceId);
-  assert.equal(reverse(t, p.wageJournalPostId, 'g-1', '   ').error, 'reason_required');
+  const original = t.store.db.prepare('SELECT COUNT(*) AS n FROM journal_line WHERE entry_id = ?').get(p.postedEntryId).n;
+  const res = reverse(t, p.wageJournalPostId, 'd204-1', '   ');
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(res.reason, null, 'a blank reason is absent, not a refusal');
+  const mirror = t.store.db.prepare('SELECT reverses_entry_id, description FROM journal_entry WHERE id = ?').get(res.reversalEntryId);
+  assert.equal(mirror.reverses_entry_id, p.postedEntryId, 'what: the mirror names the original');
+  assert.doesNotMatch(mirror.description, /: $/, 'no dangling colon');
+  assert.equal(t.store.db.prepare('SELECT COUNT(*) AS n FROM journal_line WHERE entry_id = ?').get(p.postedEntryId).n, original, 'append-only');
+  assertAuditRow(t.store, t.workspaceId, { entityKind: 'payroll_handoff', entityId: p.wageJournalPostId, action: 'reverse', actor: t.ctx.actor });
+  assertPermission('wage_journal_reverse');
+  const after = counts(t.store, t.workspaceId);
+  assert.equal(after.entries, before.entries + 1);
+  assert.equal(reverse(t, p.wageJournalPostId, 'd204-1', undefined).reversalEntryId, res.reversalEntryId, 'idempotent replay');
+  assert.deepEqual(counts(t.store, t.workspaceId), after, 'a replay writes nothing');
+});
+
+test('D171: post is required, an unknown id and another tenant see not_found', () => {
+  const t = setup();
+  const p = posted(t);
+  const before = counts(t.store, t.workspaceId);
   const noPost = reverse(t, p.wageJournalPostId, 'g-2', 'x', capCtx(t, 'clerk', ['hr.read', 'hr.manage']));
   assert.equal(noPost.ok, false);
   assert.equal(noPost.capability, 'post');

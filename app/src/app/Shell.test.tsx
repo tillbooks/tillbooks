@@ -12,7 +12,7 @@ import { DensityProvider } from './density';
 import { WorkspaceProvider, WorkspaceRoute } from './workspace';
 import { Shell } from './Shell';
 import { Placeholder } from './Placeholder';
-import { NAV_ITEMS } from './nav';
+import { ROUTE_REGISTRY } from './nav';
 
 /** The engine's real `list_workspaces` shape; the root suite pins it against a live engine call. */
 import workspacesFixture from '../surfaces/Setup/workspaces.fixture.json';
@@ -43,7 +43,7 @@ async function settle(): Promise<void> {
 }
 
 async function renderShell(
-  initialPath = '/setup',
+  initialPath = '/overview',
   { workspaceId = null as string | null, client = makeClient(), theme = 'light' as Theme } = {},
 ) {
   const rendered = render(
@@ -56,13 +56,15 @@ async function renderShell(
               <Routes>
                 <Route path="/w/:workspaceId" element={<WorkspaceRoute />} />
                 <Route path="/" element={<Shell />}>
-                  {NAV_ITEMS.map((item) => (
+                  {ROUTE_REGISTRY.map((item) => (
                     <Route
                       key={item.path}
                       path={item.path.replace(/^\//, '')}
                       element={<Placeholder titleKey={item.labelKey} />}
                     />
                   ))}
+                  {/* D201: a group header opens its area overview (stood in for by a placeholder here). */}
+                  <Route path="area/:groupId" element={<Placeholder titleKey="nav.overview" />} />
                 </Route>
               </Routes>
             </MemoryRouter>
@@ -88,12 +90,13 @@ describe('Shell rail: the collapsible tree (D118 A1)', () => {
     const tree = screen.getByRole('tree', { name: 'Hauptnavigation' });
     // A headerless daily cluster is never collapsible: its leaves are always on screen.
     expect(within(tree).getByRole('treeitem', { name: 'Übersicht' })).toBeInTheDocument();
-    expect(within(tree).getByRole('treeitem', { name: 'Aufgaben' })).toBeInTheDocument();
-    expect(within(tree).getByRole('treeitem', { name: 'Agent' })).toBeInTheDocument();
+    expect(within(tree).getByRole('treeitem', { name: 'Pendenzen' })).toBeInTheDocument();
+    // D210: Suche, Agent and Aufgaben left the tree (palette, gear and Pendenzen carry them).
+    for (const gone of ['Suche', 'Agent', 'Aufgaben']) expect(within(tree).queryByRole('treeitem', { name: gone })).toBeNull();
     // A headed group starts collapsed, so it shows its header but not its destinations.
     const stammdaten = within(tree).getByRole('treeitem', { name: 'Stammdaten' });
     expect(stammdaten).toHaveAttribute('aria-expanded', 'false');
-    expect(within(tree).queryByRole('treeitem', { name: 'Konten' })).toBeNull();
+    expect(within(tree).queryByRole('treeitem', { name: 'Kontakte' })).toBeNull();
   });
 
   it('overrides the link role on every tree node, so a parent is a heading and never a link', async () => {
@@ -108,22 +111,20 @@ describe('Shell rail: the collapsible tree (D118 A1)', () => {
     await renderShell('/overview');
     await userEvent.click(screen.getByRole('treeitem', { name: 'Stammdaten' }));
     expect(screen.getByRole('treeitem', { name: 'Stammdaten' })).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('treeitem', { name: 'Konten' })).toBeInTheDocument();
-    // The A2 fold: the inventory family sits behind a Lager parent, collapsed inside the group.
-    const lager = screen.getByRole('treeitem', { name: 'Lager' });
-    expect(lager).toHaveAttribute('aria-expanded', 'false');
-    // A parent is a heading, not a link: no href behind it (W1). Its child /inventory stays hidden
-    // while it is collapsed, so only the parent matches here.
-    expect(lager).not.toHaveAttribute('href');
+    // D201: the click also opened the area overview, whose header now wears the mark.
+    expect(screen.getByRole('treeitem', { name: 'Stammdaten' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('treeitem', { name: 'Kontakte' })).toBeInTheDocument();
+    // D210: the compact menu leaves the Lager and Anlagen parents out of Stammdaten.
+    expect(screen.queryByRole('treeitem', { name: 'Lager' })).toBeNull();
+    expect(screen.queryByRole('treeitem', { name: 'Anlagen' })).toBeNull();
   });
 
   it('auto-expands the ancestor chain of a deep link so the active item is visible', async () => {
-    // /vat is nested two levels deep: Buchhaltung > MWST > MWST-Einstellungen. Both must open on load.
-    await renderShell('/vat');
+    // D210: /mwst is one leaf of Buchhaltung; the group must open on load so the leaf shows.
+    await renderShell('/mwst');
     expect(screen.getByRole('treeitem', { name: 'Buchhaltung' })).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('treeitem', { name: 'MWST' })).toHaveAttribute('aria-expanded', 'true');
-    const mwst = screen.getByRole('group', { name: 'MWST' });
-    const active = within(mwst).getByRole('treeitem', { name: 'MWST-Einstellungen' });
+    const accounting = screen.getByRole('group', { name: 'Buchhaltung' });
+    const active = within(accounting).getByRole('treeitem', { name: 'MWST' });
     expect(active).toHaveAttribute('aria-current', 'page');
     expect(active).toHaveAttribute('aria-selected', 'true');
   });
@@ -135,36 +136,87 @@ describe('Shell rail: the collapsible tree (D118 A1)', () => {
     expect(active).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('offers the theme toggle in the rail footer', async () => {
-    await renderShell();
-    expect(screen.getByRole('button', { name: 'Design wechseln' })).toBeInTheDocument();
-  });
-
-  it('keeps the rail footer to ONE row: the status pill, then the icon buttons (K-01)', async () => {
+  it('D210: light or dark is a checkbox item in the status menu beside the density, and switches the theme', async () => {
     await renderShell();
     const footer = document.querySelector('.rail-footer') as HTMLElement;
-    const pill = within(footer).getByRole('button', { name: /Lokal, keine Verbindung/ });
-    const theme = within(footer).getByRole('button', { name: 'Design wechseln' });
-    // The pill leads the row; the theme toggle closes it. No wrapping link, no stacked rows.
-    expect(footer.firstElementChild?.contains(pill)).toBe(true);
-    expect(footer.lastElementChild).toBe(theme);
+    expect(within(footer).queryByRole('button', { name: 'Design wechseln' })).toBeNull();
+    await userEvent.click(within(footer).getByRole('button', { name: /^Lokal/ }));
+    const item = screen.getByRole('menuitemcheckbox', { name: 'Dunkles Design' });
+    const before = document.documentElement.getAttribute('data-theme');
+    expect(item).toHaveAttribute('aria-checked', before === 'dark' ? 'true' : 'false');
+    await userEvent.click(item);
+    expect(document.documentElement.getAttribute('data-theme')).toBe(before === 'dark' ? 'light' : 'dark');
+  });
+
+  it('keeps the rail footer to ONE row: the company, the status dot, then the icon buttons (K-01, D204)', async () => {
+    await renderShell('/overview', { workspaceId: 'ws_1' });
+    const footer = document.querySelector('.rail-footer') as HTMLElement;
+    // D204: no second row and no pill borders: everything is a direct child of the one footer row.
+    expect(footer.querySelector('.rail-footer-row')).toBeNull();
+    expect(footer.firstElementChild).toHaveClass('ws-switcher');
+    const dot = within(footer).getByRole('button', { name: /^Lokal/ });
+    // D210: the settings gear closes the row (light or dark moved into the dot's menu).
+    const gear = within(footer).getByRole('button', { name: 'Einstellungen' });
+    expect(footer.children[1]?.contains(dot)).toBe(true);
+    expect(footer.lastElementChild?.contains(gear)).toBe(true);
     expect(within(footer).queryByRole('link')).toBeNull();
   });
 
-  it('offers the density switch and the collapse in the status pill menu (B3, A4, K-01)', async () => {
+  it('D210: the footer gear opens the Einstellungen page, and wears the mark while it is open', async () => {
+    await renderShell('/overview', { workspaceId: 'ws_1' });
+    const footer = document.querySelector('.rail-footer') as HTMLElement;
+    const gear = within(footer).getByRole('button', { name: 'Einstellungen' });
+    expect(gear).not.toHaveAttribute('aria-current');
+    await userEvent.click(gear);
+    expect(await screen.findByRole('heading', { name: 'Alle Einstellungen', level: 1 })).toBeInTheDocument();
+    expect(within(footer).getByRole('button', { name: 'Einstellungen' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('D204: the status is a dot whose accessible name carries the words, and a click opens its menu', async () => {
+    await renderShell('/overview', { workspaceId: 'ws_1' });
+    const footer = document.querySelector('.rail-footer') as HTMLElement;
+    const dot = within(footer).getByRole('button', { name: /^Lokal/ });
+    expect(dot).toHaveAttribute('aria-haspopup', 'menu');
+    expect(dot).toHaveTextContent('');
+    expect(dot.querySelector('.rail-env-dot')).not.toBeNull();
+    await userEvent.click(dot);
+    expect(screen.getByRole('menuitem', { name: 'Umgebungen verwalten' })).toBeInTheDocument();
+  });
+
+  it('offers the density switch in the status pill menu, and the collapse only in the rail head (B3, A4, D201)', async () => {
     await renderShell();
-    await userEvent.click(screen.getByRole('button', { name: /Lokal, keine Verbindung/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Lokal/ }));
     // Komfortabel is the default, so the checkbox item reads unchecked.
     expect(screen.getByRole('menuitemcheckbox', { name: 'Kompakte Ansicht' })).toHaveAttribute('aria-checked', 'false');
-    // The single-pointer, non-dragging alternative to the splitter (WCAG 2.5.7) lives here now.
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Navigation einklappen' }));
+    // One act, one place (D152 rule 3): the visible head toggle replaced the menu item.
+    expect(screen.queryByRole('menuitem', { name: 'Navigation einklappen' })).toBeNull();
+  });
+
+  it('D201: the visible toggle in the rail head collapses to the icon strip and expands again, naming itself', async () => {
+    await renderShell();
+    const head = document.querySelector('.rail-head-row') as HTMLElement;
+    const collapse = within(head).getByRole('button', { name: 'Navigation einklappen' });
+    // Its words on hover and focus: the second line is its description, never the name twice.
+    expect(collapse).toHaveAccessibleDescription('Nur Symbole zeigen');
+    // The single-pointer, non-dragging alternative to the splitter (WCAG 2.5.7).
+    await userEvent.click(collapse);
     expect(document.querySelector('.rail--icon')).not.toBeNull();
+    const expand = screen.getByRole('button', { name: 'Navigation ausklappen' });
+    expect(expand.closest('.rail-head')).not.toBeNull();
+    expect(expand).toHaveAccessibleDescription('Namen zeigen');
+    await userEvent.click(expand);
+    expect(document.querySelector('.rail--icon')).toBeNull();
+  });
+
+  it('D204: the footer icon buttons name themselves on hover and focus', async () => {
+    await renderShell();
+    const footer = document.querySelector('.rail-footer') as HTMLElement;
+    expect(within(footer).getByRole('button', { name: 'Einstellungen' })).toHaveAccessibleDescription('Alle Einstellungen dieses Arbeitsbereichs');
   });
 
   it('D187 option B: a pointer resting on the collapsed strip slides the whole menu open, and leaving folds it back', async () => {
     await renderShell();
-    await userEvent.click(screen.getByRole('button', { name: /Lokal, keine Verbindung/ }));
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Navigation einklappen' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Navigation einklappen' }));
     const rail = document.getElementById('studio-rail') as HTMLElement;
     expect(rail).toHaveClass('rail--icon', 'rail--floating');
     // The page keeps the strip's place while the rail floats.
@@ -198,20 +250,22 @@ describe('Shell rail: the collapsible tree (D118 A1)', () => {
 
   it('opens "Menü anpassen" from the status pill menu, the second door to the menu editor (D178)', async () => {
     await renderShell();
-    await userEvent.click(screen.getByRole('button', { name: /Lokal, keine Verbindung/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Lokal/ }));
     await userEvent.click(screen.getByRole('menuitem', { name: 'Menü anpassen' }));
     const editor = screen.getByRole('region', { name: 'Menü anpassen' });
     expect(within(editor).getByRole('button', { name: 'Fertig' })).toHaveFocus();
     // The rail's model rides on the nav band: the editor shows every favourite grip.
     expect(document.querySelector('.rail-nav')).toHaveAttribute('data-customising');
-    expect(document.querySelector('.rail-nav')).toHaveAttribute('data-header-style', 'text_14_bold');
+    expect(document.querySelector('.rail-nav')).toHaveAttribute('data-header-style', 'icon_14');
   });
 
-  it('has no head tagline: the wordmark and the switcher share one row (K-01)', async () => {
-    await renderShell('/setup', { workspaceId: 'ws_1' });
+  it('has no head tagline: the wordmark and the toggle share one row, the switcher is in the footer (K-01, D201)', async () => {
+    await renderShell('/overview', { workspaceId: 'ws_1' });
     const row = document.querySelector('.rail-head-row') as HTMLElement;
     expect(within(row).getByText('TILL Studio')).toBeInTheDocument();
-    expect(row.querySelector('.ws-switcher-trigger')).not.toBeNull();
+    expect(within(row).getByRole('button', { name: 'Navigation einklappen' })).toBeInTheDocument();
+    expect(row.querySelector('.ws-switcher-trigger')).toBeNull();
+    expect(document.querySelector('.rail-footer .ws-switcher-trigger')).not.toBeNull();
     expect(screen.queryByText(/Schweizer Buchhaltung/)).toBeNull();
   });
 
@@ -222,56 +276,46 @@ describe('Shell rail: the collapsible tree (D118 A1)', () => {
   });
 
   it('has no axe violations in the light theme', async () => {
-    const { container } = await renderShell('/vat', { theme: 'light' });
+    const { container } = await renderShell('/mwst', { theme: 'light' });
     expect(await axe(container)).toHaveNoViolations();
   });
 
   it('has no axe violations in the dark theme with nested levels on screen', async () => {
-    const { container } = await renderShell('/vat', { theme: 'dark' });
+    const { container } = await renderShell('/mwst', { theme: 'dark' });
     // Open one more group so a collapsed and an expanded subtree are both present for the scan.
     await expandNode('Stammdaten');
     expect(await axe(container)).toHaveNoViolations();
   });
 });
 
-describe('Shell: the nested MWST rail parent (owner decision W1)', () => {
-  it('renders MWST as a heading, never as a link, because it has no destination', async () => {
+describe('Shell: MWST is one leaf in Buchhaltung (D210, was the nested W1 parent)', () => {
+  it('renders MWST as a leaf with its own destination, no group behind it', async () => {
     await renderShell('/mwst');
     const tree = screen.getByRole('tree', { name: 'Hauptnavigation' });
-    expect(within(tree).getByRole('treeitem', { name: 'MWST' })).toBeInTheDocument();
-    expect(within(tree).queryByRole('link', { name: 'MWST' })).toBeNull();
+    const mwst = within(tree).getByRole('treeitem', { name: 'MWST' });
+    expect(mwst).not.toHaveAttribute('aria-expanded');
+    expect(within(tree).queryByRole('group', { name: 'MWST' })).toBeNull();
+    expect(within(tree).queryByRole('treeitem', { name: 'MWST-Einstellungen' })).toBeNull();
   });
 
-  it('holds both children in a group the parent names, Abrechnung leading', async () => {
+  it('marks the leaf active with aria-current, like any other item', async () => {
     await renderShell('/mwst');
-    const sub = screen.getByRole('group', { name: 'MWST' });
-    const labels = within(sub)
-      .getAllByRole('treeitem')
-      .map((el) => el.textContent);
-    expect(labels).toEqual(['Abrechnung', 'MWST-Einstellungen']);
+    expect(screen.getByRole('treeitem', { name: 'MWST' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('marks a nested child active with aria-current, exactly like a top-level item', async () => {
-    await renderShell('/mwst');
-    const mwst = screen.getByRole('group', { name: 'MWST' });
-    expect(within(mwst).getByRole('treeitem', { name: 'Abrechnung' })).toHaveAttribute('aria-current', 'page');
-    // The sibling is not dragged along by the shared parent.
-    expect(within(mwst).getByRole('treeitem', { name: 'MWST-Einstellungen' })).not.toHaveAttribute('aria-current');
-  });
-
-  it('still routes the untouched /vat path from the nested child', async () => {
+  it('still routes the untouched /vat path, with no rail row lit for it', async () => {
     await renderShell('/vat');
-    const mwst = screen.getByRole('group', { name: 'MWST' });
-    expect(within(mwst).getByRole('treeitem', { name: 'MWST-Einstellungen' })).toHaveAttribute('aria-current', 'page');
+    expect(within(screen.getByRole('main')).getByRole('heading', { name: 'MWST-Einstellungen', level: 1 })).toBeInTheDocument();
+    expect(document.querySelectorAll('.rail-nav [aria-current="page"]')).toHaveLength(0);
   });
 
-  it('has no axe violations with the third level on screen', async () => {
+  it('has no axe violations with the leaf on screen', async () => {
     const { container } = await renderShell('/mwst');
     expect(await axe(container)).toHaveNoViolations();
   });
 });
 
-describe('Shell: the rail-head workspace switcher (D24, variant A)', () => {
+describe('Shell: the rail-footer workspace switcher (D24, variant A; D201)', () => {
   it('does not render the switcher while no workspace is selected', async () => {
     // F-02: with workspaces on the ledger the resolver would adopt the newest one; an EMPTY ledger is
     // the state in which nothing is selected after the load settles.
@@ -280,11 +324,14 @@ describe('Shell: the rail-head workspace switcher (D24, variant A)', () => {
     expect(screen.queryByRole('button', { name: /Arbeitsbereich wechseln/ })).toBeNull();
   });
 
-  it('renders the switcher in the rail head, naming the current workspace', async () => {
+  it('renders the switcher in the rail footer, naming the current workspace, its menu opening upward (D201)', async () => {
     await renderShell('/journal', { workspaceId: 'ws_1' });
     const nav = screen.getByRole('navigation', { name: 'Hauptnavigation' });
     const trigger = await within(nav).findByRole('button', { name: 'Arbeitsbereich wechseln: Muster Grafik' });
     expect(trigger).toHaveTextContent('Muster Grafik');
+    expect(trigger.closest('.rail-footer')).not.toBeNull();
+    await userEvent.click(trigger);
+    expect(screen.getByRole('menu').closest('.ws-switcher-pop')).toHaveClass('ws-switcher-pop--up');
   });
 
   it('switching workspaces from the rail adopts the target workspace and stays in the app', async () => {
@@ -329,10 +376,10 @@ describe('Shell: the G16 frame additions', () => {
     expect(screen.getByRole('button', { name: /Suchen/ })).toBeInTheDocument();
   });
 
-  it('renders the /agent rail entry with no badge when no count is provided', async () => {
+  it('keeps the /agent door off the rail (D210), still routed behind the palette', async () => {
     await renderShell();
     const nav = screen.getByRole('navigation', { name: 'Hauptnavigation' });
-    expect(within(nav).getByRole('treeitem', { name: 'Agent' })).toBeInTheDocument();
+    expect(within(nav).queryByRole('treeitem', { name: 'Agent' })).toBeNull();
   });
 
   it('toggles the responsive drawer from the hamburger', async () => {
@@ -362,8 +409,9 @@ describe('Shell: the G16 frame additions', () => {
   it('shows the trust state in the rail footer pill: a dot plus its words, never the dot alone', async () => {
     await renderShell();
     const footer = document.querySelector('.rail-footer') as HTMLElement;
-    const pill = within(footer).getByRole('button', { name: /Lokal, keine Verbindung/ });
+    const pill = within(footer).getByRole('button', { name: /^Lokal/ });
     expect(pill.querySelector('.rail-env-dot')).not.toBeNull();
+    expect(pill).toHaveTextContent('');
   });
 
   it('has no axe violations with the drawer open', async () => {

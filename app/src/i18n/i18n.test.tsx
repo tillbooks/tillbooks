@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CATALOG, I18nProvider, useI18n, formatMoney, formatDate, type Messages } from './index';
+import { CATALOG, I18nProvider, useI18n, formatMoney, formatDate, formatDateAs, formatPrefsNow, parseDateAs, resetFormatPrefs, setFormatPrefs, type Messages } from './index';
 import { allowConsole } from '../test-console';
 
 const APP_SRC = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -144,6 +144,26 @@ describe('formatMoney', () => {
     expect(formatMoney(-123455, 'CHF')).toBe("CHF -1'234.55");
   });
 
+  it('D195: `signed` writes + before money in and the typographic minus before money out, nothing for zero', () => {
+    expect(formatMoney(2375, 'CHF', { signed: true })).toBe('CHF +23.75');
+    expect(formatMoney(-61840, 'CHF', { signed: true })).toBe('CHF −618.40');
+    expect(formatMoney(0, 'CHF', { signed: true })).toBe('CHF 0.00');
+    // Without the option nothing changes: the ASCII minus, no plus.
+    expect(formatMoney(2375, 'CHF')).toBe('CHF 23.75');
+  });
+
+  it('D195: appearance.amount_sign = minus_only drops the plus and keeps the minus', () => {
+    try {
+      setFormatPrefs({ amountSign: 'minus_only' });
+      expect(formatMoney(2375, 'CHF', { signed: true })).toBe('CHF 23.75');
+      expect(formatMoney(-2375, 'CHF', { signed: true })).toBe('CHF −23.75');
+      setFormatPrefs({ amountSign: 'nonsense' });
+      expect(formatPrefsNow().amountSign).toBe('minus_only');
+    } finally {
+      resetFormatPrefs();
+    }
+  });
+
   it('formats any currency the same way, because the format is the house style, not the unit', () => {
     expect(formatMoney(4200, 'EUR')).toBe('EUR 42.00');
     expect(formatMoney(4200, 'USD')).toBe('USD 42.00');
@@ -184,6 +204,27 @@ describe('formatDate', () => {
   it('renders an ISO date as TT.MM.JJJJ', () => {
     expect(formatDate('2026-12-31')).toBe('31.12.2026');
     expect(formatDate('2026-01-05T08:00:00.000Z')).toBe('05.01.2026');
+  });
+
+  it('D195: follows appearance.date_format (iso, us), and the DateField parses each format back', () => {
+    try {
+      setFormatPrefs({ dateFormat: 'iso' });
+      expect(formatDate('2026-12-31')).toBe('2026-12-31');
+      setFormatPrefs({ dateFormat: 'us' });
+      expect(formatDate('2026-01-05T08:00:00.000Z')).toBe('01/05/2026');
+    } finally {
+      resetFormatPrefs();
+    }
+    expect(formatDate('2026-12-31')).toBe('31.12.2026');
+    expect(formatDateAs('2026-09-01', 'ch')).toBe('01.09.2026');
+    expect(formatDateAs('nope', 'ch')).toBe('');
+    expect(parseDateAs('1.9.2026', 'ch')).toBe('2026-09-01');
+    expect(parseDateAs('2026-9-1', 'iso')).toBe('2026-09-01');
+    expect(parseDateAs('09/01/2026', 'us')).toBe('2026-09-01');
+    // Not a real day, the wrong format, or half a date: null, never a guess.
+    expect(parseDateAs('31.02.2026', 'ch')).toBeNull();
+    expect(parseDateAs('2026-09-01', 'ch')).toBeNull();
+    expect(parseDateAs('01.09.', 'ch')).toBeNull();
   });
 });
 

@@ -12,6 +12,7 @@
 /* The search field takes the free width up to a readable cap, so it does not sprawl on a wide table
    nor crowd the filters beside it. */
 .filter-bar-search {
+  position: relative;
   display: block;
   flex: 1 1 240px;
   max-width: 360px;
@@ -22,6 +23,21 @@
    control, so the row tightens with the global toggle. */
 .filter-bar-input {
   width: 100%;
+}
+
+/* Room for the magnifier; stated on the field itself so the shared `.field` padding cannot outrank it. */
+.filter-bar-search .filter-bar-input.field {
+  padding-left: calc(var(--t-space-2) + 16px + var(--t-space-1));
+}
+
+.filter-bar-search-glyph {
+  position: absolute;
+  top: 50%;
+  left: var(--t-space-2);
+  display: inline-flex;
+  color: var(--t-text-dim);
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
 /* The surface's own filters trail the search: selects, segmented toggles, checkboxes. */

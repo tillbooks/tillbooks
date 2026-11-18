@@ -55,7 +55,7 @@
     },
     "lost": {
       "label": "Deal als verloren markieren: {title}",
-      "reason": "Grund"
+      "reason": "Notiz (freiwillig)"
     },
     "drawer": {
       "close": "Details schliessen"
@@ -88,7 +88,6 @@
       "transport": "Die Pipeline konnte nicht geladen werden.",
       "contact_not_found": "Dieser Kontakt existiert nicht.",
       "stage_not_in_pipeline": "Diese Phase gehört nicht zu dieser Pipeline.",
-      "lost_reason_required": "Für verlorene Deals ist ein Grund erforderlich.",
       "terminal_stage_use_mark": "In eine Abschlussphase gelangt ein Deal über Gewonnen/Verloren, nicht per Verschieben.",
       "deal_closed": "Dieser Deal ist abgeschlossen. Zuerst wieder öffnen.",
       "needs_fx_rate": "Für diese Währung ist kein aktueller Kurs erfasst.",

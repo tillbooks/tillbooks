@@ -51,6 +51,7 @@ import { Provenance } from '../../components/Provenance';
 import { OverflowMenu, type OverflowMenuItem } from '../../components/OverflowMenu';
 import { Status, type StatusKind } from '../../components/Status';
 import { formatCalendar } from '../../lib/format';
+import { optionalReason } from '../../lib/useAskReason';
 import './Requisitions.css';
 
 /** A requisition's state as the one `Status` word (K-22), by what it asks of the reader. */
@@ -454,12 +455,14 @@ export function Requisitions() {
       </button>,
     );
   }
+  // D204: a decision needs no reason; the box is an optional comment that travels only when written.
+  const decisionNote = optionalReason(decisionText);
   if (s === 'pending_approval') {
     detailActions.push(
       <button key="approve" type="button" className="btn btn--primary" onClick={() => void act('requisition_approve', { comment: decisionText || undefined })} disabled={!canWrite}>
         {t('requisitions.action.approve')}
       </button>,
-      <button key="return" type="button" className="btn btn--ghost" onClick={() => void act('requisition_return', { reason: decisionText })} disabled={!canWrite}>
+      <button key="return" type="button" className="btn btn--ghost" onClick={() => void act('requisition_return', decisionNote === undefined ? {} : { reason: decisionNote })} disabled={!canWrite}>
         {t('requisitions.action.return')}
       </button>,
     );
@@ -468,7 +471,7 @@ export function Requisitions() {
       label: t('requisitions.action.reject'),
       danger: true,
       disabled: !canWrite,
-      onSelect: () => void act('requisition_reject', { reason: decisionText }),
+      onSelect: () => void act('requisition_reject', decisionNote === undefined ? {} : { reason: decisionNote }),
     });
   }
   if ((s === 'approved' || s === 'partially_converted') && !converting) {
@@ -721,7 +724,7 @@ export function Requisitions() {
 
           {(s === 'pending_approval' || s === 'rejected') && (
             <div className="form-stack">
-              <Field label={s === 'pending_approval' ? t('requisitions.field.reason') : t('requisitions.field.comment')}>
+              <Field label={t('requisitions.field.comment')}>
                 <input id="req-decision" className="field" value={decisionText} onChange={(e) => setDecisionText(e.target.value)} />
               </Field>
             </div>

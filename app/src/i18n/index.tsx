@@ -13,6 +13,7 @@ import { createContext, Fragment, useContext, useMemo, useState, type ReactNode 
 
 import deCH from './de-CH.json';
 import en from './en.json';
+import { formatPrefsNow, resetFormatPrefs, setFormatPrefs, signedPrefix, type AmountSignStyle, type DateFormat } from './formatPrefs';
 
 export type Locale = 'de-CH' | 'en';
 
@@ -138,22 +139,62 @@ function groupThousands(digits: string): string {
  *
  * The parameter is `minor`, not `minorCHF`. The old name was part of the same assumption.
  */
-export function formatMoney(minor: number, currency: string): string {
+export function formatMoney(minor: number, currency: string, opts: { signed?: boolean } = {}): string {
   const negative = minor < 0;
   const absolute = Math.abs(Math.trunc(minor));
   const whole = Math.floor(absolute / 100);
   const rappen = absolute % 100;
   const grouped = groupThousands(String(whole));
-  const sign = negative ? '-' : '';
+  const sign = opts.signed === true ? signedPrefix(minor) : negative ? '-' : '';
   return `${currency} ${sign}${grouped}.${String(rappen).padStart(2, '0')}`;
 }
 
-/** Format an ISO date (`2026-12-31` or a full instant) as `31.12.2026`. */
+// --- the person's format preferences (D195) ----------------------------------------------------------
+
+// The state lives in its own React-free module (`./formatPrefs`), which the bank model reads under Node too.
+export { formatPrefsNow, resetFormatPrefs, setFormatPrefs, signedPrefix };
+export type { AmountSignStyle, DateFormat };
+
+/** Format an ISO date (`2026-12-31` or a full instant) in the person's date format (`31.12.2026` by default). */
 export function formatDate(isoDate: string): string {
   const datePart = isoDate.slice(0, 10);
   const [year, month, day] = datePart.split('-');
   if (year === undefined || month === undefined || day === undefined) return isoDate;
+  return dateIn(formatPrefsNow().dateFormat, year, month, day);
+}
+
+function dateIn(format: DateFormat, year: string, month: string, day: string): string {
+  if (format === 'iso') return `${year}-${month}-${day}`;
+  if (format === 'us') return `${month}/${day}/${year}`;
   return `${day}.${month}.${year}`;
+}
+
+/** An ISO date as text in `format` (the DateField's own text), or '' for one it cannot read. */
+export function formatDateAs(isoDate: string, format: DateFormat): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
+  return m === null ? '' : dateIn(format, m[1] as string, m[2] as string, m[3] as string);
+}
+
+/**
+ * A date typed in `format`, back as ISO, or null when it is not a real calendar date in that format. Day
+ * and month may have one digit (`1.9.2026`); the year has four.
+ */
+export function parseDateAs(text: string, format: DateFormat): string | null {
+  const s = text.trim();
+  const m =
+    format === 'iso'
+      ? /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s)
+      : format === 'us'
+        ? /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s)
+        : /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(s);
+  if (m === null) return null;
+  const parts = format === 'iso' ? [m[1], m[2], m[3]] : format === 'us' ? [m[3], m[1], m[2]] : [m[3], m[2], m[1]];
+  const year = Number(parts[0]);
+  const month = Number(parts[1]);
+  const day = Number(parts[2]);
+  const probe = new Date(Date.UTC(year, month - 1, day));
+  if (probe.getUTCFullYear() !== year || probe.getUTCMonth() !== month - 1 || probe.getUTCDate() !== day) return null;
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 /**

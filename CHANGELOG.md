@@ -7,6 +7,120 @@ compatibility promise yet, so back up before every upgrade.
 
 ## [Unreleased]
 
+## [1.0.0-beta.6] - 2026-11-18
+
+A calmer Studio, and turnover and bank gaps from any export. The menu, the Übersicht, Pendenzen, the
+bank list and the settings were rebuilt around fewer words and one click per decision, and no screen
+makes you type a reason any more. Turnover comes in from a payment processor's feed, a CSV or an Excel
+file, and the new Umsatz page shows every sale before it is booked. No database upgrade: books from
+1.0.0-beta.5 open as they are. Still a beta: back up before you update.
+
+### Added
+
+- What's new after an update. After TILL updates, the Studio shows one short note with a What's new
+  button. It lists every version you have not seen yet, newest first, in English or German. The notes
+  ship inside TILL and work offline. The version line in the menu brings them back, and
+  tillbooks.ch/changelog is built from the same file. The settings `releases.whats_new_toast` and
+  `releases.whats_new_versions` decide whether the note shows and how many versions it lists. Agents
+  read the notes with `whats_new` (D199).
+- Umsatz, a page for turnover from payment processors, shops and tills. It lists a period's sales one
+  by one before anything is booked, with Einbeziehen and Ignorieren in the row, and TILL never asks
+  for a reason. Buchen books exactly what you reviewed. Each row shows how its booking is derived. The Zahlen
+  tab shows the turnover from the books, never from processor payouts; the Regeln tab edits each
+  source's booking template in place. Agents use `settlement_review`, `set_settlement_event_ignored`,
+  `turnover_summary` and `settlement_periods` (D200, D203).
+- Turnover from any table. A CSV or Excel export books through a column mapping saved per source
+  (`settlement_from_table`). Each row needs an id, from one column or composed from several; TILL
+  shows live whether it is unique in the file, and once events are booked only a person can change it.
+  For exports with no id at all, the setting `settlement.table_event_id` offers a whole-day mode: it
+  books only days the export lists in full and asks a person when a new day shares an amount with a
+  booked day next to it (D205, D206).
+- The `till-settlement/v1` format has a published JSON Schema. `validate_settlement` and
+  `till settlement validate <file>` check a file without opening a book, `till settlement schema`
+  prints the schema, and the MCP prompt `settlement_from_source` walks an agent through building,
+  checking, reviewing and importing a file.
+- Bank gaps from any export. The gap dialog takes camt.053, CSV and Excel (XLSX) in one drop zone.
+  When an export has no balance column, a gap between two stored statements can be proven by the sum
+  of its lines instead (setting `bank.csv_fill_proof`). Import profiles are files
+  (`till-import-profile/v1`), so a mapping can be shared (D205).
+- The receipt's VAT picks the input VAT code of a bank line's proposal when TILL trusts the receipt's
+  figures; the account still comes from your rules and history. The MWST cell marks a receipt VAT that
+  differs or is not confirmed. Setting `belege.vat_from_receipt` (D193).
+- The agent may decide on bank Vorschläge when you allow it. The setting `agent.decide_proposals` (off
+  by default) lets it reject them, or reject and approve them. Only a person can change it, it lapses
+  when the person who set it loses the right to, and every decision taken under it says so.
+  `reject_drafted_actions` rejects several at once (D196).
+- Approve in chat. With the setting `agent.approve_on_owner_word` switched on (off by default, only a
+  person can change it), you tell the agent in chat which Vorschläge are approved, and it runs exactly
+  those, of any kind. Your words are kept verbatim on each Vorschlag and in the Verlauf. Filing the VAT
+  return, installing a plugin and sharing data always wait for your click (setting
+  `agent.owner_word_excluded`) (D209).
+- Freigeben und künftig automatisch. On a bank booking suggestion, a third icon books the line and
+  saves a Buchungsregel from it in one click, with Rückgängig. The setting
+  `attention.auto_rule_confirm` brings back a confirm step (D207).
+- Settlement feeds. TILL can fetch a payment processor's settlement (`till-settlement/v1`) from the
+  producer's own HTTPS feed (`set_settlement_source`, `pull_settlement`) and book it through the same
+  template as an imported file. The token stays in the macOS Keychain. You can switch on a daily fetch
+  with the setting `settlement.pull_mode`. `settlement_payout_for_bank_line` shows what a payout on
+  the bank was made of. Test payments are never booked as real ones (their processor fees are), and
+  the MWST-Abrechnung warns about settlement events that are not in the books of the period, booked
+  twice, or left out as tests. `resolve_settlement_event` lets a person answer for one event.
+
+### Changed
+
+- The menu has an icon on every row and a visible collapse toggle, its groups open with an animation,
+  and a click on a group opens an overview of its pages. The workspace switcher moved to the footer
+  (D201).
+- A shorter menu. Übersicht and Pendenzen stay on top, then five areas: Bank, Verkauf, Einkauf,
+  Buchhaltung and Stammdaten. Berichte and Treuhänder moved into Buchhaltung, Korrespondenz into
+  Stammdaten. Einstellungen is a gear in the footer that opens the settings page, which links every
+  settings page. Suche is the search field above the menu, and Agent is on the settings page. Stock,
+  assets, projects and the rarely used purchasing and report pages show with the setting
+  `nav.menu_scope` = `all`; the search finds them either way. Favourites lose their gold star
+  (`nav.favourite_style`) and the Favoriten and Menü headings (`nav.section_headers`) (D210).
+- Light or dark is a checkbox, Dunkles Design, in the status dot's menu beside Kompakte Ansicht, so the
+  menu's footer keeps room for the company's name next to feedback and the settings gear (D210).
+- Pendenzen shows one set of three icons per row, Ablehnen, the star and Freigeben, in the same place
+  whether the row is open or closed. An open row holds only the text, the account and the MWST code; the
+  account list adds Als Umsatz buchen on money in and In Bank öffnen. Aufgaben due within
+  `attention.tasks_due_days` (14 by default) appear under Erledigen, so Aufgaben left the menu (D210).
+- The Übersicht shows the agent's suggestions as a card, first in the grid by default, with Freigeben
+  and Ablehnen in the row. You move, resize and hide cards from a small toolbar on hover, without an
+  edit mode, and a hidden card comes back from a side sheet over the live page. Sichern and Neue
+  Buchung left its header (setting `overview.doors`). A page you drilled into has a back arrow (D201,
+  D204).
+- Pendenzen comes in three sections, Bankbuchungen, Weitere Vorschläge and Zu erledigen. Filters for
+  kind, area and actor narrow all three, one bar approves or rejects several items at once, and a row
+  opens its details in place (D201, D207).
+- The Vorschläge screen is a list beside the selected Vorschlag, and its decisions are icons that name
+  themselves on hover (D197).
+- A Vorschlag is one calm row. It opens a line where you change the account, the MWST code or the
+  booking text before you book, and the star saves that booking as a Buchungsregel, naming the rule it
+  replaces before you click. A Buchungsregel carries a comment to the agent and its booking text, which
+  every later booking by the rule uses (setting `bank.entry_text_from_leg`) (D208).
+- The bank list. Every open line has a checkbox, and Buchen on several lines books the ones that are
+  complete and names the ones it skipped and why (setting `bank.bulk_book_scope`). A click on a row
+  opens it in place (setting `bank.detail_position`), the account picker is searchable, and Ignorieren
+  takes one click with an optional note (D195, D196).
+- Amounts carry a plus or minus sign, and dates follow your format (31.12.2026, 2026-12-31 or
+  12/31/2026). Both are personal preferences (D195).
+- Einstellungen: one page with the ten areas in a slim list on the left and their settings on the
+  right, compact rows whose controls line up in one column, and a search that also finds descriptions
+  and synonyms and never misses a setting added since the page opened. Reset and history show on hover,
+  plain German names for every value, and each change is saved the moment you make it. Cmd K finds
+  settings too. You can open an area to the
+  agent (`agent.settings_sections`); a protected setting it can only propose, and a person approves
+  that with one click. `settings_history` shows who changed what, when and under which permission
+  (D202).
+- No screen makes you type a reason any more. Reversals, rejections, overrides, waivers, flags and
+  confirmations go through with one click and still record who did it and when. A team that wants a
+  reason field sets `audit.ask_reason` to optional. Deleting an archived year asks you to type the year
+  instead (D204).
+
+### Fixed
+
+- Confirmation dialogs take the focus, close on Escape and keep Tab inside the dialog.
+
 ## [1.0.0-beta.5] - 2026-11-11
 
 Asset sales count once, and the files TILL writes beside your books survive a crash. When you link a

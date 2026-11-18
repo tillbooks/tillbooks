@@ -473,7 +473,6 @@ export function projectSetTask(
   const evidenceKind = fields.evidenceKind !== undefined ? (fields.evidenceKind as string | null) : (existing?.evidence_kind ?? null);
   const evidenceRef = fields.evidenceRef !== undefined ? (fields.evidenceRef as string | null) : (existing?.evidence_ref ?? null);
   const prerequisiteId = existing?.prerequisite_task_id ?? null;
-  const undeletable = existing?.undeletable === 1;
 
   // Completing a task whose prerequisite is still open refuses, naming it (US-G20.2).
   if (nextStatus === 'done' && prerequisiteId !== null) {
@@ -488,13 +487,11 @@ export function projectSetTask(
   if (nextStatus === 'done' && evidenceKind !== null && (evidenceRef === null || evidenceRef.length === 0)) {
     return err('evidence_required', { taskId: input.taskId, evidenceKind });
   }
-  // not_applicable needs a recorded reason: the canon may be waived consciously, never dropped
-  // silently (US-G20.2). This is the only status an undeletable go/no-go or rollback task may take
-  // other than done/open/blocked.
-  const reason = fields.reason !== undefined ? (fields.reason as string | null) : (existing?.reason ?? null);
-  if (nextStatus === 'not_applicable' && (reason === null || (reason as string).trim().length === 0)) {
-    return err('not_applicable_needs_reason', { taskId: input.taskId, undeletable });
-  }
+  // not_applicable is a conscious waiver, never a silent drop (US-G20.2): the task stays listed with its
+  // status, who set it and when. D204: a reason is optional. This is the only status an undeletable
+  // go/no-go or rollback task may take other than done/open/blocked.
+  const givenReason = fields.reason !== undefined ? (fields.reason as string | null) : (existing?.reason ?? null);
+  const reason = typeof givenReason === 'string' && givenReason.trim().length > 0 ? givenReason : null;
 
   return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey as string, 'project_set_task', () => {
     const now = ctx.clock.now();
@@ -542,6 +539,12 @@ export function projectSetTask(
       task = ctx.store.db.prepare('SELECT * FROM implementation_task WHERE id = ? AND workspace_id = ?').get(existing.id, ctx.workspaceId) as TaskRow;
     }
     blocked = task.status === 'blocked';
+    // D204 (A03 §11, critic M2): every status change names who and when on the audit chain, so a waived
+    // Go/No-Go or rollback task (`not_applicable`, a reason optional) is never an anonymous act. The
+    // action names the status it moved to.
+    if (existing === undefined || existing.status !== task.status) {
+      ctx.audit.record({ entityKind: 'implementation_task', entityId: task.id, action: `set_${task.status}`, actor: ctx.actor, at: now });
+    }
 
     // Recompute the derived phase now the task set may have advanced it, and persist it so the roster
     // and reads see it without a recompute. `phaseChangedTo` is the OP8 null-collapse anchor: the

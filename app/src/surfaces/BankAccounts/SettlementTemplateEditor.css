@@ -1,0 +1,50 @@
+/* A43 §3: the booking template of one settlement source. One row per kind, three shared Selects. */
+.settlement-template {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  padding: var(--t-space-3) 0;
+}
+.settlement-template-title {
+  margin: 0;
+  font-size: var(--t-font-md);
+  font-weight: 600;
+}
+.settlement-template-clearing {
+  display: grid;
+  grid-template-columns: max-content minmax(12rem, 28rem);
+  align-items: center;
+  gap: var(--t-space-3);
+}
+.settlement-template-kinds {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 64rem;
+}
+.settlement-template-kinds th,
+.settlement-template-kinds td {
+  text-align: left;
+  padding: var(--t-space-1) var(--t-space-2) var(--t-space-1) 0;
+  vertical-align: middle;
+}
+.settlement-template-kinds thead th {
+  color: var(--t-text-dim);
+  font-weight: 500;
+}
+.settlement-template-kinds tbody th {
+  font-weight: 500;
+  white-space: nowrap;
+}
+.settlement-template-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+.settlement-template-saved {
+  color: var(--t-text-dim);
+}
+@media (max-width: 40rem) {
+  .settlement-template-clearing {
+    grid-template-columns: 1fr;
+  }
+}

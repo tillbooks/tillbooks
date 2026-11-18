@@ -17,6 +17,7 @@ import { useClaimedEntries, useEntry, useLedgerLines } from './panelData';
 import { plural } from './lookups';
 import { SearchGlyph } from './glyphs';
 import { LegsPreview } from './LegsPreview';
+import { optionalReason, useAskReason } from '../../lib/useAskReason';
 
 export interface LinkChooserProps {
   workspaceId: string;
@@ -42,6 +43,7 @@ export function LinkChooser({ workspaceId, line, lookups, claimedEntryIds, initi
   const [picked, setPicked] = useState<string | null>(initial);
   // An accepted difference states its reason (critic A39-12): the books keep why they differ.
   const [reason, setReason] = useState('');
+  const askReason = useAskReason();
   const date = lineDate(line) ?? '';
 
   const { same, other } = useMemo(() => {
@@ -96,7 +98,11 @@ export function LinkChooser({ workspaceId, line, lookups, claimedEntryIds, initi
         if (chosen === null || busy) return;
         const shown = { entryDate: chosen.date, ...(chosen.description !== null ? { entryText: chosen.description } : {}) };
         if (difference === 0) onMatch({ kind: 'existing_entry', entryId: chosen.entryId, acceptDifference: false, ...shown });
-        else if (reason.trim() !== '') onMatch({ kind: 'existing_entry', entryId: chosen.entryId, acceptDifference: true, differenceReason: reason.trim(), ...shown });
+        else {
+          // D204: accepting the difference is the act; a note travels only when the workspace asks and one was written.
+          const note = optionalReason(reason);
+          onMatch({ kind: 'existing_entry', entryId: chosen.entryId, acceptDifference: true, ...(note === undefined ? {} : { differenceReason: note }), ...shown });
+        }
       }}
     >
       <h3 id={`${baseId}-title`} className="bank-mode__title">
@@ -135,19 +141,20 @@ export function LinkChooser({ workspaceId, line, lookups, claimedEntryIds, initi
       {chosen !== null && difference !== 0 && (
         <>
           <p className="bank-mode__warn">{t('bankInbox.link.difference', { amount: formatMoney(Math.abs(difference), line.currency) })}</p>
-          <label className="bank-field" htmlFor={`${baseId}-reason`}>
-            <span className="bank-field__label">{t('bankInbox.compare.differenceReason', { amount: formatMoney(Math.abs(difference), line.currency) })}</span>
-            <textarea
-              id={`${baseId}-reason`}
-              className="field bank-textarea"
-              rows={2}
-              maxLength={500}
-              value={reason}
-              placeholder={t('bankInbox.compare.differenceReasonHint')}
-              aria-invalid={reason.trim() === '' || undefined}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </label>
+          {askReason && (
+            <label className="bank-field" htmlFor={`${baseId}-reason`}>
+              <span className="bank-field__label">{t('bankInbox.compare.differenceReason', { amount: formatMoney(Math.abs(difference), line.currency) })}</span>
+              <textarea
+                id={`${baseId}-reason`}
+                className="field bank-textarea"
+                rows={2}
+                maxLength={500}
+                value={reason}
+                placeholder={t('bankInbox.compare.differenceReasonHint')}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </label>
+          )}
         </>
       )}
       {chosen !== null && entry !== null && (
@@ -161,7 +168,7 @@ export function LinkChooser({ workspaceId, line, lookups, claimedEntryIds, initi
       )}
       {chosen !== null && <p className="bank-mode__consequence">{t('bankInbox.link.consequence')}</p>}
       <div className="bank-mode__actions">
-        <button type="submit" className="btn btn--secondary bank-touch bank-commit" disabled={chosen === null || busy || !canPost || (difference !== 0 && reason.trim() === '')}>
+        <button type="submit" className="btn btn--secondary bank-touch bank-commit" disabled={chosen === null || busy || !canPost}>
           {busy ? t('bankInbox.row.busy') : difference !== 0 ? t('bankInbox.link.matchWithDifference') : t('bankInbox.row.match')}
         </button>
         <button type="button" className="btn btn--ghost bank-touch" onClick={onCancel}>

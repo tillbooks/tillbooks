@@ -242,3 +242,63 @@
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
 }
+
+/* D207: the details open in place under the row (`.motion-height`: 0fr to 1fr, inert while closed), on the
+   same neutral tint as the open row, indented to the subject's edge. */
+.vorschlag-line[data-open='true'] {
+  background: var(--t-bg-soft);
+}
+
+.vorschlag-line-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  padding: var(--t-space-1) var(--t-space-2) var(--t-space-2) calc(28px + var(--t-space-1));
+}
+
+.vorschlag-line .vorschlag-line-details .vorschlag-readback {
+  margin: 0;
+}
+
+.vorschlag-legs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vorschlag-leg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-1);
+  align-items: baseline;
+}
+
+.vorschlag-leg-amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.vorschlag-leg-tax {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+}
+
+/* The ways on from the details: icons only, their words on hover and focus. */
+.vorschlag-line-ways {
+  display: flex;
+  gap: var(--t-space-0-5);
+  margin-left: calc(-1 * var(--t-space-1));
+}
+
+/* D207: the rule confirm of `attention.auto_rule_confirm = always`, and a rule that did not save. */
+.vorschlag-rule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+.vorschlag-rule-text {
+  flex: 1 1 16em;
+  min-width: 0;
+}

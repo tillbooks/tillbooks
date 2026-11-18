@@ -22,6 +22,16 @@
  *    over `DASHBOARD_TILES` (the registry's tiles and the bank item, `bank_inbox`). Empty (the default) is
  *    the registry order. The list only orders and hides: a tile the person's role may not read is omitted
  *    by `dashboard_overview` whatever the list says, so a preference never widens what anyone sees.
+ *  - `overview.customize` (D201 pick A, 15.11.2026): how the person arranges the page. `inline` (the
+ *    default): each item shows its toolbar on hover or focus (hide, size, Mehr, a drag handle), with no
+ *    mode to enter. `edit_mode`: D180's Anpassen mode, kept for whoever prefers it.
+ *  - `overview.doors` (D201 point 5): whether Neue Buchung and Sichern sit in the page header. `hidden`
+ *    (the default): Neue Buchung lives in Cmd K and the Journal, Sichern on Betrieb. The demo door of an
+ *    empty workspace shows either way.
+ *  - `overview.suggestions_empty` (D201): what the suggestions card shows while nothing is open, a calm
+ *    one-liner (`line`, the default) or nothing, the card stepping out of the grid (`hide`).
+ *  - `overview.waiting_list` (D201): the older "Wartet auf dich" list of every waiting item under the
+ *    key figures, which the suggestions card replaced. `hidden` (the default) or `shown`.
  *  - `appearance.motion` (point 14): Lively (default), Standard, Calm, Off. The OS reduce-motion setting
  *    beats every level (brand/DESIGN.md, Motion levels). It sits in the Darstellung area beside the theme
  *    and the density; it is declared here, in the area file of the node that built it, with the
@@ -41,8 +51,13 @@ export const OVERVIEW_WIDGET_IDS = ['expense_donut', 'money_in_out', 'open_credi
 
 export type OverviewWidgetId = (typeof OVERVIEW_WIDGET_IDS)[number];
 
-/** Every key-figure id `overview.tiles` may arrange: the registry's tiles and the bank item (D180). */
-export const OVERVIEW_TILE_IDS = DASHBOARD_TILES;
+/**
+ * Every key-figure id `overview.tiles` may arrange: the registry's tiles, the bank item (D180) and the
+ * agent's suggestions (D201 pick B, 15.11.2026: a card in the grid, first and full width by default,
+ * that moves, hides and resizes like every other item). The suggestions are not a `dashboard_overview`
+ * tile: the Studio reads them with `list_drafted_actions`, so the engine's figures are unchanged.
+ */
+export const OVERVIEW_TILE_IDS = [...DASHBOARD_TILES, 'suggestions'] as const;
 
 export type OverviewTileId = (typeof OVERVIEW_TILE_IDS)[number];
 
@@ -54,6 +69,12 @@ export const OVERVIEW_TILES_OFF_BY_DEFAULT: readonly OverviewTileId[] = ['cash',
 
 /** D186: the key figures that start double width. */
 export const OVERVIEW_TILES_DOUBLE_BY_DEFAULT: readonly OverviewTileId[] = ['bank_balance'];
+
+/** D201: the items that start over the whole row (the suggestions); their size choice is full or double. */
+export const OVERVIEW_TILES_FULL_BY_DEFAULT: readonly OverviewTileId[] = ['suggestions'];
+
+/** D201: the items that lead the grid when a stored arrangement never names them (it predates them). */
+export const OVERVIEW_TILES_LEAD_BY_DEFAULT: readonly OverviewTileId[] = ['suggestions'];
 
 /** D186: what a key figure is compared with (`overview.compare`, and per tile in `overview.tiles`). */
 export const OVERVIEW_COMPARE_MODES = ['previous_year', 'previous_period', 'none'] as const;
@@ -212,6 +233,70 @@ export const OVERVIEW_PREFS: readonly PrefDef[] = [
       '3': { en: '3 months', 'de-CH': '3 Monate' },
       '6': { en: '6 months', 'de-CH': '6 Monate' },
       '12': { en: '12 months', 'de-CH': '12 Monate' },
+    },
+  },
+  {
+    key: 'overview.customize',
+    schema: { type: 'enum', values: ['inline', 'edit_mode'] },
+    default: 'inline',
+    scope: 'person',
+    area: OVERVIEW,
+    label: { en: 'Arranging the overview', 'de-CH': 'Übersicht anordnen' },
+    description: {
+      en: 'Arrange cards directly, with the tools a card shows when you point at it, or in a separate arranging mode.',
+      'de-CH': 'Karten direkt anordnen, mit den Werkzeugen, die eine Karte beim Darüberfahren zeigt, oder in einem eigenen Modus.',
+    },
+    valueLabels: {
+      inline: { en: 'Directly on the card', 'de-CH': 'Direkt auf der Karte' },
+      edit_mode: { en: 'Arranging mode', 'de-CH': 'Modus zum Anordnen' },
+    },
+  },
+  {
+    key: 'overview.doors',
+    schema: { type: 'enum', values: ['hidden', 'shown'] },
+    default: 'hidden',
+    scope: 'person',
+    area: OVERVIEW,
+    label: { en: 'New entry and Backup in the header', 'de-CH': 'Neue Buchung und Sichern im Kopf' },
+    description: {
+      en: 'Whether the overview header carries New entry and Backup. Both stay in the command menu, the journal and Operations.',
+      'de-CH': 'Ob der Kopf der Übersicht Neue Buchung und Sichern zeigt. Beides bleibt im Befehlsmenü, im Journal und unter Betrieb.',
+    },
+    valueLabels: {
+      hidden: { en: 'Hidden', 'de-CH': 'Ausgeblendet' },
+      shown: { en: 'Shown', 'de-CH': 'Angezeigt' },
+    },
+  },
+  {
+    key: 'overview.suggestions_empty',
+    schema: { type: 'enum', values: ['line', 'hide'] },
+    default: 'line',
+    scope: 'person',
+    area: OVERVIEW,
+    label: { en: 'When no suggestion is open', 'de-CH': 'Wenn kein Vorschlag offen ist' },
+    description: {
+      en: 'What the suggestions card shows when nothing waits: one quiet line, or the card steps out of the grid.',
+      'de-CH': 'Was die Karte Vorschläge zeigt, wenn nichts wartet: eine ruhige Zeile, oder die Karte tritt aus dem Raster.',
+    },
+    valueLabels: {
+      line: { en: 'One line', 'de-CH': 'Eine Zeile' },
+      hide: { en: 'Hide the card', 'de-CH': 'Karte ausblenden' },
+    },
+  },
+  {
+    key: 'overview.waiting_list',
+    schema: { type: 'enum', values: ['hidden', 'shown'] },
+    default: 'hidden',
+    scope: 'person',
+    area: OVERVIEW,
+    label: { en: 'Waiting list under the key figures', 'de-CH': 'Liste «Wartet auf dich»' },
+    description: {
+      en: 'The list of everything waiting for you, under the key figures. The suggestions card and Pendenzen carry the same work.',
+      'de-CH': 'Die Liste mit allem, was auf dich wartet, unter den Kennzahlen. Die Karte Vorschläge und die Pendenzen zeigen dieselbe Arbeit.',
+    },
+    valueLabels: {
+      hidden: { en: 'Hidden', 'de-CH': 'Ausgeblendet' },
+      shown: { en: 'Shown', 'de-CH': 'Angezeigt' },
     },
   },
   {

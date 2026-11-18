@@ -30,6 +30,9 @@ export interface SegmentedOption<V extends string = string> {
   value: V;
   /** The visible label, already translated by the caller. */
   label: string;
+  /** D195: this one segment cannot be chosen now; it stays focusable and says why in `reason` (its title). */
+  disabled?: boolean;
+  reason?: string;
 }
 
 export interface SegmentedProps<V extends string = string> {
@@ -66,6 +69,10 @@ export function Segmented<V extends string = string>({
   const pick = (index: number, moveFocus: boolean) => {
     const option = options[index];
     if (option === undefined) return;
+    if (option.disabled === true) {
+      if (moveFocus) refs.current[index]?.focus();
+      return;
+    }
     if (option.value !== value) onChange(option.value);
     if (moveFocus) refs.current[index]?.focus();
   };
@@ -117,6 +124,8 @@ export function Segmented<V extends string = string>({
             aria-checked={checked}
             tabIndex={index === stopIndex ? 0 : -1}
             disabled={disabled}
+            aria-disabled={option.disabled === true ? true : undefined}
+            title={option.disabled === true ? option.reason : undefined}
             className="segmented-option"
             onClick={() => pick(index, false)}
             onKeyDown={(event) => onKeyDown(event, index)}

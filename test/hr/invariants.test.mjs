@@ -235,3 +235,23 @@ test('E02 reversing discipline: an approved claim is immutable and corrected onl
   assert.equal(claimRow(t.store, t.workspaceId, claimId).status, 'reversed');
   assert.equal(payablesBalance(t.store, t.workspaceId), 0, 'the reversal cleared employee-payable 2260');
 });
+
+test('D204 hr: a submitted claim is rejected with no reason; the trail keeps who, when, what and the permission', async () => {
+  const { assertAuditRow, assertPermission } = await import('../support/d204.mjs');
+  const t = setup();
+  const { employeeId } = addEmployee(t.ctx, {}, 'd204-emp');
+  const { claimId } = submittedClaim(t.ctx, employeeId, {}, 'd204-clm');
+  const before = counts(t.store, t.workspaceId);
+  const res = rejectClaim(t.ctx, { claimId, idempotencyKey: 'd204-rj' });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  const row = claimRow(t.store, t.workspaceId, claimId);
+  assert.equal(row.status, 'rejected', 'what changed: submitted -> rejected');
+  assert.equal(row.reject_reason, null, 'no reason given, none stored');
+  assertAuditRow(t.store, t.workspaceId, { entityKind: 'expense_claim', entityId: claimId, action: 'reject', actor: t.ctx.actor });
+  assertPermission('expense_claim_reject');
+  assert.equal(counts(t.store, t.workspaceId).entries, before.entries, 'a reject posts nothing');
+  // A given reason is still kept, trimmed.
+  const second = submittedClaim(t.ctx, employeeId, {}, 'd204-clm2');
+  assert.equal(rejectClaim(t.ctx, { claimId: second.claimId, reason: '  Beleg fehlt ', idempotencyKey: 'd204-rj2' }).ok, true);
+  assert.equal(claimRow(t.store, t.workspaceId, second.claimId).reject_reason, 'Beleg fehlt');
+});

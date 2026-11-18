@@ -7,6 +7,10 @@
  * "SOUND" hold a property the critic checked and found to hold.
  *
  * Synthetic by construction: invented names, amounts and ids.
+ *
+ * D201 (15.11.2026): the batch is ONE call of `approve_drafted_actions` (`ids`), started from the sticky bar's
+ * "Freigeben (n)"; under `all_with_confirm` that press opens the confirm. A box also sits on a Vorschlag the
+ * batch may only REJECT. Each finding is held on the new shape.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -20,6 +24,12 @@ import { WorkspaceProvider } from '../../app/workspace';
 import { CapabilitiesContext, type Capabilities } from '../../lib/capabilities';
 import { Attention } from './index';
 import { bankVorschlag, draftedBankLine, groupedOf, linesRow } from './testing';
+
+/** D208: select-all sits in each section's heading; this ticks every section's box. */
+async function tickAllSections() {
+  for (const box of screen.getAllByRole('checkbox', { name: /^Alle (angezeigten )?in .* auswählen$/ })) await userEvent.click(box);
+}
+
 
 type Call = { action: string; input: Record<string, unknown> };
 type Handler = (input: Record<string, unknown>) => RestResponse | Promise<RestResponse>;
@@ -62,6 +72,19 @@ function reads(first: Record<string, unknown>, after: Record<string, unknown>): 
   };
 }
 
+/** The batch verb answering every id it was sent as approved. */
+const approveAll: Handler = (input) => ok({ items: ((input.ids as string[]) ?? []).map((actionId, index) => ({ index, actionId, ok: true, result: { ok: true } })) });
+
+/** The ids every batch call carried, in order. */
+const batchIds = (calls: Call[]) => calls.filter((c) => c.action === 'approve_drafted_actions').map((c) => c.input.ids);
+
+/** Tick every visible Vorschlag with the head box, then press the bar's Freigeben. */
+async function tickAllAndApprove(count: number) {
+  await screen.findAllByRole('checkbox', { name: /^Alle (angezeigten )?in .* auswählen$/ });
+  await tickAllSections();
+  await userEvent.click(screen.getByRole('button', { name: `Freigeben (${count})` }));
+}
+
 /** A drafted bank Vorschlag of another verb, as list_drafted_actions answers it. */
 function drafted(actionId: string, actionTool: string, payload: Record<string, unknown>, dialCapability = 'pay'): Record<string, unknown> {
   return { actionId, actor: 'agent', dialCapability, actionTool, payload, status: 'pending', createdAt: '2026-10-21T07:00:00.000Z' };
@@ -72,7 +95,7 @@ beforeEach(() => {
 });
 
 describe('FIXED M1: the batch reaches only the decisions on a bank line (the engine flag)', () => {
-  it('tick: the IBAN redirect and the QR auto-apply switch get no box and keep their own Genehmigen; select all + approve runs the two bookings only', async () => {
+  it('tick: the IBAN redirect and the QR auto-apply switch keep their own Genehmigen and are only rejected in a batch; select all + Freigeben runs the two bookings only', async () => {
     // The engine marks only bank-line decisions `batchable` (n4-batch-scope.test.mjs, SCOPE); the Studio reads that flag.
     const rows = [
       bankVorschlag('a1'),
@@ -90,22 +113,24 @@ describe('FIXED M1: the batch reaches only the decisions on a bank line (the eng
           draftedBankLine('a2', 'Porto', 1890),
         ],
       }),
-      approve_drafted_action: ok({ status: 'executed' }),
+      approve_drafted_actions: approveAll,
     });
-    await waitFor(() => expect(boxes()).toHaveLength(2));
-    // The two that are not line decisions are lines with their own Genehmigen, never a checkbox.
+    await waitFor(() => expect(boxes()).toHaveLength(4));
+    // The two that are not line decisions keep their own Genehmigen.
     for (const id of ['a_iban', 'a_auto']) {
-      const line = document.querySelector(`.vorschlag-line[data-action-id="${id}"]`) as HTMLElement;
-      expect(line.querySelector('input[type="checkbox"]')).toBeNull();
-      expect(within(line).getByRole('button', { name: 'Genehmigen' })).toBeInTheDocument();
+      const line = document.querySelector(`.pl[data-action-id="${id}"]`) as HTMLElement;
+      expect(within(line).getByRole('button', { name: 'Freigeben' })).toBeInTheDocument();
     }
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Alle Vorschläge auswählen' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Ausgewählte genehmigen (2)' }));
-    expect(await screen.findByText('2 genehmigt.')).toBeInTheDocument();
-    expect(calls.filter((c) => c.action === 'approve_drafted_action').map((c) => c.input.actionId)).toEqual(['a1', 'a2']);
+    await tickAllSections();
+    // Freigeben counts the two bookings; Ablehnen all four.
+    expect(screen.getByRole('button', { name: 'Ablehnen (4)' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Freigeben (2)' }));
+    expect(await screen.findByText('2 freigegeben.')).toBeInTheDocument();
+    expect(batchIds(calls)).toEqual([['a1', 'a2']]);
+    expect(calls.filter((c) => c.action === 'approve_drafted_action')).toHaveLength(0);
   });
 
-  it('all_with_confirm: "Alle genehmigen" counts and runs only the batchable rows', async () => {
+  it('all_with_confirm: Freigeben counts and runs only the batchable rows, after the confirm', async () => {
     const rows = [
       bankVorschlag('a1'),
       bankVorschlag('a_iban', { subtitleParams: { tool: 'set_creditor_bank_profile' }, batchable: false, amountMinor: undefined, currency: undefined }),
@@ -114,13 +139,14 @@ describe('FIXED M1: the batch reaches only the decisions on a bank line (the eng
     const { calls } = renderHub({
       attention_list: reads(groupedOf(rows, { approvalBatchMode: 'all_with_confirm' }), groupedOf([])),
       list_drafted_actions: ok({ actions: [draftedBankLine('a1', 'Eins', 100), draftedBankLine('a2', 'Zwei', 200)] }),
-      approve_drafted_action: ok({ status: 'executed' }),
+      approve_drafted_actions: approveAll,
     });
-    await userEvent.click(await screen.findByRole('button', { name: 'Alle genehmigen (2)' }));
-    const dialog = await screen.findByRole('alertdialog', { name: '2 Vorschläge genehmigen?' });
-    await userEvent.click(within(dialog).getByRole('button', { name: '2 genehmigen' }));
-    await screen.findByText('2 genehmigt.');
-    expect(calls.filter((c) => c.action === 'approve_drafted_action').map((c) => c.input.actionId)).toEqual(['a1', 'a2']);
+    await waitFor(() => expect(boxes()).toHaveLength(3));
+    await tickAllAndApprove(2);
+    const dialog = await screen.findByRole('alertdialog', { name: '2 Vorschläge freigeben?' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '2 freigeben' }));
+    await screen.findByText('2 freigegeben.');
+    expect(batchIds(calls)).toEqual([['a1', 'a2']]);
   });
 });
 
@@ -136,11 +162,12 @@ describe('FIXED M2: the confirm names the money per currency, in and out apart, 
       ),
       // The payload legs say something else on purpose: the confirm must not read them.
       list_drafted_actions: ok({ actions: [draftedBankLine('a_chf', 'Büromaterial', 99), draftedBankLine('a_eur', 'Messe Stand Köln', 99)] }),
-      approve_drafted_action: ok({ status: 'executed' }),
+      approve_drafted_actions: approveAll,
     });
     await waitFor(() => expect(calls.some((c) => c.action === 'list_drafted_actions')).toBe(true));
-    await userEvent.click(await screen.findByRole('button', { name: 'Alle genehmigen (2)' }));
-    const dialog = await screen.findByRole('alertdialog', { name: '2 Vorschläge genehmigen?' });
+    await waitFor(() => expect(boxes()).toHaveLength(2));
+    await tickAllAndApprove(2);
+    const dialog = await screen.findByRole('alertdialog', { name: '2 Vorschläge freigeben?' });
     const total = dialog.querySelector('.att-batch-confirm-total')?.textContent ?? '';
     expect(total).toMatch(/Ausgang CHF\s?100\.00/);
     expect(total).toMatch(/Ausgang EUR\s?500\.00/);
@@ -155,7 +182,8 @@ describe('FIXED M2: the confirm names the money per currency, in and out apart, 
       ),
       list_drafted_actions: ok({ actions: [draftedBankLine('a_in', 'Kundenzahlung', 10000), draftedBankLine('a_out', 'Miete', -30000)] }),
     });
-    await userEvent.click(await screen.findByRole('button', { name: 'Alle genehmigen (2)' }));
+    await waitFor(() => expect(boxes()).toHaveLength(2));
+    await tickAllAndApprove(2);
     const dialog = await screen.findByRole('alertdialog');
     const total = dialog.querySelector('.att-batch-confirm-total')?.textContent ?? '';
     expect(total).toMatch(/Eingang CHF\s?100\.00/);
@@ -168,7 +196,8 @@ describe('FIXED M2: the confirm names the money per currency, in and out apart, 
       attention_list: ok(groupedOf([bankVorschlag('a1'), bankVorschlag('a2', { amountMinor: undefined, currency: undefined })], { approvalBatchMode: 'all_with_confirm' })),
       list_drafted_actions: ok({ actions: [] }),
     });
-    await userEvent.click(await screen.findByRole('button', { name: 'Alle genehmigen (2)' }));
+    await waitFor(() => expect(boxes()).toHaveLength(2));
+    await tickAllAndApprove(2);
     const dialog = await screen.findByRole('alertdialog');
     expect(within(dialog).getByText('Dazu 1 ohne Betrag.')).toBeInTheDocument();
   });
@@ -178,39 +207,42 @@ describe('FIXED M2: the confirm names the money per currency, in and out apart, 
       attention_list: ok(groupedOf([bankVorschlag('a1', { amountMinor: -4520, currency: 'CHF' })])),
       list_drafted_actions: ok({ actions: [draftedBankLine('a1', 'Büromaterial', 4520)] }),
     });
-    await waitFor(() => expect(document.querySelector('.vorschlag-line-meta--hub')).not.toBeNull());
-    const meta = (document.querySelector('.vorschlag-line-meta--hub') as HTMLElement).textContent ?? '';
-    expect(meta.replace(/\s+/g, ' ')).toMatch(/^CHF -45\.20 · 6500 Büromaterial · 20\.10\.2026$/);
+    // D197, the shared row: what it books onto beside the subject, then the date, then the signed amount.
+    await waitFor(() => expect(document.querySelector('.pl .pl-amount')).not.toBeNull());
+    const cells = ['.pl-account-text', '.pl-date', '.pl-amount'].map((sel) => document.querySelector(`.pl ${sel}`) as HTMLElement);
+    expect(cells.map((c) => c.textContent)).toEqual(['6500 Büromaterial', '20.10.2026', 'CHF -45.20']);
+    expect(cells[0]!.compareDocumentPosition(cells[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(cells[1]!.compareDocumentPosition(cells[2]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 
 describe('FIXED L1: "Alle" says what it covers', () => {
-  it('a bank section with more rows behind its cursor offers "Angezeigte genehmigen (2)", never "Alle genehmigen"', async () => {
+  it('with more rows behind the cursor, the confirm and the run cover the shown rows only, never "Alle genehmigen"', async () => {
     const { calls } = renderHub({
       attention_list: reads(
         groupedOf([bankVorschlag('a1'), bankVorschlag('a2')], { approvalBatchMode: 'all_with_confirm', more: { bank: { count: 30, nextCursor: '2' } } }),
         groupedOf([]),
       ),
       list_drafted_actions: ok({ actions: [draftedBankLine('a1', 'Eins', 100), draftedBankLine('a2', 'Zwei', 200)] }),
-      approve_drafted_action: ok({ status: 'executed' }),
+      approve_drafted_actions: approveAll,
     });
-    await screen.findByRole('button', { name: 'Angezeigte genehmigen (2)' });
-    expect(document.querySelector('[data-section="bank"]')?.getAttribute('data-count')).toBe('32');
+    await waitFor(() => expect(boxes()).toHaveLength(2));
+    expect(screen.getByRole('button', { name: 'Weitere 30 anzeigen' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Alle genehmigen/ })).toBeNull();
-    await userEvent.click(screen.getByRole('button', { name: 'Angezeigte genehmigen (2)' }));
-    const dialog = await screen.findByRole('alertdialog', { name: '2 Vorschläge genehmigen?' });
-    await userEvent.click(within(dialog).getByRole('button', { name: '2 genehmigen' }));
-    await screen.findByText('2 genehmigt.');
-    expect(calls.filter((c) => c.action === 'approve_drafted_action')).toHaveLength(2);
+    await tickAllAndApprove(2);
+    const dialog = await screen.findByRole('alertdialog', { name: '2 Vorschläge freigeben?' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '2 freigeben' }));
+    await screen.findByText('2 freigegeben.');
+    expect(batchIds(calls)).toEqual([['a1', 'a2']]);
   });
 
-  it('tick mode with more behind the cursor: the header box is "Alle angezeigten Vorschläge auswählen"', async () => {
+  it('tick mode with more behind the cursor: the section head box is "Alle angezeigten in Bankbuchungen auswählen" (D208)', async () => {
     renderHub({
       attention_list: ok(groupedOf([bankVorschlag('a1'), bankVorschlag('a2')], { more: { bank: { count: 30, nextCursor: '2' } } })),
       list_drafted_actions: ok({ actions: [] }),
     });
-    expect(await screen.findByRole('checkbox', { name: 'Alle angezeigten Vorschläge auswählen' })).toBeInTheDocument();
-    expect(screen.queryByRole('checkbox', { name: 'Alle Vorschläge auswählen' })).toBeNull();
+    expect(await screen.findByRole('checkbox', { name: 'Alle angezeigten in Bankbuchungen auswählen' })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Alle in Bankbuchungen auswählen' })).toBeNull();
   });
 });
 
@@ -234,7 +266,7 @@ describe('FIXED L2: a remainder row of a Vorschläge queue renders as a remainde
     };
     renderHub({ attention_list: ok(groupedOf([bankVorschlag('a1'), remainder])), list_drafted_actions: ok({ actions: [draftedBankLine('a1', 'Eins', 100)] }) });
     expect(await screen.findByText('3 weitere in Bank-Vorschläge')).toBeInTheDocument();
-    const lines = [...document.querySelectorAll('.vorschlag-line')];
+    const lines = [...document.querySelectorAll('.pl')];
     expect(lines.map((l) => l.getAttribute('data-action-id'))).toEqual(['a1']);
     expect(document.querySelector('.att-row[data-row-count="3"]')).not.toBeNull();
   });
@@ -245,20 +277,20 @@ describe('SOUND: the batch only ever runs rows the person ticked', () => {
     const { calls } = renderHub({
       attention_list: reads(groupedOf([bankVorschlag('a1'), bankVorschlag('a2')]), groupedOf([bankVorschlag('a1'), bankVorschlag('a2'), bankVorschlag('a_new')])),
       list_drafted_actions: ok({ actions: [draftedBankLine('a1', 'Eins', 100), draftedBankLine('a2', 'Zwei', 200), draftedBankLine('a_new', 'Neu', 300)] }),
-      approve_drafted_action: ok({ status: 'executed' }),
+      approve_drafted_actions: approveAll,
     });
     await waitFor(() => expect(boxes()).toHaveLength(2));
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Alle Vorschläge auswählen' }));
+    await tickAllSections();
     // The person refreshes: a third bank Vorschlag arrives.
     await userEvent.click(screen.getByRole('button', { name: 'Aktualisieren' }));
     await waitFor(() => expect(boxes()).toHaveLength(3));
     expect(boxes().map((b) => b.checked)).toEqual([true, true, false]);
-    await userEvent.click(screen.getByRole('button', { name: 'Ausgewählte genehmigen (2)' }));
-    await screen.findByText('2 genehmigt.');
-    expect(calls.filter((c) => c.action === 'approve_drafted_action').map((c) => c.input.actionId)).toEqual(['a1', 'a2']);
+    await userEvent.click(screen.getByRole('button', { name: 'Freigeben (2)' }));
+    await screen.findByText('2 freigegeben.');
+    expect(batchIds(calls)).toEqual([['a1', 'a2']]);
   });
 
-  it('a ticked row that comes back changed (stale) loses its box and is not run; nothing posts the changed record', async () => {
+  it('a ticked row that comes back changed is no longer approved in the batch; nothing posts the changed record', async () => {
     const { calls } = renderHub({
       attention_list: reads(
         groupedOf([bankVorschlag('a1'), bankVorschlag('a2'), bankVorschlag('a3')]),
@@ -266,18 +298,19 @@ describe('SOUND: the batch only ever runs rows the person ticked', () => {
         groupedOf([bankVorschlag('a1'), bankVorschlag('a2', { changedSinceProposal: true }), bankVorschlag('a3')]),
       ),
       list_drafted_actions: ok({ actions: [draftedBankLine('a1', 'Eins', 100), draftedBankLine('a2', 'Zwei', 200), draftedBankLine('a3', 'Drei', 300)] }),
-      approve_drafted_action: ok({ status: 'executed' }),
+      approve_drafted_actions: approveAll,
     });
     await waitFor(() => expect(boxes()).toHaveLength(3));
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Alle Vorschläge auswählen' }));
+    await tickAllSections();
     await userEvent.click(screen.getByRole('button', { name: 'Aktualisieren' }));
-    await waitFor(() => expect(boxes()).toHaveLength(2));
-    await userEvent.click(screen.getByRole('button', { name: 'Ausgewählte genehmigen (2)' }));
-    await screen.findByText('2 genehmigt.');
-    expect(calls.filter((c) => c.action === 'approve_drafted_action').map((c) => c.input.actionId)).toEqual(['a1', 'a3']);
+    // The changed row may still be rejected, so it keeps its box; Freigeben no longer counts it.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Freigeben (2)' })).toBeInTheDocument());
+    await userEvent.click(screen.getByRole('button', { name: 'Freigeben (2)' }));
+    await screen.findByText('2 freigegeben.');
+    expect(batchIds(calls)).toEqual([['a1', 'a3']]);
   });
 
-  it('a double click on "Ausgewählte genehmigen" runs each row once; the batch never sends allowFuture', async () => {
+  it('a double click on "Freigeben (n)" sends ONE batch call; the batch never sends allowFuture', async () => {
     let release: () => void = () => undefined;
     const gate = new Promise<void>((r) => {
       release = r;
@@ -285,19 +318,19 @@ describe('SOUND: the batch only ever runs rows the person ticked', () => {
     const { calls } = renderHub({
       attention_list: reads(groupedOf([bankVorschlag('a1'), bankVorschlag('a2')]), groupedOf([])),
       list_drafted_actions: ok({ actions: [draftedBankLine('a1', 'Eins', 100), draftedBankLine('a2', 'Zwei', 200)] }),
-      approve_drafted_action: async () => {
+      approve_drafted_actions: async (input) => {
         await gate;
-        return ok({ status: 'executed' });
+        return approveAll(input);
       },
     });
     await waitFor(() => expect(boxes()).toHaveLength(2));
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Alle Vorschläge auswählen' }));
-    const button = screen.getByRole('button', { name: 'Ausgewählte genehmigen (2)' });
+    await tickAllSections();
+    const button = screen.getByRole('button', { name: 'Freigeben (2)' });
     await userEvent.dblClick(button);
     release();
-    await screen.findByText('2 genehmigt.');
-    const approvals = calls.filter((c) => c.action === 'approve_drafted_action');
-    expect(approvals.map((c) => c.input.actionId)).toEqual(['a1', 'a2']);
+    await screen.findByText('2 freigegeben.');
+    const approvals = calls.filter((c) => c.action === 'approve_drafted_actions');
+    expect(approvals.map((c) => c.input.ids)).toEqual([['a1', 'a2']]);
     expect(approvals.every((c) => c.input.allowFuture === undefined)).toBe(true);
   });
 

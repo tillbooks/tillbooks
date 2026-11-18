@@ -139,6 +139,11 @@
       "apply": "Zugewiesen",
       "override": "Korrigiert",
       "set_auto_apply": "Automatik umgestellt",
+      "waive": "Verzichtet",
+      "set_open": "Auf offen gesetzt",
+      "set_done": "Erledigt",
+      "set_blocked": "Blockiert",
+      "set_not_applicable": "Nicht zutreffend",
       "import": "Importiert",
       "confirm": "Bestätigt",
       "book": "Buchung erstellt",
@@ -182,8 +187,14 @@
       "beleg_assign": "Beleg zugeordnet",
       "beleg_consume": "Beleg verbucht",
       "beleg_release": "Beleg gelöst",
-      "confirm_figures": "Zahlen bestätigt"
+      "approve_on_owner_word": "Im Chat freigegeben",
+      "confirm_figures": "Zahlen bestätigt",
+      "confirm_id_change": "ID-Änderung bestätigt",
+      "confirm_whole_days": "Ganze Tage bestätigt",
+      "confirm_edge_day": "Vollständiger Tag bestätigt",
+      "file_days_inner": "Tag als innerhalb der Datei angegeben"
     },
+    "ownerWord": "«{quote}»",
     "entityKind": {
       "entry": "Buchung",
       "payment": "Zahlung",
@@ -207,6 +218,7 @@
       "bank_statement_gap": "Auszugslücke",
       "bank_txn": "Bankbewegung",
       "beleg_assignment": "Belegzuordnung",
+      "agent_action": "Vorschlag",
       "receipt_held": "Zugeordneter Beleg",
       "creditor_bank_profile": "Kreditoren-IBAN",
       "payment_batch": "Zahlungslauf",
@@ -237,6 +249,8 @@
       "inventory_reason_code": "Korrekturgrund",
       "inventory_adjustment": "Bestandeskorrektur",
       "migration_plan": "Übernahmeplan",
+      "migration_control": "Übernahmekontrolle",
+      "implementation_task": "Einführungsaufgabe",
       "sync": "Sync-Publishing",
       "accrual": "Abgrenzung",
       "provision": "Rückstellung",
@@ -245,7 +259,12 @@
       "hausbuch_note": "Hausregel",
       "rule_autobook_grant": "Automatik einer Buchungsregel",
       "vorlage_schedule": "Dauerbuchung",
-      "settlement_template": "Buchungsvorlage für Abrechnungen"
+      "settlement_template": "Buchungsvorlage für Abrechnungen",
+      "settlement_source": "Abrechnungsquelle",
+      "settlement_test_resolution": "Testantwort zur Abrechnung",
+      "settlement_event_inclusion": "Antwort zur Abrechnung (einbeziehen oder ignorieren)",
+      "settlement_event_override": "Override zur Abrechnung",
+      "settlement_table_mapping": "Tabellenzuordnung für Abrechnungen"
     },
     "emptyHint": "TILL schreibt hier jede Buchung, jede Sperre und jede Änderung an deinen Stammdaten mit. Du musst nichts davon selbst erfassen."
   },

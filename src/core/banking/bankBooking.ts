@@ -267,11 +267,9 @@ function validateTarget(raw: unknown): { target: BookBankLineTarget } | { error:
     const a = t['acceptDifference'];
     if (a !== undefined && typeof a !== 'boolean') return { error: err('invalid_input', { field: 'target.acceptDifference' }) };
     const reason = typeof t['differenceReason'] === 'string' ? (t['differenceReason'] as string).trim() : '';
-    // Critic A39-12 (owner decision): accepting a difference is a stated judgment, so it carries its
-    // reason, recorded on the decision; the amount stays unbounded (the owner wants the flexibility).
-    if (a === true && reason.length === 0) {
-      return { error: err('invalid_input', { field: 'target.differenceReason', reason: 'state why the difference is accepted' }) };
-    }
+    // Critic A39-12 (owner decision): accepting a difference is an explicit act (`acceptDifference: true`,
+    // the difference recorded on the link); D204: its reason is optional and kept when given. The amount
+    // stays unbounded (the owner wants the flexibility).
     if (reason.length > MAX_TEXT) return { error: err('invalid_input', { field: 'target.differenceReason', maxLength: MAX_TEXT }) };
     return {
       target: {
@@ -371,7 +369,7 @@ type RuleTarget = Extract<BookBankLineTarget, { kind: 'rule' }>;
  * buchen" rule refuses `wrong_outcome` (`ignore_bank_line` with the rule's reason, note and `standardId`
  * decides such a line). Reads only; the booking validates the expansion like any other.
  */
-export function expandRule(ctx: WorkspaceContext, row: BankTxnRow, target: Pick<RuleTarget, 'standardId' | 'asks'>): { target: AccountsTarget } | { error: Err } {
+export function expandRule(ctx: WorkspaceContext, row: BankTxnRow, target: Pick<RuleTarget, 'standardId' | 'asks'>): { target: AccountsTarget; restLeg: number } | { error: Err } {
   const rule = readLiveRule(ctx, target.standardId);
   if (rule === undefined) return { error: err('rule_not_found', { standardId: target.standardId }) };
   if (rule.scope !== 'bank') {
@@ -444,7 +442,7 @@ export function expandRule(ctx: WorkspaceContext, row: BankTxnRow, target: Pick<
   const rest = row.amount_minor - others;
   if (rest === 0) return { error: err('rest_is_zero', { standardId: rule.id, legIndex: restAt, reason: 'the asked amounts leave nothing for the rest leg' }) };
   out[restAt] = { ...out[restAt]!, amountMinor: rest };
-  return { target: { kind: 'accounts', legs: out, ...(rule.via_account_id !== null ? { viaAccountId: rule.via_account_id } : {}) } };
+  return { target: { kind: 'accounts', legs: out, ...(rule.via_account_id !== null ? { viaAccountId: rule.via_account_id } : {}) }, restLeg: restAt };
 }
 
 // --- D175: compose_entry for a bank line -----------------------------------------------------------
@@ -921,12 +919,15 @@ export function bookBankLine(ctx: WorkspaceContext, input: BookBankLineInput): R
   // D175: a Buchungsregel is expanded on THIS line before it is validated, then booked as the `accounts`
   // target it stands for (the decision row says `accounts`; the rule id stays in the verb's input).
   let target: BookableBankLineTarget;
+  // D208 point 8: a rule's text is its REST leg's, whatever the asked amounts make the largest leg.
+  let restLeg: number | undefined;
   if (given.kind === 'rule') {
     const expanded = expandRule(ctx, row, given);
     if ('error' in expanded) return expanded.error;
     const again = validateTarget(expanded.target);
     if ('error' in again) return again.error;
     target = again.target as BookableBankLineTarget;
+    restLeg = expanded.restLeg;
   } else {
     target = given;
   }
@@ -934,7 +935,7 @@ export function bookBankLine(ctx: WorkspaceContext, input: BookBankLineInput): R
   return runGuarded(() =>
     ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'book_bank_line', () =>
       {
-        const booked = performBooking(ctx, row, target, { text: input.text, ...(given.kind === 'rule' ? { ruleId: given.standardId } : {}) });
+        const booked = performBooking(ctx, row, target, { text: input.text, ...(given.kind === 'rule' ? { ruleId: given.standardId, restLeg } : {}) });
         // Critic A41 r1 P4: a receipt filed on this line while it was open is now held by a posting; its
         // capture closes in the booking's own transaction.
         if (booked.ok) settleCapturesLinkedTo(ctx, 'bank_txn', row.id);
@@ -1032,7 +1033,7 @@ export function performBooking(
   ctx: WorkspaceContext,
   row: BankTxnRow,
   target: BookableBankLineTarget,
-  opts: { text?: string | undefined; ruleId?: string; dryRun?: boolean },
+  opts: { text?: string | undefined; ruleId?: string; restLeg?: number | undefined; dryRun?: boolean },
 ): Result<BookBankLineOk> {
   const current = lineStateOf(ctx, row);
   if (current.state !== 'open') abort(lineNotOpen(row, current.state, current.link));
@@ -1070,7 +1071,7 @@ function dispatchBooking(
   row: BankTxnRow,
   bankLedgerId: string,
   target: BookableBankLineTarget,
-  opts: { text?: string | undefined; ruleId?: string },
+  opts: { text?: string | undefined; ruleId?: string; restLeg?: number | undefined },
   warnings: string[],
 ): Result<BookBankLineOk> {
   switch (target.kind) {
@@ -1082,12 +1083,18 @@ function dispatchBooking(
       return bookPaymentBatch(ctx, row, bankLedgerId, target.batchId, warnings);
     case 'existing_entry':
       return matchExistingEntry(ctx, row, bankLedgerId, target.entryId, target.acceptDifference === true ? (target.differenceReason ?? '') : null, warnings);
-    case 'accounts':
+    case 'accounts': {
+      // D208 point 8: the entry's text, decided ONCE for every accounts booking (a rule target, the inbox
+      // proposal a rule makes, bulk, an approved Vorschlag, autobook): the caller's text, else the rest leg's
+      // (`bank.entry_text_from_leg` = leg, the default), else the bank's default text.
+      const text = opts.text ?? (entryTextFromLeg(ctx) ? restLegText(target.legs, opts.restLeg) : undefined);
+      const withText = text === undefined ? opts : { ...opts, text };
       // D178 E3 (A39 §17.4): a leg in the transaction currency books through the conversion entry.
       if (target.legs.some((l) => l.fx !== undefined)) {
-        return bookToAccountsFx(ctx, row, bankLedgerId, target, opts, warnings);
+        return bookToAccountsFx(ctx, row, bankLedgerId, target, withText, warnings);
       }
-      return bookToAccounts(ctx, row, bankLedgerId, target.legs, opts, warnings, target.viaAccountId);
+      return bookToAccounts(ctx, row, bankLedgerId, target.legs, withText, warnings, target.viaAccountId);
+    }
     case 'contact':
       return bookContact(ctx, row, bankLedgerId, target, opts, warnings);
     case 'expense_claims':
@@ -1428,7 +1435,8 @@ function bookContact(
   const planned = planContact(ctx, row, bankLedgerId, target);
   if ('error' in planned) abort(planned.error);
   const plan = planned.plan;
-  const note = plan.overridden ? `abweichend: ${plan.mode}; Grund: ${plan.overrideReason ?? ''}`.slice(0, MAX_TEXT) : null;
+  // D204: the override is named on the decision; its reason only when given.
+  const note = plan.overridden ? (plan.overrideReason === null ? `abweichend: ${plan.mode}` : `abweichend: ${plan.mode}; Grund: ${plan.overrideReason}`).slice(0, MAX_TEXT) : null;
   const contactAnswer = {
     contactId: plan.contactId,
     counterpartyKind: plan.counterpartyKind,
@@ -1523,17 +1531,14 @@ function bookContact(
       }
       const own = setting === 'warn' ? 'keep' : 'reverse';
       const act = stated ?? own;
-      const reason = typeof target.overrideReason === 'string' ? target.overrideReason.trim() : '';
       // Security review: departing from the setting's answer (or keeping the VAT where the setting asks the
       // call to decide) changes a filed figure, so it needs the setting owner's right, `manage_vat_config`
-      // (A24 and the `vat-file` dial family declare the same for a stated `refundVat`), and a reason.
+      // (A24 and the `vat-file` dial family declare the same for a stated `refundVat`). D204: no reason is
+      // required; the decision row keeps who, when and the value it chose, and a reason when given.
       const departs = stated !== undefined && (setting === 'refuse' ? stated === 'keep' : stated !== own);
       if (departs) {
         const vatRight = ctx.capabilities.assert('manage_vat_config');
         if (!vatRight.ok) abort(vatRight as Err);
-        if (reason.length === 0) {
-          abort(bankTargetRefusal('reason_required', { field: 'target.overrideReason', settingKey: 'bank.anzahlung_vat_refund', setting, refundVat: stated }));
-        }
       }
       if (act === 'reverse') {
         let left = row.amount_minor;
@@ -1957,6 +1962,37 @@ function refundNote(note: string | null, target: Extract<BookBankLineTarget, { k
 }
 
 /** The default text of a booking from a bank line: the counterparty and the remittance, else the line's reference. */
+/**
+ * D208 point 8: the booking text an `accounts` booking carries in its legs: the description of its REST leg,
+ * the leg that takes the remainder. A booking by a Buchungsregel names it (`restLeg`, the rule's own rest
+ * index from `expandRule`); a plain accounts target (a one-leg rule's inbox proposal, a hand-built split)
+ * reads it as the largest leg in the line's direction (the convention a rule saved from a booking reads its
+ * rest by, `bankStandards.ts`); a single leg is the rest. Undefined when the rest leg carries none: the
+ * default text then stands.
+ */
+export function restLegText(legs: readonly Pick<BankLineLeg, 'amountMinor' | 'description'>[], restLeg?: number): string | undefined {
+  let rest: Pick<BankLineLeg, 'amountMinor' | 'description'> | undefined;
+  if (restLeg !== undefined) {
+    rest = legs[restLeg];
+  } else {
+    // A leg's amount runs in the line's direction; a negative one runs against it (`BankLineLeg`).
+    const along = legs.filter((l) => l.amountMinor > 0);
+    const pool = along.length > 0 ? along : legs;
+    for (const l of pool) if (rest === undefined || Math.abs(l.amountMinor) > Math.abs(rest.amountMinor)) rest = l;
+  }
+  const text = rest?.description?.trim();
+  return text === undefined || text === '' ? undefined : text;
+}
+
+/**
+ * D208 (D172): `bank.entry_text_from_leg`: `leg` (the default) books the rest leg's description as the entry
+ * text; `bank` keeps the bank's default text ("Bank: counterparty, remittance"). Read fail-closed: any value
+ * other than `bank` is the default.
+ */
+function entryTextFromLeg(ctx: WorkspaceContext): boolean {
+  return getSetting<string>(ctx, 'bank.entry_text_from_leg') !== 'bank';
+}
+
 function defaultBankText(ctx: WorkspaceContext, row: BankTxnRow): string {
   const detail = ctx.store.db
     .prepare('SELECT counterparty_name, remittance_text FROM bank_txn_detail WHERE workspace_id = ? AND bank_txn_id = ?')
@@ -2138,7 +2174,7 @@ function matchExistingEntry(
   row: BankTxnRow,
   bankLedgerId: string,
   entryId: string,
-  /** The stated reason when a difference is accepted, else null (critic A39-12). */
+  /** The reason when a difference is accepted ('' when none was given, D204), else null (critic A39-12). */
   acceptDifference: string | null,
   warnings: string[],
 ): Result<BookBankLineOk> {
@@ -2200,14 +2236,14 @@ function matchExistingEntry(
         entryAmountMinor: total,
         lineCurrency: row.currency,
         entryCurrency: chosen[0]!.currency,
-        reason: 'the entry does not book this movement on the bank account; pass acceptDifference: true with a differenceReason to link it anyway, recorded',
+        reason: 'the entry does not book this movement on the bank account; pass acceptDifference: true to link it anyway, recorded (a differenceReason is optional, D204)',
       }));
     }
     differenceMinor = signed - total;
     warnings.push('accepted_difference');
   }
   const leg = chosen[0]!;
-  const acceptedReason = differenceMinor !== null ? acceptDifference : null;
+  const acceptedReason = differenceMinor !== null && acceptDifference !== null && acceptDifference !== '' ? acceptDifference : null;
   const linkId = writeLineLink(ctx, {
     bankTxnId: row.id,
     kind: 'journal_entry',
@@ -2474,6 +2510,10 @@ function bookToAccounts(
 
 export interface IgnoreBankLineInput {
   bankTxnId?: string;
+  /**
+   * D196 point 2 (one-click ignore): optional. Absent (or blank), the line is ignored with the workspace's
+   * `bank.ignore_default_reason` (default `other`); a caller that sends one of the closed reasons keeps it.
+   */
   reason?: string;
   note?: string;
   /**
@@ -2538,11 +2578,11 @@ function screenIgnore(
   const guard =
     requireString(input.bankTxnId, 'bankTxnId') ??
     requireString(input.idempotencyKey, 'idempotencyKey') ??
-    requireString(input.reason, 'reason') ??
+    (input.reason !== undefined && input.reason !== null && typeof input.reason !== 'string' ? err('invalid_input', { field: 'reason' }) : null) ??
     optionalText(input.note, 'note') ??
     (input.standardId !== undefined ? requireString(input.standardId, 'standardId') : null);
   if (guard) return { error: guard };
-  if (!(BANK_LINE_IGNORE_REASONS as readonly string[]).includes(input.reason as string)) {
+  if (hasIgnoreReason(input) && !(BANK_LINE_IGNORE_REASONS as readonly string[]).includes(input.reason as string)) {
     return { error: err('invalid_input', { field: 'reason', allowed: [...BANK_LINE_IGNORE_REASONS] }) };
   }
   if (typeof input.note === 'string' && input.note.length > MAX_TEXT) return { error: err('invalid_input', { field: 'note', maxLength: MAX_TEXT }) };
@@ -2578,6 +2618,25 @@ function screenIgnore(
   return { row, scopedKey };
 }
 
+/** D196: a caller named a reason (a blank string counts as none: the one-click ignore). */
+function hasIgnoreReason(input: IgnoreBankLineInput): boolean {
+  return typeof input.reason === 'string' && input.reason.trim().length > 0;
+}
+
+/**
+ * D196: the reason a one-click ignore records, the workspace's `bank.ignore_default_reason` (default
+ * `other`). A value that is not a closed reason (no path writes one) falls back to `other`.
+ */
+function defaultIgnoreReason(ctx: WorkspaceContext): BankLineIgnoreReason {
+  let value: string;
+  try {
+    value = getSetting<string>(ctx, 'bank.ignore_default_reason');
+  } catch {
+    return 'other';
+  }
+  return (BANK_LINE_IGNORE_REASONS as readonly string[]).includes(value) ? (value as BankLineIgnoreReason) : 'other';
+}
+
 export function ignoreBankLine(ctx: WorkspaceContext, input: IgnoreBankLineInput): Result<IgnoreBankLineOk> {
   const capable = ctx.capabilities.assert('post');
   if (!capable.ok) return capable;
@@ -2586,28 +2645,31 @@ export function ignoreBankLine(ctx: WorkspaceContext, input: IgnoreBankLineInput
   if ('replayed' in screened) return screened.replayed;
   if ('already' in screened) return ok<IgnoreBankLineOk>(screened.already);
   const { row, scopedKey } = screened;
+  const reason: BankLineIgnoreReason = hasIgnoreReason(input) ? (input.reason as BankLineIgnoreReason) : defaultIgnoreReason(ctx);
+  const note = typeof input.note === 'string' && input.note.trim().length > 0 ? input.note : null;
   return runGuarded(() =>
     ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'ignore_bank_line', () => {
       const linkId = writeLineLink(ctx, {
         bankTxnId: row.id,
         kind: 'ignored',
-        targetId: input.reason as string,
+        targetId: reason,
         state: 'ignored',
         targetKind: 'ignore',
-        ignoreReason: input.reason as BankLineIgnoreReason,
-        note: input.note ?? null,
+        ignoreReason: reason,
+        note,
         ...(input.standardId !== undefined ? { ruleId: input.standardId } : {}),
       });
       syncCreditRow(ctx, row, 'dismissed');
       ctx.audit.record({ entityKind: 'bank_txn', entityId: row.id, action: 'discard', actor: ctx.actor, at: ctx.clock.now() });
-      return ok<IgnoreBankLineOk>({ bankTxnId: row.id, state: 'ignored', linkId, reason: input.reason as string, alreadyIgnored: false });
+      return ok<IgnoreBankLineOk>({ bankTxnId: row.id, state: 'ignored', linkId, reason, alreadyIgnored: false });
     }),
   );
 }
 
 /** Retire the line's decision on record (superseded, never deleted; its claims released with it). */
 function retireDecision(ctx: WorkspaceContext, row: BankTxnRow, reason: string): string | null {
-  return supersedeActiveLink(ctx, row.id, reason)?.linkId ?? null;
+  // D204: no reason given is stored as NULL; who and when are on the row either way.
+  return supersedeActiveLink(ctx, row.id, reason === '' ? null : reason)?.linkId ?? null;
 }
 
 /** Spec L5: the refusal for a `date` field the lean verbs no longer take. */
@@ -2659,10 +2721,13 @@ export function reopenBankLine(ctx: WorkspaceContext, input: ReopenBankLineInput
   const guard =
     requireString(input.bankTxnId, 'bankTxnId') ??
     requireString(input.idempotencyKey, 'idempotencyKey') ??
-    requireString(input.reason, 'reason');
+    optionalText(input.reason, 'reason');
   if (guard) return guard;
   if (input.date !== undefined) return noDateOverride();
-  if ((input.reason as string).length > MAX_TEXT) return err('invalid_input', { field: 'reason', maxLength: MAX_TEXT });
+  // D204: reopening needs no reason (one click, undone by booking again); the superseded decision keeps
+  // who and when, and a given reason.
+  const reopenReason = typeof input.reason === 'string' ? input.reason.trim() : '';
+  if (reopenReason.length > MAX_TEXT) return err('invalid_input', { field: 'reason', maxLength: MAX_TEXT });
   const scopedKey = JSON.stringify(['reopen_bank_line', input.bankTxnId, input.idempotencyKey]);
   const replayed = ctx.store.recallIdempotent<Result<ReopenBankLineOk>>(ctx.workspaceId, scopedKey, 'reopen_bank_line');
   if (replayed !== undefined) return replayed;
@@ -2723,7 +2788,7 @@ export function reopenBankLine(ctx: WorkspaceContext, input: ReopenBankLineInput
       const warnings: string[] = [];
       // L3: supersede FIRST, so the claims this decision holds are released before the reversal's
       // chokepoint looks for a live claim on the entry.
-      const supersededLinkId = retireDecision(ctx, row, input.reason as string);
+      const supersededLinkId = retireDecision(ctx, row, reopenReason);
       let creditPaymentReversed: string | null = null;
       // What the decision CREATED is reversed, read off the DECISION's own declared references (never a
       // link's `target_id`, which a G04 restore does not remap, critic A39R2-1).
@@ -2745,17 +2810,17 @@ export function reopenBankLine(ctx: WorkspaceContext, input: ReopenBankLineInput
             // A refund line's own Entgeltsminderung corrections (owner, 21.10.2026).
             for (const correction of anzahlungVatCorrectionsOfLink(ctx, link.linkId)) {
               if (reversalOf(ctx, correction) !== null) continue;
-              reverseOneEntry(ctx, row, correction, input.reason as string);
+              reverseOneEntry(ctx, row, correction, reopenReason);
               reversedEntryIds.push(correction);
             }
             for (const clearing of anzahlungVatClearingsOf(ctx, link.paymentId)) {
               if (reversalOf(ctx, clearing) !== null) continue;
-              reverseOneEntry(ctx, row, clearing, input.reason as string);
+              reverseOneEntry(ctx, row, clearing, reopenReason);
               reversedEntryIds.push(clearing);
             }
             const paymentEntry = paymentEntryOf(ctx, link.paymentId);
             if (link.entryId !== null && link.entryId !== paymentEntry) {
-              reverseOneEntry(ctx, row, link.entryId, input.reason as string);
+              reverseOneEntry(ctx, row, link.entryId, reopenReason);
               reversedEntryIds.push(link.entryId);
             }
           }
@@ -2764,7 +2829,7 @@ export function reopenBankLine(ctx: WorkspaceContext, input: ReopenBankLineInput
           // D178 E3: a booking with a foreign counter-leg posted a conversion entry (the decision's
           // `entryId`) and a bank entry (its claim); both are the decision's and both are reversed.
           for (const entryId of entriesOfLink(ctx, link.linkId, link.entryId)) {
-            reverseOneEntry(ctx, row, entryId, input.reason as string);
+            reverseOneEntry(ctx, row, entryId, reopenReason);
             reversedEntryIds.push(entryId);
           }
         }
@@ -2960,7 +3025,7 @@ function reverseOneEntry(ctx: WorkspaceContext, row: BankTxnRow, entryId: string
     {
       entryId,
       date: entry.date,
-      description: `Storno Bankzeile: ${reason}`.slice(0, MAX_TEXT),
+      description: (reason === '' ? 'Storno Bankzeile' : `Storno Bankzeile: ${reason}`).slice(0, MAX_TEXT),
       idempotencyKey: `bankline-reopen-${row.id}-${ctx.ids.next('blr')}`,
     },
     'reopen_bank_line',

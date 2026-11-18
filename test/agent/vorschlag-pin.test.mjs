@@ -250,8 +250,22 @@ function mutateRecord(/** @type {Fx} */ fx, /** @type {string} */ record, /** @t
       // The stamp was refused too: the record cannot change.
     }
   }
+  // A42: an APPEND-ONLY answer table (UPDATE and DELETE refused by triggers) changes by a NEW row, which is what a
+  // person's later answer is: the latest row per event decides.
+  const append = APPEND_ONLY_CHANGE[record];
+  if (append !== undefined && append(db, fx.workspaceId) === 1) return `${spec.table}+row`;
   return undefined;
 }
+
+/** @type {Record<string, (db: import('better-sqlite3').Database, workspaceId: string) => number>} */
+const APPEND_ONLY_CHANGE = {
+  settlement_event_inclusions_all: (db, workspaceId) =>
+    db
+      .prepare(
+        "INSERT INTO settlement_event_inclusion (id, workspace_id, source_system, source_processor, event_id, state, reason, amendments_seen, actor, at) VALUES (?, ?, 'Musterplattform', 'Beispielzahl', 'feed-sale-1', 'included', NULL, 0, 'studio', '2026-03-31T10:00:00Z')",
+      )
+      .run(`stlinc_pin_${db.prepare('SELECT COUNT(*) AS n FROM settlement_event_inclusion').get().n}`, workspaceId).changes,
+};
 
 // --- the repro: critic N1 -----------------------------------------------------------------------------
 

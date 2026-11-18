@@ -763,9 +763,9 @@ export interface SetDefaultInput {
  * `forceRevaluation` and why, while a back-dated DEFAULT silently restated every item in the
  * workspace with nothing in the history to say who did it or why. G01 automation is allowed to fire
  * both (the owner's answer to Q2 was to deny nothing), so an unattended rule could have done exactly
- * that at 03:00. It now cannot: the same force-plus-reason is required, and a blank or whitespace
- * reason is refused rather than stored as an empty string, so an unattended restatement always
- * arrives with a sentence attached.
+ * that at 03:00. It now cannot: the same `forceRevaluation` is required (D204: the reason is optional,
+ * stored when given; a blank one is stored as null, never as an empty string), so an unattended restatement always
+ * arrives as an explicit, audited act (who and when on the assignment row).
  *
  * The count is over the whole workspace's ledger, because the workspace default reaches every item
  * that has no override of its own.
@@ -790,12 +790,12 @@ export function inventoryValuationSetDefault(ctx: WorkspaceContext, input: SetDe
       .prepare('SELECT COUNT(*) AS n FROM stock_movement WHERE workspace_id = ? AND moved_at >= ?')
       .get(ctx.workspaceId, effectiveFrom) as { n: number }
   ).n;
-  if (affected > 0 && !(force && reason !== null)) {
+  if (affected > 0 && !force) {
     return err('method_change_blocked_open_period', {
       scope: 'workspace',
       effectiveFrom,
       affectedMovements: affected,
-      needs: ['forceRevaluation', 'reason'],
+      needs: ['forceRevaluation'],
     });
   }
 
@@ -863,12 +863,12 @@ export function inventoryValuationSetItemMethod(ctx: WorkspaceContext, input: Se
       .prepare('SELECT COUNT(*) AS n FROM stock_movement WHERE workspace_id = ? AND item_id = ? AND moved_at >= ?')
       .get(ctx.workspaceId, item.id, effectiveFrom) as { n: number }
   ).n;
-  if (affected > 0 && !(force && reason !== null)) {
+  if (affected > 0 && !force) {
     return err('method_change_blocked_open_period', {
       itemId: item.id,
       effectiveFrom,
       affectedMovements: affected,
-      needs: ['forceRevaluation', 'reason'],
+      needs: ['forceRevaluation'],
     });
   }
 

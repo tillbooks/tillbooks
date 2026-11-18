@@ -29,6 +29,13 @@ its seat has been given. Much of what you can change back, such as drafts and co
 not on the dial and runs within the seat's rights. Every call the agent makes is recorded, reads and
 refusals included.
 
+Deciding proposals is yours. If you want the agent to decide them itself, the owner can grant it
+under Setup > Settings > Agent ("Agent decides proposals", `agent.decide_proposals`): `reject` lets
+the agent reject proposals, `decide` also lets it approve bank-line decisions and booking rules. The grant is off by default,
+only a person can change it, and it ends when you set it back to `off` or when the person who gave it
+loses the right to decide. Every other proposal, and TILL's own offers to you, still waits for you. An approval the agent takes runs with the agent's own rights, and every
+decision it takes shows your grant.
+
 The dial covers agents that connect to TILL: over MCP, or as an agent member of a workspace. An
 agent that can drive your browser or run commands on your computer can act as you: give your agent
 TILL, not your browser or your shell.

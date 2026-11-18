@@ -1010,11 +1010,11 @@ function recoverSkippedFee(
 export interface DunningFeeReverseInput {
   runId?: string;
   reason?: string;
-  /** D174: a per-call override of `dunning.refreeze` for this run only. Needs `overrideReason`. */
+  /** D174: a per-call override of `dunning.refreeze` for this run only (audited; D204: no reason needed). */
   refreeze?: unknown;
-  /** D174: a per-call override of `dunning.letter_date` for this run only. Needs `overrideReason`. */
+  /** D174: a per-call override of `dunning.letter_date` for this run only (audited; D204: no reason needed). */
   letterDate?: unknown;
-  /** D174: the required reason for an override, written into the mirror's text and an audit row. */
+  /** D174: the optional reason for an override (D204), written into the mirror's text when given. */
   overrideReason?: unknown;
   idempotencyKey?: string;
 }
@@ -1051,7 +1051,7 @@ class FeeReverseAbort {
  *  - any live payment allocation on one of the run's fee items -> `fee_settled` naming the payments:
  *    the debtor paid (or it was written off), so reversing the booking alone would leave 1100 in
  *    credit beside the payment. `reverse_payment` first, never silently;
- *  - a blank reason -> `reason_required`; a locked period on the reversal date -> `period_locked`.
+ *  - a locked period on the reversal date -> `period_locked` (D204: a blank reason is absent, never a refusal).
  * THE DATE is today (OR 957a: correct in the open period, `reverse_entry`'s convention); the D69 VAT
  * trace rides the mirror, so the Umsatzsteuer comes back on the Ziffer it was declared on, and a
  * VAT-filed period is never touched. An EVEN, non-empty chain (a book whose raw Storno was itself
@@ -1065,8 +1065,7 @@ export function reverseDunningFee(ctx: WorkspaceContext, input: DunningFeeRevers
   if (!posting.ok) return posting;
   const guard = requireString(input.runId, 'runId') ?? requireString(input.idempotencyKey, 'idempotencyKey');
   if (guard) return guard;
-  if (typeof input.reason !== 'string' || input.reason.trim().length === 0) return err('reason_required', { field: 'reason' });
-  const reason = input.reason.trim();
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
   const runId = input.runId as string;
   // D174: the per-call override is validated before anything is read or written.
   const overrideBad = validateRefreezeOverride(input);
@@ -1074,7 +1073,8 @@ export function reverseDunningFee(ctx: WorkspaceContext, input: DunningFeeRevers
   const refreezeOverride = input.refreeze as DunningRefreezeMode | undefined;
   const letterDateOverride = input.letterDate as DunningLetterDate | undefined;
   const overridden = refreezeOverride !== undefined || letterDateOverride !== undefined;
-  const overrideReason = overridden ? (input.overrideReason as string).trim() : null;
+  const overrideReason =
+    overridden && typeof input.overrideReason === 'string' && input.overrideReason.trim().length > 0 ? input.overrideReason.trim() : null;
 
   const scopedKey = JSON.stringify(['dunning_fee_reverse', runId, input.idempotencyKey as string]);
   const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, scopedKey, 'dunning_fee_reverse');
@@ -1132,10 +1132,11 @@ export function reverseDunningFee(ctx: WorkspaceContext, input: DunningFeeRevers
       // stored result whatever the setting says now); a per-call override wins for this run only.
       const refreeze = refreezeOverride ?? dunningRefreezeOf(ctx);
       const letterDate = letterDateOverride ?? dunningLetterDateOf(ctx);
-      const description =
-        overrideReason === null
-          ? `Storno Mahngebühren Mahnlauf ${run.run_date}: ${reason}`
-          : `Storno Mahngebühren Mahnlauf ${run.run_date}: ${reason} (abweichend: offene Briefe ${refreeze === 'hold' ? 'zurückgehalten' : 'ohne Gebühr neu ausgestellt'}, Briefdatum ${letterDate === 'today' ? 'Tag der Neuausstellung' : 'Datum des Mahnlaufs'}; Grund: ${overrideReason})`;
+      // D204: the reasons are optional; the override itself is always named (what differed, and how).
+      const head = reason === null ? `Storno Mahngebühren Mahnlauf ${run.run_date}` : `Storno Mahngebühren Mahnlauf ${run.run_date}: ${reason}`;
+      const description = !overridden
+        ? head
+        : `${head} (abweichend: offene Briefe ${refreeze === 'hold' ? 'zurückgehalten' : 'ohne Gebühr neu ausgestellt'}, Briefdatum ${letterDate === 'today' ? 'Tag der Neuausstellung' : 'Datum des Mahnlaufs'}${overrideReason === null ? '' : `; Grund: ${overrideReason}`})`;
       const reversed = reverseOwnedEntry(
         ctx,
         {
@@ -1151,7 +1152,7 @@ export function reverseDunningFee(ctx: WorkspaceContext, input: DunningFeeRevers
       ctx.audit.record({ entityKind: 'dunning_run', entityId: run.id, action: 'fee_reverse', actor: ctx.actor, at: ctx.clock.now() });
       // D174: in the SAME transaction, every letter not yet sent is re-frozen without the fee, so the
       // reversal and the letters that no longer demand it land together or not at all.
-      // D174: the override is its own audit row (the reason stands in the mirror's description).
+      // D174: the override is its own audit row (what differed stands in the mirror's description).
       if (overridden) {
         ctx.audit.record({ entityKind: 'dunning_run', entityId: run.id, action: 'refreeze_override', actor: ctx.actor, at: ctx.clock.now() });
       }

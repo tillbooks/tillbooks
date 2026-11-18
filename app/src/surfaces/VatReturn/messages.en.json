@@ -237,6 +237,34 @@
         "permission_denied": "You lack the right to post.",
         "fallback": "The settlement could not be read or posted. Nothing was changed."
       }
+    },
+    "feed": {
+      "title": "Settlement feed",
+      "gap": "{source}: not pulled {from} to {to}",
+      "show": "Show the events",
+      "tip": {
+        "missing": "{count} events of this period are not in the books ({amount} VAT)",
+        "earlier": "{count} earlier events need a look: not booked, booked twice or changed by the feed",
+        "double": "{count} events are booked twice",
+        "amended": "{count} events were changed by the feed after the import booked them",
+        "overrideCheck": "{count} events marked handled outside the import were changed by the feed since",
+        "test": "Test payments: {excluded} with VAT left out ({vat}), {open} not cancelled, {booked} booked",
+        "ignored": "{count} events with VAT ignored in the Umsatz review ({vat} VAT left out)",
+        "residue": "Test payments leave {amount} on the clearing account",
+        "unplaceable": "{count} events the feed sent without an id: they cannot be named"
+      },
+      "col": {
+        "day": "Day",
+        "amount": "Amount",
+        "vat": "VAT",
+        "why": "Why"
+      },
+      "reason": {
+        "missing": "not in the books",
+        "booked_twice": "booked twice",
+        "amended": "changed by the feed",
+        "override_check": "Figures changed, check the override"
+      }
     }
   },
   "help": {

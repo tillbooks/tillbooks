@@ -584,7 +584,8 @@ function requireEmployeeContact(ctx: WorkspaceContext, employee: EmployeeRow): R
 
 export interface ClaimRejectInput {
   claimId: string;
-  reason: string;
+  /** D204: optional; a given reason is kept on the claim, the audit row keeps who and when. */
+  reason?: string;
   idempotencyKey: string;
 }
 
@@ -593,7 +594,8 @@ export function rejectClaim(ctx: WorkspaceContext, input: ClaimRejectInput): Res
   if (!capable.ok) return capable;
   const guard = requireString(input.claimId, 'claimId') ?? requireString(input.idempotencyKey, 'idempotencyKey');
   if (guard) return guard;
-  if (typeof input.reason !== 'string' || input.reason.trim().length === 0) return err('reason_required', { field: 'reason' });
+  // D204: no reason is required; a blank one is absent.
+  const rejectReason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
 
   const scopedKey = JSON.stringify(['expense_claim_reject', input.claimId, input.idempotencyKey]);
   const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, scopedKey, 'expense_claim_reject');
@@ -609,7 +611,7 @@ export function rejectClaim(ctx: WorkspaceContext, input: ClaimRejectInput): Res
     const now = ctx.clock.now();
     ctx.store.db
       .prepare("UPDATE expense_claim SET status = 'rejected', reject_reason = ? WHERE workspace_id = ? AND id = ? AND status = 'submitted'")
-      .run(input.reason, ctx.workspaceId, claim.id);
+      .run(rejectReason, ctx.workspaceId, claim.id);
     ctx.audit.record({ entityKind: 'expense_claim', entityId: claim.id, action: 'reject', actor: ctx.actor, at: now });
     return ok({ claimId: claim.id, claim: claimEcho(ctx, readClaimRow(ctx, claim.id) as ClaimRow) });
   });
@@ -777,7 +779,8 @@ export function reimburseClaim(ctx: WorkspaceContext, input: ClaimReimburseInput
 
 export interface ClaimReverseInput {
   claimId: string;
-  reason: string;
+  /** D204: optional; a given reason rides the mirror's description. */
+  reason?: string;
   idempotencyKey: string;
 }
 
@@ -793,7 +796,7 @@ export interface ClaimReverseInput {
  *    names `reverse_payment`, which walks the claim back to `approved`, after which this verb runs.
  *  - `reversed` -> `already_reversed` naming the mirror (idempotent on ROWS under a new key; the same
  *    key replays the memo).
- *  - any other state -> `invalid_transition`; a blank reason -> `reason_required`;
+ *  - any other state -> `invalid_transition` (D204: a blank reason is no refusal, it is absent);
  *    a locked period on the reversal date -> `period_locked`.
  * THE DATE is today (OR 957a: correct in the open period), the convention `reverse_entry` and
  * `void_vendor_bill` share; the VAT trace and its Leistungsdatum ride the mirror (A02), so the
@@ -812,8 +815,7 @@ export function reverseClaim(ctx: WorkspaceContext, input: ClaimReverseInput): R
   if (!posting.ok) return posting;
   const guard = requireString(input.claimId, 'claimId') ?? requireString(input.idempotencyKey, 'idempotencyKey');
   if (guard) return guard;
-  if (typeof input.reason !== 'string' || input.reason.trim().length === 0) return err('reason_required', { field: 'reason' });
-  const reason = input.reason.trim();
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
 
   const scopedKey = JSON.stringify(['expense_claim_reverse', input.claimId, input.idempotencyKey]);
   const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, scopedKey, 'expense_claim_reverse');
@@ -850,7 +852,7 @@ export function reverseClaim(ctx: WorkspaceContext, input: ClaimReverseInput): R
         {
           entryId: chain.last,
           date,
-          description: `Storno Spesen ${claim.title}: ${reason}`,
+          description: reason === null ? `Storno Spesen ${claim.title}` : `Storno Spesen ${claim.title}: ${reason}`,
           // One mirror per claim, whatever key the caller used: the identity is the claim.
           idempotencyKey: JSON.stringify(['expense_claim_reversal', claim.id]),
         },

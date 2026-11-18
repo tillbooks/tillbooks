@@ -322,10 +322,9 @@ test('bridge sign-off: a signed review goes stale on a hash change (open again, 
 
 // --- Skip and reopen (6.1 / 6.2) -----------------------------------------------------------------
 
-test('skip: needs a reason, refuses the three undeletable items, shows the reason and actor; reopen returns it to open', () => {
+test('skip: refuses the three undeletable items, shows the reason and actor; reopen returns it to open', () => {
   const w = world('skip');
   const run = start(w);
-  refuse(w.call('checklist_item_skip', { runId: run.runId, itemId: 'ech0217_exported', reason: '  ', idempotencyKey: key('r') }), 'skip_needs_reason', 'blank reason');
   for (const id of ['vat_return_computed', 'period_locked', 'settlement_booked']) {
     refuse(w.call('checklist_item_skip', { runId: run.runId, itemId: id, reason: 'x', idempotencyKey: key('u') }), 'undeletable', `skip ${id}`);
   }
@@ -378,10 +377,9 @@ test('a full walk reaches the derived done; the run status is never stored', () 
   assert.equal(listed.runs[0].doneCount, 10);
 });
 
-test('abandon: needs a reason, stays listed under the filter, every later write refuses run_abandoned', () => {
+test('abandon: keeps a given reason, stays listed under the filter, every later write refuses run_abandoned', () => {
   const w = world('abandon');
   const run = start(w);
-  refuse(w.call('checklist_abandon', { runId: run.runId, reason: '', idempotencyKey: key('a') }), 'invalid_input', 'no reason');
   const gone = must(w.call('checklist_abandon', { runId: run.runId, reason: 'Falsche Periode.', idempotencyKey: key('b') }), 'abandon');
   assert.equal(gone.status, 'abandoned');
   assert.equal(gone.abandonReason, 'Falsche Periode.');
@@ -520,4 +518,19 @@ test('permission: the five writes gate on manage_checklists, the three reads on 
     assert.ok(bundle.includes('post') && bundle.includes('manage_checklists'), `${role} holds post and manage_checklists`);
   }
   assert.equal(CAPABILITY_FOR_ACTION.vat_mark_filed, 'vat_file', 'item 8 keeps the statutory gate');
+});
+
+test('D204 checklists: an item is skipped and a run abandoned with no reason; who and when are kept and the permission named', async () => {
+  const { assertAuditRow, assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
+  const w = world('d204-skip');
+  const run = start(w);
+  const skipped = must(w.call('checklist_item_skip', { runId: run.runId, itemId: 'ech0217_exported', reason: '  ', idempotencyKey: key('d204-s') }), 'skip without a reason');
+  assert.equal(skipped.item.status, 'skipped', 'what changed: open -> skipped');
+  assert.equal(skipped.item.skipReason, null);
+  assertWhoWhen(skipped.item.skippedBy, skipped.item.skippedAt, 'studio');
+  assertPermission('checklist_item_skip');
+  const abandoned = must(w.call('checklist_abandon', { runId: run.runId, idempotencyKey: key('d204-a') }), 'abandon without a reason');
+  assert.equal(abandoned.status, 'abandoned');
+  assertAuditRow(w.deps.store, w.wid, { entityKind: 'checklist_run', entityId: run.runId, action: 'cancel', actor: 'studio' });
+  assertPermission('checklist_abandon');
 });

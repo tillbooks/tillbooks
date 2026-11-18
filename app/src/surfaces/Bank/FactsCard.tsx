@@ -216,7 +216,7 @@ export function FactsCard({ line, lookups, titleId, showAccount, onReceipts }: F
   // A20 §12: where the line came from, said only when it is not the camt.053 every line is by default (a
   // line filled from the bank's CSV export, or read from an MT940).
   if (facts?.source === 'csv' || facts?.source === 'mt940') {
-    rows.push({ key: 'source', glyph: <NoteGlyph size={16} />, name: t('bankInbox.facts.source'), value: t(`bankInbox.facts.sourceOf.${facts.source}`) });
+    rows.push({ key: 'source', glyph: <NoteGlyph size={16} />, name: t('bankInbox.facts.source'), value: t(`bankInbox.facts.sourceOf.${facts.source === 'csv' && facts.container === 'xlsx' ? 'xlsx' : facts.source}`) });
   }
   if (line.receiptCount > 0) {
     const Clip = VOCABULARY.attach.glyph;

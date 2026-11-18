@@ -129,9 +129,6 @@ export function bookStateOf(
     if (rest < 0) return { enabled: false, reason: t('bankInbox.book.why.positions', { amount: money(absAmount(line)) }) };
     if (rest > 0 && target.remainder !== 'on_account') return { enabled: false, reason: t('bankInbox.book.why.remainder', { amount: money(rest) }) };
   }
-  if (target.kind === 'contact' && target.mode !== null && target.overrideReason.trim() === '') {
-    return { enabled: false, reason: t('bankInbox.book.why.overrideReason') };
-  }
   if (target.kind === 'expense_claims' && target.claimIds.length === 0) return { enabled: false, reason: t('bankInbox.book.why.target') };
   if (target.kind === 'rule') {
     const missing = target.asks.filter((a) => !isComputedAsIs(a) && askMinor(a) === null);
@@ -149,9 +146,6 @@ export function bookStateOf(
     if (target.legs.reduce((s, l) => s + l.amountMinor, 0) !== absAmount(line)) {
       return { enabled: false, reason: t('bankInbox.book.why.positions', { amount: money(absAmount(line)) }) };
     }
-  }
-  if (target.kind === 'existing_entry' && target.acceptDifference && (target.differenceReason ?? '').trim() === '') {
-    return { enabled: false, reason: t('bankInbox.book.why.difference') };
   }
   return { enabled: true, reason: null };
 }
@@ -179,13 +173,24 @@ export function vatSummaryOf(t: T, l: Lookups, target: DraftTarget | null): stri
 }
 
 /**
- * The Buchungstext the engine writes when `book_bank_line` is sent none (`performAccountsBooking`):
- * "Bank: <counterparty>, <remittance or entry reference>", else "Bankbuchung <entry reference>". The
- * engine's `counterparty_name ?? payer_name` is the line's `counterparty.name` already.
+ * The Buchungstext the ENGINE writes when `book_bank_line` is sent none (`defaultBankText` and
+ * `performAccountsBooking` in src/core/banking/bankBooking.ts): "Bank: <counterparty>, <remittance or entry
+ * reference>", else "Bankbuchung <entry reference>". The engine's `counterparty_name ?? payer_name` is the
+ * line's `counterparty.name` already.
+ */
+export function engineDefaultBookingText(line: BankInboxLine): string {
+  const parts = [line.counterparty.name, line.remittance.text ?? line.entryRef].filter((s): s is string => typeof s === 'string' && s.length > 0);
+  return parts.length > 0 ? `Bank: ${parts.join(', ')}` : `Bankbuchung ${line.entryRef ?? line.bankTxnId}`;
+}
+
+/**
+ * D195 (owner, v12: "do not repeat yourself"): the Buchungstext the row shows and books by default,
+ * "<counterparty>, <remittance or entry reference>" without the "Bank:" prefix, the way the mockup reads
+ * "Render, Hosting Oktober"; "Bankbuchung <entry reference>" when the line names neither.
  */
 export function defaultBookingText(line: BankInboxLine): string {
   const parts = [line.counterparty.name, line.remittance.text ?? line.entryRef].filter((s): s is string => typeof s === 'string' && s.length > 0);
-  return parts.length > 0 ? `Bank: ${parts.join(', ')}` : `Bankbuchung ${line.entryRef ?? line.bankTxnId}`;
+  return parts.length > 0 ? parts.join(', ') : `Bankbuchung ${line.entryRef ?? line.bankTxnId}`;
 }
 
 /** The longest Buchungstext the engine takes (`MAX_TEXT`, bankBooking.ts). */
@@ -196,11 +201,14 @@ export function takesBookingText(target: DraftTarget | null): boolean {
   return target === null || target.kind === 'accounts' || target.kind === 'rule';
 }
 
-/** The `text` to send: the person's text when it differs from the engine's default, else nothing. */
+/**
+ * The `text` to send: the text as the row shows it (the person's, else the Studio's default), so what is
+ * booked is what was on screen; nothing only when it is the engine's own default, which the engine writes
+ * anyway.
+ */
 export function bookingTextToSend(line: BankInboxLine, text: string | undefined): string | undefined {
-  if (text === undefined) return undefined;
-  const trimmed = text.trim();
-  if (trimmed === '' || trimmed === defaultBookingText(line)) return undefined;
+  const trimmed = (text ?? defaultBookingText(line)).trim();
+  if (trimmed === '' || trimmed === engineDefaultBookingText(line)) return undefined;
   return trimmed.slice(0, BOOKING_TEXT_MAX);
 }
 

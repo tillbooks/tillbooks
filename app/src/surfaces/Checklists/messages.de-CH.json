@@ -466,7 +466,6 @@
       "working": "Wird bestätigt",
       "consequence": "Hält das Datum der Genehmigung fest. Die Versammlung selbst findet ausserhalb von TILL statt.",
       "needsDate": "Gib das Datum der Versammlung an.",
-      "needsReason": "Die Versammlung liegt vor der Freigabe der Jahresrechnung. Gib einen Grund an.",
       "alreadyAttested": "Die Genehmigung ist schon bestätigt. Öffne den Schritt zuerst wieder."
     },
     "skip": {
@@ -481,9 +480,6 @@
         "bank_balance_typed": "Bankauszug liegt vor.",
         "prior_year_comparison": "Erstes Geschäftsjahr."
       }
-    },
-    "reason": {
-      "needed": "Gib einen Grund an."
     },
     "acknowledge": {
       "title": "{item}: zur Kenntnis nehmen",

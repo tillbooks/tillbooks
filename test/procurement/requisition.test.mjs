@@ -161,13 +161,19 @@ test('approve completes the task and moves the requisition to approved', () => {
   assert.equal(approved.requisition.approvalEvents.some((e) => e.decision === 'approved'), true);
 });
 
-test('reject requires a reason and is terminal; return sends it back to draft, re-submittable', () => {
+test('D204 reject needs no reason and is terminal; the event keeps who and when; return sends it back to draft, re-submittable', async () => {
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
   const { ctx } = setup();
   const r = requisitionUpsert(ctx, draftInput()).requisition;
   requisitionSubmit(ctx, { requisitionId: r.id, idempotencyKey: 's6' });
-  assert.equal(requisitionReject(ctx, { requisitionId: r.id, idempotencyKey: 'x1' }).error, 'reason_required');
-  const rejected = requisitionReject(ctx, { requisitionId: r.id, reason: 'over budget', idempotencyKey: 'rj1' });
-  assert.equal(rejected.requisition.status, 'rejected');
+  const rejected = requisitionReject(ctx, { requisitionId: r.id, idempotencyKey: 'x1' });
+  assert.equal(rejected.requisition.status, 'rejected', 'what changed: pending_approval -> rejected');
+  const ev = ctx.store.db
+    .prepare("SELECT actor_id, created_at, comment FROM requisition_approval_event WHERE workspace_id = ? AND requisition_id = ? AND decision = 'rejected'")
+    .get(ctx.workspaceId, r.id);
+  assertWhoWhen(ev.actor_id, ev.created_at);
+  assert.equal(ev.comment, null);
+  assertPermission('requisition_reject');
 
   const r2 = requisitionUpsert(ctx, draftInput({}, 'r2')).requisition;
   requisitionSubmit(ctx, { requisitionId: r2.id, idempotencyKey: 's7' });

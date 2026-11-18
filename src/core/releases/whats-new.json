@@ -1,0 +1,147 @@
+{
+  "$comment": "What's new (spec O00, D199): shown once in the Studio after an update and on tillbooks.ch/changelog. One entry per released version, newest first; the first entry may be the one \"unreleased\" entry (no date) for develop builds, renamed to the version when it is released. Each entry holds 2 to 4 items: kind (new, improved or fixed), icon (a name from RELEASE_ICONS in notes.ts), a title of at most 40 characters with no final period, a body of ONE sentence of at most 110 characters ending in a period, both in en and de-CH (du, real umlauts, ss never the sharp s), no em dashes, through the humanizer. Optional go: a Studio route such as /journal. node ops/release.mjs bump refuses a version without an entry, and test/releases/whats-new.test.mjs fails when the running version has none.",
+  "releases": [
+    {
+      "version": "1.0.0-beta.6",
+      "date": "2026-11-18",
+      "items": [
+        {
+          "kind": "improved",
+          "icon": "layout",
+          "title": {
+            "en": "A calmer Studio",
+            "de-CH": "Ein ruhigeres Studio"
+          },
+          "body": {
+            "en": "A menu of seven areas, settings behind one gear, and one click per decision in Pendenzen.",
+            "de-CH": "Ein Menü mit sieben Bereichen, Einstellungen hinter einem Zahnrad, ein Klick pro Entscheid."
+          },
+          "go": "/attention"
+        },
+        {
+          "kind": "new",
+          "icon": "agent",
+          "title": {
+            "en": "Approve in chat",
+            "de-CH": "Freigabe im Chat"
+          },
+          "body": {
+            "en": "Tell the agent in chat which Vorschläge are approved, and it runs exactly those, except VAT filing.",
+            "de-CH": "Sag im Chat, welche Vorschläge gelten, und der Agent führt genau diese aus, ausser der MWST-Abrechnung."
+          },
+          "go": "/settings/agent"
+        },
+        {
+          "kind": "new",
+          "icon": "receipt",
+          "title": {
+            "en": "Turnover from any export",
+            "de-CH": "Umsatz aus jedem Export"
+          },
+          "body": {
+            "en": "Load a CSV or Excel export, check every sale on the Umsatz page, then book what you reviewed.",
+            "de-CH": "Lade einen CSV- oder Excel-Export, prüfe jeden Verkauf unter Umsatz und buche, was du geprüft hast."
+          },
+          "go": "/umsatz"
+        },
+        {
+          "kind": "new",
+          "icon": "bank",
+          "title": {
+            "en": "Settlement feeds",
+            "de-CH": "Abrechnungen direkt abholen"
+          },
+          "body": {
+            "en": "TILL fetches a payment processor's settlement and books it through your template.",
+            "de-CH": "TILL holt die Abrechnung eines Zahlungsanbieters ab und bucht sie über deine Vorlage."
+          }
+        }
+      ]
+    },
+    {
+      "version": "1.0.0-beta.5",
+      "date": "2026-11-11",
+      "items": [
+        {
+          "kind": "improved",
+          "icon": "asset",
+          "title": {
+            "en": "Asset sales count once",
+            "de-CH": "Anlageverkäufe zählen einmal"
+          },
+          "body": {
+            "en": "Link the sale invoice to the disposal, and its proceeds and VAT are booked only once.",
+            "de-CH": "Verknüpfe die Rechnung mit dem Abgang, dann zählen Erlös und MWST nur einmal."
+          }
+        },
+        {
+          "kind": "new",
+          "icon": "agent",
+          "title": {
+            "en": "TILL in Claude Desktop",
+            "de-CH": "TILL in Claude Desktop"
+          },
+          "body": {
+            "en": "A double-click installs TILL's MCP server in Claude Desktop, with no JSON to edit.",
+            "de-CH": "Ein Doppelklick installiert den MCP-Server von TILL in Claude Desktop, ganz ohne JSON."
+          }
+        },
+        {
+          "kind": "fixed",
+          "icon": "shield",
+          "title": {
+            "en": "Files survive a crash",
+            "de-CH": "Dateien überstehen einen Absturz"
+          },
+          "body": {
+            "en": "Backups and the files TILL writes beside your books survive a crash or a power cut.",
+            "de-CH": "Sicherungen und die Dateien neben deinen Büchern überstehen einen Absturz oder Stromausfall."
+          }
+        }
+      ]
+    },
+    {
+      "version": "1.0.0-beta.4",
+      "date": "2026-11-09",
+      "items": [
+        {
+          "kind": "new",
+          "icon": "export",
+          "title": {
+            "en": "Export any date range",
+            "de-CH": "Export für jeden Zeitraum"
+          },
+          "body": {
+            "en": "The journal and the bank statements export for any range, with quick picks for the usual periods.",
+            "de-CH": "Journal und Kontoauszüge exportierst du für jeden Zeitraum, mit Schnellwahl für die üblichen Perioden."
+          },
+          "go": "/journal"
+        },
+        {
+          "kind": "improved",
+          "icon": "layout",
+          "title": {
+            "en": "A calmer Studio",
+            "de-CH": "Ein ruhigeres Studio"
+          },
+          "body": {
+            "en": "Screens share a few layouts, so the same kind of task looks and works the same everywhere.",
+            "de-CH": "Die Seiten teilen wenige Layouts, also sieht dieselbe Aufgabe überall gleich aus."
+          }
+        },
+        {
+          "kind": "fixed",
+          "icon": "layout",
+          "title": {
+            "en": "One scroll per page",
+            "de-CH": "Ein Bildlauf pro Seite"
+          },
+          "body": {
+            "en": "The app scrolls as one page, with no second scrollbar inside the window.",
+            "de-CH": "Die App scrollt als eine Seite, ohne zweite Bildlaufleiste im Fenster."
+          }
+        }
+      ]
+    }
+  ]
+}

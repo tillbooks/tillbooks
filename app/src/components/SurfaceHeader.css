@@ -59,6 +59,31 @@
   color: var(--t-text);
 }
 
+/* D201: the back chevron above the title, quiet: the dim ink of a secondary line, the accent on hover
+   only as the anchor colour shift every link takes. A glyph beside the origin's name, never alone. */
+.surface-header-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  margin: 0 0 var(--t-space-0-5) calc(-1 * var(--t-space-0-5));
+  padding: 0 var(--t-space-0-5);
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  color: var(--t-text-dim);
+  text-decoration: none;
+}
+
+.surface-header-back:hover {
+  color: var(--t-text);
+}
+
+/* The vocabulary has a right chevron; pointing back is its mirror. */
+.surface-header-back-glyph {
+  transform: scaleX(-1);
+}
+
 .surface-header-titleline {
   display: flex;
   align-items: baseline;

@@ -200,6 +200,11 @@ export function capabilityFor(
   actor: string,
   capability: string,
   identitySource?: IdentitySource,
+  // D196: true ONLY where a caller has established that the owner's live grant (`agent.decide_proposals`,
+  // `core/agent/decisionGrant.ts`) covers the ONE decision verb being dispatched. It lifts step 0 and
+  // nothing else: the rest of the order below still decides, so the grant never adds a right the seat's
+  // ROLE lacks. The only caller that passes it is the registry boundary for `DECISION_VERBS`.
+  governorDelegated = false,
 ): boolean {
   // STEP 0 (A35 critic F1, 18.08.2026): THE GOVERNED SEAT NEVER HOLDS ITS OWN GOVERNOR.
   // `manage_agent_dial` arms and disarms unattended agent execution, approves and rejects drafted
@@ -212,7 +217,7 @@ export function capabilityFor(
   // F-08 (d): the rule reads the GOVERNED SEAT, not the one actor string, so a served member of kind
   // `agent` is denied its governor exactly as the local `agent` is. Capability first, so the lookup
   // runs only on the one capability it decides.
-  if (capability === 'manage_agent_dial' && isGovernedSeat(store, actor)) return false;
+  if (capability === 'manage_agent_dial' && !governorDelegated && isGovernedSeat(store, actor)) return false;
 
   // STEP 0-b (M01, served access): THE SERVED STRANGER HOLDS NOTHING, EVEN ON AN UNPROVISIONED
   // WORKSPACE. A request in served mode whose proxy-attested subject matches no `user.subject` is
@@ -263,8 +268,9 @@ export function assertCapability(
   actor: string,
   capability: string,
   identitySource?: IdentitySource,
+  governorDelegated = false,
 ): Result {
-  if (capabilityFor(store, workspaceId, actor, capability, identitySource)) return ok();
+  if (capabilityFor(store, workspaceId, actor, capability, identitySource, governorDelegated)) return ok();
   const member = memberFor(store, workspaceId, actor);
   return err('permission_denied', {
     capability,

@@ -297,14 +297,25 @@ body {
   margin-bottom: var(--t-space-2);
 }
 
-/* The one head row. It is the positioned box the switcher's menu hangs from, so the menu spans the
-   whole column (every workspace name in full) rather than the compact trigger's width. */
+/* The one head row (D201): the wordmark and, at its right edge, the visible expand and collapse
+   toggle. The workspace switcher moved to the footer. */
 .rail-head-row {
   position: relative;
   display: flex;
   align-items: center;
   gap: var(--t-space-1);
   min-height: 36px;
+}
+
+.rail-head-row > .tooltip-wrap {
+  margin-left: auto;
+}
+
+/* The toggle is a quiet 28px icon control in the head row, the rows' band; in the icon strip's head it
+   keeps the strip's 40px target. */
+.rail-head-row .rail-toggle {
+  width: 28px;
+  height: 28px;
 }
 
 .rail-title {
@@ -318,13 +329,14 @@ body {
   padding: 0 0 0 var(--t-space-2);
 }
 
-/* The rail-head workspace switcher (D24, variant A): names the current workspace and discloses
-   the full list. It reads as a CONTROL, not another nav row: surface fill plus the strong border,
-   exactly the .btn--secondary treatment, so it can never be mistaken for a label. The popup is a
-   menu of the one overlay tier (K-28): the elevated ground, one hairline, one overlay shadow, the
-   menu radius. Since K-01 it takes the rest of the head row beside the wordmark; it is NOT
-   positioned itself, so its menu hangs from the whole row (`.rail-head-row`). */
+/* The workspace switcher (D24, variant A): names the current workspace and discloses the full list.
+   It reads as a CONTROL, not another nav row: surface fill plus the strong border, exactly the
+   .btn--secondary treatment, so it can never be mistaken for a label. The popup is a menu of the one
+   overlay tier (K-28): the elevated ground, one hairline, one overlay shadow, the menu radius. Since
+   D201 it is the footer's first row, the rail's full width, and the positioned box its menu hangs
+   from, so the menu opens upward over the rail at the switcher's width. */
 .ws-switcher {
+  position: relative;
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -553,6 +565,18 @@ body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  /* D201/D204: nothing in the rail scrolls sideways, and when the band does scroll (a short viewport, a
+     long open group) its bar is the thin native one, transparent at rest and shown while the pointer
+     is over the rail or focus is inside it, overlaying nothing. Never a `::-webkit-scrollbar`
+     pseudo-bar (B1). An engine without `scrollbar-color` keeps its own overlay bar. */
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.rail:hover .rail-nav,
+.rail-nav:focus-within {
+  scrollbar-color: var(--t-border-strong) transparent;
 }
 
 /* The tree itself (A1): a flat column of rows. A row's depth reads from the inset of its
@@ -577,10 +601,10 @@ body {
    one band: the density toggle never touches the rail. Below 767px the drawer rows grow to 44px.
 
    ONE TYPE SIZE, ONE TEXT EDGE (D178 point 17). Hierarchy is carried by weight and by the person's
-   header style (`data-header-style` on `.rail-nav`), never by a second row height: by default a
-   header is 14px/600 in --t-text with its text at the rows' icon column and its rows flush below;
-   `icon_14` gives it a group icon at 14px/500 and nests its rows at the text column; `label_12` is
-   the K-23 12px/500 dim label. `--rail-text-indent` is the icon plus its gap, the step from the icon
+   header style (`data-header-style` on `.rail-nav`), never by a second row height: by default
+   (`icon_14`, D201) a header carries a group icon at 14px/500 with its rows flush below, every row with
+   its icon; `text_14_bold` is 14px/600 in --t-text with its text at the rows' icon column and no group
+   icon; `label_12` is the K-23 12px/500 dim label. `--rail-text-indent` is the icon plus its gap, the step from the icon
    column to the text column, so a nested row's text lines up with its parent's text. */
 .rail-nav {
   --rail-icon-size: 18px;
@@ -768,35 +792,65 @@ body {
   transform: rotate(90deg);
 }
 
-/* The child list of an expanded node (role="group"). The disclosure pattern of the Reveal moment
-   (D122 D-I): the body fades under its chevron in `--t-motion-reveal`; collapse is instant. Under the
-   default and the `label_12` header style a GROUP's rows sit flush with the top-level rows (the
-   owner's "why have indented menu items"); a nested PARENT's rows start at its text column. */
+/* The child list of a group or parent (D201, D204 Arrive and leave). It stays mounted; its height
+   opens and closes with `grid-template-rows` 0fr to 1fr over `--t-motion-reveal` and its rows fade
+   with it, so a group glides open instead of jumping. While closed the body is `inert` (NavTree) and
+   `visibility: hidden`, which arrives only once the height has closed. The tokens are zeroed
+   under reduced motion and by `data-motion="off"`, so nothing moves there (motion-tokens guard).
+
+   THE PITCH HOLDS. A closed body is still a flex child of the 2px-gap column, so it would add one gap
+   per closed group. Its -2px top margin cancels that gap, and the open list's 2px top padding puts it
+   back between the header and the first row: closed costs 0px, open costs the one row step.
+
+   Under every header style a GROUP's rows sit flush with the top-level rows (the owner's "why have
+   indented menu items"); a nested PARENT's rows start at its text column. */
+.rail-tree-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-top: -2px;
+  visibility: hidden;
+  /* `visibility` interpolates as visible while either end is visible: it shows at once on open and
+     stays until the height has closed, with no delay to spell. */
+  transition:
+    grid-template-rows var(--t-motion-reveal) var(--t-ease-out),
+    visibility var(--t-motion-reveal) var(--t-ease-out);
+}
+
+.rail-tree-body[data-open] {
+  grid-template-rows: 1fr;
+  visibility: visible;
+}
+
+/* The clip: `min-height: 0` lets the 0fr track close it; `clip` with a 2px margin keeps a focused row's
+   halo where the engine supports it (`hidden` is the fallback). */
+.rail-tree-clip {
+  min-height: 0;
+  overflow: hidden;
+  overflow: clip;
+  overflow-clip-margin: 2px;
+  opacity: 0;
+  transition: opacity var(--t-motion-reveal) var(--t-ease-out);
+}
+
+.rail-tree-body[data-open] > .rail-tree-clip {
+  opacity: 1;
+}
+
 .rail-tree-group {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  animation: motion-reveal-under var(--t-motion-reveal) var(--t-ease-out);
+  padding-top: 2px;
 }
 
 .rail-tree-group--parent {
   padding-left: var(--rail-text-indent);
 }
 
-/* `icon_14`: a group's rows nest at the header's text column and drop their own icons (the header
-   carries the group's), and a parent's rows step in once more. */
-.rail-nav[data-header-style='icon_14'] .rail-tree-group--group {
-  padding-left: var(--rail-text-indent);
-}
-
-.rail-nav[data-header-style='icon_14'] .rail-tree-group--group > .rail-leaf > .rail-icon,
-.rail-nav[data-header-style='icon_14'] .rail-tree-group--group > .rail-parent-row > .rail-icon {
-  display: none;
-}
-
-.rail-nav[data-header-style='icon_14'] .rail-tree-group--parent {
-  padding-left: var(--t-space-2);
-}
+/* `icon_14` (the default since D201, "icons on every row"): the header carries the group's icon and
+   its rows sit flush below it, each with its own icon in the same icon column; a parent's rows start
+   at its text column, as in every style. Before D201 a group's rows nested at the text column and
+   dropped their icons. */
 
 /* A destination row: icon plus label. The active state is a soft accent-tinted PILL (tint fill +
    accent text/icon) plus aria-current, never a left accent bar and never colour alone. */
@@ -860,6 +914,19 @@ body {
   font-weight: 500;
 }
 
+/* D201: the header whose overview page is open wears the active pill, like a lit leaf (it is the one
+   `aria-current="page"` of the rail while the overview shows). */
+.rail-treeitem[aria-current='page'],
+.rail-treeitem[aria-current='page']:hover {
+  color: var(--t-accent);
+  background: var(--t-accent-soft);
+}
+
+.rail-treeitem[aria-current='page'] .rail-header-label,
+.rail-treeitem[aria-current='page'] .rail-label {
+  color: inherit;
+}
+
 /* The collapsed group or parent that holds the open page, when the person closed it (judge round 1
    M4): `aria-current="location"` and the accent ink, no fill, so the rail keeps exactly one mark. */
 .rail-treeitem[aria-current='location'],
@@ -869,11 +936,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rail-chevron {
+  .rail-chevron,
+  .rail-tree-body,
+  .rail-tree-clip {
     transition: none;
-  }
-  .rail-tree-group {
-    animation: none;
   }
 }
 
@@ -2739,79 +2805,104 @@ textarea.field:disabled {
   color: var(--t-text-dim);
 }
 
-/* The rail footer (K-01, D137): ONE row. The environment pill takes the free width and truncates,
-   the icon buttons (identity in served mode, feedback, theme) follow it at the 32px dense band, and
-   nothing wraps: an element that would break the row moves into the pill's menu instead. It is the
-   positioned box that menu hangs from, so the menu spans the footer. Zero accent. flex-shrink:0 keeps
-   the row's height on a short viewport, so .rail-nav is the only region that yields. Measured before:
-   six stacked rows, 158px. */
+/* The rail footer (K-01, D137; D201): the workspace switcher, then ONE row. In the row the
+   environment pill takes the free width and truncates, the icon buttons (identity in served mode,
+   feedback, theme) follow it at the 32px dense band, and nothing wraps: an element that would break
+   the row moves into the pill's menu instead. The footer is the positioned box the pill's menu hangs
+   from, so that menu spans the footer. Zero accent. flex-shrink:0 keeps the footer's height on a short
+   viewport, so .rail-nav is the only region that yields. Measured before K-01: six stacked rows, 158px. */
 .rail-footer {
   position: relative;
   display: flex;
+  flex-direction: row;
   align-items: center;
   flex-wrap: nowrap;
-  gap: var(--t-space-0-5);
+  gap: 2px;
+  min-width: 0;
+  min-height: 36px;
   padding: var(--t-space-1) 0 0;
   margin-top: 0;
   border-top: 1px solid var(--t-border);
   flex-shrink: 0;
 }
 
-/* The footer's icon buttons sit on the 32px dense band, the pill's own height. */
-.rail-footer .theme-toggle,
-.rail-footer .density-toggle,
-.rail-footer .rail-icon-btn {
-  flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
+/* D204 (calm footer): ONE row. The company is plain dim text on the left (a button with a chevron only
+   with 2+ workspaces), then the status dot, feedback and theme as 32px icon buttons. No pill borders.
+   Both menus hang from the footer itself, so their positioned boxes are static here. */
+.rail-footer .ws-switcher,
+.rail-footer .rail-status {
+  position: static;
 }
 
-.rail-status {
-  display: flex;
+.rail-footer .ws-switcher {
   flex: 1 1 auto;
   min-width: 0;
 }
 
-/* The environment pill: "● Live · main ▾". A control (the strong edge, the full radius of a pill),
-   neutral on the writable local main; the loud orange of a sandbox and the dim served face are the
-   D135 markings. The dot is the egress state; its words are in the accessible name and the menu. */
-.rail-env-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--t-space-0-5);
-  min-width: 0;
+.rail-footer .ws-switcher-trigger {
+  width: auto;
   max-width: 100%;
-  height: 32px;
-  padding: 0 calc(var(--t-space-1) - 1px) 0 calc(var(--t-space-1) + 3px);
-  border: 1px solid var(--t-border-strong);
-  border-radius: var(--t-radius-full);
+  min-height: 32px;
+  padding: 0 var(--t-space-0-5);
   background: transparent;
-  color: var(--t-text);
-  font: inherit;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  color: var(--t-text-dim);
   font-size: var(--t-font-md);
-  line-height: var(--t-lh-md);
-  font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    background-color var(--t-motion-hover) var(--t-ease-out),
-    border-color var(--t-motion-hover) var(--t-ease-out),
-    color var(--t-motion-hover) var(--t-ease-out);
+  font-weight: 400;
 }
 
-.rail-env-pill:hover {
+.rail-footer .ws-switcher-trigger:hover {
+  background: var(--t-bg-soft);
+  color: var(--t-text);
+}
+
+.rail-footer .ws-switcher--text .ws-switcher-name {
+  display: block;
+  padding: 0 var(--t-space-0-5);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.rail-footer > .tooltip-wrap {
+  flex: 0 0 auto;
+}
+
+/* The footer's icon buttons are 28px cells so the company name keeps its width (owner, 16.11.2026). */
+.rail-footer .theme-toggle,
+.rail-footer .density-toggle,
+.rail-footer .rail-icon-btn,
+.rail-footer .rail-env-btn {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+}
+
+.rail-env-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-md);
+  background: transparent;
+  cursor: pointer;
+}
+
+.rail-env-btn:hover {
   background: var(--t-bg-soft);
 }
 
-.rail-env-pill[data-face='loud'],
-.rail-env-pill[data-face='loud']:hover {
-  background: var(--t-warn);
-  border-color: var(--t-warn);
-  color: var(--t-bg);
+.rail-status {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
-.rail-env-pill[data-face='served'] {
-  color: var(--t-text-dim);
+/* The company name takes the free width; the status dot and the icons sit together at the right, one 32px cell each. */
+.rail-footer .ws-switcher {
+  margin-right: auto;
 }
 
 .rail-env-dot {
@@ -2830,33 +2921,9 @@ textarea.field:disabled {
   background: var(--t-danger);
 }
 
-.rail-env-pill[data-face='loud'] .rail-env-dot {
-  background: currentColor;
-}
-
-.rail-env-text {
-  display: inline-flex;
-  gap: var(--t-space-0-5);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rail-env-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rail-env-sep,
-.rail-env-caret {
-  flex: 0 0 auto;
-  color: var(--t-text-dim);
-}
-
-.rail-env-pill[data-face='loud'] .rail-env-sep,
-.rail-env-pill[data-face='loud'] .rail-env-caret {
-  color: currentColor;
+/* A sandbox (the loud face) is the orange dot: waiting on the person, never a green that lies. */
+.rail-env-btn[data-face='loud'] .rail-env-dot {
+  background: var(--t-warn);
 }
 
 /* The status lines at the top of the pill's menu: the egress state in words beside its dot, and a
@@ -2970,6 +3037,17 @@ textarea.field:disabled {
   .rail-fav-input {
     min-height: 44px;
   }
+  /* D201: the drawer carries the footer's workspace switcher, a 44px target like every row. */
+  .rail-footer .ws-switcher-trigger,
+  .rail-footer .theme-toggle,
+  .rail-footer .rail-icon-btn,
+  .rail-footer .rail-env-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .rail-footer {
+    min-height: 44px;
+  }
   /* "Menü anpassen" in the drawer (judge round 1 H3): the drawer widens to hold grip, checkbox, a
      whole name and Mehr, and still leaves a strip of the page beside it to tap back to. */
   .rail:has(.rail-nav[data-customising]) {
@@ -3080,9 +3158,16 @@ textarea.field:disabled {
   gap: var(--t-space-0-5);
   min-height: 0;
   overflow-y: auto;
-  /* A thin scrollbar only if the strip outgrows a short viewport; the flyouts are fixed, so this
-     never clips them. */
+  overflow-x: hidden;
+  /* A thin scrollbar only if the strip outgrows a short viewport, transparent until the pointer is on
+     the rail (D201); the flyouts are fixed, so this never clips them. */
   scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.rail:hover .rail-icons,
+.rail-icons:focus-within {
+  scrollbar-color: var(--t-border-strong) transparent;
 }
 
 .rail-icon-entry {

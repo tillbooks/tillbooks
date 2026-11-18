@@ -146,6 +146,9 @@ Money never uses the accent. It has its own two semantics:
   owes, and a minus there reads as a credit with the supplier. The minus is reserved for credit
   notes and reversals. This is display only; no engine value, sign or posting changes.
 
+- **Incoming money in a list row carries a small `--t-success` plus** (D208, 18.11.2026); the figure itself stays
+  in ink. The minus of outgoing money keeps `--t-danger` in the sign only.
+
 ### Status
 
 `--t-success`, `--t-warn`, `--t-danger` are status, not brand. Status is never carried by colour
@@ -253,7 +256,7 @@ the body size.
   beside every page, so D167 holds.
 - Density is a feature. This is a data tool, not a landing page. Rows are compact and scannable.
 - **One global density toggle, Komfortabel or Kompakt** (D118 B3), never per-table density menus.
-  It sits in the rail footer beside the theme toggle, persists per user, and works by stamping
+  It sits in the status dot's menu beside "Dunkles Design" (D210), persists per user, and works by stamping
   `data-density` on the document root, where the token stylesheet keys the compact values
   (`--t-control-h`, `--t-row-h`, `--t-row-pad-y`, `--t-cell-pad-x`, `--t-font-table`).
   Komfortabel is the ground and equals the default look; Kompakt tightens control height, row
@@ -304,9 +307,10 @@ the body size.
   column the rows' pills span. The 28px band is the rail's stated exception to the D116 32px dense
   floor and to the 8-pt grid (see Tap targets); A4 first set it at 32px (a 34px pitch), and the owner
   found that too loose (D138, option B of the rail density picker). Hierarchy is carried by type
-  (leaf 14px; the group label is a per-person setting since D178, default 14px/600 in `--t-text`
-  starting at the icon column, alternatives 14px/500 with a group icon or the K-23 12px/500 label in
-  `--t-text-dim`), never by a second row height. A
+  (leaf 14px; the group label is a per-person setting since D178, default since D201 14px/500 with a
+  group icon and the group's rows flush below, alternatives 14px/600 in `--t-text` with no group icon
+  or the K-23 12px/500 label in `--t-text-dim`), never by a second row height. Every row carries its
+  icon, a nested page included (D201). A
   control inside a row (the 24px pin star, a count badge) never grows the row: the band is the row's
   natural height (a 20px line, 3px padding, a transparent 1px border) held by its `min-height`, and
   the star takes a negative block margin to stay out of the height calculation while keeping its
@@ -315,10 +319,13 @@ the body size.
   ONE row step (the 2px gap), no extra whitespace. Hover stays the soft fill, never an underline.
   Measured before A4: leaves 40px, group rows 32, parents 34, the Favoriten header a 37px paragraph
   with 14px UA margins, four rhythms in one column.
-- **The rail chrome has a budget** (UI polish round 2, K-01, D137). The head is one row, the
-  wordmark and the workspace switcher side by side, with the search field under it; the tagline
-  lives on the website, not in the rail. The footer is one row: the environment as a single pill
-  (its egress state a word inside it, never a bare dot) followed by the icon buttons, with
+- **The rail chrome has a budget** (UI polish round 2, K-01, D137; amended by D201, 15.11.2026). The
+  head is one row, the wordmark and the visible expand and collapse toggle side by side, with the
+  search field under it; the tagline lives on the website, not in the rail. The footer is ONE row
+  (amended 16.11.2026): the company as plain text (a switcher only with 2 or more workspaces), then the
+  build status as a single dot with its words on hover (never colour alone: the words ride its accessible
+  name) and the icon buttons (feedback and the settings gear, each naming itself on hover and focus; D210
+  moved light or dark into the dot's menu beside the density, so the company's name keeps its room), with
   "Umgebungen verwalten" as the first row of the environment menu. The budget is measured, not
   asserted: at 1440x900 with one group open, the tree does not scroll, and since D138 (the 30px
   pitch) neither does it at 1280x800 with no favourites pinned. Measured before it, head and
@@ -328,11 +335,15 @@ the body size.
   AND nested parents collapse; everything collapsible DEFAULTS TO COLLAPSED, so a fresh workspace
   shows roughly fifteen rows that fit without a scrollbar. A group header or parent carries no route
   of its OWN, so it adds no anchor to the rail and the count of anchors stays equal to the count of
-  destinations. Its chevron toggles expand/collapse, and (D135, owner request) clicking the header
-  itself navigates to the node's first child leaf, its natural landing, and expands it: a header is a
-  shortcut into its group, not a dead label, and no separate "section landing" surface is added.
-  Opening one top-level group collapses its sibling groups (an accordion); nested parents keep their
-  own independent expand state.
+  destinations. Its chevron toggles expand/collapse, and (D201, owner pick A, replacing D135's "land
+  on the first child") clicking the header itself opens the node's OVERVIEW page and expands it: one
+  shared surface (`GroupOverview`, at `/area/<navId>`) shows every page of the group or parent as a
+  tile (icon, name, a short state where one is cheap) under a live search, and on its own open
+  overview a second click folds the node. While an overview is open its header carries the one
+  `aria-current="page"` and the active pill; a deep link to an overview opens its node. A group opens
+  and closes with the Arrive and leave height (`grid-template-rows` 0fr to 1fr), its rows mounted and
+  `inert` while closed. Opening one top-level group collapses its sibling groups (an accordion);
+  nested parents keep their own independent expand state.
 - **The tree is a WAI-ARIA treeview, not a styled list.** `role="tree"`, `role="treeitem"` with
   `aria-expanded` on collapsibles and `aria-current="page"` on the active leaf, `role="group"` child
   lists linked by `aria-owns`, ROVING TABINDEX (one Tab stop), and the full APG keyboard model:
@@ -343,9 +354,12 @@ the body size.
   workspace) is the user's explicit toggle OVERRIDES, not the whole expanded set, so visiting a
   group does not pin it open and the default-collapsed rhythm survives. Storage failure is silent:
   a rail that cannot remember its open groups still navigates.
-- **The taxonomy is authored once, in one shared vocabulary** (D118 A2): Lager, Anlagen and
-  Einstellungen are nested parents, Berichte is a group of report doors, and the daily queues
-  (Übersicht, Aufgaben, Inbox, ...) stay top-level and always visible. Documentation, support and
+- **The taxonomy is authored once, in one shared vocabulary** (D118 A2, cut by D210): two daily
+  rows on top (Übersicht, Pendenzen), then five areas (Bank, Verkauf, Einkauf, Buchhaltung,
+  Stammdaten), seven rows in all; Lager and Anlagen are nested parents. The Einstellungen are a gear
+  in the footer, never a group, and the compact menu (`nav.menu_scope`) leaves the rare modules out
+  until the person asks for all areas. A page leaves the tree only to a door that still reaches it
+  (the palette, the settings page, Pendenzen). Documentation, support and
   the agent all speak this one taxonomy. It is the default and the reset target: since D178 each
   person may reorder groups and items, move items between groups and hide them in their own view
   ("Menü anpassen", pointer drag AND keyboard move buttons), and "Zurücksetzen" restores it.
@@ -374,7 +388,11 @@ the body size.
   deliberate Enter action.
 - **The icon rail's flyouts are disclosures, never dialogs.** A flyout is a positioned `div` with
   `role="group"` and an accessible name, opened by hover or focus, closed by Escape with focus
-  returned to its trigger; the active surface carries `aria-current`, never colour alone.
+  returned to its trigger; the active surface carries `aria-current`, never colour alone. A group's
+  flyout leads with its Bereichsübersicht (D201).
+- **The rail never scrolls sideways** (D201). Its band and the icon strip take `overflow-x: hidden`; the
+  thin native scrollbar is transparent at rest and shows while the pointer is on the rail or focus is
+  inside it, never a `::-webkit-scrollbar` pseudo-bar.
 - **Navigate without closing.** Moving between peer surfaces never requires a modal round-trip.
   If reaching a sibling means dismissing something first, the structure is wrong.
 
@@ -544,11 +562,12 @@ the law it sets. The system (`app/src/components/icons`, `IconButton`, the guard
 
 ### Icon vocabulary
 
-Thirty-three glyphs may stand alone on a button, and no others: D154's twelve, the five D177 added
+Thirty-six glyphs may stand alone on a button, and no others: D154's twelve, the five D177 added
 for the bank line (16.10.2026), the five D180 added for arranging the Übersicht in place (24.10.2026),
 A41.5's Freigeben on the bank inbox row (owner, D184 point 7, 07.11.2026), D186's Vergleichen and
-Verlauf for the key figures (owner, 09.11.2026) and the eight of the Ruhig sweep (owner, D187,
-09.11.2026). Each means one thing everywhere, and its name is the button's
+Verlauf for the key figures (owner, 09.11.2026), the eight of the Ruhig sweep (owner, D187,
+09.11.2026), Ablehnen for the agent's Vorschlag (owner, D197, 12.11.2026) and the settings row's Auf
+Standard zurück and Änderungen (owner, the Einstellungen redesign, 18.11.2026). Each means one thing everywhere, and its name is the button's
 accessible name and the first line of its tooltip.
 
 | Glyph | Name | Means | Where |
@@ -571,13 +590,13 @@ accessible name and the first line of its tooltip.
 | small cross | Ignorieren | Take a bank line out of the inbox without booking it | The bank row's right edge (D177 point 5): the one destructive glyph, because the status line undoes it in one click |
 | minus in a ring | Position entfernen | Take a position out of a draft (a split's position) | Draft rows (D177). Never a posted record: its correction is Stornieren. A minus, never a cross: on the bank line × means Ignorieren only (D177 final judge) |
 | two sliders | Anpassen | Open the arrangement of this surface for editing, in place | The surface header (D180). Pressed again, as Fertig, it closes the mode; Escape is its twin |
-| check | Fertig | Close an arrangement, or confirm a short name entry | Anpassen's pressed state, and the confirm of a one-field name entry such as naming a view (D180). Never a money commit or a posted record |
+| check | Fertig | Close an arrangement, or confirm a short name entry | Anpassen's pressed state, and the confirm of a one-field name entry such as naming a view (D180); on an open settings question (A41 ask-first) it takes TILL's suggested value, named "Vorschlag übernehmen" (Einstellungen redesign, 18.11.2026). Never a money commit or a posted record |
 | eye struck through | Ausblenden | Take an item off the page; it keeps its place | An item in edit mode (D180). The item stays in its slot as a faded ghost until Fertig |
 | open eye | Einblenden | Put a hidden item back where it was | A ghost in edit mode (D180) |
 | arrows between two edges | Grösse ändern | Make an item wider or narrower, or choose its size | An item in edit mode (D180): a card toggles half and full width; the bank item opens Kachel, Karte oben, Schmale Leiste |
 | two columns, short then tall | Vergleichen | Choose what a key figure is compared with | The key-figure settings (D186): opens Wie die Seite, Vorjahr, Vorperiode, Kein Vergleich, as a menu below it |
 | a rising line | Verlauf | Show or hide a key figure's twelve-month line | The key-figure settings (D186), pressed while the line shows |
-| check in a ring | Freigeben | Book a bank line as its row shows it, or approve the agent's Vorschlag on it | The bank inbox row only (A41.5, the owner's ruling D184 point 7): the one money commit that may be a glyph alone, because the row's own columns say what it books and how sure TILL is, its name says "Buchen" or "Vorschlag freigeben", and Stornieren undoes it. Never Fertig's bare check |
+| check in a ring | Freigeben | Book a bank line as its row shows it, or approve the agent's Vorschlag | The bank inbox row (A41.5, the owner's ruling D184 point 7), and the agent's Vorschlag on the Vorschläge screen and the Pendenzen row (D197): the one money commit that may be a glyph alone, because the row's own columns say what it books and how sure TILL is, its name says "Buchen" or "Vorschlag freigeben", and Stornieren undoes it. Never Fertig's bare check |
 | plus in a ring | Hinzufügen | Add a row or a position inside a form | Forms with repeating rows (D187). Never a surface's main create action: "Neue Buchung" keeps its word |
 | arrow into a page | Importieren | Bring a file in: CSV, camt, a bexio export | Headers (D187). The tooltip names the format |
 | clock turning back | Wiederherstellen | Restore a backup or an earlier state | First run and Sicherungen (D187) |
@@ -586,6 +605,9 @@ accessible name and the first line of its tooltip.
 | arrow up beside arrow down | Sortieren | Change the order of a list | List headers (D187) |
 | folder | Ordner öffnen | Pick a file or a place on this device | Beside a path field (D187) |
 | three joined nodes | Teilen | Send a document to someone | Document headers (D187) |
+| a ring with one diagonal stroke | Ablehnen | Decline the agent's Vorschlag: it closes unexecuted, with an optional reason | The Vorschläge screen and the Pendenzen Vorschlag row, beside Freigeben (D197). One step asks for the reason, because the engine cannot undo a rejection. Never Schliessen's cross or Ignorieren's small cross |
+| a counter-clockwise arrow, no clock face | Auf Standard zurück | Put a setting back to its default | A changed settings row, on hover or focus (Einstellungen redesign, 18.11.2026). Its context names the default ("Standard: System"); the toast offers Rückgängig. Replaces the visible word "Standard" |
+| a clock face | Änderungen | Show who changed a setting, from what to what, and when | Every settings row, on hover or focus (Einstellungen redesign, 18.11.2026). Never Verlauf's rising line, which stays the key figures' twelve-month line |
 
 - **The one control is `IconButton`.** It takes a vocabulary key, a required `context` ("Beleg zu
   dieser Buchung"), and nothing else that changes its meaning. The name is its `aria-label`; the
@@ -595,11 +617,11 @@ accessible name and the first line of its tooltip.
   Escape dismisses it wherever focus is. The tap that ends a long press does not act; a keyboard or
   screen-reader click always does. A touch tap opens no bubble, and only a hover-opened bubble takes
   the pointer, so a leftover bubble never catches the next tap.
-- **Everything else is an icon plus a word.** A glyph outside the thirty-three never stands alone; status
+- **Everything else is an icon plus a word.** A glyph outside the thirty-six never stands alone; status
   and disclosure glyphs sit beside words or inside a primitive that names itself.
 - **Money commits always keep their word:** Buchen, Ausstellen, Zahlung buchen, Periode sperren, and
   the one main action of a surface (Neue Buchung, Rechnung erfassen). The one exception is Freigeben on the bank
-  inbox row (D184 point 7): its accessible name still says "Buchen" or "Vorschlag freigeben", and the
+  inbox row (D184 point 7) and on the agent's Vorschlag (D197): its accessible name still says "Buchen" or "Vorschlag freigeben", and the
   row's review view and the pick bar keep the worded commit. An irreversible act is never a
   glyph alone, which is why the vocabulary has no "Neu" and no "Löschen". Its one check mark (D180) is
   Fertig: it closes an arrangement whose every change already saved itself, or confirms a one-field
@@ -648,6 +670,11 @@ migrates:
   marks only focus, the selected row and the money commit.
 - **Drawers close by X and Escape.** No labelled "Abbrechen"; the footer holds the one primary action
   and its (i). Rare drawer actions (Als Entwurf sichern, Aufteilen, Referenz) move under Mehr.
+- **A pressed toggle is a filled glyph, never a box** (D208): no border, no background behind a pressed icon;
+  the outline star pressed is the filled star. A row hint is one glyph without a word, its words on hover and in
+  the accessible name (the missing Beleg is the paperclip in `--t-warn`).
+- **An open row is one line** (D208): its values (booking text, account, MWST) carry no visible labels, their names
+  are the tooltip and the accessible name, and the glyphs and the commit sit on the right of that same line.
 - **Row actions appear on hover or focus-within**, always on the selected row, and always on touch
   (`@media (hover: none)`), so a touch user never meets a hidden control.
 
@@ -728,13 +755,109 @@ brackets is the only way to build it.
 | List | Title with count; search, then active filters as removable chips and "+ Filter"; one primary action in words; row actions appear on hover (always on touch) | `SurfaceHeader count`, `FilterBar facets`, `DataTable rowActions` |
 | Create and edit | A sheet from the right, the list stays in view; fields sized to what they hold, side by side where they belong together, small group headings; one primary in the footer | `DetailDrawer`, `Field size`, `.form-line` |
 | Adding small things | One row above the table, fields side by side; a value in a row changes through its pencil on hover | `.form-line`, `.row-reveal` |
-| Settings | One column of rows under small group headings; one visible line per setting; "Standard" only while changed | `SettingGroup`, `SettingRow` |
+| Settings | One column of rows under small group headings; one visible line per setting, at least 40px tall: the label (ellipsis) with its description on hover and focus, a 6px dim dot after it while changed, Auf Standard zurück and Änderungen as icons on hover or focus, the control in one fixed 240px column on the right (Segmented and Select exactly 240px, a Segmented only while every option label fits its share uncut in both locales, else the Select: an option text is never cut; a number field 72px with its unit before it, a switch at the right edge). A protected (human-only) row carries no padlock, its tooltip says it; the padlock stays only for a missing permission. An open question (A41) is the dot in the warn ink with its words on the label's tooltip and Vorschlag übernehmen on hover, never a line under the row. At phone width a label wraps to two lines | `SettingGroup`, `SettingRow` |
 | Reports and export | A sticky bar: title, what and format, the one action; under it the period and filters; the result beneath; statutory lines visible | `SurfaceHeader actions` and `toolbar` |
 | Work through items | One list; a row opens in place to show its detail | `DataTable expand` |
 | Notices | Folded into one "N Hinweise" chip beside the title; money and filing warnings stay beside their button | `SurfaceHeader hints` |
 
 A field is never wider than what it holds: `Field size` is `code`, `date`, `amount`, `short`, `name`
 (the default) or `full` (a text area or a long address only).
+
+## The calm Studio (D204, 15.11.2026)
+
+The owner's rules from the shell, Übersicht, Pendenzen, Einstellungen and Umsatz rework (D201 to D203). They bind every
+surface, old and new. The audit that measured the rest of the Studio against them is
+`docs/planning/studio-rules-audit-2026-11-15.md`.
+
+### Nobody types a reason
+
+- **No mandatory reason field, anywhere.** A change records who did what, when, and with which permission. That is the
+  whole audit trail: OR Art. 957a asks for traceable, unalterable books, and the append-only log with actor and time
+  gives that. A typed Grund adds friction and no evidence.
+- Asking for a reason is a workspace setting (`audit.ask_reason`, default `never`), so a team that wants one can turn it
+  on (D172). When it is on, the field is optional and sits after the act, never in front of the button.
+- A reason **category** that carries meaning stays (a stock movement type, a provision kind, a machine seal such as
+  `vat_filed`). It is a pick from a short list with a default, never free text that blocks the act.
+
+### Change it where you see it
+
+- **A value changes in place and saves on change.** A toggle, a pick or a short value has no Speichern button, no edit
+  screen, no modal and no edit mode. A reversible change shows an undo toast instead of a confirm.
+- The pencil-on-hover row (`.row-reveal`, the Members role pick) is the pattern; a sheet is for creating a thing or
+  editing a thing with many fields, never for one value.
+- **Layout is customised in place too.** A card shows its toolbar on hover or focus (hide, size, settings, drag
+  handle) and moves by drag and drop; there is no separate edit mode for the Übersicht or any other customisable page
+  (D201; D180's mode survives only as the `overview.customize` setting).
+- **Picking what is shown happens in a sheet over the live page** (D204). Bringing a hidden card back, choosing the
+  columns of a list or the items a page shows opens a side sheet; the page stays visible behind it, and each toggle in
+  the sheet shows or hides the thing on the page at once, with the Arrive and leave motion. Never a separate page of
+  checkboxes, never a Speichern.
+
+### Find it, then act
+
+- **A long list or a long settings page gets a live search on top** that filters as you type, with a filtered-empty state
+  and "Filter zurücksetzen".
+- **The global search (Cmd K) finds settings as well as pages and records.** "Bank" offers the Bank page, its accounts
+  and the bank settings; a setting hit opens its row in place.
+- **Every menu group with sub-items has an overview page**: tiles for its children, its own search on top.
+- **A page reached by drilling down shows a back chevron** to where the person came from (the `back` slot in
+  `SurfaceHeader`, fed by the navigation state).
+- **A page links to the settings that govern it** with one settings icon in its header, opening that section.
+- **Einstellungen** (D202, redesigned by the owner's pick A, 18.11.2026): ONE page. The search sits top right in the
+  header; a slim sticky rail on the left lists the ten areas (icon and name, the sub-headings on hover); the right side
+  shows the chosen area's rows, or, while the search has text, every matching setting of every area under its area's
+  name. No home of tiles and no text under anything; an area with an open question carries a dot in the rail. Each row
+  is one control per setting, saved on change. One search index feeds the settings search and Cmd K, and it reads
+  `settings_list` again when the window regains focus and after every write.
+- **Figures and the rules that make them** (D203): two tabs, Zahlen (KPIs first, then the events) and Regeln (templates,
+  related settings and bank rules, edited in place). Figures come from the books, never from a feed recompute.
+- **A page family** (procurement, inventory, fixed assets) gets an overview of tiles; pages that only show another view
+  of one record set become a filter or a part of that record's detail (D204).
+
+### What the agent proposes
+
+- On the Übersicht the suggestions are a card in the grid, placed first and wide by default, and it moves, hides and
+  resizes like any card (D201). Pendenzen is one list with kind, area and actor filters.
+- **A suggestion is acted on where it appears**: one line, the amount, account and date, with Freigeben and Ablehnen in
+  the row. Several at once go through a multi-select and one sticky action bar, calling the batch verbs; ids that fail
+  stay selected with their cause.
+- **Rejecting is one click.** It asks nothing and books nothing.
+- The agent may change a setting when the person tells it to, within the permission that person granted. A protected
+  (human-only) setting is only ever **proposed** by the agent and approved by a person with one click (D202 reverses
+  D183 for proposals, owner 15.11.2026; the agent never applies one itself, never in a batch).
+
+### Calm states and honest buttons
+
+- **Not set up yet is not an error.** A page with no source, no rule or no data shows a calm start with its entry
+  actions. A red error is reserved for a real failure and says what happened, why, and the one action that recovers.
+- **A primary action is enabled only when it can act.** A bar that commits work (Buchen, Freigeben) appears only when
+  there is something to commit. A control that looks live and does nothing is a defect.
+- **Without permission the control stays, with a padlock** (D204): the cause shows on hover and focus, never as a
+  sentence under the button.
+- **The one irreversible act asks for the year, not a reason** (D204): an archive purge is confirmed by typing the year.
+- **Plain German in the interface.** Never an English enum value, a setting key or an engine code in a label, a list
+  cell or an error. An unknown code falls back to a neutral German line; the code goes to the report.
+
+### The shell
+
+- Icons on every menu row, group headers included; every icon-only control (the theme toggle and the feedback button
+  among them) names itself on hover and focus.
+- The menu's expand and collapse toggle is visible in the rail head. Groups open with a height animation of about 200 ms
+  and do not move under reduced motion.
+- The rail footer is ONE row (16.11.2026, amends D201): the company as plain dim text on the left, a switcher
+  (button, chevron, menu opening upward) only when the person has 2 or more workspaces; then the build status as a
+  single dot (its words, "Live · main", on hover and in its accessible name; a click opens the status menu), the
+  feedback and settings icon buttons (D210: the theme is a checkbox item of the status menu). No pill borders, no
+  centring. The collapsed strip stacks the dot, feedback and theme. This amends K-01 (D137).
+- Content uses the full width. Scrollbars are thin and overlay on hover; nothing scrolls sideways.
+
+### Owner decisions are reviewable and saved
+
+- A UI decision for the owner is one review page with real options and live previews (D46 still scopes which decisions
+  go there). The page saves the picks where Claude reads them back (the artifact database) and offers one "Auswahl
+  kopieren"; every copied line names page, question and option, never a bare letter.
+
+The owner's picks behind these rules are D201 to D204 in `DECISIONS.md`.
 
 
 ## Motion
@@ -779,7 +902,7 @@ switch. The chart palette is two tokens, `--t-chart-in` and `--t-chart-out`, one
 
 ### The vocabulary: three moments, one ease pair (D122 D-I, 05.09.2026)
 
-Motion is spent on exactly three moments, plus one hover beat (K-41) and one loading loop (D155), and
+Motion is spent on exactly four moments (Arrive and leave joined in D204), plus one hover beat (K-41) and one loading loop (D155), and
 each one is a set of tokens in `tokens.css`, never a number typed into a surface. A surface says `var(--t-motion-reveal)`; it never says `200ms`. The
 `test/style/motion-tokens.test.mjs` guard holds the set, the values and the kill switch, and
 ratchets the raw duration literals left in the Studio down to zero.
@@ -789,6 +912,7 @@ ratchets the raw duration literals left in the Studio down to zero.
 | **Navigate** (a change of surface) | The new surface enters in 200 ms from 8 px on the travel side (`--t-ease-out`): a fade over the whole 200 ms, the travel settling in the first 80 ms (`--t-motion-nav-out`, the beat the old surface's exit would have taken). The rail pill changes in 120 ms regardless. Same-surface moves (a list to its detail, a route closing a drawer) do not navigate. **The old surface does not leave**: D-I asked for an 80 ms exit, it was built on the View Transitions API and measured (05.09.2026), and a raw click 150 ms after landing was lost four of four while the transition ran, with `pointer-events: none` on `::view-transition` as documented; the act after a navigation cost 325 ms against 172 with the transition nulled. That is the pointer being fought, so the exit was withdrawn. | `--t-motion-nav-out` 80 ms, `--t-motion-nav-in` 200 ms, `--t-motion-pill` 120 ms, `--t-travel` 8 px |
 | **Commit** (post, pay, issue, lock, apply) | The pressed control scales to 0.98 in 80 ms. The new or updated row lands in 180 ms from 8 px above, a check draws in 180 ms beside the words, and an `--t-accent-soft` tint on the row decays over 720 ms. Never a toast that says "Success", never colour alone: the `ActionFeedback` primitive carries the words. | `--t-motion-press` 80 ms, `--t-press-scale` 0.98, `--t-motion-commit` 180 ms, `--t-motion-tint` 720 ms |
 | **Reveal** (a dock, a drawer, a disclosure) | The panel slides from the edge it lives on in 200 ms; its items follow with a 30 ms per-item stagger over at most three items. A disclosure's body fades under its chevron in 200 ms. | `--t-motion-reveal` 200 ms, `--t-motion-stagger` 30 ms |
+| **Arrive and leave** (an item appears or disappears in place: a card shown or hidden, a row approved away, a group opening; D204, 15.11.2026) | The item fades in and scales from 0.98 in 200 ms (`--t-ease-out`) and leaves in 120 ms (`--t-ease-in`). Its neighbours glide into the new space in 200 ms: the layout changes at once and each neighbour plays its old-to-new offset on `transform` (FLIP, the Web Animations API), so a click always lands on the final layout and the pointer is never fought. A height opens and closes with `grid-template-rows` 0fr to 1fr, the closed body `inert`. One helper in `motion.ts` (`arriveLeave`) serves every list, grid and sheet. | `--t-motion-arrive` 200 ms, `--t-motion-leave` 120 ms, `--t-motion-shift` 200 ms, `--t-arrive-scale` 0.98 |
 | **Hover** (a pointer over a control; UI polish round 2, K-41) | The one beat under the pointer: a shared primitive's background, ink and edge colour ease in 120 ms (`.btn`, `.field`, `.select-trigger`, `.help-trigger`, the rail tree rows, table row hover). Nothing else moves on hover. | `--t-motion-hover` 120 ms |
 | **Loop** (a loading or pending state; owner, 09.10.2026, D155) | A skeleton pulses, or a pending indicator breathes, on one 1400 ms cycle. It is the single allowed exception to the 120-200 ms budget, used only for a skeleton or a pending indicator, never for decoration. Reduced motion stops it. | `--t-motion-loop` 1400 ms |
 

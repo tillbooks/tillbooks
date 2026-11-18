@@ -24,7 +24,6 @@
       "overrideTitle": "Abweichung übersteuern?",
       "overrideBody": "Die Abweichung liegt ausserhalb der Toleranz. Eine Übersteuerung ist endgültig, gibt die Rechnung zur Zahlung frei und bleibt mit deiner Begründung am Vorgang.",
       "reason": "Begründung",
-      "reasonRequired": "Eine Begründung mit mindestens fünf Zeichen ist erforderlich.",
       "expected": "Erwartet",
       "billed": "Verrechnet",
       "valueVar": "Wertabweichung",

@@ -466,7 +466,6 @@
       "working": "Confirming",
       "consequence": "Records the date of the approval. The meeting itself takes place outside TILL.",
       "needsDate": "Give the date of the meeting.",
-      "needsReason": "The meeting lies before the release of the annual accounts. Give a reason.",
       "alreadyAttested": "The approval is already attested. Reopen the step first."
     },
     "skip": {
@@ -481,9 +480,6 @@
         "bank_balance_typed": "A bank statement is on file.",
         "prior_year_comparison": "First fiscal year."
       }
-    },
-    "reason": {
-      "needed": "Give a reason."
     },
     "acknowledge": {
       "title": "{item}: acknowledge",

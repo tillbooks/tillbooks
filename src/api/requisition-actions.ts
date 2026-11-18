@@ -99,15 +99,15 @@ export function requisitionActions(h: RequisitionActionHelpers): readonly Action
     ctxAction(
       'requisition_reject',
       'write:correctable:internal',
-      'Reject a pending requisition with a reason. Status becomes rejected (terminal), all open approval tasks are closed, and an immutable approval event records the decision.',
-      ctxSchema({ requisitionId: STR, taskId: STR, reason: STR, idempotencyKey: STR }, ['requisitionId', 'reason', 'idempotencyKey']),
+      'Reject a pending requisition; reason is optional (D204). Status becomes rejected (terminal), all open approval tasks are closed, and an immutable approval event records the decision.',
+      ctxSchema({ requisitionId: STR, taskId: STR, reason: STR, idempotencyKey: STR }, ['requisitionId', 'idempotencyKey']),
       (ctx, input) => requisitionReject(ctx, as(input)),
     ),
     ctxAction(
       'requisition_return',
       'write:correctable:internal',
-      'Return a pending requisition to the requester for revision, with a reason. Status returns to draft, open tasks are cancelled, and the requester can edit and re-submit; the prior approval events stay queryable.',
-      ctxSchema({ requisitionId: STR, taskId: STR, reason: STR, idempotencyKey: STR }, ['requisitionId', 'reason', 'idempotencyKey']),
+      'Return a pending requisition to the requester for revision, with an optional comment (D204). Status returns to draft, open tasks are cancelled, and the requester can edit and re-submit; the prior approval events stay queryable.',
+      ctxSchema({ requisitionId: STR, taskId: STR, reason: STR, idempotencyKey: STR }, ['requisitionId', 'idempotencyKey']),
       (ctx, input) => requisitionReturn(ctx, as(input)),
     ),
     ctxAction(

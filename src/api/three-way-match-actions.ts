@@ -65,15 +65,15 @@ export function threeWayMatchActions(h: ThreeWayMatchActionHelpers): readonly Ac
     ctxAction(
       'match_three_way_override',
       'write:correctable:books',
-      'Force a match on an out-of-tolerance evaluation with a MANDATORY reason (min 5 chars). Pass poId to pin the SAME candidate PO the evaluation was run against; otherwise the supplier oldest open PO is chosen. Writes a permanent match header with status overridden, the reason and the overriding actor, and still increments billed_qty and marks the receipt lines. An override without a reason is refused (reason_required). The override is permanent: it can only ever be undone by match_three_way_reverse, never silently turned back into a clean match. Refused with no_candidate_po / nothing_received / bill_not_convertible / match_already_exists exactly as create. Idempotent under idempotencyKey. Needs BOTH purchasing.match AND purchasing.match_override.',
-      ctxSchema({ billId: STR, poId: STR, evaluation: OBJ, reason: STR, idempotencyKey: STR }, ['billId', 'reason', 'idempotencyKey']),
+      'Force a match on an out-of-tolerance evaluation; reason is optional (D204), the record keeps who and when. Pass poId to pin the SAME candidate PO the evaluation was run against; otherwise the supplier oldest open PO is chosen. Writes a permanent match header with status overridden, the reason and the overriding actor, and still increments billed_qty and marks the receipt lines. The override is permanent: it can only ever be undone by match_three_way_reverse, never silently turned back into a clean match. Refused with no_candidate_po / nothing_received / bill_not_convertible / match_already_exists exactly as create. Idempotent under idempotencyKey. Needs BOTH purchasing.match AND purchasing.match_override.',
+      ctxSchema({ billId: STR, poId: STR, evaluation: OBJ, reason: STR, idempotencyKey: STR }, ['billId', 'idempotencyKey']),
       (ctx, input) => matchThreeWayOverride(ctx, as(input)),
     ),
     ctxAction(
       'match_three_way_reverse',
       'write:correctable:books',
-      'Reverse a matched / partial / overridden match when a material error is found. Writes a compensating record (status reversed) linked to the original, restores billed_qty on every affected PO line to its exact pre-match value, and un-marks the I02 receipt lines. It never mutates the original header or its lines (§H-AUDIT) beyond stamping the one-way reverse link. A reversed match cannot be re-activated: a fresh evaluate + create is required. A non-empty reason (min 5 chars) is mandatory (reason_required); a match that is already reversed or in a non-reversible state is refused (match_not_reversible). Idempotent under idempotencyKey. Needs the purchasing.match_override capability.',
-      ctxSchema({ matchId: STR, reason: STR, idempotencyKey: STR }, ['matchId', 'reason', 'idempotencyKey']),
+      'Reverse a matched / partial / overridden match when a material error is found. Writes a compensating record (status reversed) linked to the original, restores billed_qty on every affected PO line to its exact pre-match value, and un-marks the I02 receipt lines. It never mutates the original header or its lines (§H-AUDIT) beyond stamping the one-way reverse link. A reversed match cannot be re-activated: a fresh evaluate + create is required. The reason is optional (D204); a match that is already reversed or in a non-reversible state is refused (match_not_reversible). Idempotent under idempotencyKey. Needs the purchasing.match_override capability.',
+      ctxSchema({ matchId: STR, reason: STR, idempotencyKey: STR }, ['matchId', 'idempotencyKey']),
       (ctx, input) => matchThreeWayReverse(ctx, as(input)),
     ),
     ctxAction(

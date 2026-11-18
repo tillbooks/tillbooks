@@ -55,7 +55,7 @@
     },
     "lost": {
       "label": "Mark deal as lost: {title}",
-      "reason": "Reason"
+      "reason": "Note (optional)"
     },
     "drawer": {
       "close": "Close details"
@@ -88,7 +88,6 @@
       "transport": "The pipeline could not be loaded.",
       "contact_not_found": "That contact does not exist.",
       "stage_not_in_pipeline": "That stage does not belong to this pipeline.",
-      "lost_reason_required": "A reason is required to mark a deal lost.",
       "terminal_stage_use_mark": "A deal reaches a closing stage through Won/Lost, not by moving it.",
       "deal_closed": "This deal is closed. Reopen it first.",
       "needs_fx_rate": "No current exchange rate is recorded for this currency.",

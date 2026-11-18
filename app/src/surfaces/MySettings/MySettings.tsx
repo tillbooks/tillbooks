@@ -34,7 +34,7 @@ import { IconButton } from '../../components/IconButton';
 import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { Segmented } from '../../components/Segmented';
 import { Select } from '../../components/Select';
-import { parseDraft } from '../Setup/WorkspaceSettings';
+import { parseDraft } from '../Settings/SettingControl';
 import './MySettings.css';
 
 type Localised = { en: string; 'de-CH': string };
@@ -200,7 +200,7 @@ function PrefRow({ pref }: { pref: PrefView }) {
       dataKey={pref.key}
       reset={
         !pref.isDefault || pref.stale
-          ? { defaultLabel: pref.schema.type === 'json' ? t('mySettings.json.default') : format(pref.default), onReset: () => void store?.reset(pref.key) }
+          ? { defaultLabel: pref.schema.type === 'json' ? '' : format(pref.default), onReset: () => void store?.reset(pref.key) }
           : undefined
       }
       status={

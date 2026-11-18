@@ -34,11 +34,16 @@ export interface PickBarProps {
    * the threshold first (null: no question).
    */
   askLearned?: { workspaceId: string; onAnswered: () => void } | null;
+  /**
+   * D195 (`bank.bulk_book_scope = bookable`): the lines the bulk leaves behind, counted by reason, in words
+   * ("2 ohne Konto, 1 mit offenem Vorschlag"); null: none, or the `sure` scope, whose own sentence then shows.
+   */
+  skipped?: string | null;
 }
 
 const BULK_REASONS = BANK_LINE_IGNORE_REASONS.filter((r) => r !== 'other');
 
-export function PickBar({ count, ready, busy, canPost, onBook, onIgnore, onClear, askLearned = null }: PickBarProps) {
+export function PickBar({ count, ready, busy, canPost, onBook, onIgnore, onClear, askLearned = null, skipped = null }: PickBarProps) {
   const t = useT();
   const baseId = useId();
   const [ignoring, setIgnoring] = useState(false);
@@ -100,7 +105,11 @@ export function PickBar({ count, ready, busy, canPost, onBook, onIgnore, onClear
           <button type="button" className="btn btn--ghost bank-touch" disabled={busy} onClick={onClear}>
             {t('bankInbox.pick.clear')}
           </button>
-          {ready < count && <p className="bank-pickbar__note">{plural(t, 'bankInbox.pick.notReady', count - ready)}</p>}
+          {skipped !== null ? (
+            <p className="bank-pickbar__note">{t('bankInbox.pick.skipped', { list: skipped })}</p>
+          ) : (
+            ready < count && <p className="bank-pickbar__note">{plural(t, 'bankInbox.pick.notReady', count - ready)}</p>
+          )}
         </>
       )}
     </section>

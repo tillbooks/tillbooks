@@ -36,7 +36,11 @@ import { LINE_STATE_EXPR, LINE_STATE_JOINS } from '../banking/bankLines.js';
 import { isMinedRuleVorschlag, storedMinedFacts } from '../banking/ruleMiner.js';
 import { isAutobookOffer, storedOfferFacts } from '../banking/autobook.js';
 import { isGovernedSeat } from '../access/capability.js';
-import type { AttentionAutobookOffer, AttentionDecisionOption, AttentionItem, AttentionRuleProposal, QueueProvider } from './types.js';
+import type { AttentionAutobookOffer, AttentionDecisionOption, AttentionItem, AttentionRuleProposal, AttentionSettingChange, QueueProvider } from './types.js';
+import { SETTINGS_WRITE_VERBS } from '../settings/agentAccess.js';
+import { settingDef } from '../settings/registry.js';
+import { presentationOf, settingValueWords } from '../settings/presentation.js';
+import { getSetting } from '../settings/settings.js';
 
 /**
  * The drafted verbs that file a Vorschlag under Bank: the verbs whose owning surface sits in the rail's
@@ -63,6 +67,11 @@ export const BANK_VORSCHLAG_VERBS: readonly string[] = [
   // D185, the settlement socket: a processor's settlement file and its booking template.
   'import_settlement',
   'set_settlement_template',
+  'set_settlement_table_mapping',
+  // D198: the feed pull books like the import.
+  'pull_settlement',
+  // A42: the Umsatz review's answer per event.
+  'set_settlement_event_ignored',
   // A21, the QR Abgleich.
   'apply_qr_match',
   'override_qr_match',
@@ -354,6 +363,15 @@ function vorschlagItem(ctx: WorkspaceContext, queueId: string, a: Record<string,
       { id: 'reject', verb: 'reject_drafted_action', labelKey: mined ? 'attention.ruleProposed.dismiss' : offer ? 'attention.autobookOffer.dismiss' : 'agent.card.reject', role: 'danger', input: { actionId }, capability: 'manage_agent_dial', reasonField: true },
     );
   }
+  // D202 point 5: a settings Vorschlag says what it changes, in words; a person-only one (a protected setting)
+  // is approved one at a time, so it carries no "künftig automatisch" and its rejection asks nothing.
+  const settingChange = settingChangeOf(ctx, tool, payload);
+  if (settingChange !== null) {
+    const allowAt = options.findIndex((o) => o.id === 'approve_allow');
+    if (allowAt >= 0 && settingChange.personOnly) options.splice(allowAt, 1);
+    const rejectAt = options.findIndex((o) => o.id === 'reject');
+    if (rejectAt >= 0) options.splice(rejectAt, 1, { ...(options[rejectAt] as AttentionDecisionOption), reasonField: false });
+  }
   const subtitleParams: Record<string, string | number> = { tool };
   // N03 (D183): a mined Buchungsregel shows who it is for, how often it was booked so and its backtest, as
   // the miner stored them when it drafted it (bank facts: only for a seat that reads the bank, as above).
@@ -398,6 +416,42 @@ function vorschlagItem(ctx: WorkspaceContext, queueId: string, a: Record<string,
     ...(ruleProposal !== null ? { ruleProposal } : {}),
     ...(autobookOffer !== null ? { autobookOffer } : {}),
     ...(scheduledBy !== null ? { scheduledBy } : {}),
+    ...(settingChange !== null ? { settingChange } : {}),
+  };
+}
+
+/**
+ * D202: what a settings Vorschlag changes, in both languages: the setting's plain label, the value in force
+ * now and the proposed one in words, whether it is person-only (a protected setting) and whether approving it
+ * gives the agent more rights. Null for any other Vorschlag. Reading the current value needs the reading
+ * right of the settings; without it the "from" side stays empty.
+ */
+function settingChangeOf(ctx: WorkspaceContext, tool: string, payload: Readonly<Record<string, unknown>>): AttentionSettingChange | null {
+  if (!SETTINGS_WRITE_VERBS.has(tool) || typeof payload.key !== 'string') return null;
+  const def = settingDef(payload.key);
+  if (def === undefined) return null;
+  const shown = presentationOf(def.key, def.label);
+  const target = tool === 'settings_reset' ? def.default : payload.value;
+  let current: unknown;
+  if (ctx.capabilities.assert('read_master_data').ok) {
+    try {
+      current = getSetting(ctx, def.key);
+    } catch {
+      current = undefined;
+    }
+  }
+  const words = (value: unknown) => ({
+    en: value === undefined ? '' : settingValueWords(def.key, def.schema, value, 'en'),
+    'de-CH': value === undefined ? '' : settingValueWords(def.key, def.schema, value, 'de-CH'),
+  });
+  return {
+    key: def.key,
+    label: shown.label,
+    area: shown.area,
+    from: words(current),
+    to: words(target),
+    personOnly: def.humanOnly === true,
+    widensAgent: shown.widensAgent === true,
   };
 }
 

@@ -1,0 +1,7 @@
+Transaction Date,Type,Order,Card Brand,Card Source,Payout Status,Payout Date,Available On,Amount,Fee,Net
+2026-07-03 10:15:00 +0200,charge,#9001,visa,online,paid,2026-07-07,2026-07-07,108.10,3.24,104.86
+2026-07-04 14:02:11 +0200,charge,#9002,mastercard,online,paid,2026-07-07,2026-07-07,54.05,1.62,52.43
+2026-07-04 14:02:11 +0200,charge,#9003,mastercard,online,paid,2026-07-07,2026-07-07,54.05,1.62,52.43
+2026-07-05 09:30:00 +0200,refund,#9001,visa,online,paid,2026-07-07,2026-07-07,-21.62,0.00,-21.62
+2026-07-06 08:00:00 +0200,adjustment,#9004,,,paid,2026-07-07,2026-07-07,-5.00,0.00,-5.00
+2026-07-07 06:00:00 +0200,payout,,,,paid,2026-07-07,2026-07-07,-183.10,0.00,-183.10

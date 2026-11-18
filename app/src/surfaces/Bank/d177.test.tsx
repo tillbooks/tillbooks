@@ -390,7 +390,8 @@ describe('D177 story matrix (A39 §16.3)', () => {
     await userEvent.click(bookOf(rowOf('bt_bond')));
     const booked = calls.find((c) => c.action === 'book_bank_line');
     expect(booked?.input.target).toEqual({ kind: 'rule', standardId: 'bs_bond', asks: {} });
-    expect(booked?.input).not.toHaveProperty('text');
+    // D195: the text the row shows (without the engine's "Bank:" prefix) is the text that is booked.
+    expect(booked?.input.text).toBe(`Fernpay Plattform AG, ${LONG_TEXT}`.slice(0, 500));
   });
 
   it('2 estimate off: typing the figure reads "von dir", the preview asks with the override, "berechnen" takes the engine figure back', async () => {
@@ -460,15 +461,21 @@ describe('D177 story matrix (A39 §16.3)', () => {
     await waitFor(() => expect(calls.find((c) => c.action === 'reopen_bank_line')?.input).toMatchObject({ bankTxnId: 'bt_fee', reason: 'Ignorieren rückgängig gemacht' }));
   });
 
-  it('6b "Anderer Grund" asks for the note in the panel before anything is ignored', async () => {
+  // D196 point 2: the panel no longer asks for a reason (no radio list, the note optional behind an icon);
+  // the reason the menu entry named is kept, and nothing is ignored before the one click.
+  it('6b "Anderer Grund" opens the one-click panel (optional note) before anything is ignored', async () => {
     const { transport, calls } = recording(canned([FEE]));
     renderBank(transport);
     const row = await rowReady('bt_fee');
     await userEvent.click(within(row).getByRole('button', { name: /^Weitere Aktionen für / }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Ignorieren: Anderer Grund' }));
     await waitFor(() => expect(panel()).toHaveAttribute('data-mode', 'ignore'));
-    expect(within(panel()).getByRole('radio', { name: /Anderer Grund/ })).toBeChecked();
+    expect(within(panel()).queryAllByRole('radio')).toHaveLength(0);
+    expect(within(panel()).getByRole('button', { name: 'Notiz hinzufügen' })).toBeInTheDocument();
     expect(calls.some((c) => c.action === 'ignore_bank_line')).toBe(false);
+    await userEvent.click(within(panel()).getByRole('button', { name: 'Ignorieren' }));
+    await waitFor(() => expect(calls.some((c) => c.action === 'ignore_bank_line')).toBe(true));
+    expect(calls.find((c) => c.action === 'ignore_bank_line')?.input).toMatchObject({ reason: 'other' });
   });
 
   it('7 split a line: position rows on the table\'s columns, the first holds the amount, "+ Position" the rest, the row\'s Buchen books', async () => {
@@ -538,6 +545,9 @@ describe('D177 story matrix (A39 §16.3)', () => {
     expect(within(row).getByRole('button', { name: /^Buchen auf, / })).toHaveTextContent('6500');
     await select('bt_fee');
     expect(panel().querySelectorAll('.bank-vorschlag')).toHaveLength(1);
+    // D201: the agent's Vorschlag is named ONCE in the panel, by its own strip; no Woher line repeats it.
+    expect(panel().querySelector('.bank-woher')).toBeNull();
+    expect(panel().querySelectorAll('.bank-vorschlag__kicker')).toHaveLength(1);
   });
 
   it('10 a disabled Buchen always names why in a few words (an asked amount, the right to post)', async () => {
@@ -658,13 +668,13 @@ describe('D177 guards (A39 §16.4) and the owner amendments', () => {
     }
   });
 
-  it('the Buchungstext is a field from the start, prefilled with the engine\'s default; an edited text is sent with Buchen', async () => {
+  it('the Buchungstext is a field from the start, prefilled with the default (D195: no "Bank:" prefix); an edited text is sent with Buchen', async () => {
     const { transport, calls } = recording(canned([BOND]));
     renderBank(transport);
     await rulesRead('bt_bond');
     await select('bt_bond');
     const text = within(panel()).getByLabelText('Buchungstext') as HTMLInputElement;
-    expect(text.value).toBe(`Bank: Fernpay Plattform AG, ${LONG_TEXT}`);
+    expect(text.value).toBe(`Fernpay Plattform AG, ${LONG_TEXT}`);
     await userEvent.clear(text);
     await userEvent.type(text, 'Bondigoo Oktober');
     await userEvent.click(within(panel()).getByRole('button', { name: 'Buchen' }));

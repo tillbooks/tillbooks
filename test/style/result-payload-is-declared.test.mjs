@@ -241,6 +241,8 @@ const CONVERTED = [
   { module: './dist/core/banking/statementImport.js', verb: 'bankCsvPreview', field: 'headers', absent: 'columns' },
   { module: './dist/core/banking/csvMapping.js', verb: 'getBankCsvMapping', field: 'mapping', absent: 'csvMapping' },
   { module: './dist/core/banking/csvMapping.js', verb: 'setBankCsvMapping', field: 'mapping', absent: 'csvMapping' },
+  // A20 §13.4 (D205): a till-import-profile/v1 file read. `profile` (never `envelope`, the tabular layer's word).
+  { module: './dist/core/banking/csvMapping.js', verb: 'readBankStatementProfile', field: 'profile', absent: 'envelope' },
   // D178 point 19: the person's answer to a possible duplicate. `decision` (never `outcome`, the import's word).
   { module: './dist/core/banking/duplicateDecision.js', verb: 'resolvePossibleDuplicate', field: 'decision', absent: 'outcome' },
   // G03. `workspaceKind` is what the shell demo banner keys on, and `kind` is exactly the read a
@@ -357,6 +359,8 @@ const CONVERTED = [
   { module: './dist/core/settings/settings.js', verb: 'settingsGet', field: 'setting', absent: 'value' },
   { module: './dist/core/settings/settings.js', verb: 'settingsSet', field: 'previousValue', absent: 'oldValue' },
   { module: './dist/core/settings/settings.js', verb: 'settingsReset', field: 'changed', absent: 'reset' },
+  // D202: the Einstellungen read the history's `changes`; `history` is the near-miss a consumer would reach for.
+  { module: './dist/core/settings/settings.js', verb: 'settingsHistory', field: 'changes', absent: 'history' },
   // D178 point 7 (the per-person preferences): the Studio's prefs store reads `prefs` from the list,
   // `pref` from a get, `previousValue` after a set and `reset` (the keys it cleared) after a reset.
   { module: './dist/core/customization/prefs.js', verb: 'prefsList', field: 'prefs', absent: 'items' },
@@ -391,6 +395,27 @@ const CONVERTED = [
   { module: './dist/core/banking/belegAssignment.js', verb: 'confirmCaptureFigures', field: 'confirmed', absent: 'captures' },
   // A41.3 follow-ups: assign_beleg_file answers `amountFrom` (where the assigned amount came from).
   { module: './dist/core/banking/belegAssignment.js', verb: 'assignBelegFile', field: 'amountFrom', absent: 'assigned' },
+  // D198, the settlement feed: the source save says `tokenDroppedUrlMoved` (never a `token`), the pull
+  // `eventsNew` (the import's own counts sit under `import`), the payout link `matches` (never `payouts`).
+  { module: './dist/core/settlement/source.js', verb: 'setSettlementSource', field: 'tokenDroppedUrlMoved', absent: 'token' },
+  { module: './dist/core/settlement/source.js', verb: 'pullSettlement', field: 'eventsNew', absent: 'booked' },
+  { module: './dist/core/settlement/payoutLink.js', verb: 'settlementPayoutForBankLine', field: 'matches', absent: 'payouts' },
+  // D198 stateless check S5: a test answer lists the `events` it clears or returns to their flags, never a
+  // `booked` flag (no answer marks an event booked).
+  { module: './dist/core/settlement/resolution.js', verb: 'resolveSettlementEvent', field: 'events', absent: 'booked' },
+  // A42: the Umsatz review answers its `rows` (never an `events` list of the import), the answer verb its `state`
+  // (never a `resolution`).
+  { module: './dist/core/settlement/review.js', verb: 'settlementReview', field: 'rows', absent: 'events' },
+  { module: './dist/core/settlement/inclusion.js', verb: 'setSettlementEventIgnored', field: 'state', absent: 'resolution' },
+  // A43 §2, the table door: the read answers the generated `settlement` (never an `events` list of its own), the
+  // mapping verbs their `mappingId` / `mappings` (never a `templateId` / `templates`).
+  { module: './dist/core/settlement/tableMapping.js', verb: 'settlementFromTable', field: 'settlement', absent: 'events' },
+  { module: './dist/core/settlement/tableMapping.js', verb: 'setSettlementTableMapping', field: 'mappingId', absent: 'templateId' },
+  { module: './dist/core/settlement/tableMapping.js', verb: 'getSettlementTableMapping', field: 'mappings', absent: 'templates' },
+  // D203: the figures from the books answer their `totals` (never `rows` of a review), the periods their `periods`
+  // (never `rows`).
+  { module: './dist/core/settlement/turnover.js', verb: 'turnoverSummary', field: 'totals', absent: 'rows' },
+  { module: './dist/core/settlement/turnover.js', verb: 'settlementPeriods', field: 'periods', absent: 'rows' },
 ];
 
 /**
@@ -423,7 +448,13 @@ const UNDECLARED = { module: './dist/core/ledger/draft.js', verb: 'deleteDraft' 
 // 86 since D185 (2026-11-07): `importSettlement`, `setSettlementTemplate`, `getSettlementTemplate`.
 // 89 since A41.3 (2026-11-07): `assignBeleg`, `releaseBeleg`, `confirmCaptureFigures`.
 // 90 since the A41.3 follow-ups (2026-11-09): `assignBelegFile`.
-const DECLARED_FLOOR = 91;
+// 94 since D198 (2026-11-12): `setSettlementSource`, `pullSettlement`, `settlementPayoutForBankLine`.
+// 97 since A42 (2026-11-13): `settlementReview`, `setSettlementEventIgnored`.
+// 98 since A20 §13.4 (D205, 2026-11-15): `readBankStatementProfile`.
+// 101 since A43 (2026-11-15): `settlementFromTable`, `setSettlementTableMapping`, `getSettlementTableMapping`.
+// 102 since D202 (2026-11-16): `settingsHistory`.
+// 104 since D203 (2026-11-16): `turnoverSummary`, `settlementPeriods`.
+const DECLARED_FLOOR = 104;
 
 /**
  * The resolved compiler options of `tsconfig.test.json`, read through TypeScript's own JSONC parser

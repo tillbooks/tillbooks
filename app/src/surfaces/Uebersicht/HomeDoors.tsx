@@ -19,6 +19,10 @@
  *   - Demo ausprobieren mints the demo workspace with the same verb the Erste Schritte door uses
  *     (`create_demo_workspace`) and adopts it in place; the shared demo banner then says so above
  *     every surface. It shows only while the workspace has no data, so a demo never offers a demo.
+ *
+ * D201 point 5 (owner, 15.11.2026): Neue Buchung and Sichern left the header. They show only when the
+ * person sets `overview.doors = shown` (`doors`); Neue Buchung stays in Cmd K and the Journal, Sichern on
+ * Betrieb. The demo door of an empty workspace shows either way.
  */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -35,7 +39,7 @@ function newKey(): string {
   return `demo-${typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : Date.now()}`;
 }
 
-export function HomeDoors({ fresh }: { fresh: boolean }) {
+export function HomeDoors({ fresh, doors = true }: { fresh: boolean; doors?: boolean }) {
   const t = useT();
   const client = useClient();
   const { setWorkspaceId } = useWorkspace();
@@ -62,12 +66,16 @@ export function HomeDoors({ fresh }: { fresh: boolean }) {
           {busy ? t('dashboard.doors.demoBusy') : t('dashboard.doors.demo')}
         </button>
       )}
-      <Link to="/operations#data-title" className="btn btn--secondary">
-        {t('dashboard.doors.backup')}
-      </Link>
-      <Link to="/journal?new=1" className="btn btn--primary">
-        {t('dashboard.doors.book')}
-      </Link>
+      {doors && (
+        <>
+          <Link to="/operations#data-title" className="btn btn--secondary">
+            {t('dashboard.doors.backup')}
+          </Link>
+          <Link to="/journal?new=1" className="btn btn--primary">
+            {t('dashboard.doors.book')}
+          </Link>
+        </>
+      )}
       {error !== null && (
         <div className="home-doors-error">
           <ErrorBanner error={error} onRetry={() => void startDemo()} />

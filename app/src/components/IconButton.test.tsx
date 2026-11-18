@@ -45,7 +45,7 @@ describe('IconButton (Ruhig 3, D154)', () => {
     expect(tip).toHaveClass('is-open', 'is-hoverable');
     fireEvent.pointerLeave(button, { pointerType: 'mouse' });
     expect(tip).not.toHaveClass('is-open');
-    fireEvent.focus(button);
+    act(() => { button.focus(); });
     expect(tip).toHaveClass('is-open');
     fireEvent.keyDown(button, { key: 'Escape' });
     expect(tip).not.toHaveClass('is-open');
@@ -152,7 +152,7 @@ describe('IconButton (Ruhig 3, D154)', () => {
     fireEvent.pointerEnter(button, { pointerType: 'touch' });
     fireEvent.mouseEnter(button);
     expect(tip).not.toHaveClass('is-open');
-    fireEvent.focus(button);
+    act(() => { button.focus(); });
     expect(tip).toHaveClass('is-open');
     expect(tip).not.toHaveClass('is-hoverable');
   });
@@ -171,12 +171,12 @@ describe('IconButton (Ruhig 3, D154)', () => {
     const onFocus = vi.fn();
     render(<IconButton icon="more" context="Weitere Aktionen" small className="row-more" onFocus={onFocus} />);
     const button = screen.getByRole('button', { name: 'Mehr' });
-    fireEvent.focus(button);
+    act(() => { button.focus(); });
     expect(onFocus).toHaveBeenCalledTimes(1);
     expect(button).toHaveClass('btn', 'btn--ghost', 'btn--icon', 'btn--sm', 'icon-button', 'row-more');
   });
 
-  it('the vocabulary is the twelve of D154 plus the five of D177 the five of D180 and the Freigeben of A41.5, and no money commit or destructive act is named as one (Ignorieren excepted by D177 point 5; Freigeben is the D184 point 7 approve)', () => {
+  it('the vocabulary is the twelve of D154 plus the five of D177 the five of D180 and the Freigeben of A41.5 (and the Ablehnen of D197, and the settings row glyphs Auf Standard zurück and Änderungen), and no money commit or destructive act is named as one (Ignorieren excepted by D177 point 5; Freigeben is the D184 point 7 approve)', () => {
     expect(Object.values(VOCABULARY).map((entry) => entry.name)).toEqual([
       'Bearbeiten',
       'Anhängen',
@@ -211,6 +211,9 @@ describe('IconButton (Ruhig 3, D154)', () => {
       'Sortieren',
       'Ordner öffnen',
       'Teilen',
+      'Ablehnen',
+      'Auf Standard zurück',
+      'Änderungen',
     ]);
     for (const { name } of Object.values(VOCABULARY)) {
       if (name === 'Ignorieren') continue;

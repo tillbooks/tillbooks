@@ -142,6 +142,13 @@ export function useMeasuredRoom(ref: RefObject<HTMLElement | null>): { width: nu
 export interface DetailLayout {
   /** The person's preference as it stands. */
   preference: DockPreference;
+  /** D195: `inline` (the default since v12): the line opens in place in the list; no area docks. */
+  inline: boolean;
+  /**
+   * The person asked for the bottom (or automatic chose it) but the workspace is too short for the area's
+   * controls, so it docks right for now: the dock control says so instead of the choice snapping back silently.
+   */
+  bottomBlocked: boolean;
   /** Where the area docks now (automatic resolved). */
   edge: DockEdge;
   /** The area's size at that edge, clamped to the room. */
@@ -176,7 +183,9 @@ export function useDetailLayout(openCount: number | null, entryKey: string | nul
     setDecided({ key: entryKey, edge: decideAutomatic(openCount, threshold) });
   }, [openCount, entryKey, threshold, decided]);
   const autoEdge: DockEdge = decided !== null && decided.key === entryKey ? decided.edge : 'right';
-  const edge: DockEdge = edgeForRoom(preference === 'automatic' ? autoEdge : preference, room);
+  const wanted: DockEdge = preference === 'automatic' ? autoEdge : preference;
+  const edge: DockEdge = edgeForRoom(wanted, room);
+  const bottomBlocked = edgeForRoom('bottom', room) !== 'bottom';
 
   const [driven, setDriven] = useState<{ edge: DockEdge; size: number } | null>(null);
   const stored = edge === 'right' ? width : height;
@@ -206,7 +215,7 @@ export function useDetailLayout(openCount: number | null, entryKey: string | nul
     void (latest.current.edge === 'right' ? widthMeta.reset() : heightMeta.reset());
   }, [widthMeta, heightMeta]);
 
-  return { preference, edge, size, bounds, dock, drive, commit, reset };
+  return { preference, inline: position === 'inline', bottomBlocked, edge, size, bounds, dock, drive, commit, reset };
 }
 
 /**

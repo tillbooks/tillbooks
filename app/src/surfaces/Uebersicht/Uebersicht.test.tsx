@@ -7,7 +7,7 @@
  * transport is canned per action, so every assertion is about what the surface sends and renders,
  * not about the engine.
  */
-import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'jest-axe';
@@ -178,6 +178,8 @@ const happyCanned = (): Canned => ({
   dashboard_series: ok(SERIES),
   list_vendor_bills: ok(BILLS),
   tasks_list: ok(TASKS),
+  // D201: the suggestions card reads the open Vorschläge; none are open here.
+  list_drafted_actions: ok({ actions: [] }),
 });
 
 /** A freshly minted workspace: the wall loads, but every tile is a zero-state or degraded one, the
@@ -195,6 +197,7 @@ const freshCanned = (): Canned => ({
   dashboard_series: ok({ ...SERIES, bankAccounts: 0, months: SERIES.months.map((m) => ({ ...m, inMinor: 0, outMinor: 0 })), topExpenses: [], otherExpensesMinor: 0, expenseTotalMinor: 0 }),
   list_vendor_bills: ok({ bills: [], baseTotalOpenMinor: 0, baseCurrency: 'CHF' }),
   tasks_list: ok({ tasks: [], total: 0 }),
+  list_drafted_actions: ok({ actions: [] }),
 });
 
 /** Saved views as `list_saved_views` returns them: one personal and one shared DASHBOARD view, plus
@@ -215,7 +218,17 @@ function LocationProbe() {
 /** The detached preference store of the last `renderSurface` that was given prefs. */
 let lastStore: PrefsStore | undefined;
 
-function renderSurface(canned: Canned | Transport, prefs?: Record<string, PrefValue>) {
+/**
+ * Preferences every render of a describe block starts from (D201: the D180 edit-mode suite runs under
+ * `overview.customize = edit_mode`, the setting that keeps the mode). Reset after every test.
+ */
+let basePrefs: Record<string, PrefValue> | undefined;
+afterEach(() => {
+  basePrefs = undefined;
+});
+
+function renderSurface(canned: Canned | Transport, prefsIn?: Record<string, PrefValue>) {
+  const prefs = basePrefs === undefined ? prefsIn : { ...basePrefs, ...(prefsIn ?? {}) };
   const transport = typeof canned === 'function' ? canned : fakeTransport(canned);
   const client = new TillClient(transport);
   const surface = (
@@ -310,7 +323,7 @@ describe('Uebersicht: the tile wall states', () => {
   it('clicking a tile drills to its source route', async () => {
     renderSurface(happyCanned());
     await screen.findByText("CHF 12'500.00");
-    await userEvent.click(screen.getByRole('button', { name: /Debitoren offen/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Debitoren offen/ }));
     expect(screen.getByTestId('location')).toHaveTextContent('/open-items');
   });
 
@@ -328,10 +341,10 @@ describe('Uebersicht: the tile wall states', () => {
     renderSurface(canned);
     await screen.findByText("CHF 12'500.00");
     // The drillable tile is a real control.
-    expect(screen.getByRole('button', { name: /Flüssige Mittel/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Flüssige Mittel/ })).toBeInTheDocument();
     // The inert tile shows its figure but is NOT a button, so it never reads as clickable.
     expect(screen.getByText("CHF 30'000.00")).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Umsatz/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Umsatz/ })).toBeNull();
   });
 
   it('with no saved dashboard views the picker is hidden, not a lone default option', async () => {
@@ -372,7 +385,9 @@ describe('Uebersicht: the tile wall states', () => {
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Jahr' })).toBeChecked());
     await waitFor(() => expect(reads.some((i) => String(i.from).endsWith('-01-01') && String(i.to).endsWith('-12-31'))).toBe(true));
     // The view's layout lands in the person's preferences: its tiles in its order, the rest hidden.
-    const tiles = () => [...document.querySelectorAll('.uebersicht-grid > li')].map((li) => li.getAttribute('data-slot'));
+    // The key figures (the suggestions card and "+ Karte" are items of the zone, not figures).
+  const tiles = () =>
+    [...document.querySelectorAll('.uebersicht-grid > li[data-slot]')].map((li) => li.getAttribute('data-slot')).filter((id) => id !== 'suggestions');
     await waitFor(() => expect(tiles()).toEqual(['cash', 'revenue']));
     expect(lastStore?.value('overview.widgets')).toEqual([{ id: 'open_tasks', on: true, w: 'full' }]);
     expect(document.querySelector('[data-slot="open_tasks"]')).toHaveClass('uebersicht-widget--full');
@@ -407,7 +422,9 @@ describe('Uebersicht: the tile wall states', () => {
       filters: {
         rangePreset: 'month',
         bankAction: 'tile',
+        // D201: the suggestions card leads a list saved before it; it is an item, not a key figure (columns).
         tiles: [
+          { id: 'suggestions', on: true },
           { id: 'cash', on: true },
           { id: 'utilisation', on: false },
           { id: 'revenue', on: true },
@@ -452,9 +469,17 @@ describe('Uebersicht: the tile wall states', () => {
   });
 });
 
-describe('Uebersicht: the daily doors (F-05)', () => {
-  it('Neue Buchung and Sichern are always-visible header links into the composer and the backup panel', async () => {
+describe('Uebersicht: the daily doors (F-05, D201 point 5)', () => {
+  it('by default Neue Buchung and Sichern are off the header (they live in Cmd K, the Journal and Betrieb)', async () => {
     renderSurface(happyCanned());
+    await screen.findByText("CHF 12'500.00");
+    expect(screen.queryByRole('group', { name: 'Häufige Aktionen' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Neue Buchung' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Sichern' })).toBeNull();
+  });
+
+  it('with overview.doors = shown, Neue Buchung and Sichern are header links into the composer and the backup panel', async () => {
+    renderSurface(happyCanned(), { 'overview.doors': 'shown' });
     await screen.findByText("CHF 12'500.00");
     const doors = screen.getByRole('group', { name: 'Häufige Aktionen' });
     expect(within(doors).getByRole('link', { name: 'Neue Buchung' })).toHaveAttribute('href', '/journal?new=1');
@@ -581,7 +606,7 @@ describe('D142: the Bankeingang band on the wall, and drills that keep their par
         </I18nProvider>
       </TillClientProvider>,
     );
-    await userEvent.click(await screen.findByRole('button', { name: /Debitoren offen/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Debitoren offen/ }));
     expect(screen.getByTestId('where')).toHaveTextContent('/open-items?asOf=2026-07-31');
   });
 
@@ -708,8 +733,15 @@ describe('D178 point 13: the widgets under the key figures', () => {
     expect(await screen.findByText(/zusammen CHF -4'000.00\. Mit ihnen beträgt der Aufwand in der Erfolgsrechnung CHF 30'000.00/)).toBeInTheDocument();
   });
 
-  it('the waiting work sits below the key figures, not above the title', async () => {
+  it('the old waiting list is off by default (the suggestions card replaced it)', async () => {
     renderSurface({ ...happyCanned(), attention_summary: ok({ visibleQueues: 1, total: 3, top: [] }) });
+    await screen.findByText("CHF 12'500.00");
+    await screen.findByText('Nichts offen');
+    expect(document.querySelector('.att-strip')).toBeNull();
+  });
+
+  it('with overview.waiting_list = shown, the waiting work sits below the key figures, not above the title', async () => {
+    renderSurface({ ...happyCanned(), attention_summary: ok({ visibleQueues: 1, total: 3, top: [] }) }, { 'overview.waiting_list': 'shown' });
     await screen.findByText("CHF 12'500.00");
     const title = screen.getByRole('heading', { level: 1, name: 'Übersicht' });
     const grid = document.querySelector('.uebersicht-grid') as HTMLElement;
@@ -732,11 +764,14 @@ describe('D178 point 13: the widgets under the key figures', () => {
     await screen.findByRole('img', { name: /Aufwände total/ });
     await screen.findByRole('link', { name: 'Papeterie Muster AG' });
     await settle();
-    expect(await axe(container)).toHaveNoViolations();
+    expect(await act(() => axe(container))).toHaveNoViolations();
   });
 });
 
-describe('D180: the edit mode, in place', () => {
+describe('D180: the edit mode, in place (D201: behind overview.customize = edit_mode)', () => {
+  beforeEach(() => {
+    basePrefs = { 'overview.customize': 'edit_mode' };
+  });
   const BANK = {
     tile: 'bank_inbox',
     ok: true,
@@ -764,7 +799,9 @@ describe('D180: the edit mode, in place', () => {
     canned.dashboard_tile = ok({ workspaceId: 'ws_test', tile: BANK });
     return canned;
   };
-  const tiles = () => [...document.querySelectorAll('.uebersicht-grid > li')].map((li) => li.getAttribute('data-slot'));
+  // The key figures (the suggestions card and "+ Karte" are items of the zone, not figures).
+  const tiles = () =>
+    [...document.querySelectorAll('.uebersicht-grid > li[data-slot]')].map((li) => li.getAttribute('data-slot')).filter((id) => id !== 'suggestions');
   const cards = () => [...document.querySelectorAll('.uebersicht-widgets > .uebersicht-card')].map((el) => el.getAttribute('data-slot'));
   const live = () => document.querySelector('.uebersicht > p[aria-live="polite"]')?.textContent ?? '';
   const startEditing = async () => {
@@ -782,7 +819,8 @@ describe('D180: the edit mode, in place', () => {
     expect(done).toHaveFocus();
     expect(live()).toMatch(/ziehe am Griff oder verschiebe mit Alt/);
     // A grip per item, hidden from assistive tech.
-    expect(document.querySelectorAll('.uebersicht-grip[aria-hidden="true"]').length).toBe(4 + 8);
+    // Four figures, the suggestions card and eight cards.
+    expect(document.querySelectorAll('.uebersicht-grip[aria-hidden="true"]').length).toBe(4 + 1 + 8);
     // All eight cards are on the page: the two the content does not show wait as ghosts, in words.
     expect(cards()).toEqual(['revenue_months', 'balance_history', 'expense_donut', 'money_in_out', 'open_creditors', 'open_tasks', 'cash_flow', 'expense_bars']);
     expect(document.querySelectorAll('.uebersicht-card.is-ghost')).toHaveLength(2);
@@ -813,13 +851,15 @@ describe('D180: the edit mode, in place', () => {
     await userEvent.keyboard('{Alt>}{ArrowLeft}{/Alt}');
     expect(tiles()).toEqual(['revenue', 'ar_aging', 'cash', 'utilisation']);
     expect(lastStore?.value('overview.tiles')).toEqual([
+      { id: 'suggestions', on: true },
       { id: 'revenue', on: true },
       { id: 'ar_aging', on: true },
       { id: 'cash', on: true },
       { id: 'utilisation', on: true },
     ]);
     expect(screen.getByRole('button', { name: 'Ausblenden', description: 'Debitoren offen' })).toHaveFocus();
-    expect(live()).toBe('Debitoren offen verschoben, Platz 2 von 4.');
+    // The suggestions card is the first item of the zone (D201), so the figure counts from it.
+    expect(live()).toBe('Debitoren offen verschoben, Platz 3 von 5.');
     // The order holds outside edit mode too.
     await userEvent.click(screen.getByRole('button', { name: 'Fertig' }));
     expect(tiles()).toEqual(['revenue', 'ar_aging', 'cash', 'utilisation']);
@@ -871,13 +911,13 @@ describe('D180: the edit mode, in place', () => {
     expect(tiles()).toEqual(['revenue', 'ar_aging', 'utilisation']);
     expect(document.querySelector('[data-slot="stock_value"]')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Fertig' }));
+    // D204: the hidden figure comes back through the card sheet over the page.
     await userEvent.click(screen.getByRole('button', { name: 'Mehr zur Übersicht' }));
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Kennzahlen wählen' }));
-    expect(screen.getByTestId('location')).toHaveTextContent('/overview/kennzahlen');
-    expect(screen.getByRole('checkbox', { name: 'Flüssige Mittel' })).not.toBeChecked();
-    expect(screen.queryByRole('checkbox', { name: 'Lagerwert' })).toBeNull();
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Flüssige Mittel' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Fertig', description: 'Zur Übersicht' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Karten wählen' }));
+    const sheet = screen.getByRole('dialog', { name: 'Karten' });
+    expect(within(sheet).getByRole('switch', { name: 'Flüssige Mittel' })).toHaveAttribute('aria-checked', 'false');
+    expect(within(sheet).queryByRole('switch', { name: 'Lagerwert' })).toBeNull();
+    await userEvent.click(within(sheet).getByRole('switch', { name: 'Flüssige Mittel' }));
     expect(tiles()).toContain('cash');
   });
 
@@ -943,8 +983,9 @@ describe('D180: the edit mode, in place', () => {
     await startEditing();
     act(() => reorders.get('uebersicht-grid')?.('utilisation', 'revenue'));
     expect(tiles()).toEqual(['utilisation', 'revenue', 'cash', 'ar_aging']);
-    expect((lastStore?.value('overview.tiles') as { id: string }[]).map((s) => s.id)).toEqual(['utilisation', 'revenue', 'cash', 'ar_aging']);
-    expect(live()).toBe('Auslastung verschoben, Platz 1 von 4.');
+    expect((lastStore?.value('overview.tiles') as { id: string }[]).map((s) => s.id)).toEqual(['suggestions', 'utilisation', 'revenue', 'cash', 'ar_aging']);
+    // The suggestions card leads the zone (D201), so the figure dropped first is the second item.
+    expect(live()).toBe('Auslastung verschoben, Platz 2 von 5.');
     act(() => reorders.get('uebersicht-widgets')?.('open_tasks', 'revenue_months'));
     expect(cards()[0]).toBe('open_tasks');
     expect((lastStore?.value('overview.widgets') as { id: string }[])[0]?.id).toBe('open_tasks');
@@ -1053,10 +1094,10 @@ describe('D180: the edit mode, in place', () => {
     await userEvent.click(screen.getByRole('option', { name: 'Nur Umsatz' }));
     expect(picker).toHaveTextContent('Nur Umsatz');
     await userEvent.click(screen.getByRole('button', { name: 'Mehr zur Übersicht' }));
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Kennzahlen wählen' }));
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Umsatz' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Fertig', description: 'Zur Übersicht' }));
-    // Back on the page (the settings screen replaced it, so the picker is found again).
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Karten wählen' }));
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Karten' })).getByRole('switch', { name: 'Umsatz' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Schliessen', description: 'Karten schliessen' }));
+    // The page never left (the sheet sits over it).
     picker = await screen.findByRole('combobox', { name: 'Ansicht' });
     expect(picker).not.toHaveTextContent('Nur Umsatz');
     // Never an empty trigger: the customised state has its own word.
@@ -1172,7 +1213,9 @@ describe('D186: the money on the bank, the estimate, comparisons and the key-fig
     ...happyCanned(),
     dashboard_overview: ok({ workspaceId: 'ws_test', tiles: [BANK_BALANCE(open), REVENUE, ...TILES.filter((x) => x.tile !== 'revenue')], omitted: [] }),
   });
-  const tiles = () => [...document.querySelectorAll('.uebersicht-grid > li')].map((li) => li.getAttribute('data-slot'));
+  // The key figures (the suggestions card and "+ Karte" are items of the zone, not figures).
+  const tiles = () =>
+    [...document.querySelectorAll('.uebersicht-grid > li[data-slot]')].map((li) => li.getAttribute('data-slot')).filter((id) => id !== 'suggestions');
 
   it('the bank figure leads at double width: one number per Bankkonto, and Gebucht, Offen and Buchen only where lines wait', async () => {
     const view = renderSurface(canned(true), {});
@@ -1224,47 +1267,94 @@ describe('D186: the money on the bank, the estimate, comparisons and the key-fig
     expect(asked.at(-1)).toMatchObject({ runwayMonths: 6 });
   });
 
-  it('the key figures are their own screen: tick, compare and line per figure, written at once', async () => {
+  it('a figure\'s size, comparison and line sit on its own toolbar and Mehr, written at once (D201)', async () => {
+    renderSurface(canned(), {});
+    await screen.findByRole('region', { name: 'Auf der Bank' });
+    // Grösse ändern: the turnover goes double width.
+    await userEvent.click(screen.getByRole('button', { name: 'Grösse ändern', description: 'Umsatz: doppelt breit' }));
+    expect((lastStore?.value('overview.tiles') as { id: string; w?: string }[]).find((s) => s.id === 'revenue')).toMatchObject({ w: 'double' });
+    // Its Mehr: Kein Vergleich for the turnover alone, then its line on.
+    await userEvent.click(screen.getByRole('button', { name: 'Mehr zu Umsatz' }));
+    await userEvent.click(screen.getByRole('menuitemradio', { name: /Kein Vergleich/ }));
+    expect((lastStore?.value('overview.tiles') as { id: string; compare?: string }[]).find((s) => s.id === 'revenue')).toMatchObject({ compare: 'none' });
+    await userEvent.click(screen.getByRole('button', { name: 'Mehr zu Umsatz' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Verlauf zeigen' }));
+    expect((lastStore?.value('overview.tiles') as { id: string; trend?: boolean }[]).find((s) => s.id === 'revenue')).toMatchObject({ trend: true });
+    expect(document.querySelector('[data-slot="revenue"]')).toHaveClass('uebersicht-item--double');
+  });
+
+  it('D204: + Karte opens the card sheet over the live page; a switch shows the figure behind it at once, saved, no Speichern', async () => {
+    renderSurface(canned(), {});
+    await screen.findByRole('region', { name: 'Auf der Bank' });
+    const add = screen.getByRole('button', { name: 'Karte' });
+    await userEvent.click(add);
+    const sheet = screen.getByRole('dialog', { name: 'Karten' });
+    expect(sheet).toHaveAttribute('aria-modal', 'false');
+    // It takes the focus on its search.
+    expect(within(sheet).getByRole('searchbox', { name: 'Suchen' })).toHaveFocus();
+    // The page stays: the grid is still there beside the sheet.
+    expect(document.querySelector('.uebersicht-grid')).not.toBeNull();
+    expect(within(sheet).getByRole('switch', { name: 'Auf der Bank' })).toHaveAttribute('aria-checked', 'true');
+    const cash = within(sheet).getByRole('switch', { name: 'Flüssige Mittel' });
+    expect(cash).toHaveAttribute('aria-checked', 'false');
+    expect(tiles()).not.toContain('cash');
+    await userEvent.click(cash);
+    expect(tiles()).toContain('cash');
+    expect(cash).toHaveAttribute('aria-checked', 'true');
+    expect((lastStore?.value('overview.tiles') as { id: string; on: boolean }[]).find((s) => s.id === 'cash')).toMatchObject({ on: true });
+    // The cards and the suggestions are in the same sheet.
+    await userEvent.click(within(sheet).getByRole('switch', { name: 'Offene Aufgaben' }));
+    expect((lastStore?.value('overview.widgets') as { id: string; on: boolean }[]).find((s) => s.id === 'open_tasks')).toMatchObject({ on: false });
+    expect(within(sheet).getByRole('switch', { name: 'Vorschläge' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(sheet).queryByRole('button', { name: /Speichern/ })).toBeNull();
+    // The live search, its filtered-empty state, and Filter zurücksetzen.
+    const search = within(sheet).getByRole('searchbox', { name: 'Suchen' });
+    await userEvent.type(search, 'MITTEL');
+    expect(within(sheet).getAllByRole('switch')).toHaveLength(1);
+    await userEvent.clear(search);
+    await userEvent.type(search, 'zzz');
+    expect(within(sheet).getByText('Keine Karte gefunden')).toBeInTheDocument();
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Filter zurücksetzen' }));
+    expect(within(sheet).getAllByRole('switch').length).toBeGreaterThan(5);
+    // Escape (from the search) closes it, and the focus goes back to + Karte.
+    act(() => search.focus());
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Karten' })).toBeNull();
+    expect(add).toHaveFocus();
+  });
+
+  it('the page Mehr opens the same sheet; there is no separate page of checkboxes any more', async () => {
     renderSurface(canned(), {});
     await screen.findByRole('region', { name: 'Auf der Bank' });
     await userEvent.click(screen.getByRole('button', { name: 'Mehr zur Übersicht' }));
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Kennzahlen wählen' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'Kennzahlen' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Geld' })).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Auf der Bank' })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: 'Flüssige Mittel' })).not.toBeChecked();
-    // Grösse ändern: the turnover goes double width.
-    await userEvent.click(screen.getByRole('button', { name: 'Grösse ändern', description: 'Umsatz' }));
-    expect((lastStore?.value('overview.tiles') as { id: string; w?: string }[]).find((s) => s.id === 'revenue')).toMatchObject({ w: 'double' });
-    // Vergleichen opens a menu: Kein Vergleich for the turnover alone.
-    await userEvent.click(screen.getByRole('button', { name: 'Vergleich: Umsatz' }));
-    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Kein Vergleich' }));
-    expect((lastStore?.value('overview.tiles') as { id: string; compare?: string }[]).find((s) => s.id === 'revenue')).toMatchObject({ compare: 'none' });
-    // Verlauf: the line on.
-    await userEvent.click(screen.getByRole('button', { name: 'Verlauf', description: 'Umsatz' }));
-    expect((lastStore?.value('overview.tiles') as { id: string; trend?: boolean }[]).find((s) => s.id === 'revenue')).toMatchObject({ trend: true });
-    await userEvent.click(screen.getByRole('button', { name: 'Fertig', description: 'Zur Übersicht' }));
-    expect(document.querySelector('[data-slot="revenue"]')).toHaveClass('uebersicht-item--double');
-    expect(screen.queryByLabelText(/gegenüber/)).toBeNull();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Karten wählen' }));
+    expect(screen.getByRole('dialog', { name: 'Karten' })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.getByTestId('location')).toHaveTextContent('/overview');
   });
 
-  it('the D186 surface has no axe violations, at rest and while editing', async () => {
-    const { container } = renderSurface(canned(), {});
+  it('the D186 surface has no axe violations, at rest and in D180\'s edit mode', async () => {
+    const view = renderSurface(canned(), {});
     await screen.findByRole('region', { name: 'Auf der Bank' });
     await screen.findByRole('link', { name: 'Papeterie Muster AG' });
-    expect(await axe(container)).toHaveNoViolations();
+    await screen.findByText('MWST-Abrechnung prüfen');
+    expect(await act(() => axe(view.container))).toHaveNoViolations();
+    view.unmount();
+    const { container } = renderSurface(canned(), { 'overview.customize': 'edit_mode' });
+    await screen.findByRole('region', { name: 'Auf der Bank' });
+    await screen.findByRole('link', { name: 'Papeterie Muster AG' });
+    await screen.findByText('MWST-Abrechnung prüfen');
     await userEvent.click(screen.getByRole('button', { name: 'Anpassen' }));
-    expect(await axe(container)).toHaveNoViolations();
+    expect(await act(() => axe(container))).toHaveNoViolations();
   });
 
-  it('the key-figure settings screen has no axe violations', async () => {
+  it('the card sheet has no axe violations', async () => {
     const { container } = renderSurface(canned(), {});
     await screen.findByRole('region', { name: 'Auf der Bank' });
     await screen.findByRole('link', { name: 'Papeterie Muster AG' });
     await screen.findByText('MWST-Abrechnung prüfen');
-    await userEvent.click(screen.getByRole('button', { name: 'Mehr zur Übersicht' }));
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Kennzahlen wählen' }));
-    await screen.findByRole('checkbox', { name: 'Auf der Bank' });
+    await userEvent.click(screen.getByRole('button', { name: 'Karte' }));
+    await screen.findByRole('switch', { name: 'Auf der Bank' });
     expect(await axe(container)).toHaveNoViolations();
   });
 });

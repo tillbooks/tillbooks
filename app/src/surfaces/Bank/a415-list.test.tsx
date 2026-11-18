@@ -20,7 +20,8 @@ import { TillClient, type RestResponse, type Transport } from '../../lib/client'
 import { CAP, CapabilitiesContext, type Capabilities } from '../../lib/capabilities';
 import { I18nProvider } from '../../i18n';
 import { WorkspaceProvider } from '../../app/workspace';
-import { PrefsProvider, PrefsStore } from '../../lib/prefs';
+import { PrefsProvider } from '../../lib/prefs';
+import { legacyLayout } from './test-prefs';
 import { recordedOk } from '../../lib/test-support';
 import listAccountsFixture from '../Accounts/list-accounts.fixture.json';
 import Bank from './index';
@@ -166,7 +167,7 @@ function renderBank(transport: Transport) {
       <TillClientProvider client={new TillClient(transport)}>
         <I18nProvider initialLocale="de-CH">
           <WorkspaceProvider initialId="ws_test">
-            <PrefsProvider store={new PrefsStore(null, null, { useCache: false })}>
+            <PrefsProvider store={legacyLayout()}>
               <MemoryRouter initialEntries={['/bank']}>
                 <Bank />
               </MemoryRouter>

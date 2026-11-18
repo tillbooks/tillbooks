@@ -105,6 +105,8 @@ export const SURFACE_CATALOG: readonly Surface[] = [
   { path: '/agent', labelKey: 'nav.agent', icon: 'agent', navId: 'agent' },
 
   // Workspace cluster: set up once, touched rarely (access, customization, automation, onboarding).
+  // D202: the Einstellungen, a home of ten area tiles and one page per area (`/settings/<area>`).
+  { path: '/settings', labelKey: 'nav.settings', icon: 'setup', navId: 'settings-home' },
   { path: '/setup', labelKey: 'nav.setup', icon: 'setup', navId: 'setup' },
   { path: '/operations', labelKey: 'nav.operations', icon: 'setup', navId: 'operations' },
   { path: '/members', labelKey: 'nav.members', icon: 'members', navId: 'members' },
@@ -189,6 +191,8 @@ export const SURFACE_CATALOG: readonly Surface[] = [
   // router (REDIRECTS), so old links and the engine's deep links land here.
   { path: '/bank', labelKey: 'nav.bankInbox', icon: 'reconciliation', navId: 'bank-inbox' },
   { path: '/bank-accounts', labelKey: 'nav.bankAccounts', icon: 'bankAccounts', navId: 'bank-accounts' },
+  // A42: the Umsatz review, the settlement events of a period before they are booked.
+  { path: '/umsatz', labelKey: 'nav.umsatz', icon: 'payments', navId: 'umsatz' },
 
   // Accounting. `/mwst` and `/vat` nest under the MWST parent in the tree. Abrechnung dropped its
   // "MWST-" prefix (the parent already says it); the /vat row keeps it as "MWST-Einstellungen" since
@@ -197,7 +201,7 @@ export const SURFACE_CATALOG: readonly Surface[] = [
   { path: '/journal', labelKey: 'nav.journal', icon: 'journal', navId: 'journal' },
   { path: '/periods', labelKey: 'nav.periods', icon: 'periods', navId: 'periods' },
   { path: '/fx', labelKey: 'nav.fx', icon: 'fx', navId: 'fx' },
-  { path: '/mwst', labelKey: 'nav.mwst.abrechnung', icon: 'vat', navId: 'mwst' },
+  { path: '/mwst', labelKey: 'nav.mwst.group', icon: 'vat', navId: 'mwst' },
   { path: '/vat', labelKey: 'nav.mwst.settings', icon: 'vat', navId: 'vat' },
   { path: '/reports', labelKey: 'nav.reports', icon: 'reports', navId: 'reports' },
   { path: '/report-builder', labelKey: 'nav.reportBuilder', icon: 'reports', navId: 'report-builder' },
@@ -232,17 +236,14 @@ export interface NavTreeLeaf {
 }
 
 /**
- * A rail PARENT: a heading that groups sibling surfaces and carries no route of its OWN.
+ * A rail PARENT: a heading that groups sibling surfaces and carries no route of its OWN in the catalog.
  *
- * A parent has no path (there is no "MWST overview" screen), so it is never a routable destination in
- * its own right and the model keeps it pathless (the sync test asserts this). What CHANGED is the
- * click behaviour, not the model: D135 (owner request) made a parent row navigate on click to its
- * FIRST child leaf (its natural landing) AND expand, so the header is a shortcut to a real surface
- * rather than a dead label. The chevron keeps the pure expand/collapse toggle. The parent still adds no
- * new surface: it borrows a child's route (`firstLeafPath` resolves it). Its own `navId` is the stable
- * key a per-user collapse flag attaches to (A1 needs collapsible parents). The model carries this level
- * whether or not the rail renders nesting today, so personalization can grow into it without a schema
- * change.
+ * A parent has no catalog path, so it is never a tree destination in its own right and the model keeps
+ * it pathless (the sync test asserts this). What changed is the click behaviour, not the model: D135
+ * made a parent row navigate to its FIRST child leaf, and D201 (owner, 15.11.2026) replaced that with
+ * its overview page (`areaPath`, the one GroupOverview surface) AND an expand, so the header shows
+ * everything under it at once. The chevron keeps the pure expand/collapse toggle. Its own `navId` is
+ * the stable key a per-user collapse flag and its overview attach to (A1 needs collapsible parents).
  */
 export interface NavTreeParent {
   navId: string;
@@ -281,52 +282,91 @@ const leaf = (navId: string): NavTreeLeaf => ({ navId });
  */
 export const NAV_TREE: readonly NavTreeGroup[] = [
   {
-    // The ambient surfaces, and the Studio LANDING PAGE (overview). A headerless cluster, FIRST,
-    // because the index redirect targets the first leaf. Search and Agent join it because, like the
-    // tile wall, they compose EVERY module and would be misfiled under any one of them. A headerless
-    // cluster is NOT collapsible (there is no header to collapse), so these daily doors are always
-    // visible: that is the property the A2 regrouping keeps for the every-morning surfaces.
+    // D210: the two daily doors, headerless and FIRST (the index redirect targets the first leaf). The
+    // Übersicht is the landing page; Pendenzen is everything that waits for the person, Aufgaben and
+    // the agent's Vorschläge included, so neither needs a row of its own. Search lives in the palette
+    // field above the tree (Cmd K), the agent's archive behind the settings gear.
     navId: 'overview-cluster',
     labelKey: null,
-    items: [leaf('overview'), leaf('search'), leaf('agent')],
+    items: [leaf('overview'), leaf('attention')],
   },
   {
-    // The every-morning queues. NOT folded into a group (D118 A2 keeps daily work top-level): its
-    // rhythm is the opposite of the governance cluster, and the queues' value is being cross-entity,
-    // so filing them under one module would misfile them. A headerless cluster renders as bare rows.
-    navId: 'queues-cluster',
-    labelKey: null,
-    items: [leaf('tasks'), leaf('attention')],
+    // Bank: the bank inbox first (every bank line lands there), then turnover, the payment verbs and the
+    // rarely touched Bankkonten register.
+    navId: 'bank',
+    labelKey: 'nav.group.bank',
+    items: [leaf('bank-inbox'), leaf('umsatz'), leaf('payments'), leaf('bank-accounts')],
   },
   {
-    // Local correspondence: the other every-morning queue, cross-contact and cross-thread, so it is
-    // its own headerless cluster rather than filed under Kontakte or Verkauf. Stays top-level (A2).
-    navId: 'correspondence-cluster',
-    labelKey: null,
-    items: [leaf('correspondence')],
+    // Sales: the pipeline (deals), the documents (quotes, orders, Belege), the receivable's chase (open
+    // items, dunning) and the standing recurring series. Pipeline and orders are compact-hidden (D210).
+    navId: 'sales',
+    labelKey: 'nav.group.sales',
+    items: [
+      leaf('deals'),
+      leaf('quotes'),
+      leaf('sales-orders'),
+      leaf('documents'),
+      leaf('open-items'),
+      leaf('dunning'),
+      leaf('recurring'),
+    ],
   },
   {
-    // Projects: set the master up, then live in the timesheet daily. Personal (HR-lite) rides the
-    // nearest rhythm, day-to-day backoffice over people and their costs.
-    navId: 'projects',
-    labelKey: 'nav.group.projects',
-    items: [leaf('projects'), leaf('time'), leaf('personal')],
+    // Purchasing: the creditor mirror of Verkauf, from the internal demand through the PO, receipt and
+    // match, to the bill and its payment (D210 moved Kreditorenzahlungen here from Bank). In the compact
+    // menu only the bill, the capture inbox and the bill payments show.
+    navId: 'purchasing',
+    labelKey: 'nav.group.purchasing',
+    items: [
+      leaf('requisitions'),
+      leaf('purchasing'),
+      leaf('po-versions'),
+      leaf('goods-receipts'),
+      leaf('landed-costs'),
+      leaf('bills'),
+      leaf('three-way-match'),
+      leaf('capture-inbox'),
+      leaf('creditor-payments'),
+    ],
   },
   {
-    // Master data: registers you browse and search, not daily verbs. Holds the core three (accounts,
-    // contacts, items) and files at the top level, then FOLDS the two large families behind parents
-    // (D118 A2): Lager gathers the ten inventory routes, Anlagen the fixed-asset routes. Folding 17
-    // former peers into 2 collapsible parents is the core of the 71-route problem's solution.
+    // Accounting (D210): the ledger and everything that reads it. The chart of accounts joins the
+    // journal it books into, MWST is one row (its settings live on the Einstellungen page), and the
+    // former Berichte and Treuhänder groups fold in after the period work. The report builder, the
+    // analytics, the forecast, FX and the fiduciary review are compact-hidden.
+    navId: 'accounting',
+    labelKey: 'nav.group.accounting',
+    items: [
+      leaf('journal'),
+      leaf('accounts'),
+      leaf('mwst'),
+      leaf('periods'),
+      leaf('fx'),
+      // G22 (D127): the checklists walk the MWST period, so they sit near it.
+      leaf('checklists'),
+      leaf('reports'),
+      leaf('report-builder'),
+      leaf('procurement-analytics'),
+      leaf('asset-reports'),
+      leaf('forecast'),
+      leaf('review'),
+      leaf('export'),
+    ],
+  },
+  {
+    // Master data: the registers you browse and search. Contacts lead, then items, files and the local
+    // correspondence with those contacts (D210 moved it from the top). The two large families fold
+    // behind parents (D118 A2): Lager and Anlagen, both compact-hidden.
     navId: 'master-data',
     labelKey: 'nav.group.masterData',
     items: [
-      leaf('accounts'),
       leaf('contacts'),
       leaf('items'),
       leaf('files'),
+      leaf('correspondence'),
       {
-        // Lager (D01): the whole inventory family as one collapsible parent, `inventory` (the Lager
-        // landing) leading. No route of its own, so clicking it lands on that first child (D135).
+        // Lager (D01): the whole inventory family as one collapsible parent, `inventory` leading.
         navId: 'lager-group',
         labelKey: 'nav.parent.lager',
         icon: 'inventory',
@@ -344,8 +384,7 @@ export const NAV_TREE: readonly NavTreeGroup[] = [
         ],
       },
       {
-        // Anlagen: the fixed-asset family as one collapsible parent. Its reporting door (asset-reports)
-        // moved to the Berichte group, so this holds the register and the run/reconcile/maintain verbs.
+        // Anlagen: the fixed-asset register and its run/reconcile/maintain verbs.
         navId: 'anlagen-group',
         labelKey: 'nav.parent.anlagen',
         icon: 'items',
@@ -362,133 +401,75 @@ export const NAV_TREE: readonly NavTreeGroup[] = [
     ],
   },
   {
-    // Sales: the pipeline (deals), then the documents (quotes, orders, Belege), then the receivable's
-    // chase (open items, dunning) and the standing recurring series. The forecast door moved to the
-    // Berichte group with the other report-shaped surfaces (D118 A2).
-    navId: 'sales',
-    labelKey: 'nav.group.sales',
-    items: [
-      leaf('deals'),
-      leaf('quotes'),
-      leaf('sales-orders'),
-      leaf('documents'),
-      leaf('open-items'),
-      leaf('dunning'),
-      leaf('recurring'),
-    ],
-  },
-  {
-    // Purchasing: the creditor mirror of Verkauf, from the internal demand (requisitions) through the
-    // PO, receipt and match, to the bill. The procurement-analytics door moved to the Berichte group
-    // (D118 A2). Placed after Verkauf, because a business invoices before it pays.
-    navId: 'purchasing',
-    labelKey: 'nav.group.purchasing',
-    items: [
-      leaf('requisitions'),
-      leaf('purchasing'),
-      leaf('po-versions'),
-      leaf('goods-receipts'),
-      leaf('landed-costs'),
-      leaf('bills'),
-      leaf('three-way-match'),
-      leaf('capture-inbox'),
-    ],
-  },
-  {
-    // Bank: the bank inbox first (A2: every bank line lands there, and a click on the group header
-    // opens it, D135), then the daily payment verbs, then the rarely-touched Bankkonten register.
-    navId: 'bank',
-    labelKey: 'nav.group.bank',
-    items: [leaf('bank-inbox'), leaf('payments'), leaf('creditor-payments'), leaf('bank-accounts')],
-  },
-  {
-    // Accounting, in frequency order: the daily journal, the periodic close (periods, fx), and the
-    // MWST pair under a parent (Abrechnung leads, Einstellungen follows: config never stacks on the
-    // content it configures). The report doors (reports, report builder) moved to Berichte (D118 A2).
-    navId: 'accounting',
-    labelKey: 'nav.group.accounting',
-    items: [
-      leaf('journal'),
-      leaf('periods'),
-      leaf('fx'),
-      {
-        // The MWST parent: no route of its own, so clicking it lands on its first child, Abrechnung
-        // (D135). The `/vat` route is untouched. Abrechnung drops the "MWST-" prefix the parent
-        // carries; the /vat row keeps it (D152), so it never reads as the Einstellungen group.
-        navId: 'mwst-group',
-        labelKey: 'nav.mwst.group',
-        icon: 'vat',
-        children: [leaf('mwst'), leaf('vat')],
-      },
-      // G22 (D127): the checklists walk the MWST period the pair above computes and files, so they
-      // sit right after it; a later year-close template stays in the same door.
-      leaf('checklists'),
-    ],
-  },
-  {
-    // Berichte (D118 A2): the report-shaped doors, gathered from where they were scattered (the two
-    // accounting reports, the procurement analytics, the fixed-asset reports and the sales forecast).
-    // One place to read a statement, rather than five doors hidden across five modules.
-    navId: 'reports',
-    labelKey: 'nav.group.berichte',
-    items: [
-      leaf('reports'),
-      leaf('report-builder'),
-      leaf('procurement-analytics'),
-      leaf('asset-reports'),
-      leaf('forecast'),
-    ],
-  },
-  {
-    // Treuhänder: the fiduciary's end-of-cycle work over the whole ledger (review, export). Its own
-    // group, after the accounting cycle it reviews.
-    navId: 'treuhaender',
-    labelKey: 'nav.group.treuhaender',
-    items: [leaf('review'), leaf('export')],
-  },
-  {
-    // Einstellungen (D118 A2): the workspace governance cluster, folded from a headerless top-level
-    // run of ten rows into one collapsible group, LAST. Its rhythm is "set up once at onboarding,
-    // then rarely touched", so a fresh workspace keeps it collapsed and the ten rows cost one.
-    navId: 'settings',
-    labelKey: 'nav.group.einstellungen',
-    items: [
-      leaf('setup'),
-      // K-16: the Betrieb surface, the read-once operational panels split off `/setup` (Option A). It
-      // sits next to Einrichtung because it is the other half of the same workspace, set up once and
-      // then visited on purpose.
-      leaf('operations'),
-      // D178 point 7: Meine Einstellungen, the person's own preferences, after the workspace pair (K-16).
-      leaf('my-settings'),
-      // N00: the Hausbuch, the workspace's house notes, beside the workspace settings it belongs to.
-      leaf('hausbuch'),
-      leaf('members'),
-      leaf('customization'),
-      leaf('automations'),
-      leaf('extensions'),
-      leaf('writing-style'),
-      leaf('document-templates'),
-      leaf('dispatch'),
-      leaf('migration'),
-      // The environment landscape (D126): create / refresh / reset / delete the main / test / develop
-      // tiers and named ad-hoc environments. A set-up-once-then-visited-on-purpose governance surface,
-      // so it rides the Einstellungen cluster next to Migration, its nearest data-lifecycle sibling.
-      leaf('environments'),
-      leaf('onboarding'),
-      // M00's pre-workspace first-run door is NOT a row here since K-05 (D137): see OFF_RAIL below.
-    ],
+    // Projects: the master, the timesheet and Personal (HR-lite). Compact-hidden as a whole (D210).
+    navId: 'projects',
+    labelKey: 'nav.group.projects',
+    items: [leaf('projects'), leaf('time'), leaf('personal')],
   },
 ];
 
 /**
- * Routed surfaces that are deliberately NOT rail rows (K-05, D137). The first-run door is the
- * pre-workspace screen: the landing route becomes it on an empty ledger (`WorkspaceResolver`), and
- * inside a workspace its three doors live where a person looks for them (a new workspace in the
- * switcher, a restore under Betrieb). As an Einstellungen leaf it was a pre-workspace door filed
- * inside a workspace. The route stays; only the rail row goes. The sync test holds this list to
- * surfaces that exist, so it cannot hide a forgotten row.
+ * Routed surfaces that are deliberately NOT rail rows. The router and the command palette still carry
+ * every one of them, so each is a Cmd K away.
+ *
+ * - K-05 (D137): the first-run door is the pre-workspace screen.
+ * - D210: the Einstellungen pages. The footer gear opens `/settings`, one page whose areas link every
+ *   page below (`src/core/settings/areas.ts`), so fifteen menu rows became one icon. `/vat` (the MWST
+ *   settings) and `/agent` (what the agent may do, its conversations) are linked from there too.
+ * - D210: Suche is the palette field above the tree (its full results page stays at `/search`), and
+ *   Aufgaben due soon arrive in Pendenzen (`attention.tasks_due_days`); `/tasks` keeps the full list.
  */
-export const OFF_RAIL: ReadonlySet<string> = new Set(['first-run']);
+export const OFF_RAIL: ReadonlySet<string> = new Set([
+  'first-run',
+  'search',
+  'agent',
+  'tasks',
+  'vat',
+  'settings-home',
+  'setup',
+  'operations',
+  'my-settings',
+  'hausbuch',
+  'members',
+  'customization',
+  'automations',
+  'extensions',
+  'writing-style',
+  'document-templates',
+  'dispatch',
+  'migration',
+  'environments',
+  'onboarding',
+]);
+
+/**
+ * D210: the rows the COMPACT menu leaves out (`nav.menu_scope`, default `compact`; `all` shows them).
+ * Row keys as in `MenuLayout.hidden`: a page or a parent by navId, a headed group as `group:<navId>`.
+ * Every one stays routed, in the palette, and pinnable as a favourite (a pin always shows).
+ */
+/** D210: `nav.menu_scope`, the compact menu (default) or every area. */
+export type MenuScope = 'compact' | 'all';
+export const MENU_SCOPES: readonly MenuScope[] = ['compact', 'all'];
+
+export const COMPACT_HIDDEN: ReadonlySet<string> = new Set([
+  'group:projects',
+  'lager-group',
+  'anlagen-group',
+  'deals',
+  'sales-orders',
+  'requisitions',
+  'purchasing',
+  'po-versions',
+  'goods-receipts',
+  'landed-costs',
+  'three-way-match',
+  'fx',
+  'report-builder',
+  'procurement-analytics',
+  'asset-reports',
+  'forecast',
+  'review',
+]);
 
 // --- 3. The route registry: the route projection the router consumes -----------------------------
 
@@ -509,10 +490,9 @@ export const ROUTE_REGISTRY: readonly RouteEntry[] = SURFACE_CATALOG.map((surfac
 
 /**
  * A resolved rail LEAF: a tree leaf joined to its catalog surface. Carries `path`, `labelKey`, the
- * stable `navId`, and its glyph, which is PRESENT at the top level and ABSENT under a parent: the
- * indentation carries the hierarchy, and a second column of glyphs would make the rail a texture
- * rather than a list. Dropping the glyph on nested children is what keeps the rendered rail
- * byte-identical to the pre-split rail.
+ * stable `navId`, and its glyph. Since D201 (owner, 15.11.2026: "icons on every row") the glyph is
+ * present at EVERY level, a nested child included: the indentation still carries the hierarchy, and
+ * the glyph lets a person find a row by its shape. Before D201 a nested child carried none.
  */
 export interface NavItem {
   navId: string;
@@ -544,22 +524,21 @@ export function isNavParent(node: NavNode): node is NavParent {
   return (node as NavParent).children !== undefined;
 }
 
-/** Resolve one leaf against the catalog. `nested` drops the glyph, preserving the top-level-only
- *  glyph rule. Throws on an unknown `navId`: a tree leaf with no catalog surface is a defect the
- *  sync test also catches, but failing loudly at load is the belt to that test's braces. */
-function resolveLeaf(node: NavTreeLeaf, nested: boolean): NavItem {
+/** Resolve one leaf against the catalog, with its glyph at every level (D201). Throws on an unknown
+ *  `navId`: a tree leaf with no catalog surface is a defect the sync test also catches, but failing
+ *  loudly at load is the belt to that test's braces. */
+function resolveLeaf(node: NavTreeLeaf): NavItem {
   const surface = SURFACE_BY_ID.get(node.navId);
   if (surface === undefined) {
     throw new Error(`nav tree references unknown surface navId: ${node.navId}`);
   }
-  const item: NavItem = { navId: surface.navId, path: surface.path, labelKey: surface.labelKey };
-  return nested ? item : { ...item, icon: surface.icon };
+  return { navId: surface.navId, path: surface.path, labelKey: surface.labelKey, icon: surface.icon };
 }
 
 /**
  * Resolve a tree (the canonical one, or a future personalized one) into the render model the Shell
  * consumes. Exported so a later personalization layer can reuse it on a rearranged tree: the
- * resolution rules (glyph placement, catalog join) live in exactly one place.
+ * resolution rules (the glyph, the catalog join) live in exactly one place.
  */
 export function resolveNavTree(tree: readonly NavTreeGroup[]): readonly NavGroup[] {
   return tree.map((group) => ({
@@ -571,9 +550,9 @@ export function resolveNavTree(tree: readonly NavTreeGroup[]): readonly NavGroup
             navId: node.navId,
             labelKey: node.labelKey,
             icon: node.icon,
-            children: node.children.map((child) => resolveLeaf(child, true)),
+            children: node.children.map((child) => resolveLeaf(child)),
           }
-        : resolveLeaf(node, false),
+        : resolveLeaf(node),
     ),
   }));
 }
@@ -592,12 +571,10 @@ export const NAV_ITEMS: readonly NavItem[] = NAV_RAIL.flatMap((group) =>
 
 /**
  * The path of the FIRST destination beneath a resolved group or parent: its first leaf, or, when the
- * first row is itself a nested parent, that parent's first leaf (recursing). This is the "natural
- * landing" a header navigates to on click (D135, owner request): a parent has no route of its own, so
- * clicking it opens its first child rather than a new "section landing" surface. It stays pathless in
- * the model (the sync test asserts a parent has no `path`); it merely BORROWS this child's route at
- * click time. Returns null only for the degenerate case of a group with no leaf anywhere beneath it,
- * which the canonical tree never contains (every group holds at least one leaf).
+ * first row is itself a nested parent, that parent's first leaf (recursing). D135 made this the
+ * header's click target; since D201 the header opens its overview (`areaPath`) instead, and this stays
+ * the node's natural first page for any caller that needs one. Returns null only for the degenerate
+ * case of a group with no leaf anywhere beneath it, which the canonical tree never contains.
  */
 export function firstLeafPath(node: NavGroup | NavParent): string | null {
   const rows: readonly NavNode[] = 'children' in node ? node.children : node.items;
@@ -607,6 +584,58 @@ export function firstLeafPath(node: NavGroup | NavParent): string | null {
       if (nested !== null) return nested;
     } else {
       return row.path;
+    }
+  }
+  return null;
+}
+
+// --- The area overviews (D201): one page of tiles per group and per nested parent -------------------
+
+/**
+ * D201 (owner, 15.11.2026, menu pick A): every headed group and every nested parent has an OVERVIEW
+ * page, its children as tiles with a live search on top, and a click on its header in the rail opens
+ * that page AND expands the node. It is one routed surface (`app/src/surfaces/GroupOverview/`) on one
+ * parameterised route, never a catalog surface per group: a group is not a destination of the tree,
+ * so the catalog and the tree stay in their one-to-one sync and the router carries this route beside
+ * the registry. The param is the node's stable `navId` (the groups and the parents share no id).
+ */
+export const AREA_ROUTE = '/area/:groupId';
+
+/** The overview path of a headed group or a nested parent. */
+export function areaPath(navId: string): string {
+  return `/area/${encodeURIComponent(navId)}`;
+}
+
+/** The navId an overview path names, or null for any other path. */
+export function areaNavIdOf(pathname: string): string | null {
+  const match = /^\/area\/([^/]+)\/?$/.exec(pathname);
+  if (match === null) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+/** A resolved overview: the node itself and the collapsible nodes that hold it (itself included). */
+export type AreaNode =
+  | { kind: 'group'; navId: string; labelKey: string; items: readonly NavNode[]; ancestors: Set<string> }
+  | { kind: 'parent'; navId: string; labelKey: string; icon: NavIconName; items: readonly NavItem[]; ancestors: Set<string> };
+
+/**
+ * The headed group or nested parent `navId` names in `rail` (the personal one, or the canonical
+ * NAV_RAIL), or null. A headerless cluster has no overview: it has no header to click.
+ */
+export function findAreaIn(rail: readonly NavGroup[], navId: string): AreaNode | null {
+  for (const group of rail) {
+    if (group.labelKey !== null && group.navId === navId) {
+      return { kind: 'group', navId, labelKey: group.labelKey, items: group.items, ancestors: new Set([navId]) };
+    }
+    for (const node of group.items) {
+      if (isNavParent(node) && node.navId === navId) {
+        const ancestors = new Set(group.labelKey === null ? [navId] : [group.navId, navId]);
+        return { kind: 'parent', navId, labelKey: node.labelKey, icon: node.icon, items: node.children, ancestors };
+      }
     }
   }
   return null;
@@ -976,8 +1005,12 @@ export function menuContainerLabelKey(id: string): string | null {
  * so are a parent and a group with nothing visible left in them (a header with no destination is a dead
  * label). The canonical layout yields the canonical rows in the canonical order.
  */
-export function personalNavTree(layout: MenuLayout, { visibleOnly }: { visibleOnly: boolean }): NavTreeGroup[] {
-  const hidden = new Set(layout.hidden);
+export function personalNavTree(
+  layout: MenuLayout,
+  { visibleOnly, scope = 'all' }: { visibleOnly: boolean; scope?: MenuScope },
+): NavTreeGroup[] {
+  // D210: the compact menu leaves the COMPACT_HIDDEN rows out, exactly as if the person had hidden them.
+  const hidden = new Set(scope === 'compact' ? [...layout.hidden, ...COMPACT_HIDDEN] : layout.hidden);
   const skip = (id: string): boolean => visibleOnly && hidden.has(id);
   const rows = (container: string): NavTreeNode[] => {
     const out: NavTreeNode[] = [];
@@ -1005,7 +1038,8 @@ export function personalNavTree(layout: MenuLayout, { visibleOnly }: { visibleOn
   return out;
 }
 
-/** The glyph a headed group wears under the `icon_14` header style (D178 point 17's alternative). */
+/** The glyph a headed group wears under the `icon_14` header style (D178 point 17; the default since
+ *  D201, so every menu row, group headers included, carries an icon). */
 export const GROUP_ICON: Readonly<Record<string, NavIconName>> = {
   projects: 'projects',
   'master-data': 'contacts',
@@ -1013,9 +1047,6 @@ export const GROUP_ICON: Readonly<Record<string, NavIconName>> = {
   purchasing: 'bills',
   bank: 'bankAccounts',
   accounting: 'journal',
-  reports: 'reports',
-  treuhaender: 'tasks',
-  settings: 'setup',
 };
 
 // --- 5. One active row for the whole rail (D178 point 16) ----------------------------------------
@@ -1059,7 +1090,12 @@ export function resolveRailActive(input: {
   }
   const tree = resolveActiveIn(rail, pathname);
   const none: RailActive = { favouriteNavId: null, treeNavId: null, treeSoftNavId: null, expand: new Set() };
-  if (favourite === null && tree.leafNavId === null) return none;
+  if (favourite === null && tree.leafNavId === null) {
+    // D201: an open overview opens its own node in the tree (its header carries the mark, NavTree).
+    const areaId = areaNavIdOf(pathname);
+    const area = areaId === null ? null : findAreaIn(rail, areaId);
+    return area === null ? none : { ...none, expand: area.ancestors };
+  }
   if (favourite === null) return { ...none, treeNavId: tree.leafNavId, expand: tree.ancestors };
   if (tree.leafNavId === null) return { ...none, favouriteNavId: favourite.navId };
   if (rule === 'tree') return { ...none, treeNavId: tree.leafNavId, expand: tree.ancestors };

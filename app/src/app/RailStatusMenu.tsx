@@ -8,9 +8,13 @@
  * ("● Live · main"), and everything that lived beside it moves into the pill's menu. The feedback
  * and theme icon buttons stay in the row next to it (`Shell.tsx`).
  *
+ * CALM FOOTER (D204, 16.11.2026): the pill is now a single 8px dot in a 32px icon button; its words
+ * ("Live · main") ride the tooltip and the accessible name, and the menu below is unchanged. The
+ * collapsed icon strip passes `dotOnly`: the dot stays, the menu waits for the expanded rail.
+ *
  * WHAT THE PILL SAYS.
  *   - The dot is the E07 egress state. The shell has no live `egress_status` reader, so it rests on
- *     the honest `local` ("Lokal, keine Verbindung"). It is never colour alone: the words ride the
+ *     the honest `local` ("Lokal"; D210 dropped "keine Verbindung", because a saved settlement source can be fetched in the same process). It is never colour alone: the words ride the
  *     pill's accessible name, and the menu opens on the same dot with the words beside it.
  *   - The word is the environment's face (D135, see `EnvironmentIndicator.tsx`): calm "Live" on the
  *     writable local main, the loud orange "Test" on a sandbox, "Gehostet" with a padlock on a served
@@ -20,8 +24,10 @@
  *
  * THE MENU, top to bottom: "Umgebungen verwalten" first (DESIGN.md, Navigation), the environments
  * as radio items when there is more than one, then the view items that used to be footer buttons:
- * the density switch (a checkbox item, checked in Kompakt), "Menü anpassen" (D178 point 6, the menu
- * editor; the Menü header carries the same door) and "Navigation einklappen". It is the
+ * the density switch (a checkbox item, checked in Kompakt) and "Menü anpassen" (D178 point 6, the menu
+ * editor; the Menü header carries the same door). "Navigation einklappen" left the Shell's menu in D201
+ * (the rail head carries a visible toggle for it, and one act has one place, D152 rule 3); the item
+ * stays only for a caller that passes `onCollapse`. It is the
  * rail's shared menu button (`useMenuButton`), opening upward from the footer.
  */
 import { useId, useState } from 'react';
@@ -29,8 +35,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useT } from '../i18n';
 import { useClient } from '../lib/client-context';
-import { ChevronDownGlyph } from '../components/icons';
-import { LockGlyph } from '../components/states/glyphs';
+import { Tooltip } from '../components/Tooltip';
 import type { EgressIndicatorState } from '../components/EgressIndicator';
 import {
   FACE_WORD_KEY,
@@ -40,8 +45,10 @@ import {
   type EnvironmentFace,
 } from '../surfaces/Environments/EnvironmentIndicator';
 import { useDensity } from './density';
+import { useThemeOptional } from './theme';
 import { useRailOptional } from './nav-prefs';
 import { useMenuButton } from './useMenuButton';
+import { VersionDialog } from '../components/WhatsNew';
 import { useWorkspaceId } from './workspace';
 
 interface MenuEntry {
@@ -56,22 +63,32 @@ interface MenuEntry {
 }
 
 export interface RailStatusMenuProps {
-  /** Collapse the rail to its icon strip. Omitted where collapsing is not offered (the mobile drawer). */
+  /**
+   * Collapse the rail to its icon strip, as a menu item. The Shell no longer passes it since D201 (the
+   * rail head's visible toggle is the one place for it); a caller that renders the pill without a rail
+   * head may still offer it here.
+   */
   onCollapse?: () => void;
   /** The E07 egress state the dot shows. The shell rests on `local` (no live reader is wired). */
   egress?: EgressIndicatorState;
+  /** The collapsed strip: the dot and its words only, no menu (the rail clips a popup at 56px). */
+  dotOnly?: boolean;
 }
 
-export function RailStatusMenu({ onCollapse, egress = 'local' }: RailStatusMenuProps) {
+export function RailStatusMenu({ onCollapse, egress = 'local', dotOnly = false }: RailStatusMenuProps) {
   const t = useT();
   const client = useClient();
   const navigate = useNavigate();
   const workspaceId = useWorkspaceId();
   const landscape = useLandscape();
   const { density, toggle: toggleDensity } = useDensity();
+  // Read optionally: the menu's own tests mount it without a ThemeProvider, and then it offers no switch.
+  const themeCtx = useThemeOptional();
   // D178 point 6: "Menü anpassen" opens the menu editor; absent outside the rail's model (its tests).
   const rail = useRailOptional();
   const [busy, setBusy] = useState(false);
+  // O00/O01 (D199): the version line opens What's new, the update command or the Upgrade button.
+  const [versionOpen, setVersionOpen] = useState(false);
   const menuId = useId();
   const triggerId = useId();
 
@@ -108,12 +125,30 @@ export function RailStatusMenu({ onCollapse, egress = 'local' }: RailStatusMenuP
     onSelect: toggleDensity,
     separated: true,
   });
+  // D210 (owner, 18.11.2026): light or dark sits beside the density, so the footer row keeps room for the
+  // company's name. The collapsed icon strip keeps its own glyph, as it does for the density.
+  if (themeCtx !== null) {
+    entries.push({
+      key: 'theme',
+      label: t('theme.darkItem'),
+      role: 'menuitemcheckbox',
+      checked: themeCtx.theme === 'dark',
+      onSelect: themeCtx.toggle,
+    });
+  }
   if (rail !== null && !rail.customising) {
     entries.push({ key: 'customise', label: t('nav.customise.open'), role: 'menuitem', onSelect: () => rail.setCustomising(true) });
   }
   if (onCollapse !== undefined) {
     entries.push({ key: 'collapse', label: t('nav.collapse'), role: 'menuitem', onSelect: onCollapse });
   }
+  entries.push({
+    key: 'version',
+    label: t('releases.menu', { version: typeof __TILL_VERSION__ === 'string' ? __TILL_VERSION__ : '' }).trim(),
+    role: 'menuitem',
+    onSelect: () => setVersionOpen(true),
+    separated: true,
+  });
 
   const menu = useMenuButton(entries.length);
 
@@ -124,6 +159,14 @@ export function RailStatusMenu({ onCollapse, egress = 'local' }: RailStatusMenuP
         ? t('shell.status.labelNoFace', { name: envName, egress: egressText })
         : t('shell.status.label', { face: faceWord, name: envName, egress: egressText });
 
+  // The tooltip's words (the dot alone carries none): "Live · main", or the egress word with no landscape.
+  const words =
+    envName === null
+      ? t('shell.status.local')
+      : faceWord === null
+        ? envName
+        : `${faceWord} · ${envName}`;
+
   function select(entry: MenuEntry) {
     if (entry.disabled === true) return;
     // Collapsing unmounts this very pill, so focus has nowhere to return: close quietly first.
@@ -132,36 +175,49 @@ export function RailStatusMenu({ onCollapse, egress = 'local' }: RailStatusMenuP
     entry.onSelect();
   }
 
+  if (dotOnly) {
+    return (
+      <Tooltip
+        content={
+          <>
+            <span className="tooltip-name">{words}</span>
+            <span className="tooltip-context">{egressText}</span>
+          </>
+        }
+      >
+        <span className="rail-env-btn" data-face={face ?? 'none'} role="img" aria-label={label} tabIndex={0}>
+          <span className="rail-env-dot" data-egress={egress} aria-hidden="true" />
+        </span>
+      </Tooltip>
+    );
+  }
+
   return (
     <div className="rail-status" ref={menu.rootRef}>
-      <button
-        type="button"
-        id={triggerId}
-        ref={menu.triggerRef}
-        className="rail-env-pill"
-        data-face={face ?? 'none'}
-        aria-label={label}
-        aria-haspopup="menu"
-        aria-expanded={menu.open}
-        aria-controls={menu.open ? menuId : undefined}
-        onClick={menu.onTriggerClick}
-        onKeyDown={menu.onTriggerKeyDown}
+      <Tooltip
+        content={
+          <>
+            <span className="tooltip-name">{words}</span>
+            <span className="tooltip-context">{egressText}</span>
+          </>
+        }
       >
-        <span className="rail-env-dot" data-egress={egress} aria-hidden="true" />
-        {face === 'served' && <LockGlyph size={16} />}
-        <span className="rail-env-text" aria-hidden="true">
-          {envName === null ? (
-            <span className="rail-env-face">{t('shell.status.local')}</span>
-          ) : (
-            <>
-              {faceWord !== null && <span className="rail-env-face">{faceWord}</span>}
-              {faceWord !== null && <span className="rail-env-sep">·</span>}
-              <span className="rail-env-name">{envName}</span>
-            </>
-          )}
-        </span>
-        <ChevronDownGlyph className="rail-env-caret" size={16} />
-      </button>
+        <button
+          type="button"
+          id={triggerId}
+          ref={menu.triggerRef}
+          className="rail-env-btn"
+          data-face={face ?? 'none'}
+          aria-label={label}
+          aria-haspopup="menu"
+          aria-expanded={menu.open}
+          aria-controls={menu.open ? menuId : undefined}
+          onClick={menu.onTriggerClick}
+          onKeyDown={menu.onTriggerKeyDown}
+        >
+          <span className="rail-env-dot" data-egress={egress} aria-hidden="true" />
+        </button>
+      </Tooltip>
 
       {menu.open && (
         <div className="ws-switcher-pop ws-switcher-pop--up">
@@ -190,6 +246,7 @@ export function RailStatusMenu({ onCollapse, egress = 'local' }: RailStatusMenuP
           </div>
         </div>
       )}
+      {versionOpen && <VersionDialog onClose={() => setVersionOpen(false)} />}
     </div>
   );
 }

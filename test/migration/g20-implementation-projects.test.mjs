@@ -154,19 +154,39 @@ test('task completion: prerequisite_open and evidence_required refuse, naming wh
   );
 });
 
-test('not_applicable needs a reason', () => {
+test('D204 not_applicable needs no reason; a given one is kept', () => {
   const { call } = world('na');
   const projectId = createProject(call, 'na');
   const created = must(call('implementation_task_set', { projectId, fields: { phase: 'discovery', title: 'X', ownerKind: 'human' }, idempotencyKey: 'c' }), 'create');
-  refuse(
+  const bare = must(
     call('implementation_task_set', { projectId, taskId: created.task.taskId, fields: { status: 'not_applicable' }, idempotencyKey: 'na1' }),
-    'not_applicable_needs_reason',
     'not_applicable without reason',
   );
+  assert.equal(bare.task.status, 'not_applicable', 'what changed');
   must(
     call('implementation_task_set', { projectId, taskId: created.task.taskId, fields: { status: 'not_applicable', reason: 'Kein Bankkonto beim Vorsystem' }, idempotencyKey: 'na2' }),
     'not_applicable with reason',
   );
+});
+
+test('D204 critic M2: a reasonless waive of the undeletable go/no-go task writes an audit row naming who and when', async () => {
+  const { assertAuditRow, assertPermission } = await import('../support/d204.mjs');
+  const { call, deps, wid } = world('na-gonogo');
+  const projectId = createProject(call, 'na-gonogo');
+  const res = must(call('implementation_runbook_instantiate', { projectId, templateId: 'w3_cutover', idempotencyKey: 'inst' }), 'instantiate');
+  const goNogo = res.tasks.find((t) => t.itemId === 'cutover_go_nogo');
+  const waived = must(
+    call('implementation_task_set', { projectId, taskId: goNogo.taskId, fields: { status: 'not_applicable' }, idempotencyKey: 'gn-na' }),
+    'waive without a reason',
+  );
+  assert.equal(waived.task.status, 'not_applicable', 'what changed');
+  assertAuditRow(deps.store, wid, { entityKind: 'implementation_task', entityId: goNogo.taskId, action: 'set_not_applicable', actor: 'studio' });
+  assertPermission('implementation_task_set');
+  // A replay under the same key writes no second row.
+  const n = () => deps.store.db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE workspace_id = ? AND entity_id = ? AND action = 'set_not_applicable'").get(wid, goNogo.taskId).n;
+  const before = n();
+  must(call('implementation_task_set', { projectId, taskId: goNogo.taskId, fields: { status: 'not_applicable' }, idempotencyKey: 'gn-na' }), 'replay');
+  assert.equal(n(), before);
 });
 
 // --- The agent/human sign-off split --------------------------------------------------------------

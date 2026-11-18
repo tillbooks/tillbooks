@@ -283,7 +283,6 @@ function readyWorld() {
   v = get(w, run.runId);
   assert.equal(item(v, 'soft_lock_on_year').status, 'done');
   assert.equal(item(v, 'year_sealed').blockedBy, 'gv_approved');
-  refuse(complete(w, run.runId, 'gv_approved', { kind: 'gv_attestation', ref: '2027-02-10' }), 'acknowledge_needs_reason', 'a GV before the sign-off needs a reason');
   must(complete(w, run.runId, 'gv_approved', { kind: 'gv_attestation', ref: '2027-03-20' }), 'GV');
   v = get(w, run.runId);
   assert.equal(item(v, 'year_sealed').blockedBy, null);

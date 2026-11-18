@@ -41,6 +41,8 @@ import type { BelegCandidateGroup, BelegMatchContext, VatComparison } from './be
 import { calendarDay } from './belegFigures.js';
 import { readLineFactsMap } from './statementFacts.js';
 import type { BankLineFacts } from './statementFacts.js';
+import { attachReceiptVat, receiptVatContext } from './receiptVat.js';
+import type { ReceiptVatReading, ReceiptVatSourceKind } from './receiptVat.js';
 
 /** Why the evidence says what it says (closed, §H-ENUM; the Studio words each). */
 export const EVIDENCE_REASONS = [
@@ -89,9 +91,17 @@ export interface EvidenceContext {
 }
 
 export function evidenceContext(ctx: WorkspaceContext, pc?: ProposalContext, mc?: BelegMatchContext | null): EvidenceContext {
+  const pool = mc === undefined ? belegMatchContext(ctx) : mc;
+  let context = pc;
+  if (context === undefined) {
+    // A41.8 (D193): TILL's own proposal carries the receipt's code, as the inbox shows it (a caller that passes its
+    // context attached the reader itself).
+    context = proposalContext(ctx);
+    attachReceiptVat(context, receiptVatContext(ctx, pool));
+  }
   return {
-    pc: pc ?? proposalContext(ctx),
-    mc: mc === undefined ? belegMatchContext(ctx) : mc,
+    pc: context,
+    mc: pool,
     fxTolerancePct: getSetting<number>(ctx, 'belege.match_fx_tolerance_pct'),
     vatToleranceMinor: getSetting<number>(ctx, 'belege.vat_delta_tolerance_rappen'),
   };
@@ -241,6 +251,122 @@ export function withVatComparisons(groups: BelegCandidateGroup[], computedMinor:
     const printed = g.files.find((f) => f.vatAmountMinor !== null && f.currency === g.currency)?.vatAmountMinor ?? null;
     return printed === null ? g : { ...g, vat: compareVat(printed, computedMinor, toleranceMinor) };
   });
+}
+
+// --- A41.8 (D193), the line's receipt beside the booking -------------------------------------------------
+
+/** How a line's receipt VAT stands beside what the booking books (closed, §H-ENUM; the Studio words two). */
+export const VAT_CHECKS = ['match', 'differs', 'unread', 'none'] as const;
+export type VatCheck = (typeof VAT_CHECKS)[number];
+
+/** The line's receipt as the inbox shows it beside `vatCheck` (a seat that reads receipts only). */
+export interface ReceiptVatView {
+  source: ReceiptVatSourceKind;
+  /** The first receipt's ids. */
+  captureId: string;
+  fileId: string;
+  /** How many receipts the line has (critic r2: a code is picked only for exactly one). */
+  receipts: number;
+  /** Every receipt at or above `belege.autobook_figure_trust` (figures and the VAT statement). */
+  trusted: boolean;
+  /** The receipt's one rate (0: it states no VAT), else null. */
+  rateBp: number | null;
+  /** The receipt's VAT in `currency` (0: none); several receipts: their compared sum; else null. */
+  amountMinor: number | null;
+  currency: string | null;
+  /** One receipt whose gross covers the line (A41.1's amount rule). */
+  covers: boolean;
+  /** A41.4's comparison (`compareVat`) when one was made, else null. */
+  comparison: VatComparison | null;
+}
+
+/**
+ * A41.8: `vatCheck` of a line, through A41.4's ONE comparison (`compareVat`), over the line's receipts (assigned, filed
+ * or the single candidate group, `receiptVat.ts`, each read on its own). `booking.booksAccounts` says whether the
+ * booking books account legs at all; `booking.vatMinor` is what it computes (open: `computedVatOf` of the proposal's
+ * target) or carries (booked: `bookedVatOf`), null when no leg is taxed. Critic r1 F1: a booking that self-assesses its
+ * tax (`booking.selfAssessed`: a `reverse_charge` or `import` code) books no tax the VENDOR charged, so the receipt is
+ * compared with 0.
+ *  - `none`: no receipt, only silent ones, a line outside the base currency, a booking without accounts;
+ *  - `unread`: a receipt's figures, or its VAT statement, are below the trust level;
+ *  - `match` / `differs` (the REAL comparison): exactly ONE receipt, whose gross covers the line (`covers`), in the
+ *    line's currency, stating its VAT: within / beyond `belege.vat_delta_tolerance_rappen` of the booking's;
+ *  - every other case (critic r2 ruling: two or more receipts, a gross that does not cover the line, another or mixed
+ *    currency, a silent receipt beside a stating one) is never `match`: `differs` when a trusted comparison (every
+ *    receipt stating its VAT in the line's currency, summed) disagrees, otherwise `unread`.
+ * `caps`: the proposal's `sure`/`learned` reads `check` (`receiptVatCap`): on `differs`, and on `unread` in those other
+ * (structural) cases. ONE covering receipt in the line's currency that is merely unconfirmed reads `unread` WITHOUT the
+ * cap, as before (an agent-read receipt does not overrule a person's rule; A41.2's evidence and A41.6 govern it).
+ */
+export function receiptVatCheck(
+  readings: readonly ReceiptVatReading[],
+  row: Pick<BankTxnRow, 'currency'>,
+  baseCurrency: string,
+  booking: { booksAccounts: boolean; vatMinor: number | null; selfAssessed?: boolean },
+  toleranceMinor: number,
+): { vatCheck: VatCheck; comparison: VatComparison | null; caps: boolean } {
+  const none = { vatCheck: 'none' as const, comparison: null, caps: false };
+  if (readings.length === 0 || row.currency !== baseCurrency || !booking.booksAccounts) return none;
+  // The one receipt that may be compared for real: it covers the line, in the line's currency.
+  const one = readings.length === 1 && readings[0]!.covers && readings[0]!.currency === row.currency;
+  if (readings.some((r) => !r.trusted || (r.states !== 'silent' && !r.rateTrusted))) return { vatCheck: 'unread', comparison: null, caps: !one };
+  if (readings.every((r) => r.states === 'silent')) return none;
+  const compare = (beleg: number): VatComparison =>
+    booking.selfAssessed === true
+      ? compareVat(beleg, 0, toleranceMinor)
+      : booking.vatMinor === null
+        ? { ...compareVat(beleg, 0, toleranceMinor), untaxed: true }
+        : compareVat(beleg, booking.vatMinor, toleranceMinor);
+  const comparable = readings.every((r) => r.states !== 'silent' && r.amountMinor !== null && r.currency === row.currency);
+  const comparison = comparable ? compare(readings.reduce((sum, r) => sum + (r.amountMinor as number), 0)) : null;
+  if (one && comparison !== null) return { vatCheck: comparison.withinTolerance ? 'match' : 'differs', comparison, caps: !comparison.withinTolerance };
+  return { vatCheck: comparison !== null && !comparison.withinTolerance ? 'differs' : 'unread', comparison, caps: true };
+}
+
+/** Critic r1 F1: is any of these codes self-assessed (`reverse_charge`, `import`) in this book? §H-TENANT. */
+function anySelfAssessed(ctx: WorkspaceContext, codes: readonly string[]): boolean {
+  if (codes.length === 0) return false;
+  const r = ctx.store.db
+    .prepare(`SELECT COUNT(*) AS n FROM tax_code WHERE workspace_id = ? AND code IN (${codes.map(() => '?').join(', ')}) AND kind IN ('reverse_charge', 'import')`)
+    .get(ctx.workspaceId, ...codes) as { n: number };
+  return r.n > 0;
+}
+
+/** Does the booking `target` would make on `row` self-assess its tax (a leg with a `reverse_charge` or `import` code)? */
+export function targetSelfAssessed(ctx: WorkspaceContext, row: BankTxnRow, target: BookBankLineTarget | BankProposalTarget | null): boolean {
+  const booked = bookedLegsOf(ctx, row, target);
+  return booked !== null && anySelfAssessed(ctx, booked.legs.flatMap((l) => (l.taxCode !== undefined ? [l.taxCode] : [])));
+}
+
+/** Does a booked entry self-assess its tax (a line with a `reverse_charge` or `import` code)? */
+export function entrySelfAssessed(ctx: WorkspaceContext, entryId: string | null): boolean {
+  if (entryId === null) return false;
+  const codes = ctx.store.db
+    .prepare(
+      `SELECT DISTINCT l.tax_code AS c FROM journal_line l JOIN journal_entry e ON e.id = l.entry_id AND e.workspace_id = ?
+        WHERE l.entry_id = ? AND l.tax_code IS NOT NULL`,
+    )
+    .all(ctx.workspaceId, entryId) as { c: string }[];
+  return anySelfAssessed(ctx, codes.map((r) => r.c));
+}
+
+/** The view of a line's receipts (null for none): the first's ids, the one rate and VAT when there is ONE receipt. */
+export function receiptVatViewOf(readings: readonly ReceiptVatReading[], comparison: VatComparison | null): ReceiptVatView | null {
+  const first = readings[0];
+  if (first === undefined) return null;
+  const one = readings.length === 1;
+  return {
+    source: first.source,
+    captureId: first.captureId,
+    fileId: first.fileId,
+    receipts: readings.length,
+    trusted: readings.every((r) => r.trusted && (r.states === 'silent' || r.rateTrusted)),
+    rateBp: one ? first.rateBp : null,
+    amountMinor: one ? first.amountMinor : (comparison?.belegMinor ?? null),
+    currency: one ? first.currency : comparison !== null ? (first.currency ?? null) : null,
+    covers: one && first.covers,
+    comparison,
+  };
 }
 
 // --- The receipts the booking carries --------------------------------------------------------------------

@@ -390,6 +390,7 @@ function RulesSheetPanel({ workspaceId, lookups, currency, canEdit, onClose, onC
               initialIgnoreReason={rule.ignoreReason}
               initialIgnoreNote={rule.ignoreNote ?? ''}
               initialFollowUp={rule.followUpStandardId}
+              initialNote={rule.note}
               vorlagen={vorlagen}
               onSave={(payload) => save(rule, payload)}
               onCancel={() => setEditing(null)}

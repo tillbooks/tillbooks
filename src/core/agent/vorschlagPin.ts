@@ -117,6 +117,12 @@ export interface RecordSpec {
    * act (D163: the due date an issue derives). Runs on the tenant-scoped row; reads only inside it.
    */
   readonly normalize?: (ctx: WorkspaceContext, row: Row) => Row;
+  /**
+   * D198 re-cut (Governance): a row filter on a `many` record, beside the id match (a fixed SQL condition on
+   * the record's own columns and its parameters), so a record can pin a SLICE of a table: the workspace's
+   * `settlement.*` setting rows of `workspace_setting`. Only literal SQL from this file reaches it.
+   */
+  readonly where?: { readonly sql: string; readonly params: readonly unknown[] };
 }
 
 // --- the dependency building blocks -----------------------------------------------------------------
@@ -603,6 +609,68 @@ export const PIN_RECORDS = {
     columns: ['id', 'source_system', 'source_processor', 'template_json'],
     figures: {},
   },
+  /**
+   * D198: every settlement source of the workspace. `pull_settlement` names a source by system and
+   * processor and fetches from the stored address: a source saved after the agent's proposal (another
+   * address, another from-date) makes the approval refuse `vorschlag_stale`.
+   */
+  settlement_sources_all: {
+    table: 'settlement_source',
+    idColumn: 'workspace_id',
+    many: true,
+    columns: ['id', 'source_system', 'source_processor', 'base_url', 'feed_path', 'from_date', 'token_ref'],
+    figures: {},
+  },
+  /**
+   * D198 re-cut (Governance): the workspace's `settlement.*` setting rows. The import and the pull read
+   * `settlement.test_events`, `settlement.test_fees` and the pull overlap live; a person switching one after
+   * an agent drafted the act makes the approval refuse `vorschlag_stale`. An absent row is the default and
+   * pins as empty.
+   */
+  settlement_settings_all: {
+    table: 'workspace_setting',
+    idColumn: 'workspace_id',
+    many: true,
+    columns: ['key', 'value_json'],
+    where: { sql: "key LIKE 'settlement.%'", params: [] },
+    figures: {},
+  },
+  /**
+   * D198 re-cut (Governance, paper critic r5 L10): a person's test answer widens or narrows what the import
+   * books (a `not_test` books what was skipped, a `reopen_test` skips it again), so the track is pinned: an
+   * answer written after the agent's proposal refuses the approval `vorschlag_stale`.
+   */
+  settlement_test_resolutions_all: {
+    table: 'settlement_test_resolution',
+    idColumn: 'workspace_id',
+    many: true,
+    columns: ['id', 'source_system', 'source_processor', 'event_id', 'resolution', 'key_values_json'],
+    figures: {},
+  },
+  /**
+   * D198, the owner's answer of 12.11.2026: a person's override (`handled_outside`) stops the import booking
+   * the event and its withdrawal lets it book again, so the track is pinned like the test track: an override
+   * written after the agent's proposal refuses the approval `vorschlag_stale`.
+   */
+  settlement_event_overrides_all: {
+    table: 'settlement_event_override',
+    idColumn: 'workspace_id',
+    many: true,
+    columns: ['id', 'source_system', 'source_processor', 'event_id', 'resolution'],
+    figures: {},
+  },
+  /**
+   * A42: the Umsatz review's answers (`ignored` keeps an event off the import, `included` withdraws it), pinned
+   * like the override: an answer written after an agent drafted an import or a pull refuses the approval
+   * `vorschlag_stale`.
+   */
+  settlement_event_inclusions_all: {
+    table: 'settlement_event_inclusion',
+    idColumn: 'workspace_id',
+    many: true,
+    columns: ['id', 'source_system', 'source_processor', 'event_id', 'state'],
+    figures: {},
+  },
   /** Every time row of the workspace: a period lock seals whichever rows the period holds then. */
   time_entries_all: {
     table: 'time_entry',
@@ -842,6 +910,32 @@ export const PIN_FOR_VERB: Readonly<Record<string, readonly PinField[]>> = {
   import_settlement: [
     { workspace: true, record: 'settlement_templates_all' },
     { workspace: true, record: 'tax_codes_all' },
+    // D198 re-cut (Governance): the settings, the test track and the overrides the import reads; the flags
+    // and outcomes are the producer's own facts and stay live.
+    { workspace: true, record: 'settlement_settings_all' },
+    { workspace: true, record: 'settlement_test_resolutions_all' },
+    { workspace: true, record: 'settlement_event_overrides_all' },
+    { workspace: true, record: 'settlement_event_inclusions_all' },
+    // Code critic C2: the import reads the source's from-date (the R2 floor), so a from-date moved after the
+    // draft refuses the approval `vorschlag_stale`.
+    { workspace: true, record: 'settlement_sources_all' },
+  ],
+  // D198: the pull books by the same template and codes, from the stored source.
+  pull_settlement: [
+    { workspace: true, record: 'settlement_templates_all' },
+    { workspace: true, record: 'tax_codes_all' },
+    { workspace: true, record: 'settlement_sources_all' },
+    { workspace: true, record: 'settlement_settings_all' },
+    { workspace: true, record: 'settlement_test_resolutions_all' },
+    { workspace: true, record: 'settlement_event_overrides_all' },
+    { workspace: true, record: 'settlement_event_inclusions_all' },
+  ],
+  // A42: an agent's proposed answer for one settlement event. A person's answer (an ignore, an include, a
+  // handled_outside) written after the proposal refuses the approval `vorschlag_stale`, so an old proposal never
+  // overwrites a newer human answer; the booked check runs again at execution.
+  set_settlement_event_ignored: [
+    { workspace: true, record: 'settlement_event_inclusions_all' },
+    { workspace: true, record: 'settlement_event_overrides_all' },
   ],
   vendor_portal_remittance_create: [{ field: 'paymentId', record: 'payment' }],
   // Critic round 3 (N1): the EBICS initialisation letter the person signs carries the company identity.
@@ -1573,7 +1667,9 @@ function snapshotRecord(ctx: WorkspaceContext, spec: RecordSpec, id: string): Re
   if (spec.many === true) {
     // Every row under the key, in a stable order: a version inserted after the proposal changes it.
     const rows = (
-      ctx.store.db.prepare(`SELECT ${spec.columns.join(', ')} FROM ${spec.table} WHERE workspace_id = ? AND ${idColumn} = ?`).all(ctx.workspaceId, id) as Row[]
+      ctx.store.db
+        .prepare(`SELECT ${spec.columns.join(', ')} FROM ${spec.table} WHERE workspace_id = ? AND ${idColumn} = ?${spec.where !== undefined ? ` AND (${spec.where.sql})` : ''}`)
+        .all(ctx.workspaceId, id, ...(spec.where?.params ?? [])) as Row[]
     ).sort((a, b) => (canonical(a) < canonical(b) ? -1 : 1));
     return { row: { rows }, children: [], deps: [] };
   }

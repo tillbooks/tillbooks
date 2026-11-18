@@ -186,7 +186,27 @@ test('G11: an empty step ties out trivially and says so', () => {
 
 // --- Waivers: reason required, waived is not passed, who/why recorded, voided on change ---------
 
-test('G11: a waiver without a reason is refused (empty string included), and a waived control is waived, not passed', () => {
+test('D204 critic M3: a reasonless waiver carries waivedBy and waivedAt into the snapshot and the Prüfbericht, and is an audit row', async () => {
+  const { assertAuditRow, assertWhoWhen } = await import('../support/d204.mjs');
+  const { deps, wid } = ws('waiver-export');
+  const { planId, stepId, a, b } = seedOpeningStep(deps, wid, 'wx');
+  declare(deps, wid, planId, stepId, a.number, 90000, 'wx-d1');
+  declare(deps, wid, planId, stepId, b.number, -100000, 'wx-d2');
+  const failing = check(deps, wid, planId, stepId, 'wx-check').controls.find((c) => c.status === 'failed');
+  must(call(deps, 'migration_waive_control', { workspaceId: wid, controlId: failing.controlId, idempotencyKey: 'wx-w' }), 'waive without a reason');
+  assertAuditRow(deps.store, wid, { entityKind: 'migration_control', entityId: failing.controlId, action: 'waive' });
+  const rechecked = check(deps, wid, planId, stepId, 'wx-check-2');
+  const carried = rechecked.controls.find((c) => c.controlId === failing.controlId);
+  assert.equal(carried.status, 'waived');
+  assertWhoWhen(carried.waivedBy, carried.waivedAt);
+  const exported = must(call(deps, 'migration_export_check', { workspaceId: wid, checkId: rechecked.checkId }), 'export');
+  const bericht = JSON.parse(exported.content);
+  const waiver = bericht.waivers.find((w) => w.controlId === failing.controlId);
+  assert.equal(waiver.reason, null, 'no reason given, none invented');
+  assertWhoWhen(waiver.waivedBy, waiver.waivedAt);
+});
+
+test('D204 G11: a waiver needs no reason (empty string included), keeps who and when, and a waived control is waived, not passed', async () => {
   const { deps, wid } = ws('waiver');
   const { planId, stepId, a, b } = seedOpeningStep(deps, wid, 'wv');
   declare(deps, wid, planId, stepId, a.number, 90000, 'wv-d1'); // mis-tied on purpose
@@ -194,17 +214,16 @@ test('G11: a waiver without a reason is refused (empty string included), and a w
   const checked = check(deps, wid, planId, stepId, 'wv-check');
   const failing = checked.controls.find((c) => c.status === 'failed');
 
-  // No reason, and a blank reason, are both refused: a silent waiver is a deleted control. Since D161
-  // the waiver is dial-governed (go-live), so the registry face answers an ABSENT schema-required
-  // field first, with the code every governed verb gives it (conformance rule 7); a blank one reaches
-  // the verb, which names the rule.
-  const missing = call(deps, 'migration_waive_control', { workspaceId: wid, controlId: failing.controlId, idempotencyKey: 'wv-w0', reason: undefined });
-  assert.equal(missing.ok, false);
-  assert.equal(missing.error, 'invalid_input');
-  assert.equal(missing.field, 'reason');
-  const blank = call(deps, 'migration_waive_control', { workspaceId: wid, controlId: failing.controlId, reason: '   ', idempotencyKey: 'wv-w1' });
-  assert.equal(blank.ok, false);
-  assert.equal(blank.error, 'waiver_needs_reason');
+  // D204: no reason, or a blank one, waives too. A waiver is never silent: the row reads `waived`
+  // and names who and when, which is what the export and readiness carry.
+  const bare = must(call(deps, 'migration_waive_control', { workspaceId: wid, controlId: failing.controlId, reason: '   ', idempotencyKey: 'wv-w1' }), 'waive without a reason');
+  assert.equal(bare.status, 'waived');
+  const bareRow = deps.store.db.prepare('SELECT status, waiver_reason, waived_by, waived_at FROM migration_control_total WHERE id = ?').get(failing.controlId);
+  assert.equal(bareRow.status, 'waived', 'D204: what changed');
+  assert.equal(bareRow.waiver_reason, null);
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
+  assertWhoWhen(bareRow.waived_by, bareRow.waived_at);
+  assertPermission('migration_waive_control');
 
   const waived = must(
     call(deps, 'migration_waive_control', { workspaceId: wid, controlId: failing.controlId, reason: 'Bewusst vom alten Saldo übernommen', idempotencyKey: 'wv-w2' }),

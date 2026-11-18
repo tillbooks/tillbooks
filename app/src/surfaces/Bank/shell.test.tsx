@@ -143,6 +143,8 @@ function caps(held: readonly string[]): Capabilities {
 /** A person's preferences, held in a detached store the test reads back. */
 function prefs(seed: Record<string, string | number> = {}): PrefsStore {
   const store = new PrefsStore(null, null, { useCache: false });
+  // D195: the D178 layout these suites were written for (the row editor is the default since v12).
+  store.seed('bank.detail_position', 'automatic');
   for (const [k, v] of Object.entries(seed)) store.seed(k, v);
   return store;
 }

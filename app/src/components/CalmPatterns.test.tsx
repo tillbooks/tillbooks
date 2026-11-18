@@ -79,7 +79,7 @@ describe('D187 calm patterns', () => {
     expect(chip).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('Einstellungen A: a row shows its explanation, and "Standard" only while the value is not the default', async () => {
+  it('Einstellungen A (18.11.2026): the explanation is the label\'s tip and description, and Auf Standard zurück shows only while changed', async () => {
     const user = userEvent.setup();
     const onReset = vi.fn();
     const { rerender } = wrap(
@@ -91,7 +91,7 @@ describe('D187 calm patterns', () => {
     );
     expect(screen.getByRole('heading', { name: 'Darstellung' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Farbschema' })).toHaveAccessibleDescription('Hell, dunkel oder wie dein Gerät.');
-    expect(screen.queryByRole('button', { name: 'Standard' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Auf Standard zurück' })).toBeNull();
     rerender(
       <I18nProvider>
         <SettingRow label="Farbschema" reset={{ defaultLabel: 'System', onReset }}>
@@ -99,7 +99,7 @@ describe('D187 calm patterns', () => {
         </SettingRow>
       </I18nProvider>,
     );
-    await user.click(screen.getByRole('button', { name: 'Standard' }));
+    await user.click(screen.getByRole('button', { name: 'Auf Standard zurück' }));
     expect(onReset).toHaveBeenCalledOnce();
   });
 

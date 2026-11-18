@@ -24,6 +24,16 @@
  * and rolled back on a refusal, so there is no save button. Only the two bulk acts, Standard
  * wiederherstellen and applying a saved view, offer Rückgängig.
  *
+ * D201 (owner, 15.11.2026) and D204: the page is arranged IN PLACE by default, with no mode to enter. Each
+ * item shows its toolbar on hover or focus (the eye, the size, Mehr, the grip); a click on its face still
+ * drills, a mouse drags only from the grip and a touch after a long press. D180's edit mode survives behind
+ * `overview.customize = edit_mode`. What shows is picked in the card sheet over the live page ("+ Karte",
+ * or Karten wählen in the page's Mehr; `/overview/kennzahlen` opens the page with the sheet), never on a
+ * page of checkboxes. A show, a hide, a move and a resize play the Arrive and leave moment. The agent's
+ * suggestions are the first item, over the whole row (`SuggestionsCard`); the old "Wartet auf dich" list
+ * stays behind `overview.waiting_list`. Neue Buchung and Sichern left the header (`overview.doors`), and a
+ * drill carries `{ from: '/overview' }` so the page it opens can lead back.
+ *
  * Saved views ride G00's own verbs (`list_saved_views` / `create_saved_view`, entityKind `workspace`,
  * layout `dashboard`): `columns` are the visible key figures in order and `filters` carry the period,
  * the cards and the bank place. Choosing a view writes that layout into the person's preferences and
@@ -51,13 +61,15 @@ import { SortableList } from '../../components/SortableList';
 import type { SavedViewDto } from '../Customization/SavedViewPicker';
 import { ViewPicker } from './ViewPicker';
 import { AttentionStrip } from './AttentionStrip';
+import { SuggestionsCard, useSuggestions } from './SuggestionsCard';
+import { CardSheet, type CardSheetRow } from './CardSheet';
 import { MandatesStrip } from './MandatesStrip';
 import { SetupCard, workspaceHasData } from './SetupCard';
 import { HomeDoors } from './HomeDoors';
 import { BankBand } from './BankBand';
 import { BankTile, bankFigures } from './BankTile';
 import { EditItem, FaceSnapshot, Ghost, VisibilityToggle } from './EditControls';
-import { ResetGlyph, SaveViewGlyph } from '../../components/icons';
+import { ResetGlyph, SaveViewGlyph, VOCABULARY } from '../../components/icons';
 import { OverviewWidget, SERIES_WIDGETS, useSeries, type SeriesView } from './widgets';
 import {
   arrangement,
@@ -66,10 +78,12 @@ import {
   asContent,
   compareOf,
   isDouble,
+  isFull,
   moveSlot,
   moveSlotTo,
   seriesWindow,
   setTileCompare,
+  spansRow,
   tileArrangement,
   toggleSlot,
   toggleTileTrend,
@@ -84,10 +98,10 @@ import {
   type TileSlot,
   type WidgetSlot,
 } from './layout';
-import { BankBalanceFace, CompareLine, EstimateLine, KpiDetail, KpiSettings, estimateTip, valueOf, type KpiTile } from './Kpi';
+import { BankBalanceFace, CompareLine, EstimateLine, KpiDetail, LIBRARY_GROUPS, estimateTip, valueOf, type KpiTile } from './Kpi';
 import { Tooltip } from '../../components/Tooltip';
 import { usePref, type PrefValue } from '../../lib/prefs';
-import { useCountUp } from '../../lib/motion';
+import { useArriveLeave, useCountUp } from '../../lib/motion';
 import { Sparkline } from '../../components/charts/LineChart';
 import './Uebersicht.css';
 
@@ -165,6 +179,26 @@ function parseViews(body: unknown): SavedViewDto[] {
  * its own doors, not a figure among figures. It joins the tile zone as the bank ITEM (D180).
  */
 const BANK = 'bank_inbox';
+
+/** D201 pick B: the agent's suggestions, an item of the tile zone like the bank item. */
+const SUGGESTIONS = 'suggestions';
+
+/** The state a drill hands the page it opens, so that page can lead back (D201 point 6). */
+export const DRILL_STATE = { from: '/overview' } as const;
+
+/** The card sheet's preview glyph per card (a key figure brings its own from the read). */
+const CARD_GLYPH: Readonly<Record<string, string>> = {
+  revenue_months: '▥',
+  balance_history: '◠',
+  expense_donut: '◔',
+  expense_bars: '▤',
+  money_in_out: '⇅',
+  cash_flow: '≈',
+  open_creditors: '≡',
+  open_tasks: '☐',
+};
+
+const AddGlyph = VOCABULARY.add.glyph;
 
 /**
  * Where a tile's click lands: its Studio route WITH the drill's params as a query string, so the
@@ -318,8 +352,10 @@ export function Uebersicht() {
   const client = useClient();
   const workspaceId = useWorkspaceId();
   const navigate = useNavigate();
-  // D186 (owner, 09.11.2026): the key-figure settings are their own screen.
-  const settingsOpen = useLocation().pathname.replace(/\/+$/, '') === '/overview/kennzahlen';
+  // D204 rule 2: the old key-figure screen's address opens the page with the card sheet over it.
+  const sheetRoute = useLocation().pathname.replace(/\/+$/, '') === '/overview/kennzahlen';
+  const [sheetAsked, setSheetAsked] = useState(false);
+  const sheetOpen = sheetAsked || sheetRoute;
   const { can } = useCapabilities();
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -359,6 +395,13 @@ export function Uebersicht() {
   const [basisPref] = usePref<string>('overview.estimate_basis');
   const [runwayPref] = usePref<string>('overview.runway_months');
   const [cutPref] = usePref<string>('overview.compare_cut');
+  // D201: how the page is arranged, the header doors, the suggestions card's empty state, the old list.
+  const [customizePref] = usePref<string>('overview.customize');
+  const [doorsPref] = usePref<string>('overview.doors');
+  const [suggestionsEmptyPref] = usePref<string>('overview.suggestions_empty');
+  const [waitingPref] = usePref<string>('overview.waiting_list');
+  const inline = customizePref !== 'edit_mode';
+  const [suggestions, reloadSuggestions] = useSuggestions(workspaceId);
   const compareCut = cutPref === 'whole_period' ? 'whole_period' : 'same_day';
   const pageCompare = asCompare(comparePref);
   const basis = basisPref === 'all' || basisPref === 'off' ? basisPref : 'rules';
@@ -431,11 +474,13 @@ export function Uebersicht() {
   // The bank item leads the tile zone by default, where the bank tile always stood.
   // D186: the money on the bank leads, then the bank item, then the figures in the read's order.
   const shownIds = shown.map((tile) => tile.tile);
-  const available = [...shownIds.filter((id) => id === 'bank_balance'), ...(bankInRead ? [BANK] : []), ...shownIds.filter((id) => id !== 'bank_balance')];
+  // D201: the suggestions lead (a list saved before them gets them first too), then the money on the bank.
+  const available = [SUGGESTIONS, ...shownIds.filter((id) => id === 'bank_balance'), ...(bankInRead ? [BANK] : []), ...shownIds.filter((id) => id !== 'bank_balance')];
   const tileSlots = tileArrangement(tilesPref, available);
   const bankOn = tileSlots.find((slot) => slot.id === BANK)?.on ?? true;
 
-  const tileName = (id: string): string => (id === BANK ? t('dashboard.bank.title') : t(`dashboard.tile.${id}`));
+  const tileName = (id: string): string =>
+    id === BANK ? t('dashboard.bank.title') : id === SUGGESTIONS ? t('dashboard.suggestions.title') : t(`dashboard.tile.${id}`);
   const cardName = (id: string): string => t(`dashboard.widget.name.${id}`);
 
   const snapshot = (): Snapshot => ({ tiles: tilesPref, widgets: widgetsPref, bank: bankPlace, preset, custom, viewId });
@@ -490,7 +535,12 @@ export function Uebersicht() {
   const resizeCard = (slot: WidgetSlot): void =>
     writeCards(toggleWidth(slots, slot.id), t(slot.w === 'full' ? 'dashboard.edit.announce.half' : 'dashboard.edit.announce.full', { name: cardName(slot.id) }));
   const resizeTile = (slot: TileSlot): void =>
-    writeTiles(toggleTileWidth(tileSlots, slot.id), t(isDouble(slot) ? 'dashboard.edit.single' : 'dashboard.edit.double', { name: tileName(slot.id) }));
+    writeTiles(
+      toggleTileWidth(tileSlots, slot.id),
+      spansRow(slot.id)
+        ? t(isFull(slot) ? 'dashboard.edit.announce.double' : 'dashboard.edit.announce.full', { name: tileName(slot.id) })
+        : t(isDouble(slot) ? 'dashboard.edit.single' : 'dashboard.edit.double', { name: tileName(slot.id) }),
+    );
   const compareTile = (slot: TileSlot, mode: CompareMode | null): void => writeTiles(setTileCompare(tileSlots, slot.id, mode), tileName(slot.id));
   const trendTile = (slot: TileSlot): void => writeTiles(toggleTileTrend(tileSlots, slot.id), tileName(slot.id));
   const placeBank = (place: BankActionPlace): void => {
@@ -549,7 +599,8 @@ export function Uebersicht() {
       entityKind: 'workspace',
       name: saveName.trim(),
       layout: 'dashboard',
-      columns: tileSlots.filter((slot) => slot.on).map((slot) => slot.id),
+      // The visible key figures in order (the suggestions card is an item of the page, not a figure).
+      columns: tileSlots.filter((slot) => slot.on && slot.id !== SUGGESTIONS).map((slot) => slot.id),
       filters: {
         rangePreset: preset,
         ...(preset === 'custom' ? { from: custom.from, to: custom.to } : {}),
@@ -572,6 +623,12 @@ export function Uebersicht() {
     if (typeof created?.viewId === 'string') setViewId(created.viewId);
   }, [client, workspaceId, saveName, saveShared, preset, custom, tilesPref, tileSlots, slots, bankPlace, load]);
 
+  const openSheet = (): void => setSheetAsked(true);
+  const closeSheet = (): void => {
+    setSheetAsked(false);
+    if (sheetRoute) navigate('/overview', { replace: true });
+  };
+
   const toggleButton = (): HTMLElement | null => rootRef.current?.querySelector<HTMLElement>('[data-edit-toggle]') ?? null;
   const startEditing = (): void => {
     setEditing(true);
@@ -585,6 +642,11 @@ export function Uebersicht() {
   const onRootKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
     // The Escape that only closed a tooltip bubble is spent on it; the next one leaves the mode.
     if (event.key !== 'Escape' || event.defaultPrevented || tooltipConsumedEscape(event)) return;
+    if (sheetOpen) {
+      event.preventDefault();
+      closeSheet();
+      return;
+    }
     if (saving) {
       event.preventDefault();
       setSaving(false);
@@ -599,21 +661,31 @@ export function Uebersicht() {
   // K-34: nothing before 200ms, and a skeleton that appeared stays at least 300ms.
   const showSkeleton = useSkeletonHold(loading);
 
+  // Outside edit mode the zones hold what shows; inside, every slot (hidden ones as ghosts), and the bank
+  // item sits in the tile zone whatever its place.
+  // D186: while editing, the library lists every key figure with its checkbox, so the grid holds only the
+  // shown ones (no ghost per hidden tile: twenty ghosts would bury the six that show).
+  // D201: with nothing open and `overview.suggestions_empty = hide`, the suggestions card steps out.
+  const suggestionsQuiet = suggestionsEmptyPref === 'hide' && suggestions.state === 'ready' && suggestions.items.length === 0;
+  const gridSlots = editing
+    ? tileSlots.filter((slot) => slot.on)
+    : tileSlots.filter((slot) => slot.on && (slot.id !== BANK || (bankPlace === 'tile' && bankTile !== null)) && !(slot.id === SUGGESTIONS && suggestionsQuiet));
+  const cardSlots = editing ? slots : shownSlots;
+  // D204: a show, a hide, a move or a resize plays Arrive and leave in both zones.
+  const gridRef = useRef<HTMLElement | null>(null);
+  const cardsRef = useRef<HTMLElement | null>(null);
+  useArriveLeave(gridRef, gridSlots.map((slot) => `${slot.id}:${isFull(slot) ? 'f' : isDouble(slot) ? 'd' : 's'}`));
+  useArriveLeave(cardsRef, cardSlots.map((slot) => `${slot.id}:${slot.on ? 1 : 0}:${slot.w ?? ''}`));
+
   if (workspaceId === null) return <NoWorkspaceState />;
 
   const seriesData = series.state === 'ready' ? series.data : null;
   const rangeOptions = (['month', 'quarter', 'year', 'custom'] as const).map((p) => ({ value: p, label: t(`dashboard.range.${p}`) }));
 
-  // Outside edit mode the zones hold what shows; inside, every slot (hidden ones as ghosts), and the bank
-  // item sits in the tile zone whatever its place.
-  // D186: while editing, the library lists every key figure with its checkbox, so the grid holds only the
-  // shown ones (no ghost per hidden tile: twenty ghosts would bury the six that show).
-  const gridSlots = editing
-    ? tileSlots.filter((slot) => slot.on)
-    : tileSlots.filter((slot) => slot.on && (slot.id !== BANK || (bankPlace === 'tile' && bankTile !== null)));
-  const gridSpan = gridSlots.reduce((n, slot) => n + (isDouble(slot) ? 2 : 1), 0);
-  const cardSlots = editing ? slots : shownSlots;
+  // A row-wide item takes no column of the balance (B5): only the figures beside each other count.
+  const gridSpan = gridSlots.reduce((n, slot) => n + (isFull(slot) ? 0 : isDouble(slot) ? 2 : 1), 0);
   const ready = !failed && overview !== null;
+  const mode: 'inline' | 'editing' | 'rest' = inline ? 'inline' : editing ? 'editing' : 'rest';
 
   const bankTools = (
     <OverflowMenu
@@ -634,17 +706,82 @@ export function Uebersicht() {
 
   const tileItem = (slot: TileSlot, index: number): ReactNode => {
     const name = tileName(slot.id);
-    const mode = compareOf(slot, pageCompare);
+    const compare = compareOf(slot, pageCompare);
+    const sizable = slot.id !== BANK;
+    const full = isFull(slot);
+    // D201: the toolbar on the item (hide, size, Mehr); the comparison and the line sit in its Mehr.
     const tools = (
       <>
         <VisibilityToggle name={name} on={slot.on} onToggle={() => toggleTile(slot)} />
-        {/* The width, the comparison and the line are the key-figure settings screen's (one place). */}
         {slot.id === BANK ? bankTools : null}
+        {sizable ? (
+          <IconButton
+            icon="resize"
+            small
+            context={
+              spansRow(slot.id)
+                ? t(full ? 'dashboard.edit.widthDouble' : 'dashboard.edit.widthFull', { name })
+                : t(isDouble(slot) ? 'dashboard.edit.widthSingle' : 'dashboard.edit.widthDouble', { name })
+            }
+            aria-pressed={spansRow(slot.id) ? full : isDouble(slot)}
+            onClick={() => resizeTile(slot)}
+          />
+        ) : null}
       </>
     );
+    const compareGroup = t('dashboard.edit.compareGroup');
+    const menuItems = [
+      ...(COMPARABLE.has(slot.id)
+        ? [
+            { key: 'compare-page', group: compareGroup, label: t('dashboard.edit.comparePage'), checked: slot.compare === undefined, onSelect: () => compareTile(slot, null) },
+            ...(['previous_year', 'previous_period', 'none'] as const).map((m) => ({
+              key: `compare-${m}`,
+              group: compareGroup,
+              label: t(`dashboard.settings.modes.${m}`),
+              checked: slot.compare === m,
+              onSelect: () => compareTile(slot, m),
+            })),
+          ]
+        : []),
+      ...(TRENDABLE.has(slot.id)
+        ? [{ key: 'trend', label: t(slot.trend === true ? 'dashboard.edit.trendOff' : 'dashboard.edit.trendOn'), onSelect: () => trendTile(slot) }]
+        : []),
+    ];
     let face: ReactNode;
     if (editing && !slot.on) {
       face = <Ghost name={name} />;
+    } else if (slot.id === SUGGESTIONS) {
+      // D208 point 2: no card frame; the card's own tools (Ausblenden, Grösse ändern, Mehr) sit square in its
+      // heading and show on hover. While arranging, the item's edit toolbar carries them instead.
+      face = (
+        <SuggestionsCard
+          load={suggestions}
+          reload={reloadSuggestions}
+          workspaceId={workspaceId}
+          {...(mode !== 'editing'
+            ? {
+                tools: (
+                  <>
+                    {tools}
+                    <OverflowMenu
+                      icon="more"
+                      quiet
+                      portal
+                      label={t('dashboard.edit.more', { name })}
+                      tooltip={t('dashboard.edit.moreTip', { name })}
+                      items={[
+                        { key: 'forward', label: t('dashboard.edit.forward'), onSelect: () => moveTile(slot.id, -1), disabled: index === 0 },
+                        { key: 'back', label: t('dashboard.edit.back'), onSelect: () => moveTile(slot.id, 1), disabled: index === gridSlots.length - 1 },
+                        ...menuItems,
+                      ]}
+                      className="uebersicht-tools__more"
+                    />
+                  </>
+                ),
+              }
+            : {})}
+        />
+      );
     } else if (slot.id === BANK) {
       // A degraded bank (its figures did not read) is still arrangeable: a plain face with its name.
       face = bankTile === null ? <Ghost name={name} state={t('dashboard.edit.unavailable')} /> : <BankTile figures={bankTile} variant="tile" />;
@@ -658,7 +795,7 @@ export function Uebersicht() {
       if (tile === undefined) return null;
       const drill = tile.drill;
       const body = (
-        <TileBody tile={tile} slot={slot} mode={mode} showEstimate={basis !== 'off'} trend={trendValues(slot.id, seriesData)} trendContent={content === 'trends'} />
+        <TileBody tile={tile} slot={slot} mode={compare} showEstimate={basis !== 'off'} trend={trendValues(slot.id, seriesData)} trendContent={content === 'trends'} />
       );
       // The one sentence a derived figure needs, and the estimate's, ride the tile's tooltip.
       const tips = [TIPPED.has(slot.id) ? t(`dashboard.tileTip.${slot.id}`) : null, basis !== 'off' ? estimateTip(t, tile as unknown as KpiTile) : null].filter(
@@ -675,7 +812,8 @@ export function Uebersicht() {
             // While editing the same button stays mounted (inside the item's inert face), so switching
             // modes never remounts the figure or replays its count-up.
             onClick={() => {
-              if (!editing) navigate(drillHref(drill));
+              // D201 point 6: the page a figure opens can lead back to the Übersicht.
+              if (!editing) navigate(drillHref(drill), { state: DRILL_STATE });
             }}
           >
             {body}
@@ -699,13 +837,15 @@ export function Uebersicht() {
         key={slot.id}
         id={slot.id}
         name={name}
-        editing={editing}
+        // D208: the suggestions card carries its tools in its own heading; the item's pill appears only while arranging.
+        mode={slot.id === SUGGESTIONS && mode !== 'editing' ? 'rest' : mode}
         as="li"
-        className={isDouble(slot) ? 'uebersicht-item--double' : undefined}
+        className={full ? 'uebersicht-item--full' : isDouble(slot) ? 'uebersicht-item--double' : undefined}
         index={index}
         count={gridSlots.length}
         onMove={(delta) => moveTile(slot.id, delta)}
         tools={tools}
+        menuItems={menuItems}
         ghost={editing && !slot.on}
       >
         {face}
@@ -721,7 +861,7 @@ export function Uebersicht() {
         key={slot.id}
         id={slot.id}
         name={name}
-        editing={editing}
+        mode={mode}
         as="div"
         className={full ? 'uebersicht-card uebersicht-widget--full' : 'uebersicht-card'}
         index={index}
@@ -768,66 +908,46 @@ export function Uebersicht() {
     return <FaceSnapshot face={face} />;
   };
 
-  if (settingsOpen) {
-    const bySlot = (id: string): TileSlot | undefined => tileSlots.find((x) => x.id === id);
-    return (
-      <TooltipPortalContext.Provider value={true}>
-        <section className="uebersicht" aria-labelledby="uebersicht-settings-title">
-          <SurfaceHeader
-            title={t('dashboard.library.title')}
-            titleId="uebersicht-settings-title"
-            actions={<IconButton icon="done" context={t('dashboard.settings.back')} onClick={() => navigate('/overview')} />}
-          />
-          {ready ? (
-            <KpiSettings
-              rows={tileSlots.map((slot) => ({
-                id: slot.id,
-                on: slot.on,
-                double: isDouble(slot),
-                trend: slot.trend === true,
-                compare: slot.compare,
-                tip: TIPPED.has(slot.id) ? t(`dashboard.tileTip.${slot.id}`) : null,
-                comparable: COMPARABLE.has(slot.id),
-                trendable: TRENDABLE.has(slot.id),
-                sizable: slot.id !== BANK,
-              }))}
-              name={tileName}
-              onToggle={(id) => {
-                const slot = bySlot(id);
-                if (slot !== undefined) toggleTile(slot);
-              }}
-              onCompare={(id, mode) => {
-                const slot = bySlot(id);
-                if (slot !== undefined) compareTile(slot, mode);
-              }}
-              onTrend={(id) => {
-                const slot = bySlot(id);
-                if (slot !== undefined) trendTile(slot);
-              }}
-              onResize={(id) => {
-                const slot = bySlot(id);
-                if (slot !== undefined) resizeTile(slot);
-              }}
-            />
-          ) : failed ? (
-            <ErrorBanner context="read" message={t('dashboard.error.read')} onRetry={() => void load()} />
-          ) : (
-            <Skeleton rows={6} height={32} />
-          )}
-          <p className="visually-hidden" aria-live="polite">
-            {announcement}
-          </p>
-        </section>
-      </TooltipPortalContext.Provider>
-    );
-  }
+  // D204 rule 2: the card sheet's rows, every item the page can show, grouped as the old library was.
+  const sheetRows = (): CardSheetRow[] => {
+    const glyphOf = (id: string): string => overview?.tiles.find((tile) => tile.tile === id)?.glyph ?? '◆';
+    const groupOf = (id: string): string => {
+      const g = LIBRARY_GROUPS.find((x) => x.tiles.includes(id));
+      return t(`dashboard.library.groups.${g?.id ?? 'operations'}`);
+    };
+    const tileRows = tileSlots.map((slot) => ({
+      id: `tile:${slot.id}`,
+      name: tileName(slot.id),
+      glyph: slot.id === SUGGESTIONS ? '✦' : glyphOf(slot.id),
+      on: slot.on,
+      group: slot.id === SUGGESTIONS ? t('dashboard.sheet.groups.work') : groupOf(slot.id),
+    }));
+    // The groups in the library's order, the suggestions first.
+    const order = [t('dashboard.sheet.groups.work'), ...LIBRARY_GROUPS.map((g) => t(`dashboard.library.groups.${g.id}`))];
+    tileRows.sort((x, y) => order.indexOf(x.group) - order.indexOf(y.group));
+    const cardRows = slots.map((slot) => ({ id: `card:${slot.id}`, name: cardName(slot.id), glyph: CARD_GLYPH[slot.id] ?? '▦', on: slot.on, group: t('dashboard.sheet.groups.cards') }));
+    return [...tileRows, ...cardRows];
+  };
+  const toggleFromSheet = (rowId: string): void => {
+    const [kind, id] = rowId.split(':') as [string, string];
+    if (kind === 'tile') {
+      const slot = tileSlots.find((x) => x.id === id);
+      if (slot !== undefined) toggleTile(slot);
+    } else {
+      const slot = slots.find((x) => x.id === id);
+      if (slot !== undefined) toggleCard(slot);
+    }
+  };
+
+  const fresh = overview !== null && !workspaceHasData(overview.tiles);
+  const doorsShown = doorsPref === 'shown';
 
   return (
     // Every tooltip on this surface opens in the overlay layer: flipped and held 8px inside the viewport,
     // so a corner icon's bubble never runs off the page or widens it.
     <TooltipPortalContext.Provider value={true}>
     <section
-      className={editing ? 'uebersicht is-editing' : 'uebersicht'}
+      className={['uebersicht', editing ? 'is-editing' : '', sheetOpen ? 'has-sheet' : ''].filter(Boolean).join(' ')}
       aria-labelledby="uebersicht-title"
       ref={rootRef}
       onKeyDown={onRootKeyDown}
@@ -839,9 +959,9 @@ export function Uebersicht() {
         title={t('dashboard.route.title')}
         titleId="uebersicht-title"
         help={<SurfaceHelp surface="Uebersicht" />}
-        // F-05: the daily doors (Buchen, Sichern, and the demo while the books are empty) are the
-        // home's header actions, always visible, so the collapsed rail never hides them.
-        actions={<HomeDoors fresh={overview !== null && !workspaceHasData(overview.tiles)} />}
+        // F-05, amended by D201 point 5: Neue Buchung and Sichern sit here only by `overview.doors`; the
+        // demo door of an empty workspace shows either way.
+        actions={doorsShown || fresh ? <HomeDoors fresh={fresh} doors={doorsShown} /> : undefined}
       />
       {/* K-13: on a fresh, data-less workspace the setup steps are the point of the page, so they
           lead, directly under the header and ABOVE the range controls. */}
@@ -903,12 +1023,15 @@ export function Uebersicht() {
         ) : null}
         {ready ? (
           <div className="uebersicht-controls__tools">
-            <IconButton
-              icon={editing ? 'done' : 'customize'}
-              context={t(editing ? 'dashboard.edit.done' : 'dashboard.edit.customize')}
-              data-edit-toggle=""
-              onClick={editing ? stopEditing : startEditing}
-            />
+            {/* D201: arranged in place, there is no mode to enter; D180's Anpassen only by its setting. */}
+            {inline ? null : (
+              <IconButton
+                icon={editing ? 'done' : 'customize'}
+                context={t(editing ? 'dashboard.edit.done' : 'dashboard.edit.customize')}
+                data-edit-toggle=""
+                onClick={editing ? stopEditing : startEditing}
+              />
+            )}
             <OverflowMenu
               icon="more"
               quiet
@@ -916,7 +1039,7 @@ export function Uebersicht() {
               label={t('dashboard.edit.pageMore')}
               tooltip={t('dashboard.edit.pageMoreTip')}
               items={[
-                { key: 'kpis', label: t('dashboard.settings.open'), onSelect: () => navigate('/overview/kennzahlen') },
+                { key: 'kpis', label: t('dashboard.sheet.open'), onSelect: openSheet },
                 { key: 'save', label: t('dashboard.edit.saveView'), glyph: <SaveViewGlyph size={16} />, onSelect: () => setSaving(true) },
                 { key: 'reset', label: t('dashboard.edit.reset'), glyph: <ResetGlyph size={16} />, onSelect: resetLayout, disabled: isDefault },
               ]}
@@ -992,19 +1115,29 @@ export function Uebersicht() {
           className="uebersicht-grid"
           strategy="rect"
           style={{ ['--uebersicht-cols' as string]: balancedColumns(gridSpan) }}
-          ariaLabel={editing ? t('dashboard.edit.tilesLabel') : undefined}
+          ariaLabel={editing || inline ? t('dashboard.edit.tilesLabel') : undefined}
           renderOverlay={overlayOf}
           overlayClassName="uebersicht-overlay"
           touch="longPress"
+          {...(inline ? { mouse: 'handle' as const } : {})}
+          listRef={gridRef}
         >
           {gridSlots.map((slot, i) => tileItem(slot, i))}
+          {/* D204 rule 2: "+ Karte" opens the card sheet over the live page. */}
+          <li className="uebersicht-add" data-arrive-key="__add">
+            <button type="button" className="uebersicht-add__button" aria-haspopup="dialog" aria-expanded={sheetOpen} onClick={openSheet}>
+              <AddGlyph size={16} />
+              <span>{t('dashboard.sheet.add')}</span>
+            </button>
+          </li>
         </SortableList>
       )}
 
 
       {/* D90 D-2, placed by the B5 judge (D178): the waiting work, one line per item, BELOW the title and
-          the key figures, fed by G15's attention_summary. */}
-      <AttentionStrip />
+          the key figures, fed by G15's attention_summary. D201: the suggestions card replaced it; it shows
+          only by `overview.waiting_list`. */}
+      {waitingPref === 'shown' ? <AttentionStrip /> : null}
 
       {/* D178 point 13, D180: the cards, in the person's order and width. */}
       {ready && cardSlots.length > 0 ? (
@@ -1017,6 +1150,8 @@ export function Uebersicht() {
           renderOverlay={overlayOf}
           overlayClassName="uebersicht-overlay"
           touch="longPress"
+          {...(inline ? { mouse: 'handle' as const } : {})}
+          listRef={cardsRef}
         >
           {cardSlots.map((slot, i) => cardItem(slot, i))}
         </SortableList>
@@ -1041,6 +1176,8 @@ export function Uebersicht() {
       <p className="visually-hidden" aria-live="polite">
         {announcement}
       </p>
+
+      {sheetOpen ? <CardSheet rows={sheetRows()} onToggle={toggleFromSheet} onClose={closeSheet} /> : null}
     </section>
     </TooltipPortalContext.Provider>
   );

@@ -1,0 +1,413 @@
+/**
+ * D197: the one Vorschlag row (Vorschläge list and Pendenzen). One fixed height from the density tokens,
+ * the cells on one grid: lead, subject and kind, date, certainty, clip, amount, then the row's actions where
+ * a screen has them. No card and no box: a hairline under each row (DESIGN.md "Surface hierarchy").
+ * At touch width the row takes two lines (subject and signed amount, then kind, certainty and clip), 44px
+ * at least, and the actions show on the selected row only.
+ */
+
+.vrow {
+  border-bottom: 1px solid var(--t-border);
+  container: vrow / inline-size;
+}
+
+/* D207: the actions cell has ONE width on every row of a list that has actions (three icons and the
+   chevron), so a row with fewer buttons, or none, keeps its date and amount on the same edge as the rest.
+   A list with no actions at all (the /agent list) drops the column on every row alike. */
+.vrow {
+  --vrow-actions-w: calc(4 * 32px + 3 * var(--t-space-0-5));
+}
+
+.vrow-grid {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) var(--vrow-actions-w);
+  align-items: center;
+  column-gap: var(--t-space-1);
+  min-height: var(--t-row-h);
+}
+
+.vrow:not(.vrow--actions) .vrow-grid {
+  grid-template-columns: 28px minmax(0, 1fr);
+}
+
+.vrow-lead {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+}
+
+.vrow-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 84px 100px 20px 120px;
+  grid-template-areas: 'subject badge date cert clip amount';
+  align-items: center;
+  column-gap: var(--t-space-2);
+  min-width: 0;
+  min-height: var(--t-row-h);
+  padding: 0 var(--t-space-2) 0 0;
+  font: inherit;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  color: var(--t-text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--t-radius-sm);
+}
+
+button.vrow-main {
+  cursor: pointer;
+  transition: background-color var(--t-motion-hover);
+}
+
+/* D207 (calmer hover): a hovered row is tinted with the neutral soft ground across the whole row, never
+   the brass accent (the accent is for posting clicks only, D137). */
+.vrow {
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.vrow--select:hover,
+.vrow--open {
+  background: var(--t-bg-soft);
+}
+
+button.vrow-main:focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+}
+
+/* The selected row (the /agent list's open detail, Pendenzen's roving focus): the same neutral tint and a
+   thin ink edge at its start, the whole row, its tick box included. Never the brass accent (D207, D137). */
+.vrow--selected {
+  background: var(--t-bg-soft);
+  box-shadow: inset 2px 0 0 var(--t-border-strong);
+}
+
+.vrow-subject {
+  grid-area: subject;
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-2);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.vrow-subject-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+/* The subject takes the room it needs; the kind beside it keeps a floor of its own, so a long subject
+   never pushes it out; a supplier IBAN change keeps old and new readable, so its floor is wider. */
+
+.vrow-kind {
+  /* The kind gives way before the subject: who it is about is what a person scans for. */
+  flex: 0 1000 auto;
+  min-width: 6em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.vrow--iban .vrow-kind {
+  flex: 1 1 auto;
+  min-width: 55%;
+}
+
+.vrow-subject .status-word {
+  flex: 0 0 auto;
+  font-size: var(--t-font-md);
+}
+
+.vrow-badge {
+  grid-area: badge;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+}
+
+/* One meaning: the record's business date, in ink; a proposal date stands in only where the record has
+   none, and reads dim. */
+.vrow-date {
+  grid-area: date;
+  color: var(--t-text);
+  font-size: var(--t-font-md);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.vrow-date--proposal {
+  color: var(--t-text-dim);
+}
+
+.vrow-cert-cell {
+  grid-area: cert;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.vrow-clip {
+  grid-area: clip;
+  display: inline-flex;
+  justify-content: center;
+  color: var(--t-text-dim);
+}
+
+.vrow-amount-cell {
+  grid-area: amount;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Money never wraps. */
+.vrow-amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* DESIGN.md Money: the minus alone in danger ink, never a red row. */
+.vrow-sign {
+  color: var(--t-danger);
+}
+
+/* DESIGN.md "Lists": row actions appear on hover or focus, always on the selected row and on touch. */
+/* The decisions show on hover or focus, always on the selected or open row; the chevron always shows, so a
+   person sees the row opens. The cell is right-aligned, so the chevron sits on one edge on every row. */
+.vrow-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+}
+
+.vrow-actions > :not(.vrow-disclose-cell) {
+  opacity: 0;
+  transition: opacity var(--t-motion-hover);
+}
+
+.vrow--actions:hover .vrow-actions > *,
+.vrow--actions:focus-within .vrow-actions > *,
+.vrow--selected .vrow-actions > *,
+.vrow--open .vrow-actions > * {
+  opacity: 1;
+}
+
+/* The chevron turns a quarter when the row's details open. */
+.vrow-disclose svg {
+  transition: transform var(--t-motion-hover) var(--t-ease-out);
+}
+
+.vrow-disclose[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+
+@media (hover: none) {
+  .vrow-actions > * {
+    opacity: 1;
+  }
+}
+
+/* The certainty: three dots, then its word (never colour alone); only `check` colours its dot. An empty
+   dot is a ring, so the meter reads on any ground, the selected row's tint included. */
+.vrow-cert {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+}
+
+.vrow-cert-dots {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+.vrow-cert-dot {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--t-radius-full);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--t-border-strong);
+}
+
+.vrow-cert-dot--on {
+  background: var(--t-text-dim);
+  box-shadow: none;
+}
+
+.vrow-cert-word {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vrow-cert[data-certainty='check'] {
+  color: var(--t-text);
+  font-weight: 600;
+}
+
+.vrow-cert[data-certainty='check'] .vrow-cert-dot--on {
+  background: var(--t-warn);
+}
+
+.vrow-stale {
+  display: inline-flex;
+  max-width: 100%;
+  font-size: var(--t-font-sm);
+  white-space: nowrap;
+}
+
+.vrow-stale .status-word-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A list beside its detail: the subject keeps the room, the kind yields first (never to nothing on a
+   supplier IBAN change). */
+@container vrow (max-width: 760px) {
+  .vrow-kind {
+    min-width: 0;
+  }
+
+  .vrow-subject-text:has(+ .vrow-kind) {
+    max-width: 72%;
+  }
+
+  .vrow--iban .vrow-subject-text {
+    max-width: 45%;
+  }
+
+  .vrow--iban .vrow-kind {
+    min-width: 50%;
+  }
+}
+
+/* A short row: the clip and the date give way (the detail beside it says both), the rest stays. */
+@container vrow (max-width: 760px) {
+  .vrow-main {
+    grid-template-columns: minmax(0, 1fr) auto 100px 16px 112px;
+    grid-template-areas: 'subject badge cert clip amount';
+  }
+
+  .vrow-date {
+    display: none;
+  }
+}
+
+/* Touch width: two lines, 44px at least. Subject and signed amount, then the kind, the certainty with its
+   word, the clip. The actions show on the selected row only. */
+@container vrow (max-width: 480px) {
+  .vrow-main {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'subject subject amount'
+      'kind cert clip'
+      'status status status';
+    row-gap: 2px;
+    min-height: 44px;
+    padding-block: var(--t-space-1);
+  }
+
+  .vrow-subject {
+    display: contents;
+  }
+
+  .vrow-subject-text {
+    grid-area: subject;
+    max-width: none;
+  }
+
+  .vrow-kind {
+    grid-area: kind;
+  }
+
+  .vrow-subject .status-word {
+    grid-area: status;
+  }
+
+  .vrow-kind,
+  .vrow--iban .vrow-kind {
+    min-width: 0;
+  }
+
+  .vrow-subject-text:has(+ .vrow-kind),
+  .vrow--iban .vrow-subject-text {
+    max-width: none;
+  }
+
+  .vrow-lead {
+    width: 44px;
+    min-height: 44px;
+  }
+
+  .vrow-grid {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+  }
+
+  .vrow:not(.vrow--actions) .vrow-grid {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .vrow:not(.vrow--selected):not(.vrow--open):not(:focus-within) .vrow-actions > :not(.vrow-disclose-cell) {
+    display: none;
+  }
+
+  /* The selected row shows its actions on a line of their own under the facts, right-aligned. */
+  .vrow--actions.vrow--selected .vrow-grid,
+  .vrow--actions:focus-within .vrow-grid {
+    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-areas:
+      'lead main'
+      '. actions';
+  }
+
+  .vrow--actions.vrow--selected .vrow-lead,
+  .vrow--actions:focus-within .vrow-lead {
+    grid-area: lead;
+  }
+
+  .vrow--actions.vrow--selected .vrow-main,
+  .vrow--actions:focus-within .vrow-main {
+    grid-area: main;
+  }
+
+  .vrow--actions.vrow--selected .vrow-actions,
+  .vrow--actions:focus-within .vrow-actions {
+    grid-area: actions;
+    justify-self: end;
+    opacity: 1;
+  }
+}
+
+/* The selection bar: one line, the count, the signed sum, the worded commits, clear. */
+.vsel {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+.vsel-count {
+  font-weight: 500;
+}
+
+.vsel-sum {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

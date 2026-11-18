@@ -22,14 +22,16 @@
  * SLOTS (trust indicator, feedback, theme, reserved bell in the footer; the /agent entry's count
  * badge). Each slot renders `null` when it has no occupant and degrades inside its own boundary.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { useT } from '../i18n';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { DensityToggle } from '../components/DensityToggle';
 import { WorkspaceSwitcher } from '../components/WorkspaceSwitcher';
 import { useFeedback } from '../components/FeedbackProvider';
+import { Tooltip, TooltipPortalContext } from '../components/Tooltip';
+import { IconButton } from '../components/IconButton';
 import { CapabilitiesProvider } from '../lib/CapabilitiesProvider';
 import { DemoBanner } from '../surfaces/Onboarding';
 import { SearchPalette } from '../surfaces/Search';
@@ -43,6 +45,7 @@ import { KeyboardProvider, useFocusTrap, useKeyboard } from './keyboard';
 import { ShortcutSheet } from './ShortcutSheet';
 import { NotificationBell, SlotBoundary } from './chrome';
 import { RailStatusMenu } from './RailStatusMenu';
+import { ReleaseToast } from '../components/WhatsNew';
 import { IdentityChip, IdentityGate, ServedShellGate } from './identity';
 import { TenantRouteReset, WorkspaceResolver, useWorkspaceId } from './workspace';
 
@@ -88,6 +91,39 @@ function RailToggleIcon({ direction }: { direction: 'left' | 'right' }) {
   );
 }
 
+/**
+ * The rail's ONE expand and collapse control (D201: "a visible expand and collapse toggle"), in the
+ * rail head of both modes: the named rail's head row and the icon strip's head. It flips the same
+ * `nav.rail` collapsed flag the splitter and Enter on it drive, and it is the single-pointer,
+ * non-dragging alternative to the splitter (WCAG 2.5.7). The double chevron points the way the rail
+ * will move. Its words show on hover and focus (the `IconButton` anatomy: name, then what it does, the
+ * second line the description); it is not an `IconButton` because collapsing has no word in the closed
+ * icon vocabulary. One component for both modes, so the head never carries two of these.
+ */
+function RailToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  const t = useT();
+  const descriptionId = useId();
+  const name = t(collapsed ? 'nav.expand' : 'nav.collapse');
+  return (
+    <Tooltip
+      placement="bottom"
+      descriptionId={descriptionId}
+      content={
+        <>
+          <span className="tooltip-name">{name}</span>
+          <span className="tooltip-context" id={descriptionId}>
+            {t(collapsed ? 'nav.expandContext' : 'nav.collapseContext')}
+          </span>
+        </>
+      }
+    >
+      <button type="button" className="rail-icon-btn rail-toggle" aria-label={name} onClick={onToggle}>
+        <RailToggleIcon direction={collapsed ? 'right' : 'left'} />
+      </button>
+    </Tooltip>
+  );
+}
+
 /** A speech bubble: the rail footer's feedback entry (K-01). Decorative; the button carries the name. */
 function FeedbackGlyph() {
   return (
@@ -105,6 +141,31 @@ function FeedbackGlyph() {
     >
       <path d="M20 12a8 8 0 0 1-11.7 7.1L4 20l1-4.1A8 8 0 1 1 20 12z" />
     </svg>
+  );
+}
+
+/** The footer's feedback entry, its words on hover and focus (D204: the shell's icon-only controls name
+ *  themselves). The speech bubble is not the vocabulary's Kommentieren, so it is a plain tooltip. */
+function FeedbackEntry({ onOpen }: { onOpen: () => void }) {
+  const t = useT();
+  const descriptionId = useId();
+  const name = t('feedback.open');
+  return (
+    <Tooltip
+      descriptionId={descriptionId}
+      content={
+        <>
+          <span className="tooltip-name">{name}</span>
+          <span className="tooltip-context" id={descriptionId}>
+            {t('feedback.openContext')}
+          </span>
+        </>
+      }
+    >
+      <button type="button" className="rail-icon-btn" aria-label={name} onClick={onOpen}>
+        <FeedbackGlyph />
+      </button>
+    </Tooltip>
   );
 }
 
@@ -199,6 +260,24 @@ function useRailFit(ref: { current: HTMLDivElement | null }, narrow: boolean): v
       rows.disconnect();
     };
   }, [ref, narrow]);
+}
+
+/** D210: the footer gear into the Einstellungen page (it links every settings page by area). */
+function SettingsEntry() {
+  const t = useT();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const here = pathname === '/settings' || pathname.startsWith('/settings/');
+  return (
+    <IconButton
+      icon="settings"
+      context={t('nav.settingsEntry')}
+      small
+      className="rail-icon-btn rail-settings-entry"
+      aria-current={here ? 'page' : undefined}
+      onClick={() => navigate('/settings')}
+    />
+  );
 }
 
 function RailNavBody({ onNavigate }: { onNavigate: () => void }) {
@@ -360,14 +439,9 @@ function Frame() {
                 the expanded rail. */}
             <div className="rail-head rail-head--icon">
               {!preWorkspace && (
-                <button
-                  type="button"
-                  className="rail-icon-btn"
-                  aria-label={t('nav.expand')}
-                  onClick={() => setCollapsed(false)}
-                >
-                  <RailToggleIcon direction="right" />
-                </button>
+                <TooltipPortalContext.Provider value={true}>
+                  <RailToggle collapsed onToggle={() => setCollapsed(false)} />
+                </TooltipPortalContext.Provider>
               )}
             </div>
             {/* K-05: inert before the first workspace; the icons stay as the product's outline. */}
@@ -394,35 +468,50 @@ function Frame() {
                 </CapabilitiesProvider>
               </SlotBoundary>
               <DensityToggle />
-              <ThemeToggle />
+              <TooltipPortalContext.Provider value={true}>
+                <SlotBoundary slot="environment">
+                  <RailStatusMenu dotOnly />
+                </SlotBoundary>
+                {feedback !== null && <FeedbackEntry onOpen={() => feedback.open({ kind: 'idea' })} />}
+                <ThemeToggle />
+              </TooltipPortalContext.Provider>
             </div>
           </>
         ) : (
           <>
-            {/* K-01 (D137): the head has a budget. The wordmark and the workspace switcher share ONE
-                36px row (the tagline lives on the website, not in the rail), the palette trigger sits
-                under it, and the tree starts one row step below. */}
+            {/* K-01 (D137), amended by D201: the head has a budget. The wordmark and the expand and
+                collapse toggle share ONE 36px row (the tagline lives on the website, the workspace
+                switcher in the footer since D201), the palette trigger sits under it, and the tree
+                starts one row step below. The toggle is a desktop control: the phone drawer has none. */}
             <div className="rail-head">
               <div className="rail-head-row">
                 <p className="rail-title">{t('app.title')}</p>
-                {/* D24 variant A: the workspace switcher. Renders nothing while no workspace is selected. */}
-                <WorkspaceSwitcher />
+                {!isNarrow && (
+                  <TooltipPortalContext.Provider value={true}>
+                    {/* While the collapsed rail peeks open, the toggle offers to keep it open. */}
+                    <RailToggle collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+                  </TooltipPortalContext.Provider>
+                )}
               </div>
               {/* G16: the palette trigger sits above the nav, the widest door into the product. */}
               <PaletteTrigger />
             </div>
             {/* The Favoriten and Menü sections; choosing a destination dismisses the narrow drawer. */}
             <RailNavBody onNavigate={() => setDrawerOpen(false)} />
-            {/* K-01 (D137): the footer is ONE row. The environment is a single pill whose menu holds
-                what used to stand beside it (the environment switch, "Umgebungen verwalten", the
-                density switch and the collapse affordance, the A4 non-dragging alternative to the
-                splitter); the feedback and theme icon buttons follow it. Nothing here spends the
-                accent. */}
+            {/* K-01 (D137), amended by D201 and D204: the footer is ONE row. The company is plain text on
+                the left (a switcher only with 2+ workspaces), then the build status as a single dot whose
+                menu holds the environment switch, "Umgebungen verwalten" and the density switch; the
+                feedback and theme icon buttons follow it, each naming itself on hover and focus (D204). The rail
+                clips, so their tooltips open in the overlay layer. Nothing here spends the accent. */}
+            <TooltipPortalContext.Provider value={true}>
             <div className="rail-footer">
+              {/* D24 variant A, calm (D204): the company is plain text, a switcher only with 2+ workspaces.
+                  Renders nothing while no workspace is selected. */}
+              <WorkspaceSwitcher />
               {/* D126 / E07: the environment pill, its dot the egress state (glyph plus words, never
                   colour alone). Its own slot boundary; with no landscape it shows the egress word. */}
               <SlotBoundary slot="environment">
-                <RailStatusMenu onCollapse={isNarrow ? undefined : () => setCollapsed(true)} />
+                <RailStatusMenu />
               </SlotBoundary>
               {/* M01: the signed-in-identity chip (spec §6, the G15 slot), icon-only in the one row. Its
                   own CapabilitiesProvider, because it renders OUTSIDE <main>'s provider, and it reads the same `whoami` through the sanctioned single source. Silent
@@ -439,19 +528,16 @@ function Frame() {
               {feedback !== null && (
                 /* A quiet icon control. It NEVER spends the accent (an accent down here would spend it
                    on every screen at once). */
-                <button
-                  type="button"
-                  className="rail-icon-btn"
-                  aria-label={t('feedback.open')}
-                  onClick={() => feedback.open({ kind: 'idea' })}
-                >
-                  <FeedbackGlyph />
-                </button>
+                <FeedbackEntry onOpen={() => feedback.open({ kind: 'idea' })} />
               )}
               {/* "Menü anpassen" while the Menü has no header to carry it (no favourites yet). */}
               <MenuCustomiseEntry />
-              <ThemeToggle />
+              {/* D210: the Einstellungen are one gear, never a group of rows: `/settings` links every page.
+                  Light or dark moved into the status dot's menu beside the density (owner, 18.11.2026), so
+                  the company's name keeps its room. */}
+              <SettingsEntry />
             </div>
+            </TooltipPortalContext.Provider>
           </>
         )}
       </nav>
@@ -494,6 +580,8 @@ function Frame() {
           {/* G16: the command palette, one mount for the whole app, opened from the trigger or Cmd/Ctrl+K.
               Inside CapabilitiesProvider (it disables denied verb rows) and KeyboardProvider. */}
           <SearchPalette />
+          {/* O00/O01 (D199): the one release toast (What's new, an update ready or running), silent otherwise. */}
+          {!preWorkspace && <ReleaseToast />}
         </CapabilitiesProvider>
       </main>
       {/* The shortcut sheet, opened on `?`. Read surface, Esc closes and returns focus to the trigger. */}

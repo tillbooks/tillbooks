@@ -58,8 +58,8 @@ export function reviewActions(h: ReviewActionHelpers): ActionDef[] {
     ctxAction(
       'flag_entry',
       'write:correctable:internal',
-      'Flag a posted journal entry as questioned (beanstandet) with a reason: review metadata only, the posted rows stay untouched. The entry shows as flagged in review_status until someone approves it; the books are corrected by reversal, never by edit.',
-      ctxSchema({ entryId: STR, reason: STR, idempotencyKey: STR }, ['entryId', 'reason', 'idempotencyKey']),
+      'Flag a posted journal entry as questioned (beanstandet); reason is optional (D204), the event keeps who and when: review metadata only, the posted rows stay untouched. The entry shows as flagged in review_status until someone approves it; the books are corrected by reversal, never by edit.',
+      ctxSchema({ entryId: STR, reason: STR, idempotencyKey: STR }, ['entryId', 'idempotencyKey']),
       (ctx, input) => flagEntry(ctx, input as never),
     ),
     ctxAction(

@@ -83,6 +83,7 @@ import {
 } from '../core/files/index.js';
 import { getSetting } from '../core/settings/index.js';
 import { mineRules } from '../core/banking/index.js';
+import { runSettlementPullStep } from '../core/settlement/dailyPull.js';
 import {
   activationCheckConnections,
   activationCheckDecision,
@@ -180,6 +181,8 @@ export interface SchedulerOptions {
   dauerbuchungen?: boolean;
   /** N04: turn the recurring-invoices step off. Defaults to on. */
   recurringInvoices?: boolean;
+  /** D198: turn the daily settlement feed pull off. Defaults to on (it runs only under settlement.pull_mode daily). */
+  settlementPull?: boolean;
 }
 
 /** N04 (D183): the seat the recurring-invoices step runs as: the owner seat, the D142 fallback. */
@@ -265,6 +268,14 @@ export function createScheduler(deps: ApiDeps, opts: SchedulerOptions = {}): Sch
         );
       } catch (e) {
         stepFailed('dauerbuchungen_step_failed', 'dauerbuchungen', e);
+      }
+    }
+    if (opts.settlementPull !== false) {
+      try {
+        // D198: the daily feed pull, as the person who saved each source (live `post`, never a governed seat).
+        runSettlementPullStep(system(), { pull: registryWrite('pull_settlement'), holdsPost: holdsPost(workspaceId) });
+      } catch (e) {
+        stepFailed('settlement_pull_step_failed', 'pull_settlement', e);
       }
     }
     if (opts.recurringInvoices !== false) {

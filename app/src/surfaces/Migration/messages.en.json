@@ -507,8 +507,7 @@
     "declare": "Declare a total",
     "waive": {
       "action": "Set aside",
-      "reason": "Reason",
-      "needsReason": "Give a reason so the exception stays traceable"
+      "reason": "Reason"
     },
     "waivers": {
       "count": "{n} controls set aside"

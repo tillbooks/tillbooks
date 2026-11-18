@@ -16,7 +16,8 @@ import { appendReviewEvent, mapReviewEvent, postedEntry } from './shared.js';
 
 export interface FlagEntryInput {
   entryId: string;
-  reason: string;
+  /** D204: optional; the review event keeps who and when either way. */
+  reason?: string;
   idempotencyKey: string;
 }
 
@@ -27,16 +28,14 @@ export function flagEntry(ctx: WorkspaceContext, input: FlagEntryInput): Result 
   const entry = postedEntry(ctx, input.entryId);
   if (entry === undefined) return err('not_found', { entryId: input.entryId });
   if (entry.status !== 'posted') return err('not_posted', { entryId: entry.id, status: entry.status });
-  if (typeof input.reason !== 'string' || input.reason.trim().length === 0) {
-    return err('invalid_input', { field: 'reason' });
-  }
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
 
   const run = (): Result => {
     const row = appendReviewEvent(ctx, {
       entryId: entry.id,
       kind: 'flag',
       status: 'flagged',
-      comment: input.reason,
+      comment: reason,
     });
     return ok({ reviewId: row.id, entryId: entry.id, status: 'flagged', review: mapReviewEvent(row) });
   };

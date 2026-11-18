@@ -50,7 +50,34 @@
         "one": "{count} Zeile ignorieren",
         "other": "{count} Zeilen ignorieren"
       },
-      "clear": "Auswahl aufheben"
+      "clear": "Auswahl aufheben",
+      "skipped": "Bleibt stehen: {list}.",
+      "skip": {
+        "target": {
+          "one": "{count} ohne Konto",
+          "other": "{count} ohne Konto"
+        },
+        "incomplete": {
+          "one": "{count} unvollständig",
+          "other": "{count} unvollständig"
+        },
+        "vorschlag": {
+          "one": "{count} mit offenem Vorschlag",
+          "other": "{count} mit offenem Vorschlag"
+        },
+        "duplicate": {
+          "one": "{count} vielleicht doppelt",
+          "other": "{count} vielleicht doppelt"
+        },
+        "single": {
+          "one": "{count} nur einzeln",
+          "other": "{count} nur einzeln"
+        },
+        "right": {
+          "one": "{count} ohne Recht zum Buchen",
+          "other": "{count} ohne Recht zum Buchen"
+        }
+      }
     },
     "first": {
       "noAccountTitle": "Noch kein Bankkonto erfasst.",
@@ -138,6 +165,14 @@
       "ignoreTip": "Nicht buchen, mit Grund",
       "vatSummary": "MWST, {party}: {vat}",
       "vatSummaryTip": "MWST pro Position in den Details",
+      "vatReceiptDiffers": "Beleg {receipt}, vorgeschlagen {proposed}",
+      "vatReceiptsSum": "{count} Belege, zusammen {amount}",
+      "vatReceiptsDiffer": "{receipt}, vorgeschlagen {proposed}",
+      "vatReceiptZero": "ohne MWST",
+      "vatProposedNone": "ohne MWST",
+      "vatReceiptUnread": "TILL kann die MWST des Belegs nicht mit dieser Buchung abgleichen: Seine Zahlen sind nicht bestätigt, die Zeile hat mehrere Belege, oder der Beleg deckt die Zeile nicht oder lautet auf eine andere Währung. Prüfe sie, bevor du buchst.",
+      "vatFromReceipt": "Vom Beleg",
+      "vatFromReceiptInstead": "Vom Beleg, statt {code}",
       "moreTip": "Regel, Beleg, Ignorieren",
       "menu": {
         "ruleSave": "Als Buchungsregel speichern",
@@ -343,6 +378,7 @@
     "compare": {
       "title": "Bank und Buchhaltung",
       "differenceReason": "Warum weicht der Betrag um {amount} ab?",
+      "acceptDifference": "Differenz von {amount} übernehmen",
       "differenceReasonHint": "zum Beispiel Bankspesen abgezogen",
       "matchWithDifference": "Mit Differenz abgleichen",
       "bank": "Bank",
@@ -423,9 +459,9 @@
       "bookPrivate": "So buchen",
       "reasonLegend": "Warum?",
       "note": "Notiz für dich oder den Treuhänder",
-      "noteRequired": "Grund in eigenen Worten",
       "consequence": "Die Zeile verschwindet aus der Liste, bleibt aber im Saldo der Bank. Kommt ihr Geld nirgends in die Buchhaltung, zeigt es der Abgleich oben als Differenz.",
       "commit": "Ignorieren",
+      "addNote": "Notiz hinzufügen",
       "reason": {
         "booked_elsewhere": {
           "label": "Wird anderswo gebucht",
@@ -463,7 +499,6 @@
         "ignoredByMistake": "Versehentlich ignoriert"
       },
       "note": "Notiz (freiwillig)",
-      "noteRequired": "Grund in eigenen Worten",
       "consequenceBooked": "Stornieren bucht eine Gegenbuchung, die ursprüngliche Buchung bleibt im Journal. Die Zeile ist danach wieder zu buchen.",
       "consequenceSettlement": "Stornieren storniert die Zahlung, die Rechnung ist wieder offen. Die Zeile ist danach wieder zu buchen.",
       "consequenceMatched": "Die bestehende Buchung bleibt unverändert, nur die Verbindung zur Zeile wird gelöst. Die Zeile ist danach wieder zu buchen.",
@@ -514,6 +549,7 @@
       "bookVat": "Auf {target} buchen, {vat}.",
       "bookUnknown": "Diese Zeile buchen.",
       "ignore": "Ignorieren: {reason}.",
+      "ignorePlain": "Ignorieren.",
       "reopen": "Stornieren und wieder öffnen: {reason}",
       "approve": "Freigeben",
       "reject": "Ablehnen",
@@ -595,7 +631,8 @@
       "formats": {
         "camt": "camt.053",
         "mt940": "MT940",
-        "csv": "CSV"
+        "csv": "CSV",
+        "xlsx": "Excel (xlsx)"
       },
       "csv": {
         "title": "Spalten zuordnen",
@@ -646,7 +683,12 @@
         },
         "preset": {
           "zkb_account_statement": "Erkannt: der CSV-Kontoauszug der ZKB. Die Spalten sind schon zugeordnet. Prüfe sie."
-        }
+        },
+        "sheet": "Tabellenblatt",
+        "parsedDate": "Datum gelesen",
+        "parsedAmount": "Betrag gelesen",
+        "unread": "nicht gelesen",
+        "separatorMismatch": "Zeile {row}, Spalte «{column}»: die Datei schreibt ihre Beträge mit dem anderen Dezimalzeichen. Korrigiere das Dezimalzeichen."
       },
       "result": {
         "counts": "Neu: {imported} · Schon im Buch: {duplicates} · Nicht gelesen: {refused}",
@@ -674,7 +716,9 @@
           "csv_fill_untied": "Ein Zeitraum schliesst nicht an die Auszüge an. Er ist trotzdem importiert (Einstellung), die Lücke bleibt offen.",
           "csv_fill_chain_broken": "Bei einem Zeitraum geht der Saldo nicht auf. Er ist trotzdem importiert (Einstellung).",
           "csv_fill_open_end": "Ein Zeitraum endet mitten im Export. Er ist trotzdem importiert (Einstellung).",
-          "csv_fill_needs_balance": "Ohne Saldo-Spalte ist ein Zeitraum ungeprüft importiert (Einstellung)."
+          "csv_fill_needs_balance": "Ohne Saldo-Spalte ist ein Zeitraum ungeprüft importiert (Einstellung).",
+          "csv_fill_unreadable_row": "Ein Zeitraum mit einer unlesbaren Zeile im Export ist trotzdem importiert (Einstellung), ungeprüft.",
+          "csv_fill_boundary_mismatch": "Ein Zeitraum, dessen Grenztage vom Buch abweichen, ist trotzdem importiert (Einstellung), ungeprüft."
         },
         "refused": {
           "account_mismatch": "die Datei gehört zu einem anderen Konto",
@@ -731,7 +775,12 @@
           "untied": "Der Saldo schliesst nicht an den Auszug an: Differenz {amount}. Von diesen Tagen kommt nichts ins Buch.",
           "open_end": "Der Export endet am {date}, mitten in diesen Tagen. Exportiere ein paar Tage mehr.",
           "no_balance_column": "Ohne Saldo-Spalte prüft TILL diese Tage nicht. Von diesen Tagen kommt nichts ins Buch.",
-          "not_in_file": "Die Datei reicht nicht bis zu diesen Tagen."
+          "not_in_file": "Die Datei reicht nicht bis zu diesen Tagen.",
+          "untiedSum": "Die Zeilen dieser Tage weichen um {amount} von den Auszügen davor und danach ab. Von diesen Tagen kommt nichts ins Buch.",
+          "open_start": "Der Export beginnt erst in diesen Tagen. Exportiere ab einem Tag früher.",
+          "no_neighbour": "Ohne Saldo-Spalte braucht TILL an beiden Enden einen Auszug im Buch. Von diesen Tagen kommt nichts ins Buch.",
+          "unreadable_row": "Zeile {row} lässt sich nicht lesen, damit beweist die Summe nichts. Von diesen Tagen kommt nichts ins Buch.",
+          "boundary_mismatch": "Am {date} stehen im Export andere Beträge als im Buch. Von diesen Tagen kommt nichts ins Buch."
         },
         "line": "Zeile {row}",
         "commit": "Fehlende Tage importieren",
@@ -745,6 +794,9 @@
         "flagged": {
           "one": "1 davon wartet auf deinen Entscheid (mögliches Duplikat)",
           "other": "{count} davon warten auf deinen Entscheid (mögliches Duplikat)"
+        },
+        "proof": {
+          "neighbour_sum": "Durch die Summe geprüft: die Zeilen ergeben genau, was die Auszüge davor und danach offen lassen"
         }
       }
     },
@@ -811,7 +863,8 @@
       "selfBookedOpen": "Der Vorschlag des Agenten ist noch offen: lehn ihn unter Pendenzen ab.",
       "vorschlagLeftOpen": "Der Vorschlag des Agenten bleibt offen: schliessen kann ihn, wer Vorschläge entscheiden darf.",
       "ignoredWhy": "Ignoriert: {party} ({reason})",
-      "undoShort": "Rückgängig"
+      "undoShort": "Rückgängig",
+      "pickedSkipped": "Stehen geblieben: {list}."
     },
     "agent": {
       "question": "Wie buche ich diese Bankzeile: {date}, {party}, {amount}?"
@@ -1430,7 +1483,6 @@
         "legs": "Buchen",
         "ignore": "Nicht buchen",
         "reason": "Grund",
-        "noteMissing": "Gib beim anderen Grund eine Notiz ein.",
         "ignoreHint": "Eine Zeile, die nicht gebucht wird, erreicht die Buchhaltung nie. Darum schlägt TILL das nur vor, und du legst jede Zeile selbst beiseite.",
         "noLegs": "Diese Regel hat keine Positionen. Teil eine Zeile auf und speichere sie mit ☆."
       },
@@ -1552,7 +1604,8 @@
       "source": "Quelle",
       "sourceOf": {
         "csv": "CSV-Export der Bank",
-        "mt940": "MT940-Datei"
+        "mt940": "MT940-Datei",
+        "xlsx": "Excel-Export der Bank"
       }
     },
     "book": {
@@ -1563,10 +1616,8 @@
         "target": "Konto wählen",
         "ask": "{label} fehlt",
         "restZero": "Rest wäre {amount}",
-        "difference": "Grund der Differenz fehlt",
         "rule": "Regel wählen",
         "restZeroShort": "Für {account} bleibt nichts übrig",
-        "overrideReason": "Gib einen Grund für die Abweichung vom Standard an.",
         "remainder": "Es bleiben {amount} übrig: wähle, was damit geschieht."
       }
     },
@@ -1591,6 +1642,7 @@
       "dockLabel": "Position der Details",
       "dockRight": "Rechts",
       "dockBottom": "Unten",
+      "dockBottomBlocked": "Zu wenig Höhe: Die Details brauchen unten mehr Platz, darum stehen sie rechts.",
       "closeContext": "Details zur Bankzeile",
       "resize": "Grösse der Details",
       "sizeText": "{size} Pixel"
@@ -1826,6 +1878,78 @@
         "beleg_already_captured": "Diesen Beleg hat TILL schon erfasst. Ordne ihn im Belegeingang zu.",
         "unsupported_mime": "Diese Datei lässt sich nicht als Beleg erfassen."
       }
+    },
+    "inline": {
+      "presetMeta": "Vorlage",
+      "noPreset": "Ohne Vorlage, normal buchen",
+      "ruleMeta": "Regel",
+      "groupPresets": "Vorlage für Umsatz",
+      "groupRulesFor": "Regeln für {party}",
+      "groupItems": "Offene Rechnung zuordnen ({count})",
+      "groupMore": "Weiteres",
+      "search": "Konto, Regel oder Rechnung",
+      "textLabel": "Buchungstext, {party}",
+      "vatInSettlement": "in der Abrechnung",
+      "vatInSettlementTip": "Die MWST der Verkäufe bucht die {name}.",
+      "vatNone": "keine",
+      "vatDiffers": "Der Beleg zeigt eine andere MWST.",
+      "menu": {
+        "ignore": "Ignorieren",
+        "rule": "Als Regel speichern",
+        "link": "Mit Buchung abgleichen",
+        "attach": "Beleg anhängen",
+        "agent": "Agent fragen"
+      },
+      "moreTip": "Ignorieren, Regel, Abgleichen, Beleg, Agent",
+      "original": "Original",
+      "rate": "Kurs {rate}",
+      "qr": "QR",
+      "copyRef": "Referenz kopieren",
+      "copyRefLabel": "Referenz {ref} kopieren",
+      "source": {
+        "agent": "Vorschlag vom Agenten",
+        "vatFromReceipt": "MWST aus dem Beleg übernommen",
+        "rule": "Regel {name}"
+      },
+      "vatLeg": "MWST",
+      "legsToggle": "Soll und Haben ({count})",
+      "receiptNoVat": "ohne MWST",
+      "receiptVatRate": "MWST {rate} % · {amount}",
+      "receiptVat": "MWST {amount}",
+      "assignCandidate": "Zuordnen",
+      "attach": "Beleg anhängen",
+      "readReceipt": "Beleg lesen",
+      "openReceipt": "Beleg {name} ansehen",
+      "presetName": "Abrechnung {system}",
+      "presetNameVia": "Abrechnung {system} über {processor}",
+      "vatWithZiffer": "{name}, Ziffer {ziffer}"
+    },
+    "payout": {
+      "title": "Auszahlung von {processor}",
+      "kind": {
+        "sale": "Verkauf {day}",
+        "refund": "Rückerstattung {day}",
+        "processing_fee": "Kartengebühr",
+        "service_fee": "Gebühren {processor}",
+        "third_party_payout": "an Dritte",
+        "third_party_payout_reversal": "von Dritten zurück",
+        "reserve": "von {processor} zurückbehalten",
+        "other": "Anderes"
+      },
+      "kindPlain": {
+        "sale": "Verkäufe",
+        "refund": "Rückerstattungen",
+        "processing_fee": "Kartengebühren",
+        "service_fee": "Gebühren {processor}",
+        "third_party_payout": "an Dritte",
+        "third_party_payout_reversal": "von Dritten zurück",
+        "reserve": "von {processor} zurückbehalten",
+        "other": "Anderes"
+      },
+      "many": "{label} ({count})",
+      "withVat": "{label}, MWST {vat}",
+      "thisPayout": "diese Auszahlung",
+      "held": "bleibt bei {processor}"
     }
   },
   "qrmatch": {
@@ -1848,7 +1972,7 @@
   "help": {
     "Bank": {
       "title": "Bank",
-      "body": "Hier steht jede Zeile deiner Kontoauszüge, egal von welchem Konto. Du entscheidest sie auf ihrer Zeile: buchen, eine offene Rechnung begleichen, mit einer Buchung abgleichen oder mit dem × ignorieren. Klickst du eine Zeile an, zeigen die Details daneben, was gebucht wird und woher der Vorschlag kommt. Über der Liste steht die Differenz zwischen Bank und Buchhaltung.\n\nMit dem ☆ speicherst du eine Buchungsregel für die Gegenpartei. Eine Buchungsregel schlägt nur vor. Gebucht wird erst auf deinen Klick. Einen berechneten Betrag kannst du überschreiben. Einen Beleg hängst du mit der Büroklammer an oder ziehst ihn auf die Zeile. Ist sie gebucht, bewahrt TILL ihn zehn Jahre auf.",
+      "body": "Hier steht jede Zeile deiner Kontoauszüge. Du entscheidest sie auf ihrer Zeile: buchen, eine offene Rechnung begleichen, mit einer Buchung abgleichen oder ignorieren. Ein Klick auf die Zeile zeigt, was gebucht wird und woher der Vorschlag kommt. Über der Liste steht die Differenz zwischen Bank und Buchhaltung.\n\nUnter Mehr speicherst du eine Buchungsregel für die Gegenpartei, hängst einen Beleg an oder ignorierst die Zeile. Eine Buchungsregel schlägt nur vor. Gebucht wird erst auf deinen Klick. Hakst du mehrere Zeilen an, bucht TILL jede, die vollständig ist, und sagt, welche stehen bleiben. Einen Beleg kannst du auch auf die Zeile ziehen. Ist sie gebucht, bewahrt TILL ihn zehn Jahre auf.",
       "concepts": [],
       "docsPath": "introduction"
     }
@@ -1914,9 +2038,9 @@
     "warnZkb": "Wähle nicht «Alle nicht abgeholten Daten». Damit gelten die Tage bei der ZKB als abgeholt, und der automatische Abruf von TILL bekommt sie vielleicht nicht mehr.",
     "warnOther": "Lade die Auszüge nicht als «neue, noch nicht abgeholte» Daten herunter. Sonst gelten sie bei der Bank als abgeholt, und der automatische Abruf von TILL bekommt sie vielleicht nicht mehr.",
     "choose": "Dateien wählen",
-    "drop": "camt.053-Dateien hierher ziehen",
-    "hint": "Eine oder mehrere XML-Dateien, auch eine Datei mit mehreren Tagen.",
-    "notXml": "Das ist keine XML-Datei. Lade die Auszüge im Format camt.053 herunter.",
+    "drop": "camt.053, CSV oder Excel hierher ziehen",
+    "hint": "Eine oder mehrere XML-Dateien, oder ein CSV- oder Excel-Export.",
+    "notXml": "Diese Datei liest TILL nicht. Lade camt.053, CSV oder Excel (xlsx) herunter.",
     "denied": "Auszüge importieren und Lücken bestätigen darf nur, wer Zahlungen verwalten darf.",
     "busy": "Die Auszüge werden importiert.",
     "done": "{imported} von {total} Auszügen importiert.",
@@ -1955,11 +2079,28 @@
       "gap_not_found": "Diese Lücke ist inzwischen geschlossen.",
       "human_only": "Das bestätigt eine Person, nicht der Agent.",
       "needs_bank_account": "Dieses Bankkonto gibt es nicht mehr.",
-      "gap_has_waiting_statement": "In dieser Lücke wartet ein Auszug, der nicht anschliesst: es fehlt Geld im Buch. Sie lässt sich nicht bestätigen: importiere die fehlenden Auszüge."
+      "gap_has_waiting_statement": "In dieser Lücke wartet ein Auszug, der nicht anschliesst: es fehlt Geld im Buch. Sie lässt sich nicht bestätigen: importiere die fehlenden Auszüge.",
+      "xls_unsupported": "Diese Excel-Datei liest TILL nicht. Speichere sie als xlsx (ohne Passwort) oder als CSV.",
+      "table_too_large": "Die Datei ist zu gross. Exportiere einen kürzeren Zeitraum.",
+      "table_too_many_rows": "Die Datei hat zu viele Zeilen. Exportiere einen kürzeren Zeitraum.",
+      "csv_mapping_invalid": "Ordne die Spalten für das Datum und den Betrag zu.",
+      "csv_fill_needs_balance": "Ordne die Spalte für den Saldo zu: daran prüft TILL, dass keine Zeile fehlt.",
+      "csv_mapping_separator_mismatch": "Die Datei schreibt ihre Beträge mit dem anderen Dezimalzeichen. Korrigiere das Dezimalzeichen."
     },
     "titleAll": "Auszüge {ranges} fehlen",
     "whyAllChain": "Es fehlt kein Geld: die Salden schliessen genau an.",
-    "titleMany": "Lücken schliessen"
+    "titleMany": "Lücken schliessen",
+    "export": {
+      "title": {
+        "csv": "CSV-Export",
+        "xlsx": "Excel-Export"
+      },
+      "days": "{from} bis {to}",
+      "notReady": "Diese Tage kommen so nicht ins Buch.",
+      "busy": "Die fehlenden Tage werden importiert.",
+      "closed": "Die Lücke ist geschlossen: Auszüge {range} sind aus dem Export im Buch."
+    },
+    "mixed": "Genommen: {used}. Nicht genommen: {left}. Lege entweder die camt.053-Dateien oder einen Export ab."
   },
   "autobook": {
     "chip": {

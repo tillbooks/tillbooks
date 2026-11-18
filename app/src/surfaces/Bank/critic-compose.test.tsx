@@ -35,6 +35,8 @@ import { axe } from 'jest-axe';
 import { MemoryRouter } from 'react-router-dom';
 
 import { TillClientProvider } from '../../lib/client-context';
+import { PrefsProvider } from '../../lib/prefs';
+import { legacyLayout } from './test-prefs';
 import { TillClient, type RestResponse, type Transport } from '../../lib/client';
 import { CAP, CapabilitiesContext, type Capabilities } from '../../lib/capabilities';
 import { I18nProvider } from '../../i18n';
@@ -244,9 +246,11 @@ function renderBank(transport: Transport, path = '/bank', opts: { held?: readonl
     <TillClientProvider client={client}>
       <I18nProvider initialLocale="de-CH">
         <WorkspaceProvider initialId="ws_test">
-          <MemoryRouter initialEntries={[path]}>
+          <PrefsProvider store={legacyLayout()}>
+            <MemoryRouter initialEntries={[path]}>
             <Bank />
           </MemoryRouter>
+          </PrefsProvider>
         </WorkspaceProvider>
       </I18nProvider>
     </TillClientProvider>

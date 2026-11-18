@@ -188,6 +188,138 @@ export function targetPickerModel(
 }
 
 /**
+ * D195 (v12): a turnover preset, the booking template of one settlement source (`get_settlement_template`).
+ * Picked for a payout line, the line books the bank against the source's clearing account; the import of the
+ * settlement books the sales, fees and VAT behind it.
+ */
+export interface TurnoverPreset {
+  templateId: string;
+  /** The name a person reads ("Abrechnung Stripe"). */
+  name: string;
+  clearingAccountId: string;
+}
+
+/** The preset a target books by: one leg straight to a preset's clearing account. */
+export function activePreset(presets: readonly TurnoverPreset[], target: DraftTarget | null): TurnoverPreset | null {
+  if (target?.kind !== 'accounts' || target.legs.length !== 1 || (target.viaAccountId ?? '') !== '') return null;
+  const accountId = target.legs[0]?.accountId;
+  return presets.find((p) => p.clearingAccountId === accountId) ?? null;
+}
+
+/**
+ * D195 (owner, v12): the row's account picker, searchable, in the owner's order: for money coming in while a
+ * settlement source has a template, "Vorlage für Umsatz" (the presets) and "Ohne Vorlage, normal buchen"; the
+ * Buchungsregeln of this counterparty; every account; then "Offene Rechnung zuordnen" with its count (the open
+ * items, and for money out the generated payment runs) and "Aufteilen". Abgleichen and Ignorieren live in the
+ * row's Mehr, not here.
+ */
+export function inlinePickerModel(
+  t: T,
+  l: Lookups,
+  line: BankInboxLine,
+  current: DraftTarget | null,
+  presets: readonly TurnoverPreset[],
+  canPost = true,
+): TargetPickerModel {
+  const options: ComboboxOption[] = [];
+  const bankLedger = l.bankById.get(line.bankAccountId)?.ledgerAccountId ?? null;
+  const preset = activePreset(presets, current);
+  const credit = isCredit(line);
+
+  if (credit && presets.length > 0) {
+    for (const p of presets) {
+      options.push({ id: `preset:${p.clearingAccountId}`, label: p.name, meta: t('bankInbox.inline.presetMeta'), group: 'presets', current: preset?.templateId === p.templateId });
+    }
+    options.push({ id: 'act:nopreset', label: t('bankInbox.inline.noPreset'), group: 'presets', current: current !== null && preset === null });
+  }
+
+  for (const id of lineRuleIds(line)) {
+    const rule = l.standardById.get(id);
+    if (rule === undefined || rule.invalidReason !== null) continue;
+    options.push({
+      id: `rule:${id}`,
+      label: ruleName(t, rule),
+      meta: t('bankInbox.inline.ruleMeta'),
+      keywords: `${rule.matchText ?? ''} ${rule.counterpartyLabel} ${routeInWords(t, l, rule)}`,
+      group: 'rules',
+      current: current?.kind === 'rule' && current.standardId === id,
+    });
+  }
+
+  for (const a of l.chart) {
+    if (a.id === bankLedger) continue;
+    options.push({
+      id: `acc:${a.id}`,
+      code: a.number,
+      label: a.name,
+      group: 'accounts',
+      current: preset === null && current?.kind === 'accounts' && current.legs.length === 1 && (current.viaAccountId ?? '') === '' && current.legs[0]?.accountId === a.id,
+    });
+  }
+
+  let items = 0;
+  if (credit) {
+    for (const inv of l.invoices) {
+      if (inv.currency !== line.currency) continue;
+      items += 1;
+      options.push({
+        id: `inv:${inv.documentId}`,
+        code: inv.number ?? t('bankInbox.target.invoice'),
+        label: inv.contactName ?? t('bankInbox.target.invoiceName'),
+        trailing: formatMoney(inv.openMinor, inv.currency),
+        keywords: `${inv.number ?? ''} ${inv.contactName ?? ''} ${amountKeywords(inv.openMinor, inv.currency)}`,
+        group: 'items',
+        current: current?.kind === 'open_item' && current.documentId === inv.documentId,
+      });
+    }
+  } else {
+    for (const bill of l.bills) {
+      if (bill.currency !== line.currency) continue;
+      items += 1;
+      options.push({
+        id: `bill:${bill.vendorBillId}`,
+        code: bill.reference ?? t('bankInbox.target.bill'),
+        label: bill.vendorName ?? t('bankInbox.target.billName'),
+        trailing: formatMoney(bill.openMinor, bill.currency),
+        keywords: `${bill.reference ?? ''} ${bill.vendorName ?? ''} ${amountKeywords(bill.openMinor, bill.currency)}`,
+        group: 'items',
+        current: current?.kind === 'open_item' && current.documentId === bill.vendorBillId,
+      });
+    }
+    for (const b of l.batches) {
+      if (b.bankAccountId !== '' && b.bankAccountId !== line.bankAccountId) continue;
+      items += 1;
+      options.push({
+        id: `batch:${b.batchId}`,
+        code: b.executionDate === null ? t('bankInbox.target.batchCode') : formatDate(b.executionDate),
+        label: plural(t, 'bankInbox.picker.batchLabel', b.itemCount),
+        ...(b.totalMinor !== null ? { trailing: formatMoney(b.totalMinor, line.currency), keywords: amountKeywords(b.totalMinor, line.currency) } : {}),
+        group: 'items',
+        current: current?.kind === 'payment_batch' && current.batchId === b.batchId,
+      });
+    }
+  }
+
+  options.push({
+    id: 'act:split',
+    label: t('bankInbox.picker.actSplit'),
+    keywords: t('bankInbox.picker.actSplitKeywords'),
+    group: 'tail',
+    ...(canPost ? {} : { disabled: true, meta: t('bankInbox.picker.actDenied') }),
+  });
+
+  const party = line.counterparty.name ?? line.derivedCounterparty?.label ?? '';
+  const groups: ComboboxGroup[] = [
+    { key: 'presets', label: t('bankInbox.inline.groupPresets') },
+    { key: 'rules', label: party === '' ? t('bankInbox.picker.groupRules') : t('bankInbox.inline.groupRulesFor', { party }) },
+    { key: 'accounts', label: t('bankInbox.picker.groupAccounts') },
+    { key: 'items', label: t('bankInbox.inline.groupItems', { count: items }) },
+    { key: 'tail', label: t('bankInbox.inline.groupMore') },
+  ];
+  return { options, groups, value: '' };
+}
+
+/**
  * D175 point 4 (A39 §14.3, §14.5): the chooser on a `several_rules` line. ONE decision: the rules that
  * match the line, by name (the engine names them; a rule the Studio cannot read still lists, by the
  * counterparty), and "Anders buchen". Nothing else: the full "Worauf buchen?" list is behind "Anders
@@ -249,6 +381,11 @@ export function resolvePick(
   // D175: the chooser's two answers.
   if (id === 'act:other') return { kind: 'other' };
   if (id === 'act:clear') return { kind: 'clear' };
+  // D195: "Ohne Vorlage, normal buchen" leaves the preset; the person then chooses an account.
+  if (id === 'act:nopreset') return { kind: 'clear' };
+  // D195: a turnover preset books the bank against its clearing account, without a tax code (the settlement
+  // books the VAT of the sales behind the payout).
+  if (id.startsWith('preset:')) return { kind: 'target', target: accountDraft(line, id.slice('preset:'.length), ''), source: 'edited', chainVat: false };
   if (id.startsWith('rule:')) return { kind: 'target', target: ruleTargetOf(l, id.slice('rule:'.length)), source: 'edited', chainVat: false };
   if (id === 'act:link') return { kind: 'mode', mode: 'link' };
   if (id === 'act:split') return { kind: 'mode', mode: 'split' };

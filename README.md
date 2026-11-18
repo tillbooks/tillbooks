@@ -8,8 +8,13 @@
 
 **Trusted Independent Ledger Library.** An agent-first ERP for Swiss SMEs.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://tillbooks.ch/product/crops/hero-d-en-dark-1120.webp">
+  <img alt="The TILL Studio showing an invoice with its VAT summary and the Swiss QR payment part" src="https://tillbooks.ch/product/crops/hero-d-en-light-1120.webp" width="840">
+</picture>
+
 TILL is a free, open-source (MIT) ERP for Swiss small businesses: sales, purchasing, payments, stock,
-projects, books and MWST. Every function is exposed as an MCP tool, 852 of them, so your AI agent runs
+projects, books and MWST. Every function is exposed as an MCP tool, 869 of them, so your AI agent runs
 it and the Studio (the app you work in) shows you what it did. It works with Claude Desktop, Cursor
 and other MCP clients that can start a local stdio server. TILL runs on your own computer, or on a
 server you host yourself. Your books are a single SQLite file on that machine, and no server of ours
@@ -22,9 +27,17 @@ as drafts and contact details, runs without asking, and every call the agent mak
 The dial covers agents that connect to TILL. An agent that can drive your browser or run commands on
 your computer can act as you: give your agent TILL, not your browser or your shell.
 
-> **Public beta, version 1.0.0-beta.5.** Nomadik GmbH, the company behind TILL, keeps its own books
+> **Public beta, version 1.0.0-beta.6.** Nomadik GmbH, the company behind TILL, keeps its own books
 > in it. If you move your books to TILL, keep your old system running until the figures match, and
 > read [what the beta does not do yet](#what-the-beta-does-not-do-yet) first.
+
+Try it in one line (Node.js 22+, macOS or Linux), then open the demo company:
+
+```bash
+npm install -g tillbooks@beta && till up
+```
+
+If TILL could be useful to you, a star on GitHub helps other Swiss businesses find it.
 
 ## Why
 
@@ -76,8 +89,7 @@ npm install -g tillbooks@beta
 till up
 ```
 
-Keep the `@beta`. Until the beta ends, a plain `tillbooks` on npm is the old 0.1.0, which has no
-Studio.
+Keep the `@beta` tag: it always points at the newest beta.
 
 `till up` starts the Studio at `http://127.0.0.1:8788` and opens it in your browser. It listens on
 your own machine only. The first screen offers three ways in: create a new ledger, restore a backup,
@@ -142,12 +154,18 @@ plugin in [plugins/tillbooks](plugins/tillbooks).
 - **Usage and storage.** What you enter (your company, contacts, documents and postings) is stored in
   one SQLite file on your machine, `~/.till/till.db` or the path in `TILL_DB_PATH`. Diagnostics,
   backups and feedback reports you create stay in `~/.till` or `TILL_SUPPORT_DIR`. TILL itself opens
-  no outbound connection: the MCP server talks over stdio and the Studio listens on 127.0.0.1 only.
+  no outbound connection unless you set one up: the MCP server talks over stdio, the Studio listens on
+  127.0.0.1 only, and a settlement source you save (macOS) is fetched over HTTPS from the address you
+  entered, when you ask or, if you choose `settlement.pull_mode` = `daily`, once a day (retried if it
+  fails).
 - **Third-party sharing.** TILL shares nothing with anyone. Two things leave your machine because
   other software sends them: `npm` or `npx` downloads the package from the npm registry, under npm's
   terms, and what your agent reads through TILL's tools becomes part of your conversation with your
   AI provider, under that provider's terms. Files TILL writes for you (an eCH-0217 return, a pain.001
   payment file, an invoice PDF, a feedback report) leave only when you upload or send them yourself.
+  The one kind of request TILL sends itself goes to a settlement source you saved: it asks that address for
+  its settlements with the token you entered for it (kept in the macOS Keychain) and the date range.
+  Nothing from your books goes out with it.
 - **Data retention.** Your data stays on your disk until you delete it. Posted entries are
   append-only, as Swiss bookkeeping requires; a correction is a reversing entry. Deleting the
   database file and `~/.till` removes everything TILL stored. Keeping your books for the statutory
@@ -185,7 +203,7 @@ plugin in [plugins/tillbooks](plugins/tillbooks).
 - [Quickstart](site-docs/quickstart.mdx) : install, first run, and connecting your agent
 - [Run inside an agent](site-docs/mcp/run-inside-agent.mdx) : drive TILL over MCP with no machine of your own
 - [Self-hosting in under an hour](site-docs/self-hosting/under-an-hour.mdx) : stand up a served instance
-- [Documentation](https://docs.tillbooks.ch) : the product guides and capability reference
+- [Documentation](site-docs/introduction.mdx) : the product guides and the MCP reference
 - [Design](brand/DESIGN.md) : the design law this project builds to
 
 ## Before you use it

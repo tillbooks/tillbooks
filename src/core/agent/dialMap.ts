@@ -163,6 +163,13 @@ export const DIAL_CAPABILITY_FOR_ACTION: Readonly<Record<string, string>> = {
   // settlement entry goes, exactly as a Buchungsregel does.
   import_settlement: 'post',
   set_settlement_template: 'post',
+  // A43 §2: the table mapping decides how later tables become the events the import books, as the template does.
+  set_settlement_table_mapping: 'post',
+  // D198: the pull posts exactly as the import does.
+  pull_settlement: 'post',
+  // A42: an answer decides what the import and the pull post, so it is dialled like them (an agent's call
+  // drafts a Vorschlag; a person decides it).
+  set_settlement_event_ignored: 'post',
 
   // The governance check of 28.09.2026 (one appended block). A static reference graph over `src/`
   // (`test/agent/dial-covers-entry-minting.test.mjs`) found these write verbs reaching `postEntry`
@@ -504,12 +511,12 @@ export const NOT_DIAL_GOVERNED: Readonly<Record<string, string>> = {
   // D161: the two human-only writes. Neither drafts, because a drafted approval or dial grant would be
   // approved by the same person it asks; the engine refuses the governed seat on the ACTOR for both.
   approve_drafted_action:
-    'human-only: approveDraftedAction refuses every governed seat with cannot_self_approve before it reads the row, and A24 step 0 denies the governed seat manage_agent_dial; an approval is the human act a Vorschlag waits for, so drafting one would ask the same person twice',
+    'human-only: approveDraftedAction refuses every governed seat with cannot_self_approve before it reads the row, and A24 step 0 denies the governed seat manage_agent_dial; an approval is the human act a Vorschlag waits for, so drafting one would ask the same person twice. D196: the owner\'s live grant agent.decide_proposals = decide lets the seat approve itself (never drafted, never with allowFuture), each decision recorded with the grant. D209: so does the owner\'s word on one Vorschlag (ownerWord, under the human-only setting agent.approve_on_owner_word), recorded with the quote',
   set_agent_dial:
     'human-only: setAgentDial refuses every governed seat with cannot_self_grant, writeDialLevel throws for one, and A24 step 0 denies the governed seat manage_agent_dial; a dial grant is the human act that decides what drafts, so it cannot itself be a draft',
   // N01: the batch approval is the single approval many times, human-only for the same reason.
   approve_drafted_actions:
-    'human-only: approveDraftedActions refuses every governed seat with cannot_self_approve before it reads a row, A24 step 0 denies the governed seat manage_agent_dial, and every id is then one approve_drafted_action through the transport seam',
+    'human-only: approveDraftedActions refuses every governed seat with cannot_self_approve before it reads a row, A24 step 0 denies the governed seat manage_agent_dial, and every id is then one approve_drafted_action through the transport seam (D196: under the owner\'s live grant decide, each id meets that grant again)',
   // N01: the three DISPATCHERS. Drafting the batch as one Vorschlag would hide its items from the person;
   // instead every item is the single verb itself, dispatched through the transport seam (`governedRun`),
   // where the dial governs it: under ask each item is its own Vorschlag (D182 §4).
@@ -581,6 +588,12 @@ export const APPROVAL_CONFIRMS_FIELD: Readonly<Record<string, string>> = {
  * exactly one of the two maps.
  */
 export const APPROVAL_CONFIRM_NOT_SET: Readonly<Record<string, string>> = {
+  // A43 §2 (re-critic round 2, L1): approving never ADDS an id-change confirmation the agent did not propose.
+  set_settlement_table_mapping:
+    'confirmIdChange is never set by the approval: a save that changes the id derivation while events are booked refuses event_id_derivation_changed at draft time unless the agent drafts confirmIdChange itself, so the card shows the flag in the payload and the consequence names the double-booking risk; the approving person runs it (a governed seat executing it is refused person_decides)',
+  // D206 (security review, 16.11.2026): approving never ADDS an edge-day answer the agent did not propose.
+  import_settlement:
+    'confirmEdgeDays and fileDays are never set by the approval: confirmEdgeDays names the days a person says are complete and fileDays the first and last day of the whole file (which days count as edges), so either takes effect only when the drafted payload carries it and the card shows it; the approving person replays it as their own answer (audited confirm_edge_day, and file_days_inner for a document day fileDays says is not an edge), and a governed seat executing it is refused person_decides',
   go_productive:
     'confirmedName is a type-to-confirm against the legal name, not a flag: the approval replays the name the agent drafted, so the card shows it and a wrong one refuses confirm_name_mismatch rather than promoting',
 };
@@ -874,11 +887,10 @@ for (const action of ['settings_set', 'settings_reset']) {
     (INPUT_KEYED_DIAL_RULES as InputKeyedDialRule[]).push({
       action,
       capability,
-      // A call without a non-blank reason is not drafted: the verb refuses it reason_required and writes
-      // nothing, so a Vorschlag that could only fail at approval is never queued (critic D172 r1).
-      when: (input) =>
-        typeof input.key === 'string' && input.key.length > 0 && typeof input.reason === 'string' && input.reason.trim().length > 0 &&
-        dialCapabilityForSetting(input.key) === capability,
+      // D202 point 6: the reason is optional, so the rule keys on the key alone. A reasonless call is governed
+      // like any other (it used to match nothing here and, once the verb stopped refusing reason_required,
+      // would have run undrafted: the fail-open the D202 security review caught).
+      when: (input) => typeof input.key === 'string' && input.key.length > 0 && dialCapabilityForSetting(input.key) === capability,
       why: 'A workspace setting decides how TILL behaves for everyone from the next action on; an agent drafts a change for the owner at the tier of what the setting governs.',
     });
   }

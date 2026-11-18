@@ -192,6 +192,8 @@ const caps = {
 
 function prefs(seed: Record<string, string | number | boolean> = {}): PrefsStore {
   const store = new PrefsStore(null, null, { useCache: false });
+  // D195: the D178 layout these suites were written for (the row editor is the default since v12).
+  store.seed('bank.detail_position', 'automatic');
   for (const [k, v] of Object.entries(seed)) store.seed(k, v);
   return store;
 }
@@ -246,9 +248,9 @@ describe('the new draft targets (A39 §17)', () => {
     for (const t of [alloc, contact, { kind: 'expense_claims', claimIds: ['cl_1'] } as DraftTarget]) expect(bookCapability(t)).toBe('pay');
   });
 
-  it('a differing contact mode needs its reason; an empty allocation is not bookable', () => {
+  it('D204 a differing contact mode needs no reason; an empty allocation is not bookable', () => {
     const l = line('bt_1') as unknown as BankInboxLine;
-    expect(isBookable(l, { kind: 'contact', contactId: 'c_1', mode: 'anzahlung', overrideReason: '' })).toBe(false);
+    expect(isBookable(l, { kind: 'contact', contactId: 'c_1', mode: 'anzahlung', overrideReason: '' })).toBe(true);
     expect(isBookable(l, { kind: 'contact', contactId: 'c_1', mode: null, overrideReason: '' })).toBe(true);
     expect(isBookable(l, { kind: 'allocations', allocations: [{ documentId: 'doc_1', amountMinor: 0 }], remainder: null })).toBe(false);
   });
@@ -344,14 +346,13 @@ describe('the booking modes (A39 §20.1 to §20.3)', () => {
     // The footer's figures and the engine's own sentence as Buchen's reason.
     expect(within(area()).getByText('Abweichung')).toBeInTheDocument();
     bookable = true;
-    // Choosing Anzahlung (not the setting) asks a reason before it books.
+    // D204: choosing Anzahlung (not the setting) books with no reason; the override is audited by the engine.
     await userEvent.click(within(area()).getByRole('radio', { name: 'Anzahlung' }));
-    await waitFor(() => expect(buchen()).toHaveAttribute('aria-disabled', 'true'));
-    await userEvent.type(within(area()).getByRole('textbox', { name: 'Grund für die Abweichung vom Standard' }), 'Vorauszahlung laut Vertrag');
-    await waitFor(() => expect(lastCompose(calls)).toEqual({ kind: 'contact', contactId: 'c_1', mode: 'anzahlung', overrideReason: 'Vorauszahlung laut Vertrag' }));
+    expect(within(area()).queryByRole('textbox', { name: 'Grund für die Abweichung vom Standard' })).toBeNull();
+    await waitFor(() => expect(lastCompose(calls)).toEqual({ kind: 'contact', contactId: 'c_1', mode: 'anzahlung' }));
     await waitFor(() => expect(buchen()).not.toHaveAttribute('aria-disabled'));
     await userEvent.click(buchen());
-    await waitFor(() => expect(calls.find((c) => c.action === 'book_bank_line')?.input.target).toEqual({ kind: 'contact', contactId: 'c_1', mode: 'anzahlung', overrideReason: 'Vorauszahlung laut Vertrag' }));
+    await waitFor(() => expect(calls.find((c) => c.action === 'book_bank_line')?.input.target).toEqual({ kind: 'contact', contactId: 'c_1', mode: 'anzahlung' }));
   });
 
   it('Zuordnen: two invoices of one contact, the engine deviation, Buchen waits until a remainder is chosen', async () => {

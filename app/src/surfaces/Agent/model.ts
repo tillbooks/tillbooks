@@ -150,6 +150,10 @@ export interface AgentCall {
   draftStatus: string | null;
   /** The human's reason when the proposal was rejected (F-08, J5.6). */
   rejectReason: string | null;
+  /** D196: the agent decided this proposal itself, under the owner's grant; null when a person did. */
+  decidedUnderGrant?: { decision: 'approved' | 'rejected'; grantedBy: string; grantedAt: string } | null;
+  /** D209: the owner's words the agent approved this proposal on; null when it did not. */
+  decidedOnOwnerWord?: { quote: string; saidAt: string } | null;
 }
 
 export interface AgentTurn {
@@ -256,11 +260,27 @@ export function parseSessionDetail(body: unknown): AgentSessionDetail | null {
             agentActionId: typeof c.agentActionId === 'string' ? c.agentActionId : null,
             draftStatus: typeof c.draftStatus === 'string' ? c.draftStatus : null,
             rejectReason: typeof c.rejectReason === 'string' ? c.rejectReason : null,
+            decidedUnderGrant: parseDecidedUnderGrant(c.decidedUnderGrant),
+            decidedOnOwnerWord: parseDecidedOnOwnerWord(c.decidedOnOwnerWord),
           } satisfies AgentCall;
         }),
       } satisfies AgentTurn;
     }),
   };
+}
+
+/** D196: the grant a decision rode, defensively: anything the trace cannot read is a person's decision. */
+export function parseDecidedUnderGrant(raw: unknown): AgentCall['decidedUnderGrant'] {
+  const g = record(raw);
+  if ((g.decision !== 'approved' && g.decision !== 'rejected') || typeof g.grantedBy !== 'string' || typeof g.grantedAt !== 'string') return null;
+  return { decision: g.decision, grantedBy: g.grantedBy, grantedAt: g.grantedAt };
+}
+
+/** D209: the owner's words a decision rode, defensively: anything unreadable is none. */
+export function parseDecidedOnOwnerWord(raw: unknown): AgentCall['decidedOnOwnerWord'] {
+  const g = record(raw);
+  if (typeof g.quote !== 'string' || typeof g.saidAt !== 'string') return null;
+  return { quote: g.quote, saidAt: g.saidAt };
 }
 
 export function parseDrafted(body: unknown): DraftedAction[] {

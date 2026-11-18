@@ -38,6 +38,7 @@ import { DetailDrawer } from '../../components/DetailDrawer';
 import { Modal } from '../../components/Modal';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
 import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, Skeleton } from '../../components/states';
+import { optionalReason, useAskReason } from '../../lib/useAskReason';
 import './FixedAssets.css';
 
 const DEPRECIATION_METHODS = ['straight_line', 'declining_balance', 'units_of_production', 'none'] as const;
@@ -566,11 +567,13 @@ export function AssetRegister() {
   const [disposing, setDisposing] = useState<Asset | null>(null);
   const [dispDraft, setDispDraft] = useState<DisposeDraft>(EMPTY_DISPOSE);
   const [dispPreview, setDispPreview] = useState<DisposalPreview | null>(null);
-  // D170: the ledger event a person is about to take back, and the reason they give. The reverse runs
-  // only from the confirm dialog, never straight from the row's menu.
+  // D170: the ledger event a person is about to take back. The reverse runs only from the confirm
+  // dialog, never straight from the row's menu. D204: no reason; an optional note only when the
+  // workspace asks for one (`audit.ask_reason`).
+  const askReason = useAskReason();
   const [reversingTxn, setReversingTxn] = useState<LedgerEvent | null>(null);
   const [reverseReason, setReverseReason] = useState('');
-  // D191: the single-case override of the proceeds check, with its own required reason.
+  // D191: the single-case override of the proceeds check (audited; D204: no reason needed).
   const [overrideProceeds, setOverrideProceeds] = useState(false);
   // D191: the workspace setting `assets.proceeds_check` as asset_ledger_get reports it.
   const [proceedsCheck, setProceedsCheck] = useState<ProceedsCheckMode>('refuse');
@@ -809,12 +812,14 @@ export function AssetRegister() {
   // D170: take one event back. On success the ledger is re-read so the new correcting row and the
   // moved status show at once (write() already reloads the register list).
   const confirmReverse = useCallback(async () => {
-    if (viewing === null || reversingTxn === null || reverseReason.trim() === '') return;
+    if (viewing === null || reversingTxn === null) return;
+    const reason = optionalReason(reverseReason);
+    const why = optionalReason(overrideReason);
     const ok = await write(REVERSE_VERB, {
       assetId: viewing.id,
       transactionId: reversingTxn.id,
-      reason: reverseReason.trim(),
-      ...(overrideProceeds ? { overrideProceedsCheck: true, overrideReason: overrideReason.trim() } : {}),
+      ...(reason === undefined ? {} : { reason }),
+      ...(overrideProceeds ? { overrideProceedsCheck: true, ...(why === undefined ? {} : { overrideReason: why }) } : {}),
       idempotencyKey: newKey(),
     });
     if (!ok) return;
@@ -1496,7 +1501,7 @@ export function AssetRegister() {
             <button
               type="button"
               className="btn btn--danger"
-              disabled={!canPost || reverseReason.trim() === '' || (overrideProceeds && overrideReason.trim() === '')}
+              disabled={!canPost}
               onClick={() => void confirmReverse()}
             >
               {t('assets.ledger.reverseConfirm')}
@@ -1519,7 +1524,7 @@ export function AssetRegister() {
                 <input type="checkbox" checked={overrideProceeds} onChange={(e) => setOverrideProceeds(e.target.checked)} />{' '}
                 {t('assets.ledger.proceedsOverride')}
               </label>
-              {overrideProceeds && (
+              {overrideProceeds && askReason && (
                 <Field label={t('assets.ledger.proceedsOverrideReason')} id="fa-reverse-override-reason">
                   <input className="field" id="fa-reverse-override-reason" value={overrideReason} maxLength={200} onChange={(e) => setOverrideReason(e.target.value)} />
                 </Field>
@@ -1527,15 +1532,17 @@ export function AssetRegister() {
             </div>
           )}
           {writeError && writeError.error !== 'proceeds_settled' && <ErrorBanner error={writeError} />}
-          <Field label={t('assets.ledger.reverseReason')} id="fa-reverse-reason">
-            <input className="field"
-              id="fa-reverse-reason"
-              type="text"
-              value={reverseReason}
-              maxLength={200}
-              onChange={(e) => setReverseReason(e.target.value)}
-            />
-          </Field>
+          {askReason && (
+            <Field label={t('assets.ledger.reverseReason')} id="fa-reverse-reason">
+              <input className="field"
+                id="fa-reverse-reason"
+                type="text"
+                value={reverseReason}
+                maxLength={200}
+                onChange={(e) => setReverseReason(e.target.value)}
+              />
+            </Field>
+          )}
         </div>
       </Modal>
 

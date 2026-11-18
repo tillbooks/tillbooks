@@ -133,8 +133,8 @@
     "bookAgain": {
       "title": "Receipt already booked",
       "lead": "This receipt is already booked on:",
-      "question": "Booking it a second time needs a reason. It is kept in the change log.",
-      "reasonLabel": "Reason",
+      "question": "If you book it a second time, the change log keeps who confirmed it and when.",
+      "reasonLabel": "Note (optional)",
       "confirm": "Book anyway",
       "working": "Booking …",
       "cancel": "Cancel",
@@ -153,17 +153,16 @@
         "receipt_held": "Receipt is assigned to a bank line"
       },
       "error": {
-        "reason_required": "Enter a reason.",
         "receipt_already_booked": "A receipt may be booked only once here (Receipts setting).",
         "holders_changed": "The receipt was booked elsewhere in the meantime. Check the proposal again.",
         "human_only": "Only a person can confirm a second booking.",
-        "receipt_replace_needs_reason": "This file is the receipt of a booking: replacing it needs a reason.",
+        "receipt_replace_needs_reason": "This file is a booking's receipt: confirm the replacement.",
         "receipt_assigned": "The receipt is assigned to a bank line. Release it there first."
       },
       "replace": {
         "title": "Replace a booked receipt",
         "lead": "This file already evidences:",
-        "question": "The new version becomes the receipt of this booking; the old one stays its evidence and cannot be booked elsewhere. Give the reason, it is kept in the change log.",
+        "question": "The new version becomes this booking's receipt; the old one stays its evidence and cannot be booked elsewhere. The change log keeps who confirmed it and when.",
         "confirm": "Replace anyway"
       },
       "assigned": {

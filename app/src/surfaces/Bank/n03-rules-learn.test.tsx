@@ -314,6 +314,7 @@ function bankEngine(lines: unknown[], extra: Record<string, RestResponse | Handl
 
 function renderBank(transport: Transport, path = '/bank?tab=booked') {
   const store = new PrefsStore(null, null, { useCache: false });
+  store.seed('bank.detail_position', 'automatic');
   return render(
     <CapabilitiesContext.Provider value={caps}>
       <TillClientProvider client={new TillClient(transport)}>

@@ -254,11 +254,29 @@ test('D169: a locked period refuses period_locked before any write', () => {
   assert.deepEqual(counts(w), before);
 });
 
-test('D169: a reason is required, dun AND post are required, and another tenant sees not_found', () => {
+test('D204 dunning: the fee reverses with no reason; the mirror is new, the trail keeps who, when, what and the permission, a replay writes nothing', async () => {
+  const { assertAuditRow, assertPermission } = await import('../support/d204.mjs');
   const w = world();
   const r = issuedRun(w);
   const before = counts(w);
-  assert.equal(reverse(w, r.runId, 'g-1', '   ').error, 'reason_required');
+  const res = reverse(w, r.runId, 'd204-1', '   ');
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(res.reason, null);
+  const mirror = w.deps.store.db.prepare('SELECT reverses_entry_id, description FROM journal_entry WHERE id = ?').get(res.reversalEntryId);
+  assert.equal(mirror.reverses_entry_id, res.feeEntryId, 'what: the mirror names the fee entry');
+  assert.doesNotMatch(mirror.description, /: $/);
+  assertAuditRow(w.deps.store, w.workspaceId, { entityKind: 'dunning_run', entityId: r.runId, action: 'fee_reverse' });
+  assertPermission('dunning_fee_reverse');
+  const after = counts(w);
+  assert.equal(reverse(w, r.runId, 'd204-1', undefined).reversalEntryId, res.reversalEntryId, 'idempotent replay');
+  assert.deepEqual(counts(w), after, 'a replay writes nothing');
+  assert.notDeepEqual(after, before, 'the reversal wrote its mirror');
+});
+
+test('D169: dun AND post are required, and another tenant sees not_found', () => {
+  const w = world();
+  const r = issuedRun(w);
+  const before = counts(w);
   const other = mintWorkspace(w.deps, 'Fremd GmbH', 'ws-2');
   const foreign = call(w.deps, 'dunning_fee_reverse', { workspaceId: other.workspaceId, runId: r.runId, reason: 'x', idempotencyKey: 'g-2' });
   assert.equal(foreign.error, 'not_found');

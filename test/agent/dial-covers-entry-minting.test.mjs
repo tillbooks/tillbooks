@@ -62,6 +62,9 @@ const NOT_GOVERNED = {
   // bankBooking.ts, the D177-C1 dry run), so nothing it posts survives (test/banking/e3-preview.test.mjs
   // asserts every row count, the memo and the audit chain unchanged).
   compose_entry: 'read: composeBankLine runs a settlement booking inside a transaction it always rolls back (dryRunCapture)',
+  // A42: the Umsatz review runs the real import_settlement inside `discardingChanges`, a transaction it always
+  // rolls back, so nothing it posts survives (test/settlement/umsatz-review.test.mjs snapshots every table).
+  settlement_review: 'read: runs import_settlement inside a transaction it always rolls back (discardingChanges)',
   // D186: the estimate previews only `accounts` and `rule` targets (the pure composer path, `expandEntry`), never a
   // settlement, so it never reaches the rolled-back booking; the row census in test/dashboards/kpis.test.mjs holds it.
   dashboard_revenue_estimate: 'read: composeBankLine for accounts and rule targets only (the pure preview), never a settlement',

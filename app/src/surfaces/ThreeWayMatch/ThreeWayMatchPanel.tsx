@@ -18,7 +18,7 @@
  *   base-net and the aggregate value variance are three engine figures, not one column sum.
  * - Confirm and Override both raise the shared `Modal` as an ALERTDIALOG: releasing a bill for
  *   payment is consequential, so it is answered with a control and never a stray scrim click (APG).
- *   Override carries its mandatory reason field inside the dialog. When embedded in the I04 surface's
+ *   Override needs no reason (D204); an optional note shows only when `audit.ask_reason` is `optional`. When embedded in the I04 surface's
  *   `DetailDrawer`, opening the dialog flips the host drawer's focus trap off via `onDialogOpenChange`
  *   so the nested alertdialog owns focus and Escape.
  * - No `ConsequenceLine` (C4): `match_three_way_create` and `match_three_way_override` both carry a
@@ -44,6 +44,7 @@ import { Field } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { Status, type StatusKind } from '../../components/Status';
 import { Skeleton, refusalText } from '../../components/states';
+import { optionalReason, useAskReason } from '../../lib/useAskReason';
 
 const newKey = () => crypto.randomUUID();
 
@@ -118,6 +119,7 @@ export function ThreeWayMatchPanel({ billId, onMatched, onDialogOpenChange }: Th
   const [done, setDone] = useState<string | null>(null);
   const [intent, setIntent] = useState<Intent>(null);
   const [reason, setReason] = useState('');
+  const askReason = useAskReason();
 
   // Keep a host DetailDrawer's focus trap in step with our alertdialog: while it is open the drawer
   // must yield the trap (D118 DetailDrawer.trapActive), and reclaim it when the dialog closes.
@@ -158,12 +160,9 @@ export function ThreeWayMatchPanel({ billId, onMatched, onDialogOpenChange }: Th
 
   const override = useCallback(async () => {
     if (workspaceId === null || evaluation === null) return;
-    if (reason.trim().length < 5) {
-      setMessage(t('procurement.match.reasonRequired'));
-      return;
-    }
     setMessage('');
-    const res = await client.call('match_three_way_override', { workspaceId, billId, evaluation, reason: reason.trim(), idempotencyKey: newKey() });
+    const note = optionalReason(reason);
+    const res = await client.call('match_three_way_override', { workspaceId, billId, evaluation, ...(note === undefined ? {} : { reason: note }), idempotencyKey: newKey() });
     if (isErr(res.body)) {
       setMessage(refusalText(t, res.body, { own: 'procurement.match.error' }) || res.body.error);
       return;
@@ -314,9 +313,9 @@ export function ThreeWayMatchPanel({ billId, onMatched, onDialogOpenChange }: Th
         <p className="twm-note">
           {intent === 'override' ? t('procurement.match.overrideBody') : t('procurement.match.confirmBody')}
         </p>
-        {intent === 'override' && (
+        {intent === 'override' && askReason && (
           <Field label={t('procurement.match.reason')}>
-            <input type="text" className="field" value={reason} onChange={(e) => setReason(e.target.value)} minLength={5} />
+            <input type="text" className="field" value={reason} onChange={(e) => setReason(e.target.value)} />
           </Field>
         )}
         {message !== '' && (

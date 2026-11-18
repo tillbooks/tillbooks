@@ -120,6 +120,7 @@
   "nav": {
     "label": "Hauptnavigation",
     "setup": "Einrichtung",
+    "settings": "Alle Einstellungen",
     "operations": "Betrieb",
     "accounts": "Konten",
     "journal": "Journal",
@@ -154,6 +155,8 @@
     },
     "collapse": "Navigation einklappen",
     "expand": "Navigation ausklappen",
+    "collapseContext": "Nur Symbole zeigen",
+    "expandContext": "Namen zeigen",
     "agent": "Agent",
     "sections": {
       "menu": "Menü"
@@ -185,10 +188,13 @@
         "reset": "Menü auf den Standard zurückgesetzt"
       }
     },
-    "locked": "Zuerst ein Hauptbuch einrichten"
+    "locked": "Zuerst ein Hauptbuch einrichten",
+    "settingsEntry": "Alle Einstellungen dieses Arbeitsbereichs"
   },
   "theme": {
-    "toggle": "Design wechseln"
+    "toggle": "Design wechseln",
+    "toggleContext": "Hell oder dunkel",
+    "darkItem": "Dunkles Design"
   },
   "density": {
     "toDense": "Kompakte Ansicht",
@@ -202,6 +208,10 @@
       "loadFailed": "Die Liste der Arbeitsbereiche konnte nicht geladen werden.",
       "waiting": "{count} Pendenzen"
     }
+  },
+  "surfaceHeader": {
+    "back": "Zurück zu {label}",
+    "settingsContext": "Für diese Seite"
   },
   "help": {
     "leavesDevice": "öffnet eine Seite im Internet, dafür brauchst du eine Verbindung",
@@ -247,6 +257,7 @@
   },
   "feedback": {
     "open": "Rückmeldung senden",
+    "openContext": "Fehler, Idee oder Frage",
     "title": "Rückmeldung senden",
     "kind": {
       "label": "Worum geht es?",
@@ -394,6 +405,7 @@
       "nav": "Navigation",
       "actions": "Aktionen",
       "actionsHere": "Aktionen hier",
+      "settings": "Einstellungen",
       "records": "Datensätze",
       "concepts": "Begriffe"
     },
@@ -705,9 +717,37 @@
     "filterAddLabel": "Filter hinzufügen",
     "filterRemove": "Entfernen",
     "filterChange": "{facet} ändern",
-    "settingReset": "Standard",
-    "settingResetContext": "Zurück auf den Standard: {value}",
+    "settingResetContext": "Standard: {value}",
     "rowOpen": "Aufklappen",
     "rowClose": "Zuklappen"
+  },
+  "date": {
+    "placeholder": {
+      "ch": "TT.MM.JJJJ",
+      "iso": "JJJJ-MM-TT",
+      "us": "MM/TT/JJJJ"
+    },
+    "unreadable": "Datum als {format}"
+  },
+  "releases": {
+    "close": "Schliessen",
+    "version": "TILL {version}",
+    "menu": "TILL {version}",
+    "notes": {
+      "title": "Neuigkeiten",
+      "empty": "Keine Notizen zu dieser Version.",
+      "unreleased": "In Entwicklung",
+      "show": "Zeigen",
+      "all": "Alle Versionen"
+    },
+    "kind": {
+      "new": "Neu",
+      "improved": "Verbessert",
+      "fixed": "Behoben"
+    },
+    "toast": {
+      "updated": "Aktualisiert auf {version}",
+      "dismiss": "Hinweis ausblenden"
+    }
   }
 }

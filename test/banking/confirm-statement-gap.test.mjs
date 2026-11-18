@@ -103,13 +103,23 @@ test('never an agent alone: a governed seat is refused, the dial governs it, no 
   assert.ok(NOT_AUTOMATABLE.has('confirm_statement_gap') && NOT_AUTOMATABLE.has('revoke_statement_gap_confirmation'));
 });
 
-test('the person at the button confirms, with a reason, holding pay', () => {
+test('the person at the button confirms, holding pay', () => {
   const t = setup();
   const g = gapBook(t, 44);
   assert.equal(confirmStatementGap(t.ctx, { ...g.input, reason: 'leer', idempotencyKey: 'n-1' }).error, 'needs_confirmation');
-  assert.equal(confirmStatementGap(t.ctx, { ...g.input, reason: '   ', confirmed: true, idempotencyKey: 'n-2' }).error, 'invalid_input');
   assert.equal(confirmStatementGap(withoutCapability(t, 'pay'), { ...g.input, reason: 'leer', confirmed: true, idempotencyKey: 'n-3' }).error, 'permission_denied');
   assert.equal(acks(t).length, 0);
+});
+
+test('D204 a gap is confirmed with no reason; the append-only row keeps who and when', async () => {
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
+  const t = setup();
+  const g = gapBook(t, 46);
+  must(confirmStatementGap(t.ctx, { ...g.input, reason: '   ', confirmed: true, idempotencyKey: 'd204' }), 'confirm without a reason');
+  const row = t.store.db.prepare("SELECT actor, created_at, reason FROM bank_statement_gap_ack WHERE workspace_id = ? AND action = 'confirm'").get(t.workspaceId);
+  assertWhoWhen(row.actor, row.created_at);
+  assert.equal(row.reason, '');
+  assertPermission('confirm_statement_gap');
 });
 
 test('append-only and revocable: a withdrawal adds a row beside the confirmation, and the gap waits again', () => {

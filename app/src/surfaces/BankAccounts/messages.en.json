@@ -383,7 +383,7 @@
   "help": {
     "BankAccounts": {
       "title": "Bank accounts",
-      "body": "The register of your bank accounts with IBAN, QR-IBAN and opening balance. A QR-IBAN can only receive payments; outgoing payments need an ordinary IBAN in the register as well, and the surface points it out when one is missing. Here you also manage the EBICS channel and archive accounts that are no longer in use.",
+      "body": "The register of your bank accounts with IBAN, QR-IBAN and opening balance. A QR-IBAN can only receive payments; outgoing payments need an ordinary IBAN in the register as well, and the surface points it out when one is missing. Here you also manage the EBICS channel and archive accounts that are no longer in use. Under settlement feeds you save where TILL pulls a payment processor's settlement from; the token stays in the Keychain, and TILL books each event through your booking template.",
       "concepts": [],
       "docsPath": "swiss/qr-bill"
     }
@@ -456,6 +456,106 @@
       "confirmGapConfirm": "Yes, nothing is missing",
       "confirmGapReason": "How do you know nothing is missing?",
       "closeGaps": "Close gaps"
+    }
+  },
+  "settlementFeed": {
+    "title": "Settlement feeds",
+    "hint": "A payment processor's settlement feed (till-settlement/v1): TILL pulls it and books each event through the source's booking template. The token stays in the Keychain.",
+    "add": "Add a settlement source",
+    "edit": "Edit the source",
+    "pull": "Pull now and book",
+    "pulled": "{booked} booked, {already} already in the books, {skipped} skipped, {refused} refused.",
+    "neverPulled": "Not pulled yet",
+    "lastOk": "Complete up to {day}",
+    "incomplete": "The feed was incomplete: nothing booked, pull again later.",
+    "lastFailed": "Last pull failed: {why}",
+    "tokenStored": "Token stored in the Keychain",
+    "tokenMissing": "No token stored",
+    "editorLabel": "Settlement source",
+    "save": "Save",
+    "cancel": "Cancel",
+    "field": {
+      "system": "System",
+      "processor": "Processor",
+      "baseUrl": "Address",
+      "fromDate": "From",
+      "token": "Token (stays empty when stored)",
+      "feedPath": "Feed path",
+      "feedPathHint": "Optional; empty is {path}. A path only: no query, no fragment, no %2e, %2f or %5c. A changed path drops the stored token."
+    },
+    "refusal": {
+      "settlement_incomplete": "The file is incomplete: export it again once it is complete.",
+      "human_only": "Only a person can save a source.",
+      "settlement_source_missing": "Save the source first.",
+      "settlement_template_missing": "Save a booking template for this source first.",
+      "token_missing": "Save the token first.",
+      "feed_transport_missing": "This TILL cannot reach a settlement feed.",
+      "secret_store_unavailable": "This computer has no Keychain for the token.",
+      "secret_store_failed": "The Keychain did not keep the token. Is it unlocked?",
+      "feed_unreachable": "The feed did not answer.",
+      "feed_unauthorized": "The feed refused the token. Save the current token again.",
+      "feed_bad_request": "The feed refused the date range.",
+      "feed_http_error": "The feed answered with an error.",
+      "feed_schema": "The feed did not send a readable settlement file.",
+      "feed_source_mismatch": "The feed sent another system or processor.",
+      "no_actor": "Nobody with booking rights saved this source.",
+      "unsupported_schema": "The file is not a till-import-profile/v1 profile.",
+      "invalid_input": "The file is not a table mapping TILL can read."
+    },
+    "type": {
+      "feed": "Feed: TILL pulls it",
+      "table": "Table: a CSV or XLSX export",
+      "file": "File: a till-settlement file"
+    },
+    "editTemplate": "Edit the booking template",
+    "exportMapping": "Export the table mapping as a profile file",
+    "importMapping": "Import a table mapping from a profile file",
+    "profileImported": "Table mapping saved.",
+    "templateSaved": "Booking template saved."
+  },
+  "settlementTemplate": {
+    "title": "Booking template",
+    "denied": "Editing a booking template needs the right to post.",
+    "label": "Booking template of {system} / {processor}",
+    "clearing": "Clearing account",
+    "pick": "Choose",
+    "noVat": "No VAT",
+    "kinds": "What each kind of event books",
+    "col": {
+      "kind": "Kind",
+      "action": "Booking",
+      "account": "Account",
+      "taxCode": "Tax code"
+    },
+    "action": {
+      "book": "Book",
+      "skip": "Skip",
+      "attention": "Ask me",
+      "unmapped": "Not set"
+    },
+    "save": "Save",
+    "cancel": "Cancel",
+    "saved": "Saved",
+    "kind": {
+      "sale": "Sale",
+      "refund": "Refund",
+      "processing_fee": "Processing fee",
+      "service_fee": "Service fee",
+      "third_party_payout": "Transfer",
+      "third_party_payout_reversal": "Transfer reversed",
+      "reserve": "Reserve",
+      "bank_payout": "Payout",
+      "bank_payout_summary": "Payout (sum)",
+      "other": "Other"
+    },
+    "refusal": {
+      "invalid_account": "This account cannot be used here.",
+      "account_archived": "This account is archived.",
+      "unknown_tax_code": "This tax code does not exist.",
+      "archived_tax_code": "This tax code is archived.",
+      "tax_code_unsupported": "A settlement books output, input, zero-rated or exempt codes only.",
+      "invalid_input": "Something in the template is missing.",
+      "payout_not_turnover": "A payout is never turnover: book it to a clearing or bank account, never to a revenue account."
     }
   }
 }

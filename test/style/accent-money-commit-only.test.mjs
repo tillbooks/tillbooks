@@ -87,10 +87,10 @@ export const PROVEN_POSTING_VERBS = [
     verb: 'book_bank_line',
     why: 'books a bank line to accounts: performBooking (N03: with its provenance bound) hands an accounts target to dispatchBooking, which routes it to bookToAccounts, which posts the entry',
     hops: [
-      { at: 'src/core/banking/bankBooking.ts:937', fn: 'bookBankLine', calls: 'performBooking' },
-      { at: 'src/core/banking/bankBooking.ts:1059', fn: 'performBooking', calls: 'dispatchBooking' },
-      { at: 'src/core/banking/bankBooking.ts:1090', fn: 'dispatchBooking', calls: 'bookToAccounts' },
-      { at: 'src/core/banking/bankBooking.ts:2433', fn: 'bookToAccounts', calls: 'postEntry' },
+      { at: 'src/core/banking/bankBooking.ts:938', fn: 'bookBankLine', calls: 'performBooking' },
+      { at: 'src/core/banking/bankBooking.ts:1060', fn: 'performBooking', calls: 'dispatchBooking' },
+      { at: 'src/core/banking/bankBooking.ts:1096', fn: 'dispatchBooking', calls: 'bookToAccounts' },
+      { at: 'src/core/banking/bankBooking.ts:2469', fn: 'bookToAccounts', calls: 'postEntry' },
     ],
   },
   {
@@ -126,7 +126,7 @@ const KNOWN_NON_POSTING = ['create_credit_note', 'stock_run_valuation', 'stock_s
 export const APPROVAL_COMMIT = {
   verb: 'approve_drafted_action',
   why: 'replays the drafted verb as the approver through the shared dispatch; the batch reaches only the bank-line decisions',
-  replay: { at: 'src/core/agent/draftedActions.ts:651', fn: 'approveOnce', calls: 'invoke' },
+  replay: { at: 'src/core/agent/draftedActions.ts:849', fn: 'approveOnce', calls: 'invoke' },
   reach: { file: 'src/core/attention/vorschlaege.ts', name: 'BATCHABLE_VERBS' },
   surface: 'app/src/surfaces/Attention/Batch.tsx',
 };

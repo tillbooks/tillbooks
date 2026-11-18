@@ -47,7 +47,7 @@ describe('BookAgain (N02 R1)', () => {
     expect(screen.getByText('Dieser Beleg ist bereits gebucht (Buchung, anderer Vorschlag, wartet).')).toBeInTheDocument();
   });
 
-  it('asks for the reason, keeps it on a refused retry, and closes once the retry landed', async () => {
+  it('D204 confirms with no reason field, stays open on a refused retry, and closes once the retry landed', async () => {
     const sent: unknown[] = [];
     let answer: Err | null = { ok: false, error: 'store_busy', retryable: true };
     const retry: BookAgainRetry = async (confirmation) => {
@@ -61,19 +61,44 @@ describe('BookAgain (N02 R1)', () => {
     );
     const dialog = await screen.findByRole('alertdialog', { name: 'Beleg schon gebucht' });
     expect(within(dialog).getByText('je_1')).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('Notiz (freiwillig)')).toBeNull();
     expect(await axe(container)).toHaveNoViolations();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Trotzdem buchen' }));
-    expect(within(dialog).getByText('Gib einen Grund an.')).toBeInTheDocument();
-    expect(sent).toHaveLength(0);
-    fireEvent.change(within(dialog).getByLabelText('Grund'), { target: { value: '  Zwei Positionen  ' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Trotzdem buchen' }));
-    await waitFor(() => expect(sent).toEqual([{ bookAgain: true, overrideReason: 'Zwei Positionen' }]));
-    // Refused: the dialog stays with the reason intact.
+    await waitFor(() => expect(sent).toEqual([{ bookAgain: true }]));
+    // Refused: the dialog stays.
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
-    expect((within(dialog).getByLabelText('Grund') as HTMLTextAreaElement).value).toBe('  Zwei Positionen  ');
     answer = null;
     fireEvent.click(within(dialog).getByRole('button', { name: 'Trotzdem buchen' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+  });
+});
+
+describe('D204: the optional note when audit.ask_reason is optional', () => {
+  it('offers the note, never blocks the button, and sends overrideReason only when written', async () => {
+    const sent: unknown[] = [];
+    const transport: Transport = async (action) =>
+      action === 'settings_get'
+        ? { status: 200, body: { ok: true, setting: { key: 'audit.ask_reason', value: 'optional' } } }
+        : { status: 404, body: { ok: false, error: 'unknown_action' } };
+    render(
+      <TillClientProvider client={new TillClient(transport)}>
+        <I18nProvider initialLocale="de-CH">
+          <WorkspaceProvider initialId="ws_test">
+            <Harness
+              refusal={CONFIRMABLE}
+              retry={async (c) => {
+                sent.push(c);
+                return null;
+              }}
+            />
+          </WorkspaceProvider>
+        </I18nProvider>
+      </TillClientProvider>,
+    );
+    const dialog = await screen.findByRole('alertdialog', { name: 'Beleg schon gebucht' });
+    fireEvent.change(await within(dialog).findByLabelText('Notiz (freiwillig)'), { target: { value: '  Zwei Positionen  ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Trotzdem buchen' }));
+    await waitFor(() => expect(sent).toEqual([{ bookAgain: true, overrideReason: 'Zwei Positionen' }]));
   });
 });
 
@@ -236,7 +261,7 @@ describe('A41.3 r4 C1: the redacted hold (receipt_held) for a seat without the r
     expect(within(dialog).queryByRole('button', { name: 'Lösen' })).toBeNull();
     expect(within(dialog).queryByRole('button', { name: 'Nochmals' })).toBeNull();
     // No line is read and nothing is released or sent again.
-    expect(calls).toEqual([]);
+    expect(calls.filter((c) => c !== 'settings_get')).toEqual([]); // D204: only the reason setting is read
     fireEvent.click(within(dialog).getByRole('button', { name: 'Abbrechen' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(sent).toEqual([]);

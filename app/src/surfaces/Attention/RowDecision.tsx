@@ -151,9 +151,16 @@ export function reasonSentence(
   if (item.reasonKey === undefined || item.reasonKey === null) return null;
   const params = item.subtitleParams ?? {};
   if (item.queueId !== 'review_flag') return t(item.reasonKey, params);
-  if (viewerActor !== null && item.proposedBy === viewerActor) return t('attention.item.reviewFlag.reasonSelf', params);
-  if (item.proposedByKind === 'agent') return t('attention.item.reviewFlag.reasonByAgent', params);
-  if (item.proposedByKind === 'studio') return t('attention.item.reviewFlag.reasonByStudio', params);
-  if (item.proposedByKind === 'member' && typeof params.reviewer === 'string' && params.reviewer !== '') return t(item.reasonKey, params);
-  return t('attention.item.reviewFlag.reasonByUnknown', params);
+  // D204: a flag may carry no reason. Every flag sentence ends in ": {reason}", so a flag without one
+  // reads "Markiert von X", never with a dangling colon.
+  const noReason = typeof params.reason !== 'string' || params.reason.trim() === '';
+  const say = (key: string) => {
+    const text = t(key, params);
+    return noReason ? text.replace(/:\s*$/, '') : text;
+  };
+  if (viewerActor !== null && item.proposedBy === viewerActor) return say('attention.item.reviewFlag.reasonSelf');
+  if (item.proposedByKind === 'agent') return say('attention.item.reviewFlag.reasonByAgent');
+  if (item.proposedByKind === 'studio') return say('attention.item.reviewFlag.reasonByStudio');
+  if (item.proposedByKind === 'member' && typeof params.reviewer === 'string' && params.reviewer !== '') return say(item.reasonKey);
+  return say('attention.item.reviewFlag.reasonByUnknown');
 }

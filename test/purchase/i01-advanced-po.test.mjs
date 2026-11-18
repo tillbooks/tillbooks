@@ -263,7 +263,7 @@ test('requisition_convert_to_po stamps source_document_type/id; a directly-creat
 
 // --- cancel / reject leave the live PO untouched ------------------------------------------------
 
-test('cancel and reject leave the live PO untouched; an applied amendment cannot be cancelled', () => {
+test('D204 cancel and reject (no reason needed) leave the live PO untouched; an applied amendment cannot be cancelled', async () => {
   const s = seed('cxl');
   const { poId, lineId } = sentPo(s, 'cxl', 6, 10000);
 
@@ -279,10 +279,14 @@ test('cancel and reject leave the live PO untouched; an applied amendment cannot
   const a2 = must(call(s.deps, 'po_amendment_start', { workspaceId: s.workspaceId, poId, idempotencyKey: 'cx-s2' }), 'start 2');
   must(call(s.deps, 'po_amendment_update_lines', { workspaceId: s.workspaceId, amendmentId: a2.amendment.id, changes: [{ op: 'change', poLineId: lineId, qty: 12 }], idempotencyKey: 'cx-u2' }), 'update 2');
   must(call(s.deps, 'po_amendment_submit', { workspaceId: s.workspaceId, amendmentId: a2.amendment.id, idempotencyKey: 'cx-sub2' }), 'submit 2');
-  const missingReason = call(s.deps, 'po_amendment_reject', { workspaceId: s.workspaceId, amendmentId: a2.amendment.id, idempotencyKey: 'cx-r2a' });
-  assert.equal(missingReason.error, 'invalid_input', 'reject requires a reason');
-  const rejected = must(call(s.deps, 'po_amendment_reject', { workspaceId: s.workspaceId, amendmentId: a2.amendment.id, reason: 'Zu teuer', idempotencyKey: 'cx-r2' }), 'reject');
+  // D204: reject needs no reason; the amendment keeps who and when.
+  const rejected = must(call(s.deps, 'po_amendment_reject', { workspaceId: s.workspaceId, amendmentId: a2.amendment.id, idempotencyKey: 'cx-r2' }), 'reject without a reason');
   assert.equal(rejected.amendment.status, 'rejected');
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
+  const row = s.deps.store.db.prepare('SELECT rejected_by, rejected_at, reason FROM po_amendment WHERE id = ?').get(a2.amendment.id);
+  assertWhoWhen(row.rejected_by, row.rejected_at);
+  assert.equal(row.reason, null);
+  assertPermission('po_amendment_reject');
   assert.equal(call(s.deps, 'po_get', { workspaceId: s.workspaceId, poId }).lines[0].qty, 6, 'reject touches no live line');
 
   // Apply a third amendment, then prove an applied amendment cannot be cancelled.

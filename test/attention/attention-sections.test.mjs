@@ -251,6 +251,8 @@ test('every registered queue declares a kind; the registration guard refuses one
     review_flag: ['accounting', 'note'],
     dunning_run: ['sales', 'approve'],
     checklist_items_due: ['accounting', 'do'],
+    // D210: the due Aufgaben, one queue of the Erledigen section.
+    tasks_due: ['tasks', 'do'],
     bank_keys_review: ['bank', 'do'],
     bank_activation: ['bank', 'do'],
     bank_fetch_failed: ['bank', 'do'],

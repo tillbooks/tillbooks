@@ -1,0 +1,287 @@
+/* The Einstellungen, one page (the owner's pick A, 18.11.2026): the search top right in the header, a slim
+   sticky rail of the ten areas on the left, the rows on the right in the full width of main (DESIGN.md
+   "The calm Studio"). Only --t-* tokens; the one accent stays off this page except for focus. */
+
+.settings-surface {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+/* --- the search: top right, at most 420px, the magnifier inside the field --- */
+
+.settings-search {
+  position: relative;
+  width: min(420px, 100%);
+}
+
+.settings-search-glyph {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  display: inline-flex;
+  color: var(--t-text-faint);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+input.field.settings-search-field {
+  width: 100%;
+  /* 12px to the glyph, the 16px glyph, 6px air: the placeholder's first letter never sits under it. */
+  padding-left: 34px;
+}
+
+/* --- the layout: rail and rows --- */
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--t-space-4);
+}
+
+.settings-rail {
+  position: sticky;
+  top: calc(var(--surface-header-height, 64px) + var(--t-space-1));
+}
+
+.settings-rail-list,
+.settings-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.settings-rail-list > li > .tooltip-wrap {
+  display: block;
+}
+
+.settings-rail-item {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  height: 32px;
+  padding: 0 var(--t-space-1);
+  border-radius: var(--t-radius-sm);
+  color: var(--t-text-dim);
+  text-decoration: none;
+}
+
+.settings-rail-item:hover {
+  background: var(--t-bg-soft);
+  color: var(--t-text);
+  text-decoration: none;
+}
+
+/* The chosen area: the neutral soft fill in ink, never the accent (DESIGN.md "Surface hierarchy"). */
+.settings-rail-item[aria-current='page'] {
+  background: var(--t-bg-soft);
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+.settings-rail-item:focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+}
+
+.settings-rail-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An area with an open question: one small dot, its words on hover and for a screen reader. */
+.settings-rail-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-radius: var(--t-radius-full);
+  background: var(--t-warn);
+}
+
+.settings-main {
+  min-width: 0;
+}
+
+/* Full width: the shared rows lose their reading-width cap here. */
+.settings-groups .setting-group {
+  max-width: none;
+}
+
+.settings-none {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+/* --- the row's parts --- */
+
+.settings-tip-line {
+  display: block;
+}
+
+.settings-tip-line + .settings-tip-line {
+  margin-top: var(--t-space-0-5);
+}
+
+.settings-lock {
+  display: inline-flex;
+  color: var(--t-text-dim);
+}
+
+.settings-history,
+.settings-history-empty {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+}
+
+/* --- the controls in the row's 240px column --- */
+
+/* Segmented: exactly 240px, segments split equally and cut with an ellipsis. The chosen segment is the soft
+   fill without a border or a shadow; the track carries the control's edge. */
+.settings-segmented.segmented {
+  width: 240px;
+  grid-auto-columns: minmax(0, 1fr);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--t-border);
+}
+
+.settings-segmented .segmented-option {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 var(--t-space-1);
+  line-height: 26px;
+}
+
+.settings-segmented .segmented-option[aria-checked='true'] {
+  background: var(--t-bg-soft);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.settings-segmented .segmented-option[aria-checked='true']:focus-visible {
+  border-color: var(--t-focus-border);
+  box-shadow: var(--t-focus-ring);
+}
+
+.settings-select.select {
+  width: 240px;
+}
+
+.settings-select .select-trigger {
+  height: 32px;
+}
+
+/* A switch: 34x20 at the right edge of the column. */
+.settings-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-soft);
+  cursor: pointer;
+}
+
+.settings-switch[aria-checked='true'] {
+  background: var(--t-text);
+  border-color: var(--t-text);
+}
+
+.settings-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg);
+  box-shadow: 0 0 0 1px var(--t-border);
+  transition: transform var(--t-motion-pill) var(--t-ease-out);
+}
+
+.settings-switch[aria-checked='true'] .settings-switch-knob {
+  transform: translateX(14px);
+}
+
+.settings-switch:focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+}
+
+.settings-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-switch-knob {
+    transition: none;
+  }
+}
+
+/* A number: 72px, right-aligned, its unit as dim text before it. A text: the full 240px. */
+.settings-typed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--t-space-1);
+}
+
+.settings-number {
+  width: 72px;
+  height: 32px;
+  text-align: right;
+}
+
+.settings-text {
+  width: 240px;
+  height: 32px;
+}
+
+.settings-unit {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+}
+
+.settings-toast {
+  position: fixed;
+  right: var(--t-space-3);
+  bottom: var(--t-space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-2);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg);
+  z-index: 20;
+}
+
+/* Phone width: the rail stacks above the rows, two areas per line, so nothing scrolls sideways. */
+@media (max-width: 767px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--t-space-2);
+  }
+
+  .settings-rail {
+    position: static;
+  }
+
+  .settings-rail-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px var(--t-space-1);
+  }
+
+  .settings-toast {
+    left: var(--t-space-2);
+    right: var(--t-space-2);
+  }
+}

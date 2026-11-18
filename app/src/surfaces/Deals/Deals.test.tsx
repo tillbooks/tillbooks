@@ -7,10 +7,10 @@
  * assertion waits for the read to have STARTED, and copy is asserted through the catalogue, never
  * as a literal typed here.
  *
- * The two C01-specific claims worth singling out: picking the LOST stage never fires a write
- * directly (the reason form appears first, so `lost_reason_required` is a form and not a
- * surprise), and picking the WON stage routes through `deals_mark` rather than `deals_move`,
- * mirroring the engine's one-door rule.
+ * The two C01-specific claims worth singling out: picking the LOST stage saves at once (D204: no
+ * reason; the optional note opens first only when `audit.ask_reason` is `optional`), and picking
+ * the WON stage routes through `deals_mark` rather than `deals_move`, mirroring the engine's
+ * one-door rule.
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -309,9 +309,7 @@ describe('Deals, the writes', () => {
     });
   });
 
-  it('picking the LOST stage opens the reason form first, and submits deals_mark with the reason', async () => {
-    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
-    const canned = { ...baseCanned(), deals_mark: ok({ dealId: 'deal_1', wonDealId: null, lostDealId: 'deal_1' }) };
+  const renderAsking = (canned: Canned, asked: Array<{ action: string; input: Record<string, unknown> }>) =>
     render(
       <TillClientProvider client={new TillClient(fakeTransport(canned, asked))}>
         <I18nProvider>
@@ -323,16 +321,41 @@ describe('Deals, the writes', () => {
         </I18nProvider>
       </TillClientProvider>,
     );
+
+  it('D204 picking the LOST stage saves at once, with no reason field and no lostReason', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const canned = { ...baseCanned(), deals_mark: ok({ dealId: 'deal_1', wonDealId: null, lostDealId: 'deal_1' }) };
+    renderAsking(canned, asked);
     await screen.findByText('Website-Relaunch');
     await userEvent.click(screen.getByRole('combobox', { name: de.deals.action.move }));
     await userEvent.click(screen.getByRole('option', { name: 'Verloren' }));
-    // No write yet: the reason comes first.
-    expect(asked.some((a) => a.action === 'deals_mark')).toBe(false);
-    await userEvent.type(screen.getByLabelText(de.deals.lost.reason), 'Budget gestrichen');
-    await userEvent.click(screen.getByRole('button', { name: de.deals.action.markLost }));
     await waitFor(() => {
       const mark = asked.find((a) => a.action === 'deals_mark');
       expect(mark?.input.status).toBe('lost');
+      expect(mark?.input).not.toHaveProperty('lostReason');
+    });
+    expect(screen.queryByLabelText(de.deals.lost.reason)).toBeNull();
+  });
+
+  it('D204 with audit.ask_reason = optional the note opens first and never blocks the button', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const canned = {
+      ...baseCanned(),
+      settings_get: ok({ setting: { key: 'audit.ask_reason', value: 'optional' } }),
+      deals_mark: ok({ dealId: 'deal_1', wonDealId: null, lostDealId: 'deal_1' }),
+    };
+    renderAsking(canned, asked);
+    await screen.findByText('Website-Relaunch');
+    await waitFor(() => expect(asked.some((a) => a.action === 'settings_get')).toBe(true));
+    await userEvent.click(screen.getByRole('combobox', { name: de.deals.action.move }));
+    await userEvent.click(screen.getByRole('option', { name: 'Verloren' }));
+    const field = await screen.findByLabelText(de.deals.lost.reason);
+    expect(field).not.toBeRequired();
+    expect(asked.some((a) => a.action === 'deals_mark')).toBe(false);
+    await userEvent.type(field, 'Budget gestrichen');
+    await userEvent.click(screen.getByRole('button', { name: de.deals.action.markLost }));
+    await waitFor(() => {
+      const mark = asked.find((a) => a.action === 'deals_mark');
       expect(mark?.input.lostReason).toBe('Budget gestrichen');
     });
   });
@@ -367,7 +390,7 @@ describe('Deals, the writes', () => {
     });
   });
 
-  it('surfaces the engine refusal through the catalogue (lost_reason_required as an example)', async () => {
+  it('surfaces the engine refusal through the catalogue (needs_quotes_module as an example)', async () => {
     const canned = { ...baseCanned(), deals_to_quote: reject('needs_quotes_module') };
     renderDeals(canned);
     await screen.findByText('Website-Relaunch');

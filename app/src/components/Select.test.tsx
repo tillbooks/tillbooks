@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { Select } from './Select';
+import { MultiSelect, Select } from './Select';
 
 const OPTIONS = [
   { value: 'a', label: 'Alpha' },
@@ -106,5 +106,24 @@ describe('Select', () => {
     await userEvent.keyboard('{Escape}'); // closes the list only
     expect(screen.queryByRole('option')).toBeNull();
     expect(onAncestorEscape).not.toHaveBeenCalled();
+  });
+});
+
+describe('MultiSelect (the Einstellungen redesign, 18.11.2026)', () => {
+  it('shows its short label, ticks several options in the order of the list, and stays open while ticking', async () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<MultiSelect values={['b']} onChange={onChange} options={OPTIONS.slice(0, 2)} ariaLabel="Letters" displayLabel="1 von 2" />);
+    const trigger = screen.getByRole('combobox', { name: 'Letters' });
+    expect(trigger).toHaveTextContent('1 von 2');
+    await userEvent.click(trigger);
+    expect(screen.getByRole('listbox', { name: 'Letters' })).toHaveAttribute('aria-multiselectable', 'true');
+    expect(screen.getByRole('option', { name: 'Bravo' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('option', { name: 'Alpha' })).toHaveAttribute('aria-selected', 'false');
+    await userEvent.click(screen.getByRole('option', { name: 'Alpha' }));
+    expect(onChange).toHaveBeenLastCalledWith(['a', 'b']);
+    expect(screen.getByRole('listbox', { name: 'Letters' })).toBeInTheDocument();
+    rerender(<MultiSelect values={['a', 'b']} onChange={onChange} options={OPTIONS.slice(0, 2)} ariaLabel="Letters" displayLabel="2 von 2" />);
+    await userEvent.keyboard('{Enter}');
+    expect(onChange).toHaveBeenLastCalledWith(['b']);
   });
 });

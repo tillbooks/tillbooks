@@ -186,6 +186,14 @@ export interface ControlSnapshotRow {
   differenceMinor: number | null;
   status: ControlStatusValue;
   waiverReason: string | null;
+  /**
+   * D204 (critic M3): who waived the control and when, carried into the snapshot and the Prüfbericht so
+   * a reasonless waiver still names its person. OUTSIDE the check hash (the hash covers what the check
+   * computed, not who set a control aside), so no hash version changes; absent on a snapshot written
+   * before this field and read as null.
+   */
+  waivedBy?: string | null;
+  waivedAt?: string | null;
   detail: string | null;
   missingInput: string | null;
 }
@@ -275,6 +283,8 @@ export function runCheck(ctx: WorkspaceContext, plan: PlanRow, step: StepRow, ag
       differenceMinor: row.differenceMinor,
       status,
       waiverReason,
+      waivedBy: keepWaiver ? existing.waived_by : null,
+      waivedAt: keepWaiver ? existing.waived_at : null,
       detail: row.detail,
       missingInput: row.missingInput,
     });
@@ -492,7 +502,7 @@ export function getCheck(ctx: WorkspaceContext, input: { checkId: unknown }): Re
   return ok({
     check: checkView(row),
     controls,
-    waivers: controls.filter((c) => c.status === 'waived').map((c) => ({ controlId: c.controlId, kind: c.kind, scope: c.scope, reason: c.waiverReason })),
+    waivers: controls.filter((c) => c.status === 'waived').map((c) => ({ controlId: c.controlId, kind: c.kind, scope: c.scope, reason: c.waiverReason, waivedBy: c.waivedBy ?? null, waivedAt: c.waivedAt ?? null })),
   });
 }
 
@@ -534,10 +544,9 @@ export function waiveControl(
 ): Result {
   const guard = reqStr(input.controlId, 'controlId') ?? reqStr(input.idempotencyKey, 'idempotencyKey');
   if (guard) return guard;
-  // A waiver whose reason is blank is a silent one: refused, empty string included (P9, spec §2).
-  if (typeof input.reason !== 'string' || input.reason.trim().length === 0) {
-    return err('waiver_needs_reason', { controlId: input.controlId });
-  }
+  // D204 (A03 §11): a waiver needs no reason. It is never silent: the status is `waived`, and who and when
+  // are recorded on the row and in the Prüfbericht; a given reason is kept beside them.
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
   const row = ctx.store.db
     .prepare('SELECT id, status FROM migration_control_total WHERE id = ? AND workspace_id = ?')
     .get(input.controlId, ctx.workspaceId) as { id: string; status: string } | undefined;
@@ -549,14 +558,16 @@ export function waiveControl(
 
   return ctx.store.rememberIdempotent(ctx.workspaceId, input.idempotencyKey as string, 'migration_waive_control', () => {
     const now = ctx.clock.now();
-    // WHO and WHY are recorded (spec: a waiver is part of the check and part of the export), and the
+    // WHO and WHEN are recorded, WHY when given (a waiver is part of the check and of the export), and the
     // status is `waived`, never a silent pass: readiness renders "bereit, mit N Ausnahmen".
     ctx.store.db
       .prepare(
         `UPDATE migration_control_total SET status = 'waived', waiver_reason = ?, waived_by = ?, waived_at = ?, updated_at = ?
           WHERE id = ? AND workspace_id = ?`,
       )
-      .run((input.reason as string).trim(), ctx.actor, now, now, row.id, ctx.workspaceId);
+      .run(reason, ctx.actor, now, now, row.id, ctx.workspaceId);
+    // D204 (critic M3): the waiver is also an audit-chain row, so who and when survive outside the row.
+    ctx.audit.record({ entityKind: 'migration_control', entityId: row.id, action: 'waive', actor: ctx.actor, at: now });
     return ok({ ok: true, controlId: row.id, status: 'waived' });
   });
 }
@@ -597,7 +608,7 @@ export function exportCheck(ctx: WorkspaceContext, input: { checkId: unknown; fo
     },
     stepId: row.step_id,
     controls,
-    waivers: controls.filter((c) => c.status === 'waived').map((c) => ({ controlId: c.controlId, kind: c.kind, scope: c.scope, reason: c.waiverReason })),
+    waivers: controls.filter((c) => c.status === 'waived').map((c) => ({ controlId: c.controlId, kind: c.kind, scope: c.scope, reason: c.waiverReason, waivedBy: c.waivedBy ?? null, waivedAt: c.waivedAt ?? null })),
     sourceFiles: files.map((f) => ({ fileId: f.file_id, sha256: f.sha256, asAt: f.as_at })),
   };
   const content = JSON.stringify(bericht, null, 2);

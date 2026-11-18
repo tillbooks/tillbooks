@@ -109,6 +109,8 @@ export interface ParsedLineFacts {
   exchange: ExchangeFact | null;
   /** `Chrgs` (camt); an MT940 `/CHGS/` or ZKB `?4:` to `?8:`, a mapped CSV fee column: one record each. */
   charges: ChargesFact | null;
+  /** A20 §13.1 (D205): the line came from an Excel workbook, read as a CSV (`source` stays `csv`). Absent otherwise. */
+  container?: 'xlsx';
 }
 
 /** The stored and projected facts: the parsed ones plus what TILL derived. */
@@ -320,7 +322,11 @@ export function swissAmountToMinor(raw: string, decimal?: '.' | ','): number | n
     const thousands = decimal === '.' ? ',' : '.';
     const parts = t.split(decimal);
     if (parts.length > 2) return null;
-    whole = (parts[0] as string).split(thousands).join('');
+    // WP2 critic M2: a thousands mark stands only between digit GROUPS (the first of one to three digits, every
+    // later one of exactly three), so `12.50` under `,` (or `12,50` under `.`) is unreadable, never 1250.00.
+    const groups = (parts[0] as string).split(thousands);
+    if (groups.length > 1 && (!/^[1-9]\d{0,2}$/.test(groups[0] as string) || groups.slice(1).some((g) => !/^\d{3}$/.test(g)))) return null;
+    whole = groups.join('');
     frac = parts[1] ?? '';
     if (frac.includes(thousands)) return null;
   } else {
@@ -558,6 +564,8 @@ interface FactRow {
   fee_currency: string | null;
   fee_included: number | null;
   fee_origin: string | null;
+  /** A20 §13.1: `xlsx` for a line read from a workbook, else null (absent on a row read without the column). */
+  container?: string | null;
 }
 
 /** The fact insert, compiled once per connection (an import writes one per line; critic M5). */
@@ -575,8 +583,8 @@ export function writeLineFacts(ctx: WorkspaceContext, bankTxnId: string, f: Line
           instructed_minor, instructed_currency, tx_amount_minor, tx_amount_currency, counter_value_minor,
           counter_value_currency, fx_source_currency, fx_target_currency, fx_unit_currency, fx_rate,
           fx_effective_rate, fx_origin, charges_total_minor, charges_currency, charges_records, charges_origin,
-          fee_minor, fee_currency, fee_included, fee_origin, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          fee_minor, fee_currency, fee_included, fee_origin, container, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     factInsert.set(db, insert);
   }
@@ -616,6 +624,7 @@ export function writeLineFacts(ctx: WorkspaceContext, bankTxnId: string, f: Line
       f.fee?.currency ?? null,
       f.fee === null ? null : f.fee.included === null ? null : f.fee.included ? 1 : 0,
       f.fee?.origin ?? null,
+      f.container ?? null,
       ctx.clock.now(),
     );
 }
@@ -684,6 +693,7 @@ export function factsOfRow(r: FactRow): BankLineFacts {
       r.fee_minor === null || r.fee_currency === null
         ? null
         : { amountMinor: r.fee_minor, currency: r.fee_currency, included: r.fee_included === null ? null : r.fee_included === 1, origin: r.fee_origin === 'text' ? 'text' : 'charges' },
+    ...(r.container === 'xlsx' ? { container: 'xlsx' as const } : {}),
   };
 }
 

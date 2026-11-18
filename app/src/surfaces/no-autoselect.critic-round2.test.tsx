@@ -228,9 +228,10 @@ describe('critic round 2: /goods-receipts, the read guard and the refresh after 
       ['read_master_data', 'manage_master_data'],
     );
     await userEvent.click(await screen.findByRole('button', { name: 'Buchen' }));
-    // Posted: Buchen is gone and Stornieren (the reverse) is offered, with its reason field.
+    // Posted: Buchen is gone and Stornieren (the reverse) is offered; under D204's default no reason field.
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Buchen' })).toBeNull());
-    expect(await screen.findByLabelText(/Grund/)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Stornieren/ })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Grund/)).toBeNull();
     expect(screen.getByRole('heading', { name: 'GR-1' })).toBeInTheDocument();
     expect(asked.filter((a) => a.action === 'goods_receipt_post').map((a) => a.input.grId)).toEqual(['gr_1']);
   });

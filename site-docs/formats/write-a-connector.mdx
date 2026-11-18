@@ -1,0 +1,71 @@
+---
+title: "Write a connector"
+description: "Turn any source of turnover into a till-settlement/v1 document with a short script, and let TILL pull it."
+---
+
+A connector is any program that produces a [`till-settlement/v1`](/formats/till-settlement) document. It
+can print a file, answer an HTTP request, or be an agent that reads a source's own MCP server. TILL does
+not care which. The document is what counts.
+
+The script below is a whole connector. It holds two invented sales (replace them with a call to your
+source), prints the document, or serves it on your computer:
+
+```js title="connector.mjs"
+import { createServer } from 'node:http';
+
+const TOKEN = process.env.CONNECTOR_TOKEN ?? 'a-long-random-token-0123456789';
+const sales = [
+  { id: 'order-1001', day: '2026-07-03', gross: '108.10', net: '100.00', vat: '8.10' },
+  { id: 'order-1002', day: '2026-07-09', gross: '54.05', net: '50.00', vat: '4.05' },
+];
+
+const document = (from = '0000-00-00', to = '9999-99-99') => ({
+  schema: 'till-settlement/v1',
+  source: { system: 'my-shop', processor: 'my-shop' },
+  events: sales
+    .filter((s) => s.day >= from && s.day <= to)
+    .map((s) => ({ id: s.id, kind: 'sale', day: s.day, currency: 'CHF', amount: s.gross, net: s.net, vat: { amount: s.vat } })),
+});
+
+if (process.argv[2] === 'print') {
+  console.log(JSON.stringify(document(), null, 2));
+} else {
+  createServer((req, res) => {
+    const url = new URL(req.url, 'http://localhost');
+    if (req.headers.authorization !== `Bearer ${TOKEN}`) return res.writeHead(401).end();
+    if (url.pathname !== '/feed') return res.writeHead(404).end();
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(document(url.searchParams.get('from'), url.searchParams.get('to'))));
+  }).listen(Number(process.env.PORT ?? 8899), '127.0.0.1');
+}
+```
+
+## Check the document
+
+```sh
+node connector.mjs print > settlement.json
+till settlement validate settlement.json
+```
+
+`validate` uses the reader TILL imports with and writes nothing. Fix what it refuses before you go on. The
+rules that bite most producers:
+
+- `id` is the producer's own and stays the same on every run. TILL books an event once, by its id.
+- Write amounts as decimal strings with at most two places. `amount` is the gross, `net` and `vat.amount`
+  add up to it, and money going out of the balance is negative.
+- Take the amounts from the source. Do not work VAT out from a rate.
+
+## Let TILL pull it
+
+Start the script (`node connector.mjs`), save a booking template for `my-shop` (`set_settlement_template`),
+then, in the Studio under Bankkonten, save the source: address `http://127.0.0.1:8899`, feed path `/feed`,
+the token, and the first day to pull. A plain `http` address is accepted for your own computer only.
+`pull_settlement` then asks `/feed?from=…&to=…`, and the daily pull does the same once a day if you set
+`settlement.pull_mode` to `daily`.
+
+## Let an agent do it
+
+An agent with a source's own MCP server (Stripe's, Shopify's) needs no script. In an MCP client, the TILL
+prompt `settlement_from_source` walks it through the same steps: read the schema, build the document,
+`validate_settlement`, `settlement_review`, then `import_settlement`. An agent's import becomes a
+Vorschlag that you approve in the Studio.

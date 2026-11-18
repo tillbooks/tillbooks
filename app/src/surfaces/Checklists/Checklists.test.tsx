@@ -324,7 +324,7 @@ describe('Checklists detail', () => {
     expect(call?.input.evidence).toEqual({ kind: 'filed_attestation', ref: '2026-07-20' });
   });
 
-  it('skip: needs a reason, then calls checklist_item_skip with it', async () => {
+  it('D204 skip: confirms at once with no reason field and calls checklist_item_skip without a reason', async () => {
     const calls: Array<{ action: string; input: Record<string, unknown> }> = [];
     render(tree({ checklist_get: ok(RUN), checklist_item_skip: ok({ runId: 'r1', itemId: 'eportal_filed', item: RUN.items[6] }) }, { path: '/checklisten?run=r1', calls }));
     const journey = await screen.findByRole('list', { name: de.checklists.detail.journey });
@@ -332,12 +332,27 @@ describe('Checklists detail', () => {
     fireEvent.click(within(attest).getByRole('button', { name: de.checklists.act.skip }));
     const dialog = await screen.findByRole('alertdialog');
     expect(within(dialog).getByText(de.checklists.skip.consequence)).toBeTruthy();
-    fireEvent.click(within(dialog).getByRole('button', { name: de.checklists.skip.action }));
-    expect(await within(dialog).findByText(de.checklists.reason.needed)).toBeTruthy();
-    fireEvent.change(within(dialog).getByLabelText(de.checklists.skip.reason), { target: { value: 'Von Hand erfasst.' } });
+    expect(within(dialog).queryByLabelText(de.checklists.skip.reason)).toBeNull();
     fireEvent.click(within(dialog).getByRole('button', { name: de.checklists.skip.action }));
     await waitFor(() => expect(calls.some((c) => c.action === 'checklist_item_skip')).toBe(true));
-    expect(calls.find((c) => c.action === 'checklist_item_skip')?.input.reason).toBe('Von Hand erfasst.');
+    expect(calls.find((c) => c.action === 'checklist_item_skip')?.input).not.toHaveProperty('reason');
+  });
+
+  it('D204 skip with audit.ask_reason = optional offers the note and sends it when written', async () => {
+    const calls: Array<{ action: string; input: Record<string, unknown> }> = [];
+    render(
+      tree(
+        { checklist_get: ok(RUN), settings_get: ok({ setting: { key: 'audit.ask_reason', value: 'optional' } }), checklist_item_skip: ok({ runId: 'r1', itemId: 'eportal_filed', item: RUN.items[6] }) },
+        { path: '/checklisten?run=r1', calls },
+      ),
+    );
+    const journey = await screen.findByRole('list', { name: de.checklists.detail.journey });
+    const attest = within(journey).getAllByRole('listitem')[6] as HTMLElement;
+    fireEvent.click(within(attest).getByRole('button', { name: de.checklists.act.skip }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.change(await within(dialog).findByLabelText(de.checklists.skip.reason), { target: { value: 'Von Hand erfasst.' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: de.checklists.skip.action }));
+    await waitFor(() => expect(calls.find((c) => c.action === 'checklist_item_skip')?.input.reason).toBe('Von Hand erfasst.'));
   });
 
   it('detail states: denied, error with retry, and a missing run', async () => {
@@ -605,7 +620,7 @@ describe('Checklists, the guided close (leg 2)', () => {
     expect(await screen.findByText(de.checklists.error.refused.replace('{code}', 'period_locked'))).toBeTruthy();
   });
 
-  it('the validation warn row: the result word, the figures, the formula behind a disclosure, and "Zur Kenntnis nehmen" records a hash-bound sign-off with a reason', async () => {
+  it('the validation warn row: the result word, the figures, the formula behind a disclosure, and "Zur Kenntnis nehmen" records a hash-bound sign-off with no reason (D204)', async () => {
     const calls: Array<{ action: string; input: Record<string, unknown> }> = [];
     const run = yearRun({ nextItemId: 'prior_year_comparison' });
     render(tree({ checklist_get: ok(run), checklist_item_complete: ok({}) }, { path: '/checklisten?run=y1', held: ALL_RIGHTS, calls }));
@@ -619,10 +634,10 @@ describe('Checklists, the guided close (leg 2)', () => {
     fireEvent.click(within(row).getByRole('button', { name: de.checklists.act.acknowledge }));
     const dialog = await screen.findByRole('alertdialog');
     expect(within(dialog).getByText(de.checklists.acknowledge.consequence)).toBeTruthy();
-    fireEvent.change(within(dialog).getByLabelText(de.checklists.acknowledge.reason), { target: { value: 'Umsatzsprung durch neuen Kunden.' } });
     fireEvent.click(within(dialog).getByRole('button', { name: de.checklists.act.acknowledge }));
     await waitFor(() => expect(calls.some((c) => c.action === 'checklist_item_complete')).toBe(true));
-    expect(calls.find((c) => c.action === 'checklist_item_complete')?.input).toMatchObject({ itemId: 'prior_year_comparison', evidence: { kind: 'signoff', ref: 'Umsatzsprung durch neuen Kunden.' } });
+    expect(calls.find((c) => c.action === 'checklist_item_complete')?.input).toMatchObject({ itemId: 'prior_year_comparison', evidence: { kind: 'signoff' } });
+    expect((calls.find((c) => c.action === 'checklist_item_complete')?.input.evidence as Record<string, unknown>).ref).toBeUndefined();
     // The header counts the note apart from the blockers.
     expect(screen.getByText(/Blocker: 0, Hinweise: 1/)).toBeTruthy();
   });

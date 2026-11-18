@@ -375,6 +375,26 @@ test('§H-TENANT and the input guards: a foreign or mismatched id is not_found, 
   const notRev = A.reverse(a.id, deprRow);
   assert.equal(notRev.error, 'not_reversible');
   assert.ok(run);
+  // D204: a blank reason is no refusal. (This acquisition has a depreciation run, so it is refused for
+  // that, never for the reason.)
   const blank = assetTransactionReverse(A.ctx, { assetId: a.id, transactionId: a.txnId, reason: '  ', idempotencyKey: 'b' });
-  assert.equal(blank.error, 'reason_required');
+  assert.notEqual(blank.error, 'reason_required');
+});
+
+test('D204 assets: a transaction reverses with no reason; the compensating row and mirror are new, the trail names who, when and the permission, a replay writes nothing', async () => {
+  const { assertAuditRow, assertPermission } = await import('../support/d204.mjs');
+  const A = setup('Gamma AG');
+  const a = A.activeAsset();
+  const res = assetTransactionReverse(A.ctx, { assetId: a.id, transactionId: a.txnId, idempotencyKey: 'd204' });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(res.reason, null);
+  const mirror = A.store.db.prepare('SELECT reverses_entry_id, description FROM journal_entry WHERE id = ?').get(res.reversalEntryId);
+  assert.equal(mirror.reverses_entry_id, res.postedEntryId, 'what: the mirror names the original');
+  assert.doesNotMatch(mirror.description, /: $/);
+  assertAuditRow(A.store, A.workspaceId, { entityKind: 'asset_transaction', entityId: a.txnId, action: 'reverse', actor: A.ctx.actor });
+  assertPermission('asset_transaction_reverse');
+  const n = () => A.store.db.prepare('SELECT COUNT(*) AS n FROM journal_entry WHERE workspace_id = ?').get(A.workspaceId).n;
+  const after = n();
+  assert.equal(assetTransactionReverse(A.ctx, { assetId: a.id, transactionId: a.txnId, idempotencyKey: 'd204' }).reversalEntryId, res.reversalEntryId);
+  assert.equal(n(), after, 'a replay writes nothing');
 });

@@ -113,7 +113,7 @@
     "reverseFee": "Reverse reminder fees",
     "reverseFeeTitle": "Reverse the reminder fees of this run?",
     "reverseFeeBody": "TILL books a correcting entry that takes this run’s reminder fees back. The reminder levels stay, and a letter already sent cannot be called back.",
-    "reverseFeeReason": "Reason",
+    "reverseFeeReason": "Note (optional)",
     "reverseFeeCancel": "Cancel",
     "reverseFeeConfirm": "Reverse fees",
     "feeReversed": "The reminder fees of this run are reversed.",
@@ -124,8 +124,7 @@
     "overrideToggle": "Handle this run differently from the settings",
     "overrideRefreeze": "Letters not yet sent",
     "overrideLetterDate": "Date of a re-issued letter",
-    "overrideReason": "Why this run differs",
-    "overrideReasonRequired": "Say why this run differs from the settings.",
+    "overrideReason": "Why this run differs (optional)",
     "refreeze": {
       "reissue": "Re-issue without the fee",
       "hold": "Hold"

@@ -200,17 +200,13 @@ test('a different amount or counterparty is stored and warned about, not refused
   assert.equal(amount.documentAmountMinor, GROSS_MINOR);
 });
 
-test('the override: a reason is required, the bypass is written on the correcting row and the mirror, and audited', () => {
+test('the override: the bypass is written on the correcting row and the mirror, and audited', () => {
   const w = world();
   const inv = issueInvoice(w.ctx, { contactId: w.customerId, key: 'i6' });
   const assetId = w.activeAsset();
   const d = w.dispose(assetId, { proceedsInvoiceId: inv.id });
   assert.equal(d.ok, true, JSON.stringify(d));
   const before = w.txns();
-  const noReason = w.reverse(assetId, d.transaction.id, { overrideProceedsCheck: true }, 'o1');
-  assert.equal(noReason.error, 'reason_required');
-  assert.equal(noReason.field, 'overrideReason');
-  assert.equal(w.reverse(assetId, d.transaction.id, { overrideProceedsCheck: true, overrideReason: '   ' }, 'o2').error, 'reason_required');
   assert.equal(w.reverse(assetId, d.transaction.id, { overrideProceedsCheck: 'yes', overrideReason: 'x' }, 'o3').error, 'invalid_input');
   assert.equal(w.txns(), before);
 
@@ -221,6 +217,26 @@ test('the override: a reason is required, the bypass is written on the correctin
   const mirror = w.store.db.prepare('SELECT description FROM journal_entry WHERE workspace_id = ? AND id = ?').get(w.workspaceId, r.reversalEntryId);
   assert.match(mirror.description, /Erlösprüfung übersteuert/);
   assert.ok(w.audits.some((e) => e.action === 'override_proceeds_check' && e.entityId === d.transaction.id), 'the override is audited');
+});
+
+test('D204 assets: the proceeds override needs no reason; it is named on the correcting row and audited with who and when', async () => {
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
+  for (const overrideReason of [undefined, '   ']) {
+    const w = world();
+    const inv = issueInvoice(w.ctx, { contactId: w.customerId, key: 'i7' });
+    const assetId = w.activeAsset();
+    const d = w.dispose(assetId, { proceedsInvoiceId: inv.id });
+    assert.equal(d.ok, true, JSON.stringify(d));
+    const r = w.reverse(assetId, d.transaction.id, { overrideProceedsCheck: true, ...(overrideReason === undefined ? {} : { overrideReason }) }, 'n1');
+    assert.equal(r.ok, true, JSON.stringify(r));
+    assert.equal(r.proceedsCheckOverridden, true);
+    assert.equal(r.overrideReason, null);
+    assert.match(w.row(r.reversalTransactionId).description, /Erlösprüfung übersteuert$/, 'what: the bypass is named, with no empty reason');
+    const row = w.audits.find((e) => e.action === 'override_proceeds_check' && e.entityId === d.transaction.id);
+    assert.ok(row !== undefined, 'the override is audited');
+    assertWhoWhen(row.actor, row.at, w.ctx.actor);
+    assertPermission('asset_transaction_reverse');
+  }
 });
 
 test('an override that bypassed nothing is not recorded as one; an unlinked disposal reverses exactly as under D170', () => {

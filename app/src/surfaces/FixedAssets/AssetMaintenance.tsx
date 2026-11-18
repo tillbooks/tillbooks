@@ -34,6 +34,7 @@ import { Status } from '../../components/Status';
 import { useCalendarFormat } from '../../lib/format';
 import { Modal } from '../../components/Modal';
 import { MaintenanceLogDrawer, type MaintenanceDraft, EMPTY_MAINTENANCE_DRAFT } from './MaintenanceLogDrawer';
+import { optionalReason, useAskReason } from '../../lib/useAskReason';
 import './FixedAssets.css';
 
 /** A fresh key per write, so a retry after a transport failure is a retry and not a second write. */
@@ -174,6 +175,8 @@ export function AssetMaintenance() {
   const [draft, setDraft] = useState<MaintenanceDraft>(EMPTY_MAINTENANCE_DRAFT);
   const [cancelling, setCancelling] = useState<MaintenanceLog | null>(null);
   const [cancelReason, setCancelReason] = useState('');
+  // D204: no reason needed to cancel; an optional note only when the workspace asks for one.
+  const askReason = useAskReason();
 
   const canWrite = can(CAP.manageMasterData);
   const selectedAsset = useMemo(() => assets.find((a) => a.id === assetId) ?? null, [assets, assetId]);
@@ -323,9 +326,10 @@ export function AssetMaintenance() {
 
   const confirmCancel = useCallback(async () => {
     if (cancelling === null) return;
+    const reason = optionalReason(cancelReason);
     const ok = await write('asset_maintenance_log_cancel', {
       id: cancelling.id,
-      reason: cancelReason.trim(),
+      ...(reason === undefined ? {} : { reason }),
       idempotencyKey: newKey(),
     });
     if (ok) {
@@ -362,7 +366,7 @@ export function AssetMaintenance() {
   ];
 
   // K-21: a completed entry opens its edit drawer from the row; cancelling it sits behind the one
-  // quiet overflow (danger, and it still asks for a reason). A cancelled entry is read-only.
+  // quiet overflow (danger, behind its confirm; D204: no reason). A cancelled entry is read-only.
   const logActions = (l: MaintenanceLog): OverflowMenuItem[] =>
     l.status === 'completed' && canWrite
       ? [
@@ -512,7 +516,6 @@ export function AssetMaintenance() {
               type="button"
               className="btn btn--danger"
               onClick={() => void confirmCancel()}
-              disabled={cancelReason.trim() === ''}
             >
               {t('assets.maintenance.cancel')}
             </button>
@@ -520,9 +523,11 @@ export function AssetMaintenance() {
         }
       >
         {cancelling !== null && <p>{t('assets.maintenance.confirmCancel', { title: cancelling.title })}</p>}
-        <Field label={t('assets.maintenance.field.cancelReason')} id="fa-mnt-cancel-reason">
-          <input className="field" id="fa-mnt-cancel-reason" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
-        </Field>
+        {askReason && (
+          <Field label={t('assets.maintenance.field.cancelReason')} id="fa-mnt-cancel-reason">
+            <input className="field" id="fa-mnt-cancel-reason" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} />
+          </Field>
+        )}
         {writeError && <ErrorBanner error={writeError} />}
       </Modal>
     </div>

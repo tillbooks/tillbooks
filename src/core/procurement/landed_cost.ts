@@ -649,11 +649,11 @@ export function landedCostReverse(ctx: WorkspaceContext, input: ReverseInput): R
   const capable = ctx.capabilities.assert(WRITE_CAP);
   if (!capable.ok) return capable;
   if (typeof input.voucherId !== 'string' || input.voucherId.length === 0) return err('invalid_input', { field: 'voucherId' });
-  if (typeof input.reason !== 'string' || input.reason.trim().length === 0) return err('invalid_input', { field: 'reason' });
   if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.length === 0) {
     return err('invalid_input', { field: 'idempotencyKey' });
   }
-  const reason = input.reason.trim();
+  // D204: the reverse needs no reason; the voucher keeps who (`reversed_by`) and when.
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
 
   return runTx(ctx, 'landed_cost_reverse', input.idempotencyKey, () => {
     const v = readVoucher(ctx, input.voucherId as string);
@@ -708,7 +708,7 @@ export function landedCostReverse(ctx: WorkspaceContext, input: ReverseInput): R
       date: effectiveDate,
       source: 'reversal',
       reversesEntryId: v.journal_entry_id,
-      description: `Landed cost reversal ${v.number}: ${reason}`,
+      description: reason === null ? `Landed cost reversal ${v.number}` : `Landed cost reversal ${v.number}: ${reason}`,
       idempotencyKey: `${v.id}:rev:journal`,
       lines: reverseLines,
     }, 'landed_cost_reverse_internal');

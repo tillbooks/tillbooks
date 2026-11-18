@@ -139,14 +139,20 @@
           "tile": "Bank jetzt als Kachel.",
           "card": "Bank jetzt als Karte oben.",
           "bar": "Bank jetzt als schmale Leiste."
-        }
+        },
+        "double": "{name} jetzt doppelt breit."
       },
       "ghostName": "{name}, ausgeblendet",
       "unavailable": "Nicht verfügbar",
       "size": "Grösse ändern: {name}",
       "double": "{name} jetzt doppelt breit.",
       "single": "{name} jetzt einfach breit.",
-      "comparePage": "Wie die Seite"
+      "comparePage": "Wie die Seite",
+      "widthSingle": "{name}: einfach breit",
+      "widthDouble": "{name}: doppelt breit",
+      "compareGroup": "Vergleich",
+      "trendOn": "Verlauf zeigen",
+      "trendOff": "Verlauf ausblenden"
     },
     "doors": {
       "label": "Häufige Aktionen",
@@ -448,7 +454,6 @@
       "bankBooked": "Bank, gebucht"
     },
     "library": {
-      "title": "Kennzahlen",
       "groups": {
         "money": "Geld",
         "result": "Ergebnis",
@@ -458,21 +463,40 @@
       }
     },
     "settings": {
-      "open": "Kennzahlen wählen",
-      "back": "Zur Übersicht",
       "about": "Was ist {name}?",
-      "compare": "Vergleich: {name}",
       "modes": {
         "previous_year": "Vorjahr",
         "previous_period": "Vorperiode",
         "none": "Kein Vergleich"
+      }
+    },
+    "suggestions": {
+      "title": "Vorschläge",
+      "count": "{count} offen",
+      "all": "Alle ansehen",
+      "allCount": "Alle {count} ansehen",
+      "none": "Nichts offen",
+      "error": "Die Vorschläge konnten nicht geladen werden.",
+      "denied": "Dir fehlt das Recht, die Vorschläge zu lesen."
+    },
+    "sheet": {
+      "title": "Karten",
+      "open": "Karten wählen",
+      "add": "Karte",
+      "close": "Karten schliessen",
+      "search": "Suchen",
+      "none": "Keine Karte gefunden",
+      "reset": "Filter zurücksetzen",
+      "groups": {
+        "work": "Arbeit",
+        "cards": "Diagramme und Listen"
       }
     }
   },
   "help": {
     "Uebersicht": {
       "title": "Übersicht",
-      "body": "Die Startseite deiner Bücher: Kennzahlen mit Wert, Stand und Weg in die Fläche dahinter. Eine Kachel ohne eingerichtetes Modul zeigt keine falsche Null.\n\nMit Anpassen ordnest du Kennzahlen und Karten hier: am Griff ziehen, mit Alt und Pfeiltaste oder über Mehr verschieben, mit dem Auge aus- und einblenden, mit Grösse ändern breiter machen. Alles ist sofort gespeichert. Welche Karten am Anfang stehen, legt der Inhalt in Meine Einstellungen fest.\n\nIn der schmalen Leiste der Bank stehen drei Symbole: die Person für Zeilen, die dich brauchen, das Häkchen für sichere Vorschläge, die durchgestrichene Büroklammer für Gebuchtes ohne Beleg. Der Punkt bei deiner Bank: grün läuft, orange wartet, rot ist gestört, grau ist aus.",
+      "body": "Die Startseite deiner Bücher: zuerst die Vorschläge des Agenten, dann die Kennzahlen. Eine Kachel ohne eingerichtetes Modul zeigt keine falsche Null.\n\nEin Klick auf einen Vorschlag zeigt seine Details; freigeben oder ablehnen tust du in der Zeile.\n\nFahre über eine Karte: ausblenden, Grösse ändern, unter Mehr Vergleich und Verlauf, am Griff verschieben. Mit + Karte wählst du daneben, was die Übersicht zeigt, und siehst es sofort. Alles ist gleich gespeichert. Eine Kennzahl öffnet ihre Fläche, der Pfeil führt zurück.\n\nBei der Bank: die Person für Zeilen, die dich brauchen, das Häkchen für sichere Vorschläge, die durchgestrichene Büroklammer für Gebuchtes ohne Beleg. Der Punkt: grün läuft, orange wartet, rot ist gestört, grau ist aus.",
       "concepts": [],
       "docsPath": "quickstart"
     }

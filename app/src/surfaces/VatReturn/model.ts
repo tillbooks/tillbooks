@@ -47,6 +47,139 @@ export interface VatReturnView {
     outputVatBookedMinor: number;
     driftMinor: number;
   };
+  /**
+   * D198: the settlement feed's pre-filing finding, null when the engine sent none (an older engine) or
+   * found nothing. A finding, never a block: the return stands as computed.
+   */
+  settlement: SettlementFinding | null;
+}
+
+/**
+ * D198 stateless check S1: why a settlement event is listed in the pre-filing check
+ * (`src/core/settlement/vatFindings.ts` `SETTLEMENT_CHECK_REASONS`, mirrored here: the browser bundle never
+ * imports engine code).
+ */
+export const SETTLEMENT_REASONS = ['missing', 'booked_twice', 'amended', 'override_check'] as const;
+export type SettlementReason = (typeof SETTLEMENT_REASONS)[number];
+
+export interface SettlementFindingItem {
+  eventId: string;
+  kind: string;
+  /** Null for an event the feed sent without a readable day: it is listed in every period. */
+  day: string | null;
+  /** Null for an event whose amount the feed sent unreadable. */
+  amountMinor: number | null;
+  vatMinor: number | null;
+  reason: SettlementReason;
+  /** True for an event dated before the period. */
+  earlier: boolean;
+}
+
+export interface SettlementFinding {
+  /** Every listed event: the period's (missing, booked twice, amended, override to check) and the earlier ones. */
+  items: SettlementFindingItem[];
+  missingCount: number;
+  earlierCount: number;
+  doubleCount: number;
+  amendedCount: number;
+  /** Events marked handled outside the import that the feed changed since. */
+  overrideCheckCount: number;
+  /** The VAT of the period's missing events, each kind as a magnitude (never netted). */
+  missingVatMinor: number;
+  /** Test events with VAT the import left out, and their VAT magnitude (never netted). */
+  testExcluded: { events: number; vatMinor: number };
+  /** A42: events with VAT a person ignored in the Umsatz review, and their VAT magnitude (never netted). */
+  ignored: { events: number; vatMinor: number };
+  testResidueMinor: number;
+  unrefundedTestSales: number;
+  unreversedTestTransfers: number;
+  bookedTest: number;
+  /** Events the feed sent without an id: they can never be named. */
+  unplaceable: number;
+  gaps: { source: string; from: string; to: string }[];
+}
+
+const asObject = (v: unknown): Record<string, unknown> | null => (typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
+const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const orZero = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+
+function itemOf(x: unknown, earlier: boolean): SettlementFindingItem | null {
+  const s = asObject(x);
+  if (s === null) return null;
+  if (typeof s.eventId !== 'string') return null;
+  if (!(typeof s.day === 'string' || s.day === null) || !(typeof s.amountMinor === 'number' || s.amountMinor === null)) return null;
+  if (!(SETTLEMENT_REASONS as readonly string[]).includes(String(s.reason))) return null;
+  return {
+    eventId: s.eventId,
+    kind: typeof s.kind === 'string' ? s.kind : '',
+    day: s.day,
+    amountMinor: s.amountMinor,
+    vatMinor: typeof s.vatMinor === 'number' ? s.vatMinor : null,
+    reason: s.reason as SettlementReason,
+    earlier,
+  };
+}
+
+/** The engine's `settlement` field, read defensively; null when absent or when it found nothing. */
+export function parseSettlementFinding(raw: unknown): SettlementFinding | null {
+  const f = asObject(raw);
+  if (f === null || f.hasFindings !== true) return null;
+  const items: SettlementFindingItem[] = [];
+  const take = (list: unknown, earlier: boolean): void => {
+    for (const x of asList(list)) {
+      const item = itemOf(x, earlier);
+      if (item !== null) items.push(item);
+    }
+  };
+  take(f.missing, false);
+  take(f.bookedTwice, false);
+  take(f.amended, false);
+  take(f.overrideCheck, false);
+  take(f.earlier, true);
+  const vat = asObject(f.missingVatMinor);
+  const test = asObject(f.testExcluded);
+  const activity = asObject(f.testActivity);
+  let testEvents = 0;
+  let testVat = 0;
+  for (const k of ['sale', 'refund', 'input']) {
+    const bucket = asObject(test?.[k]);
+    testEvents += orZero(bucket?.events);
+    testVat += Math.abs(orZero(bucket?.vatMinor));
+  }
+  const ignoredRaw = asObject(f.ignored);
+  let ignoredEvents = 0;
+  let ignoredVat = 0;
+  for (const k of ['sale', 'refund', 'input']) {
+    const bucket = asObject(ignoredRaw?.[k]);
+    ignoredEvents += orZero(bucket?.events);
+    ignoredVat += Math.abs(orZero(bucket?.vatMinor));
+  }
+  const gaps: SettlementFinding['gaps'] = [];
+  for (const x of asList(f.uncoveredSources)) {
+    const u = asObject(x);
+    if (u === null) continue;
+    for (const range of asList(u.gaps)) {
+      const r = asObject(range);
+      if (r !== null && typeof r.from === 'string' && typeof r.to === 'string') gaps.push({ source: `${String(u.system)} · ${String(u.processor)}`, from: r.from, to: r.to });
+    }
+  }
+  return {
+    items,
+    missingCount: orZero(f.missingCount),
+    earlierCount: orZero(f.earlierCount),
+    doubleCount: asList(f.bookedTwice).length,
+    amendedCount: asList(f.amended).length,
+    overrideCheckCount: asList(f.overrideCheck).length,
+    missingVatMinor: Math.abs(orZero(vat?.sale)) + Math.abs(orZero(vat?.refund)) + Math.abs(orZero(vat?.input)),
+    testExcluded: { events: testEvents, vatMinor: testVat },
+    ignored: { events: ignoredEvents, vatMinor: ignoredVat },
+    testResidueMinor: orZero(activity?.testResidueMinor),
+    unrefundedTestSales: asList(activity?.unrefundedTestSales).length,
+    unreversedTestTransfers: asList(activity?.unreversedTestTransfers).length,
+    bookedTest: asList(f.bookedTest).length,
+    unplaceable: orZero(asObject(f.unplaceable)?.count),
+    gaps,
+  };
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -122,6 +255,7 @@ export function parseVatReturn(body: unknown): VatReturnView | null {
       outputVatBookedMinor: bookedMinor,
       driftMinor,
     },
+    settlement: parseSettlementFinding(b.settlement),
   };
 }
 

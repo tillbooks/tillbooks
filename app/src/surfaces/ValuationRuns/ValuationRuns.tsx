@@ -191,7 +191,7 @@ export function ValuationRuns() {
       const { body } = await client.call('inventory_valuation_reverse', {
         workspaceId,
         runId,
-        reason: t('invRun.reverseReason'),
+        // D204: no system-written reason; the mirror entry keeps who and when.
         idempotencyKey: newKey(),
       });
       setBusy(false);

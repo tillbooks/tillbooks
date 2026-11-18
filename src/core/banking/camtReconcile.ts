@@ -520,8 +520,8 @@ export function insertStatement(
       `INSERT INTO bank_statement
          (id, workspace_id, bank_account_id, message_type, statement_id, electronic_seq_nb,
           page_number, last_page_ind, content_hash, from_date, to_date, opening_balance_minor,
-          closing_balance_minor, balance_currency, txn_count, imported_by, imported_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          closing_balance_minor, balance_currency, txn_count, imported_by, imported_at, fill_proof)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       statementRowId,
@@ -541,6 +541,8 @@ export function insertStatement(
       0,
       ctx.actor,
       now,
+      // A20 §13.3 (critic round 1, L5): a gap fill's proof, in the INSERT.
+      stmt.fill?.proof ?? null,
     );
 
   // Every stored key of the account, with its line: a BANK reference key already there drops the line
@@ -643,11 +645,14 @@ export function insertStatement(
      VALUES (?, ?, ?, ?, ?, ?)`,
   );
 
+  // A20 §13.3 (critic round 1, L2): the money of the entries skipped as already held, recorded on a gap fill.
+  let heldMinor = 0;
   for (let index = 0; index < stmt.entries.length; index += 1) {
     const entry = stmt.entries[index] as (typeof stmt.entries)[number];
     let storageKey = entry.entryKey;
     if (exactRepeat.has(index) && !allowDuplicateEntries) {
       skipped.push({ entryRef: entry.entryRef, reason: 'duplicate_entry' });
+      heldMinor += entry.creditDebit === 'CRDT' ? entry.amountMinor : -entry.amountMinor;
       continue;
     }
     if (existingKeys.has(storageKey)) {
@@ -663,6 +668,7 @@ export function insertStatement(
     const decision = decisions.get(index);
     if (decision?.kind === 'absorb' && !allowDuplicateEntries) {
       skipped.push({ entryRef: entry.entryRef, reason: 'cross_format_duplicate', existingBankTxnId: decision.existingBankTxnId });
+      heldMinor += entry.creditDebit === 'CRDT' ? entry.amountMinor : -entry.amountMinor;
       continue;
     }
     existingKeys.set(storageKey, '');
@@ -755,8 +761,8 @@ export function insertStatement(
   }
 
   ctx.store.db
-    .prepare('UPDATE bank_statement SET txn_count = ? WHERE workspace_id = ? AND id = ?')
-    .run(insertedCount, ctx.workspaceId, statementRowId);
+    .prepare('UPDATE bank_statement SET txn_count = ?, fill_held_minor = ? WHERE workspace_id = ? AND id = ?')
+    .run(insertedCount, stmt.fill !== undefined ? heldMinor : null, ctx.workspaceId, statementRowId);
 
   ctx.audit.record({
     entityKind: 'bank_statement',

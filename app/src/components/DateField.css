@@ -1,0 +1,41 @@
+/*
+ * D195: the shared DateField. The text field is a `.field` (its height, border, hover and focus ring are the
+ * field's own); the calendar glyph sits inside its left edge and opens the browser's picker on a click; the
+ * native `type="date"` it opens stays in the layout (a picker needs a rendered anchor) but takes no room and
+ * no pointer.
+ */
+.date-field {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.date-field__glyph {
+  position: absolute;
+  left: var(--t-space-1);
+  display: inline-flex;
+  color: var(--t-text-dim);
+  cursor: pointer;
+}
+
+input.field.date-field__input {
+  /* Room for the glyph, and a width for a ten-character date plus that room. */
+  padding-left: calc(var(--t-space-1) + 16px + var(--t-space-1));
+  width: calc(10ch + 16px + 3 * var(--t-space-1));
+}
+
+.date-field[data-invalid='true'] input.field.date-field__input {
+  border-color: var(--t-danger);
+}
+
+.date-field__native {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}

@@ -466,6 +466,24 @@ const EXPECTED_NAMES = [
   'import_settlement',
   'set_settlement_template',
   'get_settlement_template',
+  // D198, the settlement feed
+  'set_settlement_source',
+  'get_settlement_source',
+  'pull_settlement',
+  'settlement_payout_for_bank_line',
+  // D198 re-cut R6
+  'resolve_settlement_event',
+  // A42, the Umsatz review
+  'settlement_review',
+  'set_settlement_event_ignored',
+  // A43 §2, the table door
+  'settlement_from_table',
+  'set_settlement_table_mapping',
+  'get_settlement_table_mapping',
+  'turnover_summary',
+  'settlement_periods',
+  // A43, the settlement contract's agent door
+  'validate_settlement',
   // A39, the bank inbox (bank-inbox-actions.ts, spread right after camt-actions): three writes and one
   // read. Every write that decides a bank line is on the G01 denylist (critic A39-3).
   'list_bank_inbox',
@@ -523,6 +541,8 @@ const EXPECTED_NAMES = [
   // G00, workspace settings (D172), spread in right after A40.
   'settings_list',
   'settings_get',
+  // D202: who changed which setting, how and under which permission.
+  'settings_history',
   'settings_set',
   'settings_reset',
   // G00, per-person preferences (D178 point 7), spread in right after the workspace settings.
@@ -530,6 +550,9 @@ const EXPECTED_NAMES = [
   'prefs_get',
   'prefs_set',
   'prefs_reset',
+  // O00 (D199), What's new.
+  'whats_new',
+  'whats_new_mark_seen',
   // N00, the workspace brief and the Hausbuch (D183), spread in right after the per-person preferences.
   'workspace_brief',
   'hausbuch_notes',
@@ -567,6 +590,8 @@ const EXPECTED_NAMES = [
   'book_bank_lines',
   'post_entries',
   'approve_drafted_actions',
+  // D196 item 9: the batch reject, one reject_drafted_action per id.
+  'reject_drafted_actions',
   'call_tool',
   // A35, agent conversation & oversight: three reads over the trace, zero writes.
   'list_agent_sessions',

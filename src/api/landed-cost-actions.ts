@@ -88,8 +88,8 @@ export function landedCostActions(h: LandedCostActionHelpers): readonly ActionDe
     ctxAction(
       'landed_cost_reverse',
       'write:correctable:books',
-      'Reverse an ALLOCATED voucher, the ONE correction for a confirmed allocation. Nothing about the original voucher, its movements or its journal is edited or deleted. What is written is the compensation: a value-only J02 landed_cost movement per target with the NEGATED cost against the same receipt layer (so J03 nets the layer landed cost back to zero, inventory value flat), and a reversing A02 entry that is the exact mirror of the confirm entry (so the GL nets flat). The voucher becomes reversed and is permanently linked to the reverse journal and reverse movements. reason is required. Idempotent under idempotencyKey. period_locked when the effective period is sealed.',
-      ctxSchema({ voucherId: STR, reason: STR, idempotencyKey: STR }, ['voucherId', 'reason', 'idempotencyKey']),
+      'Reverse an ALLOCATED voucher, the ONE correction for a confirmed allocation. Nothing about the original voucher, its movements or its journal is edited or deleted. What is written is the compensation: a value-only J02 landed_cost movement per target with the NEGATED cost against the same receipt layer (so J03 nets the layer landed cost back to zero, inventory value flat), and a reversing A02 entry that is the exact mirror of the confirm entry (so the GL nets flat). The voucher becomes reversed and is permanently linked to the reverse journal and reverse movements. reason is optional (D204). Idempotent under idempotencyKey. period_locked when the effective period is sealed.',
+      ctxSchema({ voucherId: STR, reason: STR, idempotencyKey: STR }, ['voucherId', 'idempotencyKey']),
       (ctx, input) => landedCostReverse(ctx, as(input)),
     ),
     ctxAction(

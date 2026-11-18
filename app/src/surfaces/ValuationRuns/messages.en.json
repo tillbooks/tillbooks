@@ -5,7 +5,6 @@
   "invRun": {
     "title": "Inventory valuation and reconciliation",
     "noWorkspace": "Pick a workspace to value its inventory and reconcile it to the ledger.",
-    "reverseReason": "Reversed from the valuation runs screen",
     "newRun": "New run",
     "reverse": "Reverse",
     "asOf": "Cut-off date",

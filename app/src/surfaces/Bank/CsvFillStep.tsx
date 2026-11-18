@@ -14,6 +14,7 @@ import { useId } from 'react';
 import { useT, formatDate, formatMoney } from '../../i18n';
 import { Segmented } from '../../components/Segmented';
 import { plural } from './lookups';
+import { BalancedGlyph } from './glyphs';
 
 /** How much of a CSV the import takes (`all` is the plain import of A20 §11). */
 export type CsvFillMode = 'gaps' | 'range' | 'all';
@@ -38,7 +39,11 @@ export interface CsvFillPartView {
   imported: number;
   before: CsvFillTieView;
   after: CsvFillTieView;
-  problems: { code: string; row?: number; side?: 'before' | 'after'; differenceMinor?: number }[];
+  problems: { code: string; row?: number; side?: 'before' | 'after'; differenceMinor?: number; day?: string }[];
+  /** A20 §13.3: what proves (or would prove) the stretch: the running balance, the neighbour sum, or nothing. */
+  proof?: 'running_balance' | 'neighbour_sum' | null;
+  /** A20 §13.3, the neighbour sum: T, S and S - T. */
+  sum?: { expectedMinor: number; actualMinor: number; differenceMinor: number } | null;
   closesTarget: boolean;
   closedGapIds: string[];
 }
@@ -91,15 +96,31 @@ export function problemSentence(t: T, p: CsvFillPartView, currency: string): str
     case 'chain_broken':
       return t('bankInbox.import.fill.problem.chain_broken', { row: first.row ?? '' });
     case 'untied':
-      return t('bankInbox.import.fill.problem.untied', { amount: formatMoney(Math.abs(first.differenceMinor ?? 0), currency) });
+      return t(p.sum !== null && p.sum !== undefined ? 'bankInbox.import.fill.problem.untiedSum' : 'bankInbox.import.fill.problem.untied', { amount: formatMoney(Math.abs(first.differenceMinor ?? 0), currency) });
     case 'open_end':
-      return t('bankInbox.import.fill.problem.open_end', { date: formatDate(p.to) });
+      return first.side === 'before' ? t('bankInbox.import.fill.problem.open_start') : t('bankInbox.import.fill.problem.open_end', { date: formatDate(p.to) });
     case 'no_balance_column':
+      return t(first.side !== undefined ? 'bankInbox.import.fill.problem.no_neighbour' : 'bankInbox.import.fill.problem.no_balance_column');
+    case 'unreadable_row':
+      return t('bankInbox.import.fill.problem.unreadable_row', { row: first.row ?? '' });
+    case 'boundary_mismatch':
+      return t('bankInbox.import.fill.problem.boundary_mismatch', { date: first.day !== undefined ? formatDate(first.day) : '' });
     case 'not_in_file':
       return t(`bankInbox.import.fill.problem.${first.code}`);
     default:
       return null;
   }
+}
+
+/** A20 §13.3: the glyph of a stretch proven by the neighbour sum, its words on hover and to a screen reader. */
+export function ProofMark() {
+  const t = useT();
+  const words = t('bankInbox.import.fill.proof.neighbour_sum');
+  return (
+    <span className="bank-fill__proof" title={words} aria-label={words} role="img">
+      <BalancedGlyph size={14} aria-hidden="true" />
+    </span>
+  );
 }
 
 export interface CsvFillStepProps {
@@ -109,8 +130,8 @@ export interface CsvFillStepProps {
   onRange: (range: { from: string; to: string }) => void;
   /** The Bankkonto is fed over EBICS: the whole file is not offered. */
   fedAccount: boolean;
-  /** The mapping names a balance column. */
-  hasBalance: boolean;
+  /** The mapping names a balance column (A20 §13.3: informative; the engine's plan decides either way). */
+  hasBalance?: boolean;
   /** The engine's plan for the chosen fill, or null while it is read (or for `all`). */
   plan: CsvFillView | null;
   planBusy: boolean;
@@ -118,7 +139,7 @@ export interface CsvFillStepProps {
   disabled: boolean;
 }
 
-export function CsvFillStep({ mode, onMode, range, onRange, fedAccount, hasBalance, plan, planBusy, currency, disabled }: CsvFillStepProps) {
+export function CsvFillStep({ mode, onMode, range, onRange, fedAccount, plan, planBusy, currency, disabled }: CsvFillStepProps) {
   const t = useT();
   const id = useId();
   const options = [
@@ -147,12 +168,7 @@ export function CsvFillStep({ mode, onMode, range, onRange, fedAccount, hasBalan
           </label>
         </div>
       )}
-      {mode !== 'all' && !hasBalance && (
-        <p className="bank-mode__warn" role="alert">
-          {t('bankInbox.import.fill.needsBalance')}
-        </p>
-      )}
-      {mode !== 'all' && hasBalance && (
+      {mode !== 'all' && (
         <div aria-live="polite" role="status">
           {planBusy ? (
             <p className="bank-mode__lead">{t('bankInbox.import.fill.reading')}</p>
@@ -165,7 +181,10 @@ export function CsvFillStep({ mode, onMode, range, onRange, fedAccount, hasBalan
                 const ties = [tieSentence(t, p.before, currency), tieSentence(t, p.after, currency)].filter((s): s is string => s !== null);
                 return (
                   <li key={`${p.from}-${p.to}`} className={`gap-repair__result is-${p.status === 'ready' || p.status === 'imported' ? 'imported' : p.status === 'already_imported' ? 'already_imported' : 'refused'}`}>
-                    <p className="bank-fill__name">{stretchName(t, p)}</p>
+                    <p className="bank-fill__name">
+                      {stretchName(t, p)}
+                      {p.proof === 'neighbour_sum' && <ProofMark />}
+                    </p>
                     <p className="bank-fill__facts">
                       {p.status === 'already_imported'
                         ? t('bankInbox.import.fill.already')

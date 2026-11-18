@@ -23,6 +23,7 @@ import { CONSEQUENCE_FOR_ACTION, DIAL_CAPABILITY_FOR_ACTION } from '../agent/dia
 import { attentionOf, bankInboxAttention } from './bankInbox.js';
 import { readBankTxnDetail, type BankTxnRow } from './bankLines.js';
 import { proposalContext, proposeForLine } from './bankProposals.js';
+import { withReceiptReader } from './receiptVat.js';
 import { staleLineDrafts } from '../attention/vorschlaege.js';
 import type { BankInboxAttentionCounts } from './bankInbox.js';
 import { readStatementGaps } from './ebics/channel.js';
@@ -253,7 +254,7 @@ export function staleNamedWaitingByAccount(ctx: WorkspaceContext): Map<string, n
     const out = new Map<string, number>();
     const drafts = staleLineDrafts(ctx);
     if (drafts.length === 0) return out;
-    const pc = proposalContext(ctx);
+    const pc = withReceiptReader(ctx, proposalContext(ctx)); // A41.8: classed as the inbox lists it (the receipt cap)
     const seen = new Set<string>();
     for (const d of drafts) {
       if (seen.has(d.bankTxnId)) continue;

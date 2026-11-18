@@ -118,6 +118,11 @@ export function ThemeProvider({
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
+/** The theme context, or null outside a provider (a control that only offers the switch where one is wired). */
+export function useThemeOptional(): ThemeContextValue | null {
+  return useContext(ThemeContext);
+}
+
 /** Access the theme context. Throws outside a provider, which is a wiring bug, not a runtime state. */
 export function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext);

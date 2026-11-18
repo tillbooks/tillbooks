@@ -75,7 +75,7 @@ describe('BankAccounts ?repair=', () => {
     expect(await screen.findByText('Die Lücke ist geschlossen: Auszüge 183–186 sind im Buch.')).toBeInTheDocument();
   });
 
-  it('gap=all: one dialog for every gap, and one reason confirms each chained gap (one confirm_statement_gap per gap)', async () => {
+  it('D204 gap=all: one dialog for every gap, and one click confirms each chained gap with no reason (one confirm_statement_gap per gap)', async () => {
     const SECOND = { ...GAP, gapId: 'bst_187:bst_191', after: { ...GAP.before }, before: { ...GAP.before, statementRowId: 'bst_191', number: 191, fromDate: '2026-10-05', toDate: '2026-10-05' }, missing: [{ year: 2026, from: 188, to: 190 }], missingDates: { from: '2026-09-30', to: '2026-10-04' } };
     const confirmed: Record<string, unknown>[] = [];
     const canned: Record<string, RestResponse | ((input: Record<string, unknown>) => RestResponse)> = {
@@ -108,12 +108,11 @@ describe('BankAccounts ?repair=', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Lücken schliessen' });
     expect(await within(dialog).findByText('Kontokorrent: Auszüge 183–186, 188–190 fehlen')).toBeInTheDocument();
     expect(within(dialog).getByText('Es fehlt kein Geld: die Salden schliessen genau an.')).toBeInTheDocument();
-    await userEvent.type(within(dialog).getByLabelText('Grund'), 'Keine Buchungen an diesen Tagen');
     await userEvent.click(within(dialog).getByRole('button', { name: /bestätigen/i }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(confirmed.map((c) => [c.afterStatementId, c.beforeStatementId, c.reason])).toEqual([
-      ['bst_182', 'bst_187', 'Keine Buchungen an diesen Tagen'],
-      ['bst_187', 'bst_191', 'Keine Buchungen an diesen Tagen'],
+      ['bst_182', 'bst_187', undefined],
+      ['bst_187', 'bst_191', undefined],
     ]);
     expect(await screen.findByText('Bestätigt: in der Lücke 183–186, 188–190 fehlt nichts.')).toBeInTheDocument();
   });

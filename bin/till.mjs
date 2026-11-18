@@ -8,7 +8,7 @@
  * The `mcp` command starts the real MCP stdio server (Phase E) from the built core.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 
 // The single source of truth for the version is package.json; the release bump touches that, and
 // `till --version` / the help header follow automatically. Works from source and from the
@@ -23,8 +23,13 @@ const USAGE = `till ${VERSION} - Swiss accounting your agent can actually use
     up         Start everything (Studio + REST + /mcp + scheduler) and open the browser
     mcp        Start the MCP server on stdio (the agent interface)
     serve      Start the MCP server over HTTP at /mcp (the Studio transport, D23)
+    settlement Check a till-settlement/v1 file, or print its JSON Schema
     version    Print the version
     help       Print this
+
+  settlement validate <file> [--currency CHF] reads the file with the reader the import uses and prints
+  what it found (exit 0 valid, 1 not). It opens no book and writes nothing. settlement schema prints
+  the JSON Schema of till-settlement/v1.
 
   up is the one command a human runs: it binds 127.0.0.1:8788 (TILL_PORT and
   TILL_HOST honoured), serves the built Studio at /, mounts the REST twins at
@@ -272,6 +277,54 @@ switch (command) {
     };
     process.once('SIGINT', shutdown);
     process.once('SIGTERM', shutdown);
+    break;
+  }
+
+  case 'settlement': {
+    // A43 section 5: the settlement contract without a book. `validate` is the import's reader on a file,
+    // `schema` the published JSON Schema; neither opens the ledger or writes anything.
+    const [sub, ...rest] = process.argv.slice(3);
+    const { checkSettlementText } = await import(new URL('../dist/api/settlement-format-actions.js', import.meta.url));
+    const { settlementJsonSchemaText } = await import(new URL('../dist/core/settlement/contract.js', import.meta.url));
+    if (sub === 'schema') {
+      process.stdout.write(settlementJsonSchemaText());
+      break;
+    }
+    if (sub === 'validate') {
+      let currency = 'CHF';
+      const files = [];
+      for (let i = 0; i < rest.length; i += 1) {
+        if (rest[i] === '--currency') {
+          currency = String(rest[(i += 1)] ?? '').toUpperCase();
+        } else if (rest[i].startsWith('--currency=')) {
+          currency = rest[i].slice('--currency='.length).toUpperCase();
+        } else {
+          files.push(rest[i]);
+        }
+      }
+      if (files.length !== 1 || !/^[A-Z]{3}$/.test(currency)) {
+        console.error('till settlement validate: one file, and --currency as three letters (default CHF)');
+        process.exit(2);
+      }
+      let text;
+      try {
+        // The size first: a file over the reader's cap is refused without being read into memory.
+        const { SETTLEMENT_MAX_BYTES } = await import(new URL('../dist/core/settlement/importSettlement.js', import.meta.url));
+        if (statSync(files[0]).size > SETTLEMENT_MAX_BYTES) {
+          console.error(`till settlement validate: ${files[0]} is over ${SETTLEMENT_MAX_BYTES} bytes`);
+          process.exit(2);
+        }
+        text = readFileSync(files[0], 'utf8');
+      } catch (e) {
+        console.error(`till settlement validate: cannot read ${files[0]}: ${e instanceof Error ? e.message : String(e)}`);
+        process.exit(2);
+      }
+      const answer = checkSettlementText(text, currency);
+      console.log(JSON.stringify(answer, null, 2));
+      process.exit(answer.ok === true && answer.valid === true ? 0 : 1);
+    }
+    console.error('till settlement: validate <file> [--currency CHF], or schema');
+    process.exit(2);
     break;
   }
 

@@ -301,9 +301,9 @@ export function Checklists() {
             sealResult={sealResults[detail.run.runId] ?? null}
             refusal={refusal}
             onComplete={(itemId, evidence: Evidence | null) => void write('checklist_item_complete', itemId, evidence === null ? { itemId } : { itemId, evidence })}
-            onSkip={(itemId, reason) => void write('checklist_item_skip', itemId, { itemId, reason })}
+            onSkip={(itemId, reason) => void write('checklist_item_skip', itemId, { itemId, ...(reason === undefined ? {} : { reason }) })}
             onReopen={(itemId) => void write('checklist_item_reopen', itemId, { itemId })}
-            onAbandon={(reason) => void write('checklist_abandon', null, { reason })}
+            onAbandon={(reason) => void write('checklist_abandon', null, reason === undefined ? {} : { reason })}
             onAct={(itemId, calls) => void act(itemId, calls)}
             onReload={() => void loadDetail()}
           />

@@ -95,9 +95,6 @@
       "cancel": "Abbrechen",
       "confirm": "Abrechnung stornieren"
     },
-    "reject": {
-      "default": "Bitte den fehlenden Beleg nachreichen."
-    },
     "rowActions": "Aktionen für Spesen {title}"
   },
   "payroll": {
@@ -180,7 +177,6 @@
       "bonus": "Bonus",
       "thirteenth": "13. Monatslohn",
       "correction": "Korrektur",
-      "reason": "Grund für diesen Lohnlauf",
       "reasonOptional": "Grund für diesen Lohnlauf (optional)"
     }
   },

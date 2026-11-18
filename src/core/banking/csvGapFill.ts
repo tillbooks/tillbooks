@@ -19,6 +19,18 @@
  * does not reach on one side is proven only as far as its rows go (its period is cut there, and an end the
  * CSV cannot state has no balance).
  *
+ * THE NEIGHBOUR SUM (A20 §13.3, D205, `bank.csv_fill_proof` = `auto`). Without a balance column, a stretch
+ * between two ADJACENT stored statements P and N is proven by the sum: the bank's movements on the missing
+ * days add up to T = N's opening minus P's closing, and the export's kept rows on those days must sum to S = T
+ * exactly. Guards, first problem wins: both ends are adjacent stored statements with one balance each (else
+ * `no_balance_column`, refused `csv_fill_needs_balance` naming the end); the export reaches past both ends
+ * (`open_end` with its side); no row of the file is unreadable (`unreadable_row`); on each boundary day the
+ * export's rows and the books' lines are the same multiset of signed amounts (`boundary_mismatch`); then
+ * S = T (`untied`, the difference S - T). A mapped balance column always takes the running-balance path and a
+ * broken chain never falls back to the sum. Under `warn` a sum fill with any problem stores NULL balances and
+ * NULL `fill_proof`, so it can never close a gap. Residual risk, stated: a net-zero error among the rows of
+ * the missing days (two offsetting rows missing, a row doubled and an equal one missing).
+ *
  * WHAT TIES IT. The neighbours in the books: the stored statement right before the stretch must close on
  * the fill's opening, the one right after it must open on the fill's closing. Under the setting
  * `bank.csv_fill_balance_tie` = `required` (the default) a stretch that contradicts a neighbour, or whose
@@ -47,7 +59,7 @@ import type { WorkspaceContext } from '../context.js';
 import { getSetting } from '../settings/settings.js';
 import type { ParsedBankStatement, ParsedCamtEntry, SkippedCamtEntry } from './camt.js';
 import { csvRowBalance, csvStatementOf } from './csvStatement.js';
-import type { CsvTable } from './csvStatement.js';
+import type { CsvRowKinds, CsvTable } from './csvStatement.js';
 import type { CsvMapping } from './csvMapping.js';
 import { nameTokens } from './statementDedupe.js';
 import { ledgerBalanceInAccountCurrency } from './bankInbox.js';
@@ -77,6 +89,17 @@ export function fillDuplicateMode(ctx: WorkspaceContext): CsvFillDuplicateMode {
 export function fillFedAccountMode(ctx: WorkspaceContext): CsvFillFedAccountMode {
   return getSetting<string>(ctx, 'bank.csv_fill_fed_accounts') === 'refuse' ? 'refuse' : 'allow';
 }
+
+/** `bank.csv_fill_proof` (A20 §13.3): the neighbour sum proves a stretch without a balance column, or only the running balance does. */
+export const CSV_FILL_PROOF_MODES = ['auto', 'running_balance_only'] as const;
+export type CsvFillProofMode = (typeof CSV_FILL_PROOF_MODES)[number];
+
+export function fillProofMode(ctx: WorkspaceContext): CsvFillProofMode {
+  return getSetting<string>(ctx, 'bank.csv_fill_proof') === 'running_balance_only' ? 'running_balance_only' : 'auto';
+}
+
+/** What a stored fill was proven by (`bank_statement.fill_proof`). */
+export type FillProof = 'running_balance' | 'neighbour_sum';
 
 // --- The scope -----------------------------------------------------------------------------------------
 
@@ -283,6 +306,8 @@ export interface FillRows {
   rows: FillRow[];
   /** Rows the reader could not take (an unreadable date or amount, another currency), with their line. */
   unreadable: SkippedCamtEntry[];
+  /** Critic round 1, L1: rows with an amount but no date (the reader skips them as no movement); the sum cannot place their money. */
+  datelessWithAmount: SkippedCamtEntry[];
   /** The order the file stood in. */
   order: 'newest_first' | 'oldest_first';
   /** Does the mapping name a balance column? */
@@ -309,7 +334,12 @@ export function fillRowsOf(table: CsvTable, mapping: CsvMapping, accountCurrency
   const stmt = csvStatementOf(table, mapping, accountCurrency);
   const skippedLines = new Set(stmt.skipped.map((s) => s.row));
   const recordByLine = new Map<number, Readonly<Record<string, string>>>();
-  table.records.forEach((r, i) => recordByLine.set(table.lines[i] ?? table.headerRow + i + 1, r));
+  const kindsByLine = new Map<number, CsvRowKinds>();
+  table.records.forEach((r, i) => {
+    const line = table.lines[i] ?? table.headerRow + i + 1;
+    recordByLine.set(line, r);
+    kindsByLine.set(line, table.container === 'xlsx' ? (table.kinds?.[i] ?? {}) : table.kinds?.[i]);
+  });
   const importedLines = table.lines.filter((l) => !skippedLines.has(l));
   const fileOrder: FillRow[] = stmt.entries.map((entry, i) => {
     const row = importedLines[i] ?? 0;
@@ -318,11 +348,17 @@ export function fillRowsOf(table: CsvTable, mapping: CsvMapping, accountCurrency
       row,
       date: entry.bookingDate as string,
       signedMinor: entry.creditDebit === 'CRDT' ? entry.amountMinor : -entry.amountMinor,
-      balanceMinor: record === undefined ? null : csvRowBalance(record, mapping),
+      balanceMinor: record === undefined ? null : csvRowBalance(record, mapping, kindsByLine.get(row)),
       entry,
     };
   });
   const unreadable = stmt.skipped.filter((s) => s.reason !== 'not_a_movement');
+  const amountHeaders = [mapping.columns.amount, mapping.columns.debit, mapping.columns.credit].filter((h): h is string => h !== undefined);
+  const datelessWithAmount = stmt.skipped.filter((s) => {
+    if (s.reason !== 'not_a_movement' || s.row === undefined) return false;
+    const record = recordByLine.get(s.row);
+    return record !== undefined && amountHeaders.some((h) => (record[h] ?? '').trim() !== '');
+  });
   let order: 'newest_first' | 'oldest_first';
   if (mapping.rowOrder === 'newest_first' || mapping.rowOrder === 'oldest_first') order = mapping.rowOrder;
   else {
@@ -334,7 +370,7 @@ export function fillRowsOf(table: CsvTable, mapping: CsvMapping, accountCurrency
   const rows = order === 'newest_first' ? [...fileOrder].reverse() : fileOrder;
   // A stable sort by date keeps the within-day order of the file (a bank that lists days out of order).
   const sorted = rows.map((r, i) => ({ r, i })).sort((a, b) => (a.r.date < b.r.date ? -1 : a.r.date > b.r.date ? 1 : a.i - b.i)).map((x) => x.r);
-  return { rows: sorted, unreadable, order, hasBalance: mapping.columns.balance !== undefined };
+  return { rows: sorted, unreadable, datelessWithAmount, order, hasBalance: mapping.columns.balance !== undefined };
 }
 
 // --- The proof of one stretch --------------------------------------------------------------------------
@@ -349,7 +385,7 @@ export type FillTie =
   | { kind: 'none'; csvMinor: number | null };
 
 /** Why a stretch cannot be written as proven (§H-ENUM, single point). */
-export const FILL_PROBLEMS = ['no_balance_column', 'chain_broken', 'untied', 'open_end', 'not_in_file'] as const;
+export const FILL_PROBLEMS = ['no_balance_column', 'chain_broken', 'untied', 'open_end', 'not_in_file', 'unreadable_row', 'boundary_mismatch'] as const;
 export type FillProblem = (typeof FILL_PROBLEMS)[number];
 
 /** A row the books already hold, left out of the fill (`skip_proven`), with the line it is. */
@@ -390,7 +426,17 @@ export interface FillPart {
   after: FillTie;
   /** Both statement ends agree, and the CSV covers every day of the target. */
   closesTarget: boolean;
-  problems: { code: FillProblem; row?: number; side?: 'before' | 'after'; differenceMinor?: number }[];
+  problems: { code: FillProblem; row?: number; side?: 'before' | 'after'; differenceMinor?: number; day?: string }[];
+  /** A20 §13.3: the path that proves the stretch (`running_balance` with a balance column, else `neighbour_sum` under `auto`), or null. */
+  path: FillProof | null;
+  /** The neighbour sum: T (expected), S (actual), S - T, and the rows held in P or N. Null off the sum path, or before the ends are known. */
+  sum: { expectedMinor: number; actualMinor: number; differenceMinor: number; heldBeforeMinor: number; heldAfterMinor: number } | null;
+  /** The boundary days that do not agree, each with the export's rows and the books' lines the other side lacks. */
+  boundary: { side: 'before' | 'after'; day: string; exportOnlyRows: number[]; booksOnlyTxnIds: string[] }[];
+  /** Sum path: does the export reach past each end of the target, the first unreadable row, and the rows dated on each boundary day. */
+  reach?: { before: boolean; after: boolean };
+  unreadableRow?: number | null;
+  boundaryRows?: { before: FillRow[]; after: FillRow[] };
 }
 
 /** The first pair of rows in `[from, to]` (indices into `rows`) whose balances do not chain, as the later row's line. */
@@ -463,9 +509,14 @@ function statementTie(s: StoredStatement, side: 'before' | 'after', csvMinor: nu
  * the breaks of its chain. Pure. Duplicates are decided afterwards (`decideFillDuplicates`), then the ties
  * (`tieFillParts`).
  */
-export function planFillParts(fill: FillRows, targets: readonly FillTarget[]): FillPart[] {
+export function planFillParts(fill: FillRows, targets: readonly FillTarget[], proofMode: CsvFillProofMode = 'running_balance_only'): FillPart[] {
   const rows = fill.rows;
   const parts: FillPart[] = [];
+  // Guard 5 (A20 §13.3): an unreadable row ANYWHERE in the file (not a zero amount) is money the sum cannot see.
+  // Critic round 1, L1: a row with an amount and no date is money the sum cannot place either.
+  const unplaced = [...fill.unreadable.filter((u) => u.reason !== 'zero_amount'), ...fill.datelessWithAmount].map((u) => u.row).filter((r): r is number => r !== undefined);
+  const firstUnreadable = unplaced.length === 0 ? null : Math.min(...unplaced);
+  const sumPath = !fill.hasBalance && proofMode === 'auto';
   for (const target of targets) {
     const problems: FillPart['problems'] = [];
     const inIdx = rows.map((r, i) => ({ r, i })).filter((x) => x.r.date >= target.from && x.r.date <= target.to).map((x) => x.i);
@@ -494,6 +545,38 @@ export function planFillParts(fill: FillRows, targets: readonly FillTarget[]): F
         after: { kind: 'none', csvMinor: null },
         closesTarget: false,
         problems: [{ code: 'not_in_file' }],
+        path: null,
+        sum: null,
+        boundary: [],
+      });
+      continue;
+    }
+    if (sumPath) {
+      // The neighbour sum: the stretch is the target's days (the guards in `tieFillParts` say what holds).
+      const bP = addDays(target.from, -1);
+      const bN = addDays(target.to, 1);
+      parts.push({
+        target,
+        from: target.from,
+        to: target.to,
+        rows: inRows,
+        entries: inRows.map((r) => r.entry),
+        duplicates: [],
+        restored: [],
+        csvOpeningMinor: null,
+        csvClosingMinor: null,
+        openingMinor: null,
+        closingMinor: null,
+        before: { kind: 'none', csvMinor: null },
+        after: { kind: 'none', csvMinor: null },
+        closesTarget: false,
+        problems,
+        path: 'neighbour_sum',
+        sum: null,
+        boundary: [],
+        reach: { before: beforeIdx >= 0, after: afterIdx >= 0 },
+        unreadableRow: firstUnreadable,
+        boundaryRows: { before: rows.filter((r) => r.date === bP), after: rows.filter((r) => r.date === bN) },
       });
       continue;
     }
@@ -550,9 +633,132 @@ export function planFillParts(fill: FillRows, targets: readonly FillTarget[]): F
       after: { kind: 'none', csvMinor: closingMinor },
       closesTarget: false,
       problems,
+      path: fill.hasBalance ? 'running_balance' : null,
+      sum: null,
+      boundary: [],
     });
   }
   return parts;
+}
+
+/** A stored line on a boundary day: its id and signed amount. */
+interface BoundaryLine {
+  id: string;
+  signed: number;
+}
+
+/** The account's stored lines booked on one day. §H-TENANT. */
+function linesBookedOn(ctx: WorkspaceContext, bankAccountId: string, day: string): BoundaryLine[] {
+  return (
+    ctx.store.db
+      .prepare(
+        `SELECT id, credit_debit, amount_minor FROM bank_txn
+          WHERE workspace_id = ? AND bank_account_id = ? AND substr(booking_date, 1, 10) = ? ORDER BY rowid`,
+      )
+      .all(ctx.workspaceId, bankAccountId, day) as { id: string; credit_debit: string; amount_minor: number }[]
+  ).map((r) => ({ id: r.id, signed: r.credit_debit === 'CRDT' ? r.amount_minor : -r.amount_minor }));
+}
+
+/** Two multisets of signed amounts, compared both ways: what each side holds the other lacks. */
+function multisetDiff(exportRows: readonly FillRow[], books: readonly BoundaryLine[]): { exportOnlyRows: number[]; booksOnlyTxnIds: string[] } {
+  const left = [...books];
+  const exportOnlyRows: number[] = [];
+  for (const r of exportRows) {
+    const at = left.findIndex((b) => b.signed === r.signedMinor);
+    if (at < 0) exportOnlyRows.push(r.row);
+    else left.splice(at, 1);
+  }
+  return { exportOnlyRows, booksOnlyTxnIds: left.map((b) => b.id) };
+}
+
+/** The stored statements of one boundary day: those ending on it (side before) or starting on it (side after). */
+function adjacentOf(statements: readonly StoredStatement[], day: string, side: 'before' | 'after', currency: string): { statement: StoredStatement; balanceMinor: number } | null {
+  const at = statements.filter((s) => {
+    if (s.balance_currency !== null && s.balance_currency !== currency) return false;
+    const span = heldSpanOf(s);
+    if (span === null) return false;
+    return side === 'before' ? span.to === day && s.last_page_ind === 1 : span.from === day && s.page_number === 1;
+  });
+  if (at.length === 0) return null;
+  const balances = at.map((s) => (side === 'before' ? s.closing_balance_minor : s.opening_balance_minor));
+  // A weak neighbour (a fill stored without balances) or two that disagree prove nothing.
+  if (balances.some((b) => b === null) || new Set(balances).size !== 1) return null;
+  const pick = [...at].sort((a, b) => (seqOf(a) ?? -1) - (seqOf(b) ?? -1));
+  return { statement: (side === 'before' ? pick[pick.length - 1] : pick[0]) as StoredStatement, balanceMinor: balances[0] as number };
+}
+
+/**
+ * A20 §13.3: the guards and the sum of one stretch on the neighbour-sum path, in the design's order (the
+ * first problem wins): adjacency, the export's reach, an unreadable row, the boundary days, then S = T.
+ */
+function tieBySum(ctx: WorkspaceContext, account: { id: string; currency: string }, statements: readonly StoredStatement[], part: FillPart): void {
+  const bP = addDays(part.target.from, -1);
+  const bN = addDays(part.target.to, 1);
+  const prev = adjacentOf(statements, bP, 'before', account.currency);
+  const next = adjacentOf(statements, bN, 'after', account.currency);
+  // Without both adjacent ends the rows held in a neighbour cannot be proven: they are imported, flagged.
+  const restore = (sides: ReadonlySet<FillDuplicate['side']>) => {
+    const back = part.duplicates.filter((d) => sides.has(d.side));
+    if (back.length === 0) return;
+    part.restored = [...part.restored, ...back];
+    part.duplicates = part.duplicates.filter((d) => !sides.has(d.side));
+    const skipped = new Set(part.duplicates.map((d) => d.row));
+    part.entries = part.rows.filter((r) => !skipped.has(r.row)).map((r) => r.entry);
+  };
+  // `inside` duplicates (their stored statement holds these very days) are restored as flagged imports.
+  restore(new Set(['inside']));
+  part.before = prev === null ? { kind: 'none', csvMinor: null } : statementTie(prev.statement, 'before', null);
+  part.after = next === null ? { kind: 'none', csvMinor: null } : statementTie(next.statement, 'after', null);
+  if (prev === null || next === null) {
+    restore(new Set(['before', 'after']));
+    part.problems.push({ code: 'no_balance_column', side: prev === null ? 'before' : 'after' });
+    return;
+  }
+  if (part.reach?.before !== true || part.reach?.after !== true) {
+    part.problems.push({ code: 'open_end', side: part.reach?.before !== true ? 'before' : 'after' });
+    return;
+  }
+  if (part.unreadableRow !== null && part.unreadableRow !== undefined) {
+    part.problems.push({ code: 'unreadable_row', row: part.unreadableRow });
+    return;
+  }
+  const claimed = new Set(part.duplicates.filter((d) => d.side === 'before' || d.side === 'after').map((d) => d.existingBankTxnId));
+  for (const [side, day] of [['before', bP], ['after', bN]] as const) {
+    const books = linesBookedOn(ctx, account.id, day).filter((l) => !claimed.has(l.id));
+    const diff = multisetDiff(part.boundaryRows?.[side] ?? [], books);
+    if (diff.exportOnlyRows.length > 0 || diff.booksOnlyTxnIds.length > 0) part.boundary.push({ side, day, ...diff });
+  }
+  const firstMismatch = part.boundary[0];
+  if (firstMismatch !== undefined) {
+    part.problems.push({ code: 'boundary_mismatch', side: firstMismatch.side, day: firstMismatch.day, ...(firstMismatch.exportOnlyRows[0] !== undefined ? { row: firstMismatch.exportOnlyRows[0] } : {}) });
+    return;
+  }
+  const held = new Set(part.duplicates.map((d) => d.row));
+  const actual = part.rows.filter((r) => !held.has(r.row)).reduce((n, r) => n + r.signedMinor, 0);
+  const expected = next.balanceMinor - prev.balanceMinor;
+  part.sum = {
+    expectedMinor: expected,
+    actualMinor: actual,
+    differenceMinor: actual - expected,
+    heldBeforeMinor: part.duplicates.filter((d) => d.side === 'before').reduce((n, d) => n + d.signedMinor, 0),
+    heldAfterMinor: part.duplicates.filter((d) => d.side === 'after').reduce((n, d) => n + d.signedMinor, 0),
+  };
+  part.openingMinor = prev.balanceMinor;
+  part.closingMinor = prev.balanceMinor + actual;
+  part.before = statementTie(prev.statement, 'before', part.openingMinor);
+  part.after = statementTie(next.statement, 'after', part.closingMinor);
+  if (actual !== expected) part.problems.push({ code: 'untied', side: 'after', differenceMinor: actual - expected });
+}
+
+/**
+ * The proof a part's statement is stored with (`bank_statement.fill_proof`): `running_balance` when the chain
+ * held and its balances are stored, `neighbour_sum` when every guard held and S = T, else null. Under `warn`
+ * an untied running-balance stretch keeps the CSV's balances (they are the bank's own figures) but no proof.
+ */
+export function fillProofOf(part: FillPart): FillProof | null {
+  if (part.path === 'neighbour_sum') return part.problems.length === 0 && part.openingMinor !== null && part.closingMinor !== null ? 'neighbour_sum' : null;
+  if (part.path === 'running_balance') return part.problems.length === 0 && part.openingMinor !== null && part.closingMinor !== null ? 'running_balance' : null;
+  return null;
 }
 
 /**
@@ -568,6 +774,12 @@ export function tieFillParts(ctx: WorkspaceContext, account: { id: string; ledge
   const statements = readStatements(ctx, account.id);
   for (const part of parts) {
     if (part.problems.some((p) => p.code === 'not_in_file')) continue;
+    if (part.path === 'neighbour_sum') {
+      tieBySum(ctx, account, statements, part);
+      const proven = part.openingMinor !== null && part.closingMinor !== null && part.problems.length === 0;
+      part.closesTarget = proven;
+      continue;
+    }
     // Critic r1 F3: a row is left out as "in the books" only when the side its money moves to is TIED to
     // an adjacent stored statement, so a false match is caught as untied. Without that tie (a range inside
     // a hole) the row is imported, and the one insertion's possible-duplicate flags ask the person.
@@ -741,11 +953,21 @@ export function decideFillDuplicates(ctx: WorkspaceContext, bankAccountId: strin
 
 /** The statement one part writes: a CSV statement over the proven days, with the balances the CSV states. */
 export function fillStatementOf(part: FillPart, currency: string, mappingDigest: string, tieMode: CsvFillBalanceTieMode): ParsedBankStatement {
-  const proven = !part.problems.some((p) => p.code === 'chain_broken' || p.code === 'no_balance_column');
-  // An untied stretch imported under `warn` keeps the CSV's balances: they are the bank's own figures, and
-  // the gap model then still sees the contradiction (it never reads such a fill as closing a gap).
-  const opening = proven && (tieMode === 'warn' || !part.problems.some((p) => p.code === 'untied')) ? part.openingMinor : null;
-  const closing = proven && (tieMode === 'warn' || !part.problems.some((p) => p.code === 'untied')) ? part.closingMinor : null;
+  let opening: number | null;
+  let closing: number | null;
+  const proof = fillProofOf(part);
+  if (part.path === 'neighbour_sum') {
+    // A20 §13.3, the hard warn rule: on the sum path the balances ARE the neighbours' figures, so a stretch
+    // with any problem stores none (NULL balances, NULL proof) and can never close a gap.
+    opening = proof === 'neighbour_sum' ? part.openingMinor : null;
+    closing = proof === 'neighbour_sum' ? part.closingMinor : null;
+  } else {
+    const proven = !part.problems.some((p) => p.code === 'chain_broken' || p.code === 'no_balance_column');
+    // An untied stretch imported under `warn` keeps the CSV's balances: they are the bank's own figures, and
+    // the gap model then still sees the contradiction (it never reads such a fill as closing a gap).
+    opening = proven && (tieMode === 'warn' || !part.problems.some((p) => p.code === 'untied')) ? part.openingMinor : null;
+    closing = proven && (tieMode === 'warn' || !part.problems.some((p) => p.code === 'untied')) ? part.closingMinor : null;
+  }
   const canonical = [
     part.from,
     part.to,
@@ -753,6 +975,8 @@ export function fillStatementOf(part: FillPart, currency: string, mappingDigest:
     closing ?? '',
     mappingDigest,
     ...part.entries.map((e) => [e.entryKey, e.bookingDate, e.creditDebit, e.amountMinor, e.currency, e.entryRef ?? '', e.remittanceText ?? ''].join('\u001f')),
+    // One extra line for a sum fill only, so every running-balance digest stays byte-identical.
+    ...(proof === 'neighbour_sum' ? ['proof:neighbour_sum'] : []),
   ].join('\n');
   const digest = createHash('sha256').update(canonical, 'utf8').digest('hex').slice(0, 24);
   return {
@@ -770,5 +994,7 @@ export function fillStatementOf(part: FillPart, currency: string, mappingDigest:
     balanceCurrency: opening !== null || closing !== null ? currency : null,
     entries: part.entries,
     skipped: [],
+    // A20 §13.3 (critic round 1, L5): the proof is written by the insertion itself, never by an update after it.
+    fill: { proof: opening !== null || closing !== null ? proof : null },
   };
 }

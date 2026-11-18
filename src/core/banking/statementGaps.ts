@@ -18,7 +18,7 @@
  *
  * THE RULE FOR A CONFIRMATION (owner, 01.10.2026). Only a person, never an agent alone; only when the
  * balances chain (`differenceMinor` 0: the later statement opens exactly on the earlier one's close);
- * only while the gap is still open in the book; always with a reason. A gap with an unexplained amount
+ * only while the gap is still open in the book; a reason optional (D204). A gap with an unexplained amount
  * can never be confirmed away.
  *
  * §H-TENANT on every query: each one is fenced by `workspace_id`.
@@ -272,6 +272,11 @@ export interface StatementGap {
    */
   filledBy?: string[];
   /**
+   * A20 §13.3 (D205): how the filling chain is proven: `neighbour_sum` when any of its fills was proven by the
+   * neighbour sum (no balance column), else `running_balance`. Present exactly when `filledBy` is.
+   */
+  filledProof?: 'running_balance' | 'neighbour_sum';
+  /**
    * Critic round 2 LOW 1: a person confirmed this gap earlier, and the confirmation no longer holds
    * (a refused statement now waits inside, or an end cannot be judged): the gap is open again.
    */
@@ -419,7 +424,7 @@ export function accountStatementGaps(
       unexplained: !chains || refused.length > 0 || flaggedEnd,
       confirmed: chains && refused.length === 0 && !flaggedEnd && confirmed.has(gapId),
       ...(confirmed.has(gapId) && (refused.length > 0 || flaggedEnd || !chains) ? { confirmationVoid: true } : {}),
-      ...(filledBy !== null ? { filledBy } : {}),
+      ...(filledBy !== null ? { filledBy, filledProof: fillProofOfChain(ctx, filledBy) } : {}),
     });
   }
 
@@ -526,11 +531,23 @@ export function statementGaps(
   return out;
 }
 
+/** A20 §13.3: the proof of a filling chain (a legacy fill without a stored proof reads as running_balance). §H-TENANT. */
+function fillProofOfChain(ctx: WorkspaceContext, ids: readonly string[]): 'running_balance' | 'neighbour_sum' {
+  const row = ctx.store.db
+    .prepare(`SELECT COUNT(*) AS n FROM bank_statement WHERE workspace_id = ? AND fill_proof = 'neighbour_sum' AND id IN (${ids.map(() => '?').join(', ')})`)
+    .get(ctx.workspaceId, ...ids) as { n: number };
+  return row.n > 0 ? 'neighbour_sum' : 'running_balance';
+}
+
 /**
  * A20 §12: is a numbered gap FILLED by CSV statements? The days strictly between the earlier statement's
  * last day and the later statement's first are covered by a CONTIGUOUS chain of stored gap fills (`csv`
  * statements `csvfill:...` with both balances), starting on the earlier statement's closing balance and
  * ending on the later one's opening. Returns the fills' row ids in order, or null. §H-TENANT; read only.
+ *
+ * A20 §13.3, guard 6 (hardens §12 fills too): a fill counts only when its STORED lines sum to its closing
+ * minus its opening. The one insertion may skip an entry (a bank reference already in the books), and a sum
+ * fill's balances are true by construction, so the balances alone carry no evidence that its lines are all there.
  */
 export function gapFillOf(
   ctx: WorkspaceContext,
@@ -547,7 +564,7 @@ export function gapFillOf(
   if (from > to) return null;
   const fills = ctx.store.db
     .prepare(
-      `SELECT id, from_date, to_date, opening_balance_minor, closing_balance_minor, balance_currency FROM bank_statement
+      `SELECT id, from_date, to_date, opening_balance_minor, closing_balance_minor, balance_currency, fill_held_minor FROM bank_statement
         WHERE workspace_id = ? AND bank_account_id = ? AND message_type = 'csv' AND statement_id LIKE 'csvfill:%'
           AND opening_balance_minor IS NOT NULL AND closing_balance_minor IS NOT NULL
           AND from_date >= ? AND to_date <= ?
@@ -560,6 +577,7 @@ export function gapFillOf(
     opening_balance_minor: number;
     closing_balance_minor: number;
     balance_currency: string | null;
+    fill_held_minor: number | null;
   }[];
   let day = from;
   let balance = after.closingBalanceMinor;
@@ -567,9 +585,21 @@ export function gapFillOf(
   for (const f of fills) {
     if (currency !== null && f.balance_currency !== null && f.balance_currency !== currency) continue;
     if (f.from_date.slice(0, 10) !== day || f.opening_balance_minor !== balance) continue;
+    // Critic round 1, L2: an entry the insertion skipped as already held (`fill_held_minor`) is money in the books.
+    // Re-critic L1: a fill written before guard 6 carries NULL there, and keeps the rule it was written under (its
+    // balances alone); every fill written since stores a number and passes guard 6.
+    if (f.fill_held_minor !== null && storedSumOf(ctx, f.id) + f.fill_held_minor !== f.closing_balance_minor - f.opening_balance_minor) continue;
     chain.push(f.id);
     day = addDays(f.to_date.slice(0, 10), 1);
     balance = f.closing_balance_minor;
   }
   return day > to && balance === before.openingBalanceMinor && chain.length > 0 ? chain : null;
+}
+
+/** The signed sum of the lines one stored statement holds (+ money in, - money out). §H-TENANT. */
+function storedSumOf(ctx: WorkspaceContext, statementRowId: string): number {
+  const row = ctx.store.db
+    .prepare(`SELECT COALESCE(SUM(CASE WHEN credit_debit = 'CRDT' THEN amount_minor ELSE -amount_minor END), 0) AS s FROM bank_txn WHERE workspace_id = ? AND statement_id = ?`)
+    .get(ctx.workspaceId, statementRowId) as { s: number };
+  return row.s;
 }

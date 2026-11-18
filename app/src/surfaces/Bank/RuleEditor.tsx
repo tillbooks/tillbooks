@@ -96,6 +96,11 @@ export interface RulePayload {
    * to replace ("Ersetzen"). The engine replaces it only while it still holds the name.
    */
   replaceStandardId?: string;
+  /**
+   * D208 point 8: the person's comment to the agent on a bank rule, when the person changed it in the form (a
+   * text sets it, '' clears it); absent when untouched. Plain text the agent reads as data, never executed.
+   */
+  note?: string;
 }
 
 /** A Vorlage the form may offer as the next step. */
@@ -130,6 +135,8 @@ export interface RuleEditorProps {
   /** D176: the stored next step, and the Vorlagen the form may offer for it (bank scope). */
   initialFollowUp?: string | null;
   vorlagen?: readonly VorlageOption[];
+  /** D208: the rule's stored comment to the agent (bank scope), shown as one field. */
+  initialNote?: string | null;
   onSave: (payload: RulePayload) => Promise<Err | null>;
   onCancel: () => void;
   /** N03: test the rule as it stands (`backtest_bank_rule`); absent hides "Testen". */
@@ -200,6 +207,7 @@ export function RuleEditor({
   initialIgnoreReason = null,
   initialIgnoreNote = '',
   initialFollowUp = null,
+  initialNote = null,
   vorlagen = [],
   onSave,
   onCancel,
@@ -218,6 +226,7 @@ export function RuleEditor({
   const [ignoreReason, setIgnoreReason] = useState<IgnoreReason>(initialIgnoreReason ?? 'booked_elsewhere');
   const [ignoreNote, setIgnoreNote] = useState(initialIgnoreNote);
   const [followUp, setFollowUp] = useState<string>(initialFollowUp ?? NO_FOLLOW_UP);
+  const [note, setNote] = useState<string>(initialNote ?? '');
   const [legs, setLegs] = useState<FormLeg[]>(() =>
     initialLegs.map((leg) => {
       const f = leg.factor;
@@ -272,9 +281,7 @@ export function RuleEditor({
     name.trim() === ''
       ? t(manual ? 'bankInbox.rules.vorlage.nameMissing' : 'bankInbox.rules.pop.nameMissing')
       : ignoring
-        ? ignoreReason === 'other' && ignoreNote.trim() === ''
-          ? t('bankInbox.rules.outcome.noteMissing')
-          : null
+        ? null // D204: an ignore rule's note is optional, "Anderer Grund" included
         : manual && legs.length < 2
           ? t('bankInbox.rules.vorlage.twoLegs')
           : legs.some((l) => l.accountId === '')
@@ -347,6 +354,8 @@ export function RuleEditor({
       ignoreNote: ignoring && ignoreNote.trim() !== '' ? ignoreNote.trim() : null,
       followUpStandardId: manual || followUp === NO_FOLLOW_UP ? null : followUp,
       ...(replaceStandardId !== null ? { replaceStandardId } : {}),
+      // D208: only a changed comment is sent, so a save never rewrites a comment the person did not touch.
+      ...(!manual && note.trim() !== (initialNote ?? '').trim() ? { note: note.trim() } : {}),
     };
   };
 
@@ -667,7 +676,7 @@ export function RuleEditor({
             />
           </div>
           <label className="bank-field" htmlFor={`${baseId}-note`}>
-            <span className="bank-field__label">{t(ignoreReason === 'other' ? 'bankInbox.ignore.noteRequired' : 'bankInbox.ignore.note')}</span>
+            <span className="bank-field__label">{t('bankInbox.ignore.note')}</span>
             <input id={`${baseId}-note`} type="text" className="field" value={ignoreNote} maxLength={500} onChange={(e) => setIgnoreNote(e.target.value)} />
           </label>
           <p className="bank-rule-form__hint">{t('bankInbox.rules.outcome.ignoreHint')}</p>
@@ -699,6 +708,12 @@ export function RuleEditor({
             ))}
           {legs.length > 0 || manual ? legsFieldset : <p className="bank-rule-form__hint">{t('bankInbox.rules.outcome.noLegs')}</p>}
         </>
+      )}
+      {!manual && (
+        <label className="bank-field" htmlFor={`${baseId}-agent-note`}>
+          <span className="bank-field__label">{t('attention.line.comment')}</span>
+          <input id={`${baseId}-agent-note`} type="text" className="field" value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
+        </label>
       )}
       {!manual && vorlagen.length > 0 && (
         <div className="bank-field">

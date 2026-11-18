@@ -23,6 +23,7 @@ import { ChevronDownGlyph, VOCABULARY } from './icons';
 import './FilterBar.css';
 
 const AddGlyph = VOCABULARY.add.glyph;
+const SearchGlyph = VOCABULARY.search.glyph;
 
 /**
  * D187 (the owner's pick "Listen A"): a facet the list can be narrowed by. While it holds a value it
@@ -93,6 +94,10 @@ export function FilterBar({
     <div className="filter-bar" role="search" aria-label={searchLabel}>
       <label className="filter-bar-search">
         <span className="visually-hidden">{searchLabel}</span>
+        {/* D197 (the judge): the magnifier says what the field is for, the vocabulary's own glyph. */}
+        <span className="filter-bar-search-glyph" aria-hidden="true">
+          <SearchGlyph size={16} />
+        </span>
         <input
           type="search"
           className="field filter-bar-input"

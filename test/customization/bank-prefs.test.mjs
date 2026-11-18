@@ -1,7 +1,7 @@
 // D178 point 10 (A39 §18.2): the per-person preferences of the /bank detail area.
 //
 // The registry asserts every def on load; this states what the BANK area promises on top: the owner's
-// pick is the default (automatic, the threshold 8), every alternative is a value a person can choose, the
+// pick is the default (inline since D195 v12, automatic's threshold 8), every alternative is a value a person can choose, the
 // sizes are bounded, every text exists in both locales, and the verbs answer them for the calling person
 // like any other preference. SYNTHETIC BY CONSTRUCTION: the workspace and the actors are invented.
 
@@ -32,11 +32,12 @@ test('the bank area carries the detail-area and booking-view preferences, in thi
   }
 });
 
-test('the owner pick is the default; right and bottom stay choosable (D178 rule: every option is a setting)', () => {
+test('the owner pick is the default (inline, D195 v12); automatic, right and bottom stay choosable (D178 rule: every option is a setting)', () => {
   const position = prefDef('bank.detail_position');
-  assert.deepEqual(position.schema, { type: 'enum', values: ['automatic', 'right', 'bottom'] });
-  assert.equal(position.default, 'automatic');
-  assert.deepEqual(Object.keys(position.valueLabels), ['automatic', 'right', 'bottom']);
+  assert.deepEqual(position.schema, { type: 'enum', values: ['inline', 'automatic', 'right', 'bottom'] });
+  assert.equal(position.default, 'inline');
+  assert.deepEqual(Object.keys(position.valueLabels), ['inline', 'automatic', 'right', 'bottom']);
+  assert.equal(position.valueLabels.inline['de-CH'], 'In der Zeile');
   assert.equal(position.valueLabels.bottom['de-CH'], 'Unten');
   const threshold = prefDef('bank.detail_auto_threshold');
   assert.deepEqual(threshold.schema, { type: 'integer', min: 0, max: 500 });
@@ -75,7 +76,7 @@ test('the verbs answer the bank preferences for the calling person: set, read ba
   assert.equal(listed.ok, true);
   const rows = listed.prefs.filter((p) => p.area.id === 'bank');
   assert.deepEqual(rows.map((p) => [p.key, p.value, p.isDefault]), [
-    ['bank.detail_position', 'automatic', true],
+    ['bank.detail_position', 'inline', true],
     ['bank.detail_auto_threshold', 8, true],
     ['bank.detail_width', 360, true],
     ['bank.detail_height', 320, true],
@@ -88,7 +89,7 @@ test('the verbs answer the bank preferences for the calling person: set, read ba
   assert.equal(docked.value, 'bottom');
   assert.equal(call('prefs_get', { workspaceId: ws, key: 'bank.detail_position' }).pref.value, 'bottom');
   // Another person keeps the default: a layout is one person's.
-  assert.equal(call('prefs_get', { workspaceId: ws, key: 'bank.detail_position' }, 'agent').pref.value, 'automatic');
+  assert.equal(call('prefs_get', { workspaceId: ws, key: 'bank.detail_position' }, 'agent').pref.value, 'inline');
 
   const wrong = call('prefs_set', { workspaceId: ws, key: 'bank.detail_position', value: 'left' });
   assert.equal(wrong.ok, false);
@@ -99,5 +100,5 @@ test('the verbs answer the bank preferences for the calling person: set, read ba
 
   const reset = call('prefs_reset', { workspaceId: ws, area: 'bank' });
   assert.equal(reset.ok, true);
-  assert.equal(call('prefs_get', { workspaceId: ws, key: 'bank.detail_position' }).pref.value, 'automatic');
+  assert.equal(call('prefs_get', { workspaceId: ws, key: 'bank.detail_position' }).pref.value, 'inline');
 });

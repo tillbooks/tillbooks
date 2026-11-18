@@ -506,3 +506,14 @@
 .periods .action-feedback__detail .t-money {
   font-size: inherit;
 }
+
+/* D209: the owner's words beside an approval on the owner's word: quoted, dim, one line, the moment on hover. */
+.audit-owner-word {
+  display: block;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-inline-size: 40ch;
+}

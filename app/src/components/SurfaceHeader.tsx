@@ -11,11 +11,45 @@
  * main's opaque top-padding mask (global.css), and shows a hairline only once content has scrolled
  * under it (`data-stuck`). It renders regardless of
  * the surface's state, so the title stops being copy-pasted into every early return.
+ *
+ * TWO SLOTS OF THE CALM STUDIO (D201 point 6, D204 "Find it, then act"):
+ *   - `back`: a page reached by drilling down shows a back chevron with the origin's name
+ *     ("‹ Übersicht"). By default it is fed by the navigation state: whoever navigates into a page
+ *     passes `state: backState(path, label)` (a tile, a KPI, a row), and every SurfaceHeader below it
+ *     shows the way back without the surface wiring anything. `back` overrides it with an explicit
+ *     target, `back={false}` suppresses it.
+ *   - `settingsHref`: one settings icon (the vocabulary's Einstellungen gear) in the header's action
+ *     slot, opening the settings section that governs the page.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Link, useInRouterContext, useLocation, useNavigate } from 'react-router-dom';
 
+import { useT } from '../i18n';
 import { HintsChip, type Hint } from './HintsChip';
+import { IconButton } from './IconButton';
+import { ChevronRightGlyph } from './icons';
 import './SurfaceHeader.css';
+
+/** Where a drilled page came from: the path to go back to and the name of that page. */
+export interface BackFrom {
+  path: string;
+  label: string;
+}
+
+/** The navigation state that gives the next page its back chevron: `navigate(to, { state: backState(...) })`. */
+export function backState(path: string, label: string): { from: BackFrom } {
+  return { from: { path, label } };
+}
+
+/** Read a `BackFrom` out of a router location state, defensively: anything else reads as none. */
+export function backFromState(state: unknown): BackFrom | null {
+  if (state === null || typeof state !== 'object') return null;
+  const from = (state as { from?: unknown }).from;
+  if (from === null || typeof from !== 'object') return null;
+  const { path, label } = from as { path?: unknown; label?: unknown };
+  if (typeof path !== 'string' || !path.startsWith('/') || typeof label !== 'string' || label === '') return null;
+  return { path, label };
+}
 
 export interface SurfaceHeaderProps {
   /** The surface title. Sentence case, one ink (design law). */
@@ -40,9 +74,56 @@ export interface SurfaceHeaderProps {
    * its filters, or a list's search and filter chips, so they stay in view while the result scrolls.
    */
   toolbar?: ReactNode;
+  /**
+   * D201: the back chevron. Omitted, it follows the navigation state (`backState`); an explicit
+   * `{ path, label }` overrides it; `false` shows none.
+   */
+  back?: BackFrom | false;
+  /** D204: the page's settings section; renders one settings icon button at the end of the actions. */
+  settingsHref?: string;
+  /** What the settings icon opens, its tooltip's second line. Defaults to "Für diese Seite". */
+  settingsContext?: string;
 }
 
-export function SurfaceHeader({ title, titleId, subtitle, help, actions, count, hints, toolbar }: SurfaceHeaderProps) {
+/** The back chevron: a real link with the origin's name beside the glyph, never a glyph alone. */
+function BackLink({ from }: { from: BackFrom }) {
+  const t = useT();
+  return (
+    <Link className="surface-header-back" to={from.path} aria-label={t('surfaceHeader.back', { label: from.label })}>
+      <ChevronRightGlyph size={16} className="surface-header-back-glyph" />
+      <span>{from.label}</span>
+    </Link>
+  );
+}
+
+/** The back chevron fed by the navigation state, only inside a router. */
+function StateBackLink() {
+  const location = useLocation();
+  const from = backFromState(location.state);
+  return from === null ? null : <BackLink from={from} />;
+}
+
+/** The settings icon: the vocabulary's gear, navigating to the page's settings section. */
+function SettingsButton({ href, context }: { href: string; context?: string }) {
+  const t = useT();
+  const navigate = useNavigate();
+  return <IconButton icon="settings" context={context ?? t('surfaceHeader.settingsContext')} onClick={() => navigate(href)} />;
+}
+
+export function SurfaceHeader({
+  title,
+  titleId,
+  subtitle,
+  help,
+  actions,
+  count,
+  hints,
+  toolbar,
+  back,
+  settingsHref,
+  settingsContext,
+}: SurfaceHeaderProps) {
+  const inRouter = useInRouterContext();
   const headerRef = useRef<HTMLElement>(null);
 
   // S1 (N5 sweep): the sticky DataTable thead and this sticky header live in the ONE .frame>main
@@ -111,6 +192,7 @@ export function SurfaceHeader({ title, titleId, subtitle, help, actions, count, 
       data-stuck={stuck ? '' : undefined}
     >
       <div className="surface-header-titles">
+        {back === undefined ? inRouter && <StateBackLink /> : back !== false && <BackLink from={back} />}
         {/* D187: the help trigger sits BESIDE the h1, not inside it. Inside, its hover name became part
             of the heading's accessible name ("Kontakte Hilfe zu Kontakte"). */}
         <div className="surface-header-titleline">
@@ -123,7 +205,12 @@ export function SurfaceHeader({ title, titleId, subtitle, help, actions, count, 
         </div>
         {subtitle !== undefined && <p className="surface-header-subtitle">{subtitle}</p>}
       </div>
-      {actions !== undefined && <div className="surface-header-actions">{actions}</div>}
+      {(actions !== undefined || settingsHref !== undefined) && (
+        <div className="surface-header-actions">
+          {actions}
+          {settingsHref !== undefined && <SettingsButton href={settingsHref} context={settingsContext} />}
+        </div>
+      )}
       {toolbar !== undefined && <div className="surface-header-toolbar">{toolbar}</div>}
     </header>
   );

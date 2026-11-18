@@ -23,6 +23,7 @@ import { isErr } from '../../lib/client';
 import { useWorkspaceId } from '../../app/workspace';
 import type { VorschlagBeleg } from './model';
 import { downloadContent } from '../Files/model';
+import { IconButton } from '../../components/IconButton';
 import './VorschlagBelege.css';
 
 /** The SNIFFED types drawn as a thumbnail (HEIC has no browser rendering). */
@@ -31,7 +32,7 @@ const THUMB_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 export const TAB_TYPES = ['application/pdf', ...THUMB_TYPES];
 
 /** One preview answer: the bytes and the type the engine sniffed from them. */
-interface Preview {
+export interface Preview {
   content: string;
   sniffed: string;
 }
@@ -42,11 +43,13 @@ function kindKey(mime: string): string {
   return 'file';
 }
 
-export function VorschlagBelege({ actionId, belege, canPreview }: { actionId: string; belege: readonly VorschlagBeleg[]; canPreview: boolean }) {
-  const t = useT();
+/**
+ * D207: reading and opening a Beleg of a Vorschlag, shared by the chips below and the "Beleg ansehen" icon of
+ * the opened row. `open` uses the type the engine SNIFFED, never the stored one (see the header).
+ */
+export function useBelegOpen(actionId: string): { read: (fileId: string) => Promise<Preview | null>; open: (b: VorschlagBeleg) => Promise<void>; failed: string | null } {
   const client = useClient();
   const workspaceId = useWorkspaceId();
-  const [thumbs, setThumbs] = useState<Readonly<Record<string, string>>>({});
   const [failed, setFailed] = useState<string | null>(null);
 
   const read = useCallback(
@@ -60,24 +63,6 @@ export function VorschlagBelege({ actionId, belege, canPreview }: { actionId: st
     },
     [actionId, client, workspaceId],
   );
-
-  const imageIds = belege.filter((b) => THUMB_TYPES.includes(b.mime)).map((b) => b.fileId).join(',');
-  useEffect(() => {
-    if (!canPreview || imageIds === '') return;
-    let live = true;
-    void (async () => {
-      for (const b of belege) {
-        if (!THUMB_TYPES.includes(b.mime)) continue;
-        const preview = await read(b.fileId);
-        // The stored mime only chose WHICH to fetch; the thumbnail is drawn only for a sniffed image.
-        if (!live || preview === null || !THUMB_TYPES.includes(preview.sniffed)) continue;
-        setThumbs((current) => ({ ...current, [b.fileId]: `data:${preview.sniffed};base64,${preview.content}` }));
-      }
-    })();
-    return () => {
-      live = false;
-    };
-  }, [canPreview, imageIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const open = useCallback(
     async (b: VorschlagBeleg) => {
@@ -99,24 +84,56 @@ export function VorschlagBelege({ actionId, belege, canPreview }: { actionId: st
     [read],
   );
 
+  return { read, open, failed };
+}
+
+export function VorschlagBelege({ actionId, belege, canPreview }: { actionId: string; belege: readonly VorschlagBeleg[]; canPreview: boolean }) {
+  const t = useT();
+  const { read, open, failed } = useBelegOpen(actionId);
+  const [thumbs, setThumbs] = useState<Readonly<Record<string, string>>>({});
+
+  const imageIds = belege.filter((b) => THUMB_TYPES.includes(b.mime)).map((b) => b.fileId).join(',');
+  useEffect(() => {
+    if (!canPreview || imageIds === '') return;
+    let live = true;
+    void (async () => {
+      for (const b of belege) {
+        if (!THUMB_TYPES.includes(b.mime)) continue;
+        const preview = await read(b.fileId);
+        // The stored mime only chose WHICH to fetch; the thumbnail is drawn only for a sniffed image.
+        if (!live || preview === null || !THUMB_TYPES.includes(preview.sniffed)) continue;
+        setThumbs((current) => ({ ...current, [b.fileId]: `data:${preview.sniffed};base64,${preview.content}` }));
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [canPreview, imageIds]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (belege.length === 0) return null;
   return (
     <div className="vorschlag-belege">
-      <p className="vorschlag-belege-head">{t('agent.belege.head', { count: belege.length })}</p>
-      <ul className="vorschlag-belege-list">
+      {/* D197 (rule 7): no caption sentence; the list names itself for a screen reader. */}
+      <ul className="vorschlag-belege-list" aria-label={t('agent.belege.head', { count: belege.length })}>
         {belege.map((b) => (
           <li key={b.fileId} className="vorschlag-beleg">
             {thumbs[b.fileId] !== undefined ? (
-              <img className="vorschlag-beleg-thumb" src={thumbs[b.fileId]} alt={t('agent.belege.thumbAlt', { name: b.filename })} />
+              <img
+                className="vorschlag-beleg-thumb"
+                src={thumbs[b.fileId]}
+                alt={t('agent.belege.thumbAlt', { name: b.filename })}
+                // An image too small to read would draw as a stray dot beside the name: the name carries it.
+                onLoad={(e) => {
+                  if (e.currentTarget.naturalWidth < 16 || e.currentTarget.naturalHeight < 16) e.currentTarget.hidden = true;
+                }}
+              />
             ) : null}
             <span className="vorschlag-beleg-name">
               {t(`agent.belege.kind.${kindKey(b.mime)}`)}: {b.filename}
             </span>
             {b.source === 'drop' ? <span className="vorschlag-beleg-note">{t('agent.belege.dropped')}</span> : null}
             {canPreview ? (
-              <button type="button" className="btn btn--ghost btn--sm" onClick={() => void open(b)}>
-                {t('agent.belege.open')}
-              </button>
+              <IconButton icon="open" small context={t('agent.vq.belegOpen')} onClick={() => void open(b)} />
             ) : null}
             {failed === b.fileId ? (
               <span className="vorschlag-beleg-note" role="alert">

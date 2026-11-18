@@ -139,6 +139,11 @@
       "apply": "Matched",
       "override": "Corrected",
       "set_auto_apply": "Auto-apply changed",
+      "waive": "Waived",
+      "set_open": "Set to open",
+      "set_done": "Done",
+      "set_blocked": "Blocked",
+      "set_not_applicable": "Not applicable",
       "import": "Imported",
       "confirm": "Confirmed",
       "book": "Entry created",
@@ -182,8 +187,14 @@
       "beleg_assign": "Receipt assigned",
       "beleg_consume": "Receipt booked",
       "beleg_release": "Receipt released",
-      "confirm_figures": "Figures confirmed"
+      "approve_on_owner_word": "Approved in chat",
+      "confirm_figures": "Figures confirmed",
+      "confirm_id_change": "Id change confirmed",
+      "confirm_whole_days": "Whole days confirmed",
+      "confirm_edge_day": "Complete day confirmed",
+      "file_days_inner": "Day given as inside the file"
     },
+    "ownerWord": "“{quote}”",
     "entityKind": {
       "entry": "Entry",
       "payment": "Payment",
@@ -207,6 +218,7 @@
       "bank_statement_gap": "Statement gap",
       "bank_txn": "Bank transaction",
       "beleg_assignment": "Receipt assignment",
+      "agent_action": "Proposal",
       "receipt_held": "Assigned receipt",
       "creditor_bank_profile": "Creditor IBAN",
       "payment_batch": "Payment run",
@@ -237,6 +249,8 @@
       "inventory_reason_code": "Adjustment reason",
       "inventory_adjustment": "Stock adjustment",
       "migration_plan": "Migration plan",
+      "migration_control": "Migration control",
+      "implementation_task": "Implementation task",
       "sync": "Sync publishing",
       "accrual": "Accrual",
       "provision": "Provision",
@@ -245,7 +259,12 @@
       "hausbuch_note": "House note",
       "rule_autobook_grant": "Automatic booking of a rule",
       "vorlage_schedule": "Recurring template",
-      "settlement_template": "Settlement booking template"
+      "settlement_template": "Settlement booking template",
+      "settlement_source": "Settlement source",
+      "settlement_test_resolution": "Settlement test answer",
+      "settlement_event_inclusion": "Settlement answer (include or ignore)",
+      "settlement_event_override": "Settlement override",
+      "settlement_table_mapping": "Settlement table mapping"
     },
     "emptyHint": "TILL records every posting, every lock and every change to your master data here. You do not have to enter any of it yourself."
   },

@@ -205,15 +205,20 @@ test('I03 (c): the landed_cost movement is immutable (J02 trigger aborts UPDATE)
 
 // --- (d) reverse nets flat ---------------------------------------------------------------------
 
-test('I03 (d): reverse returns J03 valuation AND the GL to their pre-allocation figures', () => {
+test('D204 I03 (d): a reverse with no reason returns J03 valuation AND the GL to their pre-allocation figures', async () => {
   const { ctx } = freshCtx();
   const gr = postedReceipt(ctx);
   const v = draftVoucher(ctx, gr);
   must(landedCostAllocateConfirm(ctx, { voucherId: v.id, idempotencyKey: 'conf-1' }), 'confirm');
   assert.equal(itemValue(ctx, gr.itemId), 145000);
 
-  const rev = must(landedCostReverse(ctx, { voucherId: v.id, reason: 'Falsche Zuordnung', idempotencyKey: 'rev-1' }), 'reverse');
+  const rev = must(landedCostReverse(ctx, { voucherId: v.id, idempotencyKey: 'rev-1' }), 'reverse');
   assert.equal(rev.voucher.status, 'reversed');
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
+  const row = ctx.store.db.prepare('SELECT reversed_by, reversed_at, reverse_reason FROM landed_cost_voucher WHERE id = ?').get(v.id);
+  assertWhoWhen(row.reversed_by, row.reversed_at);
+  assert.equal(row.reverse_reason, null);
+  assertPermission('landed_cost_reverse');
 
   // J03 value is back to the base: the negated landed_cost movement nets the layer's landed cost to 0.
   assert.equal(itemValue(ctx, gr.itemId), 100000, 'valuation flat after reverse');
@@ -235,7 +240,7 @@ test('I03 (d): reverse returns J03 valuation AND the GL to their pre-allocation 
   assert.ok(target.reversalMovementId, 'the target records its reversing movement');
 
   // Idempotent: a replayed reverse writes nothing further.
-  must(landedCostReverse(ctx, { voucherId: v.id, reason: 'Falsche Zuordnung', idempotencyKey: 'rev-1' }), 'reverse-replay');
+  must(landedCostReverse(ctx, { voucherId: v.id, idempotencyKey: 'rev-1' }), 'reverse-replay');
   assert.equal(count(ctx, 'stock_movement', "movement_type = 'landed_cost'"), 2, 'no third movement');
 });
 

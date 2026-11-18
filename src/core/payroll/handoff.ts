@@ -369,17 +369,18 @@ export interface WageJournalPostInput {
   confirm?: boolean;
   /**
    * D173 (owner Q8): a supplementary posting for a month whose journal stands. Skips the month guard
-   * for THIS call only; requires a non-blank `supplementaryReason`, which is audited and written into
-   * the entry description.
+   * for THIS call only and is audited as its own row; an optional `supplementaryReason` (D204: never
+   * required) is written into the entry description when given.
    */
   supplementary?: boolean;
   supplementaryReason?: string;
   /** D173 (owner Q12): the kind of run, default `regular`. Only a regular run meets the month guard. */
   runKind?: WageRunKind;
   /**
-   * D173 (owner Q14): why a non-regular run (bonus, thirteenth, correction) is posted. Required when the
-   * setting `payroll.nonregular_reason` asks for it (default: corrections only); written into the entry
-   * description whenever given. Refused `invalid_input` on a regular run.
+   * D173 (owner Q14): why a non-regular run (bonus, thirteenth, correction) is posted. Optional (D204,
+   * 16.11.2026: no run is refused for a missing reason (`payroll.nonregular_reason` is retired); the
+   * non-regular run is audited as its own row either way); written into the entry description whenever
+   * given. Refused `invalid_input` on a regular run.
    */
   runKindReason?: string;
   idempotencyKey: string;
@@ -402,8 +403,6 @@ const RUN_KIND_LABEL_DE: Readonly<Record<Exclude<WageRunKind, 'regular'>, string
   correction: 'Korrektur',
 };
 
-/** D173 (owner Q14): the `payroll.nonregular_reason` setting values. */
-export type NonregularReasonMode = 'none' | 'correction' | 'all';
 
 /** D173 (owner Q14): the audit-chain entity kind of a non-regular run, one per kind (the row has no payload). */
 export const NONREGULAR_AUDIT_KIND: Readonly<Record<Exclude<WageRunKind, 'regular'>, string>> = {
@@ -429,27 +428,6 @@ export function validateRunKindStatic(input: { runKind?: unknown; runKindReason?
       return err('invalid_input', { field: 'runKindReason', reason: 'a run-kind reason is given only for a bonus, thirteenth or correction run' });
     }
     return undefined;
-  }
-  return undefined;
-}
-
-/**
- * D173 (owner Q14): the SETTING-DEPENDENT reason check. It reads `payroll.nonregular_reason`, so it runs
- * only where a call is fresh: after the idempotent replay in confirm mode, before the preview's return,
- * and in the API's pre-draft validation only when the key has no stored result (critic r3 HIGH: a replay
- * must answer its stored original even after the setting was tightened). Assumes the static checks passed.
- */
-export function runKindReasonRequired(
-  ctx: WorkspaceContext,
-  input: { runKind?: unknown; runKindReason?: unknown },
-): Result | undefined {
-  const kind: WageRunKind = (input.runKind as WageRunKind | undefined) ?? 'regular';
-  if (kind === 'regular') return undefined;
-  const reason = typeof input.runKindReason === 'string' ? input.runKindReason.trim() : '';
-  const mode = getSetting<NonregularReasonMode>(ctx, 'payroll.nonregular_reason');
-  const required = mode === 'all' || (mode === 'correction' && kind === 'correction');
-  if (required && reason === '') {
-    return err('reason_required', { field: 'runKindReason', runKind: kind, setting: 'payroll.nonregular_reason', mode });
   }
   return undefined;
 }
@@ -699,9 +677,9 @@ function monthAlreadyPosted(
 }
 
 /**
- * D173 (owner Q8): the pure check of the supplementary override, shared by the engine and the API's
- * pre-draft validation (`withPrevalidate`), so a reasonless supplementary call is refused
- * `reason_required` on every face and never queued as a Vorschlag that could only fail at approval.
+ * D173 (owner Q8): the pure check of the supplementary override's shape, shared by the engine and the
+ * API's pre-draft validation (`withPrevalidate`). D204: the reason is optional; only its type and its
+ * pairing with `supplementary: true` are checked.
  */
 export function validateSupplementary(input: { supplementary?: unknown; supplementaryReason?: unknown }): Result | undefined {
   if (input.supplementary !== undefined && typeof input.supplementary !== 'boolean') {
@@ -709,10 +687,6 @@ export function validateSupplementary(input: { supplementary?: unknown; suppleme
   }
   if (input.supplementaryReason !== undefined && typeof input.supplementaryReason !== 'string') {
     return err('invalid_input', { field: 'supplementaryReason' });
-  }
-  const reason = typeof input.supplementaryReason === 'string' ? input.supplementaryReason.trim() : '';
-  if (input.supplementary === true && reason === '') {
-    return err('reason_required', { field: 'supplementaryReason', reason: 'a supplementary wage journal names why it is posted next to the standing one' });
   }
   if (input.supplementary !== true && input.supplementaryReason !== undefined) {
     return err('invalid_input', { field: 'supplementaryReason', reason: 'a reason is given only with supplementary:true' });
@@ -751,8 +725,7 @@ export function wageJournalPost(ctx: WorkspaceContext, input: WageJournalPostInp
   if (typeof input.entryDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(input.entryDate)) {
     return err('invalid_input', { field: 'entryDate' });
   }
-  // D173 (owner Q8): the supplementary override is validated before anything else is read, so a
-  // supplementary call without its reason is refused `reason_required` on every face, preview included.
+  // D173 (owner Q8): the supplementary override's shape is validated before anything else is read.
   const supInvalid = validateSupplementary(input);
   if (supInvalid !== undefined) return supInvalid;
   const supplementary = input.supplementary === true;
@@ -813,8 +786,6 @@ export function wageJournalPost(ctx: WorkspaceContext, input: WageJournalPostInp
   // P8: the dial-off preview writes nothing and does not consume the key. It is never refused by the
   // guard; under `refuse` or `warn` it names the standing posting(s) so the person sees it before confirming.
   if (input.confirm !== true) {
-    const reasonMissing = runKindReasonRequired(ctx, input);
-    if (reasonMissing !== undefined) return reasonMissing;
     const guardMode = guardModeNow();
     const standingNow = guardMode === 'off' ? [] : standingWageJournalsForMonth(ctx, input.entryDate);
     return ok({
@@ -829,9 +800,6 @@ export function wageJournalPost(ctx: WorkspaceContext, input: WageJournalPostInp
   // posted entry rather than posting a second one (§H-IDEMPOTENT, asserted on ROWS).
   const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, input.idempotencyKey, 'wage_journal_post');
   if (replayed !== undefined) return replayed;
-  // The setting-dependent reason check, only for a fresh call (critic r3 HIGH).
-  const reasonMissing = runKindReasonRequired(ctx, input);
-  if (reasonMissing !== undefined) return reasonMissing;
 
   const entryDate = input.entryDate;
   const postingLines: LineInput[] = prepared.lines.map((l) => ({
@@ -850,7 +818,7 @@ export function wageJournalPost(ctx: WorkspaceContext, input: WageJournalPostInp
     if (standing.length > 0 && guardMode === 'refuse') throw new HandoffAbort(monthAlreadyPosted(entryDate, standing));
     const baseDescription = input.description ?? 'Lohnbuchung';
     const notes = [
-      ...(supplementary ? [`Nachtragsbuchung: ${supplementaryReason}`] : []),
+      ...(supplementary ? [supplementaryReason === '' ? 'Nachtragsbuchung' : `Nachtragsbuchung: ${supplementaryReason}`] : []),
       ...(runKind !== 'regular' && runKindReason !== '' ? [`${RUN_KIND_LABEL_DE[runKind]}: ${runKindReason}`] : []),
     ];
     const description = notes.length > 0 ? `${baseDescription} (${notes.join('; ')})` : baseDescription;
@@ -891,11 +859,11 @@ export function wageJournalPost(ctx: WorkspaceContext, input: WageJournalPostInp
         runKind,
       );
     ctx.audit.record({ entityKind: 'payroll_handoff', entityId: wjpId, action: 'post', actor: ctx.actor, at });
-    // D173: the supplementary override is its own audit row (the reason stands in the entry description).
+    // D173: the supplementary override is its own audit row (a reason, when given, stands in the entry description).
     if (supplementary) {
       ctx.audit.record({ entityKind: 'payroll_supplementary', entityId: wjpId, action: 'post', actor: ctx.actor, at });
     }
-    // D173 (owner Q14): EVERY non-regular run is audited, whatever the reason setting says. The chain row
+    // D173 (owner Q14): EVERY non-regular run is audited, with or without a reason (D204). The chain row
     // carries kind (its entity kind), actor and time; the reason, when given, stands in the entry description.
     if (runKind !== 'regular') {
       ctx.audit.record({ entityKind: NONREGULAR_AUDIT_KIND[runKind], entityId: wjpId, action: 'post', actor: ctx.actor, at });
@@ -908,7 +876,7 @@ export function wageJournalPost(ctx: WorkspaceContext, input: WageJournalPostInp
       entryId: postedEntryId,
       runKind,
       ...(runKind !== 'regular' && runKindReason !== '' ? { runKindReason } : {}),
-      ...(supplementary ? { supplementary: true, supplementaryReason } : {}),
+      ...(supplementary ? { supplementary: true, supplementaryReason: supplementaryReason === '' ? null : supplementaryReason } : {}),
       ...(standing.length > 0 ? { warnings: [monthWarning(entryDate, standing)] } : {}),
     });
   };

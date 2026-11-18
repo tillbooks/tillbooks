@@ -37,7 +37,7 @@ describe('Tooltip', () => {
       </div>,
     );
     const trigger = screen.getByRole('button', { name: 'Hilfe' });
-    fireEvent.focus(trigger);
+    act(() => { trigger.focus(); });
     fireEvent.keyDown(trigger, { key: 'Escape' });
     expect(screen.getByRole('tooltip')).not.toHaveClass('is-open');
     fireEvent.keyDown(trigger, { key: 'Escape' });
@@ -65,11 +65,11 @@ describe('Tooltip', () => {
       );
       const trigger = screen.getByRole('button', { name: 'Hilfe' });
       const tip = () => screen.getByRole('tooltip');
-      fireEvent.focus(trigger);
+      act(() => { trigger.focus(); });
       expect(tip()).not.toHaveClass('is-open');
-      fireEvent.blur(trigger);
+      act(() => { trigger.blur(); });
       keyboard = true;
-      fireEvent.focus(trigger);
+      act(() => { trigger.focus(); });
       expect(tip()).toHaveClass('is-open');
     } finally {
       matches.mockRestore();
@@ -89,14 +89,14 @@ describe('Tooltip', () => {
     const tip = screen.getByRole('tooltip');
     expect(tip).not.toHaveClass('is-open');
 
-    fireEvent.focus(trigger);
+    act(() => { trigger.focus(); });
     expect(tip).toHaveClass('is-open');
 
     fireEvent.keyDown(trigger, { key: 'Escape' });
     expect(tip).not.toHaveClass('is-open');
 
-    fireEvent.focus(trigger);
-    fireEvent.blur(trigger);
+    act(() => { trigger.focus(); });
+    act(() => { trigger.blur(); });
     expect(tip).not.toHaveClass('is-open');
   });
 });

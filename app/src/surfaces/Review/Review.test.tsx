@@ -221,8 +221,6 @@ describe('Review: the write touch-points', () => {
     await user.click(screen.getByRole('button', { name: 'Freigeben' }));
     await waitFor(() => expect(screen.getByText('Buchung e1').closest('tr')).toHaveTextContent('freigegeben'));
     await user.click(screen.getByRole('button', { name: 'Markieren' }));
-    await user.type(screen.getByLabelText('Grund für die Markierung'), 'Beleg fehlt');
-    await user.click(screen.getByRole('button', { name: 'Buchung markieren' }));
     await waitFor(() => expect(screen.getByText('Buchung e1').closest('tr')).toHaveTextContent('markiert'));
     await user.click(screen.getByRole('button', { name: 'Freigeben' }));
     await waitFor(() => expect(approveKeys).toHaveLength(2));
@@ -254,7 +252,7 @@ describe('Review: the write touch-points', () => {
     });
   });
 
-  it('flag opens the reason composer and calls flag_entry', async () => {
+  it('D204 flag lands in one click with no reason and no composer', async () => {
     let flagged: Record<string, unknown> | null = null;
     const canned = reviewCanned([entry('e1', 'open')], {
       flag_entry: (input) => {
@@ -266,6 +264,32 @@ describe('Review: the write touch-points', () => {
     const user = userEvent.setup();
     await screen.findByText("CHF 1'200.50");
     await user.click(screen.getByRole('button', { name: 'Markieren' }));
+    await waitFor(() => expect(flagged).not.toBeNull());
+    expect(flagged).not.toHaveProperty('reason');
+    expect(screen.queryByLabelText('Grund für die Markierung')).toBeNull();
+  });
+
+  it('D204 with audit.ask_reason = optional the flag opens the note, which never blocks the button', async () => {
+    let flagged: Record<string, unknown> | null = null;
+    let settingsRead = false;
+    const canned = reviewCanned([entry('e1', 'open')], {
+      settings_get: () => {
+        settingsRead = true;
+        return ok({ setting: { key: 'audit.ask_reason', value: 'optional' } });
+      },
+      flag_entry: (input) => {
+        flagged = input;
+        return ok({});
+      },
+    });
+    renderSurface(canned);
+    const user = userEvent.setup();
+    await screen.findByText("CHF 1'200.50");
+    await waitFor(() => expect(settingsRead).toBe(true));
+    await user.click(screen.getByRole('button', { name: 'Markieren' }));
+    expect(await screen.findByLabelText('Grund für die Markierung')).toBeInTheDocument();
+    expect(flagged).toBeNull();
+    expect(screen.getByRole('button', { name: 'Buchung markieren' })).toBeEnabled();
     await user.type(screen.getByLabelText('Grund für die Markierung'), 'Beleg fehlt');
     await user.click(screen.getByRole('button', { name: 'Buchung markieren' }));
     await waitFor(() => expect(flagged).not.toBeNull());

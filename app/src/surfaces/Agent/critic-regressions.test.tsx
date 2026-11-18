@@ -14,7 +14,14 @@ import { TillClientProvider } from '../../lib/client-context';
 import { TillClient, type Transport } from '../../lib/client';
 import { WorkspaceProvider } from '../../app/workspace';
 import { Agent } from './index';
-import { VorschlagLine } from './VorschlagLine';
+import { VorschlagDetail } from './VorschlagDetail';
+import { itemOf } from './vorschlagView';
+import type { AccountNameMap } from './vorschlagDetails';
+
+/** D197: the read-back a person judges before approving is the detail pane of the Vorschläge screen. */
+function Detail({ action, accountNames }: { action: DraftedAction; accountNames?: AccountNameMap; onApprove?: unknown; onReject?: unknown }) {
+  return <VorschlagDetail item={itemOf(action, action)} {...(accountNames !== undefined ? { accountNames } : {})} onApprove={() => undefined} onReject={() => undefined} />;
+}
 import { Turn } from './TurnList';
 import type { AgentTurn, DraftedAction } from './model';
 
@@ -36,7 +43,7 @@ function wrap(node: React.ReactNode) {
 
 /** D167: the read-back lives behind the line's Details disclosure (the title button). */
 function openDetails() {
-  fireEvent.click(document.querySelector('.vorschlag-line-title') as HTMLElement);
+  // D197: the detail pane shows the read-back without a disclosure.
 }
 
 const postDraft: DraftedAction = {
@@ -61,7 +68,7 @@ const postDraft: DraftedAction = {
 
 describe('CP1-CP3: the Vorschlag card as an oversight control', () => {
   it('CP1 shows the AMOUNT a human is about to approve, in Details as words', () => {
-    wrap(<VorschlagLine action={postDraft} onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<Detail action={postDraft} onApprove={() => undefined} onReject={() => undefined} />);
     openDetails();
     const readback = document.querySelector('.vorschlag-readback')?.textContent ?? '';
     expect(readback).toContain("1'200.00");
@@ -75,15 +82,16 @@ describe('CP1-CP3: the Vorschlag card as an oversight control', () => {
       actionTool: 'record_payment',
       payload: { workspaceId: 'ws_test', direction: 'in', date: '2026-06-12', amountMinor: 120000, idempotencyKey: 'k2' },
     };
-    wrap(<VorschlagLine action={payment} onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<Detail action={payment} onApprove={() => undefined} onReject={() => undefined} />);
     openDetails();
-    const readback = (document.querySelector('.vorschlag-readback') as HTMLElement).textContent ?? '';
-    expect(readback).not.toContain('120000');
-    expect(readback).toContain("1'200.00");
+    // D197: the amount stands once, formatted, in the detail's header; never raw Rappen anywhere.
+    const pane = (document.querySelector('.vdet') as HTMLElement).textContent ?? '';
+    expect(pane).not.toContain('120000');
+    expect(document.querySelector('.vdet-amount')?.textContent).toBe("CHF 1'200.00");
   });
 
   it('CP3 labels the read-back fields in de-CH, not with raw payload keys', () => {
-    wrap(<VorschlagLine action={postDraft} onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<Detail action={postDraft} onApprove={() => undefined} onReject={() => undefined} />);
     openDetails();
     const terms = [...document.querySelectorAll('.vorschlag-readback dt')].map((n) => n.textContent);
     expect(terms).not.toContain('date');
@@ -103,14 +111,15 @@ describe('CP1-CP3: the Vorschlag card as an oversight control', () => {
       payload: { workspaceId: 'ws_test', vendorId: 'ct_77', iban: 'CH5604835012345678009', idempotencyKey: 'kv' },
       payloadLabels: { vendorId: 'Lieferant AG' },
     };
-    wrap(<VorschlagLine action={vendorIban} onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<Detail action={vendorIban} onApprove={() => undefined} onReject={() => undefined} />);
     openDetails();
     const rows = [...document.querySelectorAll('.vorschlag-readback-row')].map((row) => ({
       term: row.querySelector('dt')?.textContent,
       value: row.querySelector('dd')?.textContent,
       title: row.querySelector('dd')?.getAttribute('title'),
     }));
-    expect(rows).toContainEqual({ term: 'Lieferant', value: 'Lieferant AG', title: 'ct_77' });
+    // D197: the vendor's NAME is the detail's subject (the read-back does not repeat it); the id never shows.
+    expect(screen.getByRole('heading', { name: 'Lieferant AG' })).toBeInTheDocument();
     expect(rows).toContainEqual({ term: 'IBAN', value: 'CH5604835012345678009', title: null });
     expect(document.querySelector('.vorschlag-readback')?.textContent ?? '').not.toContain('ct_77');
   });
@@ -123,7 +132,7 @@ describe('CP1-CP3: the Vorschlag card as an oversight control', () => {
       actionTool: 'set_creditor_bank_profile',
       payload: { workspaceId: 'ws_test', vendorId: 'ct_99', iban: 'CH5604835012345678009', idempotencyKey: 'ku' },
     };
-    wrap(<VorschlagLine action={unnamed} onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<Detail action={unnamed} onApprove={() => undefined} onReject={() => undefined} />);
     openDetails();
     expect(document.querySelector('.vorschlag-readback')?.textContent ?? '').toContain('ct_99');
   });
@@ -151,7 +160,7 @@ describe('D167 browser walk: Details name accounts and sources in words', () => 
   ]);
 
   it('a posting line names its account by number and name, the id only as the tooltip', () => {
-    wrap(<VorschlagLine action={realIds} accountNames={names} onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<Detail action={realIds} accountNames={names} onApprove={() => undefined} onReject={() => undefined} />);
     openDetails();
     const rows = [...document.querySelectorAll('.vorschlag-readback-row')].map((r) => `${r.querySelector('dt')?.textContent} = ${r.querySelector('dd')?.textContent}`);
     // D167 polish 11: one line per leg; no Quelle row, no Betrag row repeating the legs, no description
@@ -159,8 +168,8 @@ describe('D167 browser walk: Details name accounts and sources in words', () => 
     expect(rows).toContain('Soll = 6500 Verwaltungs- und Bürokosten · CHF 48.50');
     expect(rows).toContain('Haben = 1021 Sparkonto · CHF 48.50');
     expect(rows.some((r) => r.startsWith('Quelle') || r.startsWith('Betrag') || r.startsWith('Beschreibung'))).toBe(false);
-    expect(document.querySelector('.vorschlag-line-title')).toHaveTextContent('Büromaterial');
-    expect(document.querySelector('.vorschlag-line-verb')).toHaveTextContent('Buchung erfassen');
+    expect(document.querySelector('.vdet-subject')).toHaveTextContent('Büromaterial');
+    expect(document.querySelector('.vdet-kind')).toHaveTextContent('Buchung erfassen');
     const text = document.querySelector('.vorschlag-readback')?.textContent ?? '';
     expect(text).not.toMatch(/acc_[0-9a-f]/);
     expect(text).not.toContain('manual');
@@ -179,7 +188,7 @@ describe('D167 browser walk: Details name accounts and sources in words', () => 
         idempotencyKey: 'kb',
       },
     };
-    wrap(<VorschlagLine action={leg} accountNames={names} onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<Detail action={leg} accountNames={names} onApprove={() => undefined} onReject={() => undefined} />);
     openDetails();
     const text = document.querySelector('.vorschlag-readback')?.textContent ?? '';
     expect(text).toContain('6500 Verwaltungs- und Bürokosten');
@@ -187,7 +196,7 @@ describe('D167 browser walk: Details name accounts and sources in words', () => 
   });
 
   it('without the chart, a posting line says "Konto" and never the id', () => {
-    wrap(<VorschlagLine action={realIds} onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<Detail action={realIds} onApprove={() => undefined} onReject={() => undefined} />);
     openDetails();
     const text = document.querySelector('.vorschlag-readback')?.textContent ?? '';
     expect(text).toContain('Konto');

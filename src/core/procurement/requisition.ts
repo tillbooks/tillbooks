@@ -650,9 +650,9 @@ export function requisitionApprove(ctx: WorkspaceContext, input: RequisitionDeci
 }
 
 export function requisitionReject(ctx: WorkspaceContext, input: RequisitionDecisionInput): Result {
-  const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+  // D204: a decision needs no reason; the approval event keeps who and when, and a given comment.
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
   const run = (): Result => {
-    if (reason.length === 0) return err('reason_required', {});
     const req = readRequisition(ctx, input.requisitionId as string);
     if (req === undefined) return err('not_found', { requisitionId: input.requisitionId });
     if (req.status !== 'pending_approval') return err('invalid_transition', { requisitionId: req.id, from: req.status });
@@ -668,9 +668,9 @@ export function requisitionReject(ctx: WorkspaceContext, input: RequisitionDecis
 }
 
 export function requisitionReturn(ctx: WorkspaceContext, input: RequisitionDecisionInput): Result {
-  const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+  // D204: a decision needs no reason; the approval event keeps who and when, and a given comment.
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
   const run = (): Result => {
-    if (reason.length === 0) return err('reason_required', {});
     const req = readRequisition(ctx, input.requisitionId as string);
     if (req === undefined) return err('not_found', { requisitionId: input.requisitionId });
     if (req.status !== 'pending_approval') return err('invalid_transition', { requisitionId: req.id, from: req.status });

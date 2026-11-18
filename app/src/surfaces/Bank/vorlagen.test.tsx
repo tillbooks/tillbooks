@@ -22,6 +22,8 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 import { TillClientProvider } from '../../lib/client-context';
+import { PrefsProvider } from '../../lib/prefs';
+import { legacyLayout } from './test-prefs';
 import { TillClient, type RestResponse, type Transport } from '../../lib/client';
 import { I18nProvider } from '../../i18n';
 import { WorkspaceProvider } from '../../app/workspace';
@@ -222,9 +224,11 @@ function renderBank(transport: Transport, path = '/bank') {
     <TillClientProvider client={new TillClient(transport)}>
       <I18nProvider initialLocale="de-CH">
         <WorkspaceProvider initialId="ws_test">
-          <MemoryRouter initialEntries={[path]}>
+          <PrefsProvider store={legacyLayout()}>
+            <MemoryRouter initialEntries={[path]}>
             <Bank />
           </MemoryRouter>
+          </PrefsProvider>
         </WorkspaceProvider>
       </I18nProvider>
     </TillClientProvider>,

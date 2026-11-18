@@ -76,6 +76,7 @@ import { BankAccountEditor } from './BankAccountEditor';
 import { BankDrawer } from './BankDrawer';
 import { OpeningBalanceStep } from './OpeningBalanceStep';
 import { EbicsChannelPanel } from './EbicsChannelPanel';
+import { SettlementSourcesPanel } from './SettlementSourcesPanel';
 import { GapRepairDialog } from '../Bank/GapRepairDialog';
 import {
   dismissalCoversRegister,
@@ -551,6 +552,9 @@ export function BankAccounts() {
           }}
         />
       )}
+
+      {/* D198: the settlement feeds, a money channel like the EBICS connection above. */}
+      {!loading && !failed && workspaceId !== null && <SettlementSourcesPanel workspaceId={workspaceId} canPost={canPost} />}
 
       {repairFor !== null && repairGap !== null && (
         <GapRepairDialog

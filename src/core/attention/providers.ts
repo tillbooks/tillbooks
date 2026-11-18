@@ -26,6 +26,7 @@ import { listDunningRuns } from '../dunning/index.js';
 import { dialCapabilityForCall, CONSEQUENCE_FOR_ACTION } from '../agent/index.js';
 import { AGENT_ACTOR, SERVED_MEMBER_ACTOR_PREFIX } from '../access/actors.js';
 import { checklistItemsDueProvider } from '../checklists/attentionProvider.js';
+import { tasksDueProvider } from '../tasks/attentionProvider.js';
 import { bankActivationProvider, bankKeysReviewProvider } from '../banking/ebics/attentionProvider.js';
 import { bankFetchFailedProvider, bankLinesWaitingProvider, bankStatementGapProvider } from '../banking/attentionProviders.js';
 import { autopilotProvider } from '../banking/autopilotAttention.js';
@@ -51,7 +52,7 @@ export function withKind(provider: QueueProvider, kind: AttentionKind): QueuePro
  * `deepLinkRoute` is not in this set fails registration, which is how the design's row 2.3 dead end
  * (a hub row that opens a Placeholder) is designed out rather than handled.
  */
-export const ROUTED_SURFACES: ReadonlySet<string> = new Set(['/bank', '/dunning', '/agent', '/journal', '/checklisten', '/bank-accounts']);
+export const ROUTED_SURFACES: ReadonlySet<string> = new Set(['/bank', '/dunning', '/agent', '/journal', '/checklisten', '/bank-accounts', '/tasks']);
 
 /**
  * The OP3 entity kinds the providers reference, hoisted to consts rather than written inline.
@@ -440,6 +441,9 @@ export const ATTENTION_PROVIDERS: readonly QueueProvider[] = [
   // checklist engine (`src/core/checklists/attentionProvider.ts`) and spread in as one line. D178: a step
   // to carry out (the MWST return included), so `do`, declared here at its registration line.
   withKind(checklistItemsDueProvider, 'do'),
+  // D210: the E03 tasks due within `attention.tasks_due_days`, so Aufgaben needs no menu row of its own.
+  // Defined beside the task engine (`src/core/tasks/attentionProvider.ts`), one line. `do`.
+  withKind(tasksDueProvider, 'do'),
   // D143: a bank that answered HPB while its activation is in progress: the human compares the keys.
   // Defined beside the EBICS engine (`src/core/banking/ebics/attentionProvider.ts`), one line. D178: `do`.
   withKind(bankKeysReviewProvider, 'do'),

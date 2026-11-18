@@ -458,11 +458,10 @@ test('security review: versioning a booked receipt off never frees the old bytes
     const fileId = w.fx.deps.store.db.prepare("SELECT id FROM stored_file WHERE workspace_id = ? AND entity_kind = 'journal_entry' AND entity_id = ?").get(w.ws, entryId).id;
     const other = Buffer.from('%PDF-1.4 a different synthetic receipt').toString('base64');
     const version = { fileId, contentBase64: other, mime: 'application/pdf', filename: 'b.pdf', idempotencyKey: 'nv' };
-    // An agent never replaces a booked receipt; a person needs the reason.
+    // An agent never replaces a booked receipt; a person confirms with bookAgain (D204: no reason needed).
     assert.equal(getAction('files_new_version').run({ ...w.fx.deps, actor: 'agent' }, { workspaceId: w.ws, ...version }).error, 'human_only');
     assert.equal(w.run('files_new_version', version).error, 'receipt_replace_needs_reason');
-    assert.equal(w.run('files_new_version', { ...version, bookAgain: true }).error, 'reason_required');
-    const replaced = w.run('files_new_version', { ...version, bookAgain: true, overrideReason: 'Falsche Seite gescannt' });
+    const replaced = w.run('files_new_version', { ...version, bookAgain: true });
     assert.equal(replaced.ok, true, JSON.stringify(replaced));
     assert.equal(w.overrides(), 1);
     // The OLD bytes are still the entry's evidence: attaching them elsewhere is refused, naming the entry.

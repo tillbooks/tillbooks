@@ -2,7 +2,7 @@
   "help": {
     "Agent": {
       "title": "Agent",
-      "body": "Here you read what the agent did: every conversation with every step, in words.\n\nThe agent records each write as a proposal instead of posting it. You decide it in Attention, one line per proposal; the full list is also here under Proposals. Under Permissions you set how far each kind of action is trusted, from always ask to run automatically.\n\nThat grant is yours alone to give: no agent can raise its own trust.",
+      "body": "Here you read what the agent did: every conversation with every step, in words.\n\nThe agent records each write as a proposal instead of posting it. You decide it in Attention, one line per proposal; the full list is also here under Proposals. There you tick several and approve or reject them together; rejecting asks nothing. Under Permissions you set how far each kind of action is trusted, from always ask to run automatically.\n\nThat grant is yours alone to give: no agent can raise its own trust.",
       "concepts": [],
       "docsPath": "introduction"
     }
@@ -75,6 +75,11 @@
       "rejectedWith": "Rejected: {reason}",
       "rejectedNoReason": "Rejected",
       "approved": "Approved",
+      "approvedByAgent": "Approved by the agent",
+      "rejectedByAgent": "Rejected by the agent",
+      "underGrant": "Granted {grantedBy} on {grantedAt}",
+      "approvedOnWord": "Run by the agent, approved in chat",
+      "onWordTitle": "“{quote}”, {saidAt}",
       "status": {
         "gelesen": "read",
         "ausgefuehrt": "executed",
@@ -89,7 +94,7 @@
     "card": {
       "title": "Proposal",
       "approve": "Approve",
-      "approveAllow": "Approve and allow in future",
+      "approveAllow": "Approve and allow the agent from now on",
       "reject": "Reject",
       "rejectConfirm": "Reject? The proposal is then finished and would have to be recorded again.",
       "rejectYes": "Yes, reject",
@@ -123,7 +128,6 @@
     "line": {
       "more": "More for: {title}",
       "details": "Details",
-      "hideDetails": "Hide details",
       "detailsOf": "Details: {title}",
       "consequence": "What this does",
       "origin": "Agent proposal",
@@ -142,7 +146,6 @@
       "moreRows": "{n} more",
       "grantConfirm": "Let the agent do {capability} without asking from now on? The grant covers every proposal of this kind, is attributed to you and can be revoked at any time.",
       "grantYes": "Approve and allow",
-      "grantNo": "Cancel",
       "yes": "Yes",
       "no": "No",
       "targetKind": {
@@ -171,7 +174,16 @@
         "onto": "to {account}",
         "many": "{count} accounts",
         "recipient": "to {recipient}"
-      }
+      },
+      "bankLine": "Bank line",
+      "booking": "Booking",
+      "why": "Why",
+      "who": "From",
+      "whoValue": "{actor}, {date}",
+      "does": "Does",
+      "openInBank": "Open in bank lines",
+      "viewBeleg": "View receipt",
+      "automate": "Approve and automate"
     },
     "queue": {
       "empty": "Nothing to approve.",
@@ -249,6 +261,7 @@
       "stock": "Stock"
     },
     "verb": {
+      "grant_rule_autobook": "Turn on Autopilot for a rule",
       "post_entry": "Record entry",
       "reverse_entry": "Reverse entry",
       "issue_invoice": "Issue invoice",
@@ -364,6 +377,11 @@
       "set_bank_csv_mapping": "Save CSV column mapping",
       "import_settlement": "Book a settlement file",
       "set_settlement_template": "Save a settlement booking template",
+      "set_settlement_table_mapping": "Save how a settlement table is read",
+      "pull_settlement": "Pull and book a settlement feed",
+      "set_settlement_source": "Save a settlement source",
+      "set_settlement_event_ignored": "Ignore or include a settlement event",
+      "resolve_settlement_event": "Mark a settlement payment test or not",
       "resolve_possible_duplicate": "Decide a possible duplicate",
       "create_payment_batch": "Draft payment run",
       "generate_pain001": "Create payment file",
@@ -415,7 +433,8 @@
       "portal_quote_accept": "Accept quote via portal link",
       "hausbuch_note_set": "Save house note",
       "hausbuch_note_archive": "Archive house note",
-      "set_vorlage_schedule": "Schedule a template"
+      "set_vorlage_schedule": "Schedule a template",
+      "settings_set": "Change a setting"
     },
     "field": {
       "amount": "Amount",
@@ -464,7 +483,12 @@
       "differenceReason": "Reason for the difference",
       "question": "Question",
       "year": "Year",
-      "method": "Method"
+      "method": "Method",
+      "billDate": "Bill date",
+      "dueDate": "Due on",
+      "expenseAccountId": "Expense account",
+      "vendorReference": "Supplier reference",
+      "value": "Value"
     },
     "belege": {
       "head": "Receipts attached on approval ({count})",
@@ -477,6 +501,137 @@
       "open": "Open",
       "thumbAlt": "Receipt {name}",
       "failed": "The receipt could not be opened."
+    },
+    "vq": {
+      "tab": {
+        "pending": "Open",
+        "executed": "Approved",
+        "rejected": "Rejected",
+        "stale": "Stale"
+      },
+      "statusLabel": "Status",
+      "status": {
+        "executed": "Approved",
+        "rejected": "Rejected",
+        "closed": "Closed by the system",
+        "stale": "Stale"
+      },
+      "search": "Search proposals",
+      "searchPlaceholder": "Search",
+      "listLabel": "Proposals",
+      "count": "{count} proposals",
+      "facet": {
+        "kind": "Kind",
+        "certainty": "Certainty",
+        "direction": "Direction",
+        "beleg": "Receipt",
+        "decidedBy": "Decided"
+      },
+      "decidedBy": {
+        "person": "by a person",
+        "agent": "by the agent, under your grant",
+        "ownerWord": "approved in chat"
+      },
+      "direction": {
+        "in": "Money in",
+        "out": "Money out"
+      },
+      "beleg": {
+        "with": "With receipt",
+        "without": "Without receipt"
+      },
+      "certainty": {
+        "sure": "Sure",
+        "learned": "Learned",
+        "check": "Check",
+        "open": "No comparison"
+      },
+      "clearFilters": "Reset filters",
+      "filteredEmpty": "No matches.",
+      "emptyOther": "No proposals.",
+      "withBeleg": "with receipt",
+      "tickRow": "Select {subject}",
+      "selection": "Selection",
+      "selected": "{count} selected",
+      "approveAll": "Approve ({count})",
+      "rejectAll": "Reject ({count})",
+      "clearSelection": "Clear selection",
+      "approve": "Approve",
+      "decide": "Decide",
+      "staleReason": "Changed since the proposal: approving would run nothing",
+      "staleShort": "Changed since the proposal",
+      "back": "Back to the list",
+      "approveAllow": "Approve and allow the agent from now on",
+      "grantTitle": "Allow the agent {capability} from now on?",
+      "grantReach": "The agent then runs every proposal of the kind “{capability}” without asking: this one, all {count} open ones of this kind here, and every future one. The grant is attributed to you and stays revocable under Permissions.",
+      "ibanChange": "IBAN change",
+      "ibanOld": "Until now",
+      "ibanNew": "New",
+      "ibanNone": "none",
+      "ibanWithheld": "not visible",
+      "ibanUnknownSupplier": "Supplier",
+      "ibanConfirmTitle": "Change the IBAN of {supplier}?",
+      "ibanConfirmYes": "Change IBAN",
+      "settingSubject": "{setting}: {value}",
+      "settingChange": "Setting",
+      "settingNow": "Until now",
+      "settingNew": "New",
+      "confirmClose": "Cancel",
+      "rejectedWith": "Reason: {reason}",
+      "decidedLabel": "Decided",
+      "ownerWordLabel": "Approval in chat",
+      "ownerWordValue": "“{quote}”, {saidAt}",
+      "decidedValue": "on {date} {who}",
+      "who": {
+        "studio": "in the Studio",
+        "agent": "by the agent",
+        "system": "by TILL",
+        "person": "by a person",
+        "agentUnderGrant": "by the agent, under your grant",
+        "agentOnWord": "by the agent, approved in chat"
+      },
+      "undoReason": "Undone under Agent > Proposals",
+      "toastClose": "Message",
+      "toast": {
+        "approved": "Approved: {subject}",
+        "rejected": "Rejected: {subject}",
+        "stale": "Not run, changed since the proposal: {subject}",
+        "undo": "Undo",
+        "undone": "Open again: {subject}",
+        "batch": {
+          "approved": "{count} approved",
+          "approvedSome": "{ok} approved, {refused} not. {subject}: {reason}",
+          "rejected": "{count} rejected",
+          "rejectedSome": "{ok} rejected, {refused} not. {subject}: {reason}"
+        }
+      },
+      "ibanRow": "IBAN {old} → {new}",
+      "staleRow": "Changed",
+      "belege": "Receipts",
+      "belegOpen": "Receipt, new window",
+      "rejectContext": "Nothing is booked",
+      "approveContext": "Runs the proposal",
+      "recoveryContext": "To the record",
+      "settingValue": {
+        "suggest": "suggest",
+        "book": "book",
+        "bulk": "in bulk",
+        "off": "off",
+        "on": "on",
+        "tick": "tick",
+        "single": "one by one",
+        "all_with_confirm": "all with confirmation",
+        "engine": "automatic",
+        "refuse": "refuse",
+        "warn": "warn",
+        "reverse": "reverse",
+        "keep": "keep",
+        "guthaben": "credit balance",
+        "anzahlung": "down payment",
+        "ask": "ask",
+        "auto": "automatic"
+      },
+      "quoted": "“{text}”"
     }
   }
 }

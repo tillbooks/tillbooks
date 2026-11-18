@@ -265,14 +265,21 @@ export function FavouritesRail({ onNavigate }: { onNavigate?: () => void }) {
   if (resolvedFavourites.length === 0) return null;
 
   return (
-    <section className="rail-section rail-favourites" aria-label={t('nav.favourites.label')}>
-      <RailSectionHeader
-        label={t('nav.favourites.label')}
-        folded={sections.favourites}
-        onToggle={() => toggleSection('favourites')}
-        controlsId={listId}
-        location={location === 'favourites'}
-      />
+    <section
+      className="rail-section rail-favourites"
+      data-headless={look.sectionHeaders ? undefined : ''}
+      aria-label={t('nav.favourites.label')}
+    >
+      {/* D210: by default no heading; the pins sit above a hairline (`nav.section_headers`). */}
+      {look.sectionHeaders && (
+        <RailSectionHeader
+          label={t('nav.favourites.label')}
+          folded={sections.favourites}
+          onToggle={() => toggleSection('favourites')}
+          controlsId={listId}
+          location={location === 'favourites'}
+        />
+      )}
       {!sections.favourites && (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={resolvedFavourites.map((f) => f.navId)} strategy={verticalListSortingStrategy}>

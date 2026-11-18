@@ -1,10 +1,12 @@
 /**
  * N01 US-N01.8, THE UNDO HINT: a write's answer names the call that undoes it, `undo: { tool, args }`, ONLY
- * where the inverse and its arguments are unambiguous. Two verbs qualify:
+ * where the inverse and its arguments are unambiguous. Three verbs qualify:
  *
  *  - `post_entry` -> `reverse_entry { entryId }`: a posted entry is corrected by its mirror (OR 957a).
  *  - `book_bank_line` -> `reopen_bank_line { bankTxnId }`: one verb undoes every kind of line decision
  *    (a booking reversed, a match or an ignore superseded).
+ *  - `ignore_bank_line` -> `reopen_bank_line { bankTxnId }` (D196 item 8, paper critic M4): the same undo, so
+ *    the agent's one-call Ignorieren names its way back.
  *
  * Every other write answers without a hint: a guessed inverse is worse than none. The hint names the verb
  * and the record; the caller adds its own `idempotencyKey` (and, for `reopen_bank_line`, its `reason`),
@@ -34,6 +36,12 @@ export const UNDO_HINTS: Readonly<Record<string, (input: ActionInput, result: Re
       : undefined,
   book_bank_line: (input, result) =>
     result.ok && typeof input.bankTxnId === 'string'
+      ? { tool: 'reopen_bank_line', args: { workspaceId: input.workspaceId, bankTxnId: input.bankTxnId } }
+      : undefined,
+  // Code critic M1: an ignore that found the line already ignored decided nothing, so it offers no undo of
+  // someone else's decision.
+  ignore_bank_line: (input, result) =>
+    result.ok && result.alreadyIgnored !== true && typeof input.bankTxnId === 'string'
       ? { tool: 'reopen_bank_line', args: { workspaceId: input.workspaceId, bankTxnId: input.bankTxnId } }
       : undefined,
 };

@@ -105,20 +105,15 @@ export function receiptActions(h: ReceiptActionHelpers): readonly ActionDef[] {
     ctxAction(
       'goods_receipt_reject_lines',
       'write:correctable:internal',
-      'Refuse HELD lines after a quality check. No stock movement and no order quantity: a rejected quantity never entered the warehouse, so the ordered quantity simply stays open and can be received again on a later delivery. reason is required and is recorded with the actor on an append-only rejection event. A line that is not pending is invalid_transition.',
-      ctxSchema({ grId: STR, lineIds: STR_ARRAY, reason: STR, idempotencyKey: STR }, [
-        'grId',
-        'lineIds',
-        'reason',
-        'idempotencyKey',
-      ]),
+      'Refuse HELD lines after a quality check. No stock movement and no order quantity: a rejected quantity never entered the warehouse, so the ordered quantity simply stays open and can be received again on a later delivery. The actor and time are recorded on an append-only rejection event, with the reason when given (D204: optional). A line that is not pending is invalid_transition.',
+      ctxSchema({ grId: STR, lineIds: STR_ARRAY, reason: STR, idempotencyKey: STR }, ['grId', 'lineIds', 'idempotencyKey']),
       (ctx, input) => goodsReceiptRejectLines(ctx, as(input)),
     ),
     ctxAction(
       'goods_receipt_reverse',
       'write:correctable:books',
-      'Storniere einen gebuchten Wareneingang: the ONE correction for a posted receipt. Nothing about the original document, its movements or its trail rows is edited or deleted. What is written is the compensation: a J02 return movement of equal magnitude and opposite sign per recognised line (same date, same source-document link, so the pair is findable together), a negative trail row so the received-quantity trail still sums to po_line.received_qty, the received_qty rollback, and the original marked reversed with who and when. Refused with line_already_billed when a three-way match has already billed a line, with period_locked when the receipt own period is sealed, and with insufficient_stock when the goods have since left the warehouse (in which case the honest correction is an inventory adjustment, not an un-receipt). reason is required. Idempotent under idempotencyKey.',
-      ctxSchema({ grId: STR, reason: STR, idempotencyKey: STR }, ['grId', 'reason', 'idempotencyKey']),
+      'Storniere einen gebuchten Wareneingang: the ONE correction for a posted receipt. Nothing about the original document, its movements or its trail rows is edited or deleted. What is written is the compensation: a J02 return movement of equal magnitude and opposite sign per recognised line (same date, same source-document link, so the pair is findable together), a negative trail row so the received-quantity trail still sums to po_line.received_qty, the received_qty rollback, and the original marked reversed with who and when. Refused with line_already_billed when a three-way match has already billed a line, with period_locked when the receipt own period is sealed, and with insufficient_stock when the goods have since left the warehouse (in which case the honest correction is an inventory adjustment, not an un-receipt). reason is optional (D204). Idempotent under idempotencyKey.',
+      ctxSchema({ grId: STR, reason: STR, idempotencyKey: STR }, ['grId', 'idempotencyKey']),
       (ctx, input) => goodsReceiptReverse(ctx, as(input)),
     ),
     ctxAction(

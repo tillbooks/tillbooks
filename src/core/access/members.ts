@@ -32,6 +32,7 @@ import { isGovernedSeat, isProvisioned, memberFor, resolveCapabilities } from '.
 import { isAssignableRole } from './roles.js';
 import { DIAL_CAPABILITIES, effectiveDialLevel } from '../agent/dial.js';
 import type { DialLevel } from '../agent/dial.js';
+import { activeOwnerWordGrant, ownerWordExcludedFamilies, OWNER_WORD_RULE } from '../agent/decisionGrant.js';
 
 /** How long an unredeemed invite stays valid, in days. */
 export const INVITE_VALIDITY_DAYS = 14;
@@ -240,9 +241,16 @@ export function whoami(ctx: WorkspaceContext): Result {
   // on the SEATED branches only (the local unprovisioned owner and the accepted member), never on the
   // not-a-member branch: a served agent member of mandate A reading `whoami` on mandate B used to get
   // B's grants (`post: auto`) beside `role: null`, on `/mcp` and on the REST twin alike.
-  const dialFor = (): { agentDial?: Record<string, DialLevel> } =>
+  // D209: while the owner's setting `agent.approve_on_owner_word` is live, the governed seat also reads the one
+  // rule for approving on the owner's word, on the same read it makes first (absent otherwise, so every other
+  // payload is byte-compatible with before). Its amendment (18.11.2026): `excludedFamilies`, the dial families in
+  // force that the owner's word never approves (`agent.owner_word_excluded`), so the agent knows before it tries.
+  const dialFor = (): { agentDial?: Record<string, DialLevel>; approveOnOwnerWord?: { rule: string; excludedFamilies: string[] } } =>
     governed
-      ? { agentDial: Object.fromEntries(DIAL_CAPABILITIES.map((c) => [c, effectiveDialLevel(ctx, c).effective])) }
+      ? {
+          agentDial: Object.fromEntries(DIAL_CAPABILITIES.map((c) => [c, effectiveDialLevel(ctx, c).effective])),
+          ...(activeOwnerWordGrant(ctx) !== null ? { approveOnOwnerWord: { rule: OWNER_WORD_RULE, excludedFamilies: DIAL_CAPABILITIES.filter((c) => ownerWordExcludedFamilies(ctx).has(c)) } } : {}),
+        }
       : {};
 
   // M01: the two additive fields every branch carries. `identitySource` defaults to `local_client`

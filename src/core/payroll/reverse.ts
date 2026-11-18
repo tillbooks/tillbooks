@@ -78,7 +78,7 @@ export function wageJournalReversalOf(ctx: WorkspaceContext, postedEntryId: stri
  * ACCEPTED: a `wage_journal_posts` row of this workspace whose entry stands.
  * REFUSALS, each a pre-check that writes nothing:
  *  - unknown or another workspace's row -> `not_found` (§H-TENANT);
- *  - a blank reason -> `reason_required`;
+ *  (D204: a reason is optional; a blank one is absent, never a refusal);
  *  - an ODD chain of posted mirrors -> `already_reversed` naming the mirror (idempotent on ROWS under a
  *    new key, and the answer for a book whose raw Storno predates D171: there is no row state to move,
  *    so the existing mirror IS the reversal and nothing is posted);
@@ -93,8 +93,7 @@ export function wageJournalReverse(ctx: WorkspaceContext, input: WageJournalReve
   if (!posting.ok) return posting;
   const guard = requireString(input.wageJournalPostId, 'wageJournalPostId') ?? requireString(input.idempotencyKey, 'idempotencyKey');
   if (guard) return guard;
-  if (typeof input.reason !== 'string' || input.reason.trim().length === 0) return err('reason_required', { field: 'reason' });
-  const reason = input.reason.trim();
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
   const postId = input.wageJournalPostId as string;
 
   const scopedKey = JSON.stringify(['wage_journal_reverse', postId, input.idempotencyKey as string]);
@@ -137,7 +136,7 @@ export function wageJournalReverse(ctx: WorkspaceContext, input: WageJournalReve
         {
           entryId: chain.last,
           date,
-          description: `Storno Lohnbuchung ${row.entry_date}: ${reason}`,
+          description: reason === null ? `Storno Lohnbuchung ${row.entry_date}` : `Storno Lohnbuchung ${row.entry_date}: ${reason}`,
           // One mirror per posting and link, whatever key the caller used: the identity is the posting.
           idempotencyKey: JSON.stringify(['wage_journal_reversal', row.id, chain.last]),
         },

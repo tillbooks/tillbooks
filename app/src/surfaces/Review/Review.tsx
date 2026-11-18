@@ -67,6 +67,7 @@ import {
   type ReviewEntry,
   type ReviewStatus,
 } from './model';
+import { optionalReason, useAskReason } from '../../lib/useAskReason';
 import './Review.css';
 
 /**
@@ -168,6 +169,9 @@ export function Review() {
   // The one selected row (its actions show at rest). Never set on load: selecting is the user's act.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  // D204: a flag needs no reason. It lands in one click; the optional note opens first only when the
+  // workspace asks for one (`audit.ask_reason = optional`). A comment is its text, so it keeps its field.
+  const askReason = useAskReason();
   const [busyEntry, setBusyEntry] = useState<string | null>(null);
 
   const [confirming, setConfirming] = useState(false);
@@ -333,14 +337,15 @@ export function Review() {
   );
 
   const submitComposer = useCallback(async () => {
-    if (workspaceId === null || composer === null || draft.trim() === '') return;
+    if (workspaceId === null || composer === null || (composer.kind === 'comment' && draft.trim() === '')) return;
     setBusyEntry(composer.entryId);
+    const note = optionalReason(draft);
     const { body } =
       composer.kind === 'flag'
         ? await client.call('flag_entry', {
             workspaceId,
             entryId: composer.entryId,
-            reason: draft.trim(),
+            ...(note === undefined ? {} : { reason: note }),
             idempotencyKey: `flag:${workspaceId}:${composer.entryId}:${nonce()}`,
           })
         : await client.call('comment_entry', {
@@ -363,6 +368,22 @@ export function Review() {
       refocusRow(composer.entryId);
     }
   }, [client, workspaceId, period, composer, draft, isCurrent, refocusRow]);
+
+  /** D204: flag one entry at once, no reason; the row lands like any row write. */
+  const flagAtOnce = useCallback(
+    async (entryId: string) => {
+      if (workspaceId === null) return;
+      setSelectedId(entryId);
+      setBusyEntry(entryId);
+      const { body } = await client.call('flag_entry', { workspaceId, entryId, idempotencyKey: `flag:${workspaceId}:${entryId}:${nonce()}` });
+      setBusyEntry(null);
+      if (isErr(body)) return;
+      await loadRef.current();
+      if (isCurrent(workspaceId, period)) setCommitted({ entryId, seq: ++commitSeq.current });
+      refocusRow(entryId);
+    },
+    [client, workspaceId, period, isCurrent, refocusRow],
+  );
 
   const openComposer = useCallback((entryId: string, kind: 'flag' | 'comment') => {
     // Acting on a row selects it, so its actions stay up while the dialog is open and the dialog can
@@ -517,14 +538,17 @@ export function Review() {
             busy={busyEntry === entry.entryId}
             onSelect={setSelectedId}
             onApprove={approve}
-            onOpen={openComposer}
+            onOpen={(entryId, kind) => {
+              if (kind === 'flag' && !askReason) void flagAtOnce(entryId);
+              else openComposer(entryId, kind);
+            }}
             heldBack={heldBack}
           />
         ),
       });
     }
     return cols;
-  }, [t, currency, locked, busyEntry, approve, openComposer, heldBack]);
+  }, [t, currency, locked, busyEntry, approve, openComposer, heldBack, askReason, flagAtOnce]);
 
   // Selecting a row is how its actions show without a pointer over it. A locked period has no row
   // actions, so its rows are not selectable (nothing would appear). A POINTER selection that reveals
@@ -739,7 +763,7 @@ export function Review() {
             <button
               type="button"
               className="btn btn--primary"
-              disabled={busyEntry !== null || draft.trim() === ''}
+              disabled={busyEntry !== null || (composer?.kind !== 'flag' && draft.trim() === '')}
               onClick={() => void submitComposer()}
             >
               {composer?.kind === 'flag' ? t('review.flagSubmit') : t('review.commentSubmit')}

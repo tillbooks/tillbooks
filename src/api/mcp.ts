@@ -54,6 +54,16 @@ import { runGoverned, runGovernedAsync } from './agent-gate.js';
 import { resolveSessionActor, type ServedIdentity } from './session.js';
 import { makeDiagnosticsPort } from './support-actions.js';
 import { resolveEbicsRuntime, type HostEbicsPorts } from './host-runtime.js';
+import { resolveSettlementFeedPort } from './settlement-feed-host.js';
+import {
+  SETTLEMENT_FORMAT_RESOURCE,
+  SETTLEMENT_FORMAT_RESOURCE_URI,
+  SETTLEMENT_FROM_SOURCE_PROMPT,
+  SETTLEMENT_FROM_SOURCE_PROMPT_DEF,
+  readSettlementFormatResource,
+  renderSettlementFromSourcePrompt,
+} from './settlement-format-mcp.js';
+import type { SettlementFeedPort } from '../core/context.js';
 import type { ApiDeps } from './registry.js';
 import { TILL_PACKAGE_VERSION } from '../core/version.js';
 
@@ -499,22 +509,29 @@ export function buildMcpServer(
   };
 
   server.setRequestHandler(ListPromptsRequestSchema, () => ({
-    prompts: listChecklistPrompts().map((p) => ({
-      name: p.name,
-      description: p.description,
-      arguments: CHECKLIST_PROMPT_ARGUMENTS.map((a) => ({ name: a.name, description: a.description, required: a.required })),
-    })),
+    prompts: [
+      ...listChecklistPrompts().map((p) => ({
+        name: p.name,
+        description: p.description,
+        arguments: CHECKLIST_PROMPT_ARGUMENTS.map((a) => ({ name: a.name, description: a.description, required: a.required })),
+      })),
+      // A43 section 5: the walk from any source to a settlement document, validated, reviewed and imported.
+      { ...SETTLEMENT_FROM_SOURCE_PROMPT_DEF, arguments: SETTLEMENT_FROM_SOURCE_PROMPT_DEF.arguments.map((a) => ({ ...a })) },
+    ],
   }));
 
   server.setRequestHandler(GetPromptRequestSchema, (request) => {
-    const rendered = renderPromptOverActions(sessionDeps(), request.params.name, (request.params.arguments ?? {}) as Record<string, unknown>);
+    const rendered =
+      request.params.name === SETTLEMENT_FROM_SOURCE_PROMPT
+        ? renderSettlementFromSourcePrompt((request.params.arguments ?? {}) as Record<string, unknown>)
+        : renderPromptOverActions(sessionDeps(), request.params.name, (request.params.arguments ?? {}) as Record<string, unknown>);
     return {
       description: rendered.description,
       messages: [{ role: 'user', content: { type: 'text', text: rendered.text } }],
     };
   });
 
-  server.setRequestHandler(ListResourcesRequestSchema, () => ({ resources: listBriefResources(sessionDeps()) }));
+  server.setRequestHandler(ListResourcesRequestSchema, () => ({ resources: [...listBriefResources(sessionDeps()), { ...SETTLEMENT_FORMAT_RESOURCE }] }));
 
   server.setRequestHandler(ListResourceTemplatesRequestSchema, () => ({
     resourceTemplates: [
@@ -528,7 +545,7 @@ export function buildMcpServer(
   }));
 
   server.setRequestHandler(ReadResourceRequestSchema, (request) => ({
-    contents: [readBriefResource(sessionDeps(), request.params.uri)],
+    contents: [request.params.uri === SETTLEMENT_FORMAT_RESOURCE_URI ? readSettlementFormatResource() : readBriefResource(sessionDeps(), request.params.uri)],
   }));
 
   server.setRequestHandler(ListToolsRequestSchema, () => ({
@@ -565,7 +582,12 @@ export function buildMcpServer(
  * `resolveEbicsRuntime()` and passes it here. Absent members stay ABSENT (not explicit `undefined`),
  * which is what the honest-degradation path reads under `exactOptionalPropertyTypes`.
  */
-export function makeApiDeps(dbPath?: string, hostPorts: HostEbicsPorts = {}): { deps: ApiDeps; store: SqliteStore } {
+export function makeApiDeps(
+  dbPath?: string,
+  hostPorts: HostEbicsPorts = {},
+  // D198: the settlement feed's Keychain and fetch, when the host wired one (`resolveSettlementFeedPort`).
+  extra: { settlementFeed?: SettlementFeedPort | undefined } = {},
+): { deps: ApiDeps; store: SqliteStore } {
   const store = new SqliteStore({ location: dbPath ?? ':memory:' });
   // G08 §4: the host is the ONLY thing that wires `DiagnosticsPort`, and until it did, `guarded()`'s
   // `deps.diagnostics?.record(...)` was permanently undefined. The port itself records nothing while
@@ -579,6 +601,7 @@ export function makeApiDeps(dbPath?: string, hostPorts: HostEbicsPorts = {}): { 
     diagnostics: makeDiagnosticsPort(),
     ...(hostPorts.ebicsTransport !== undefined ? { ebicsTransport: hostPorts.ebicsTransport } : {}),
     ...(hostPorts.ebicsKeystore !== undefined ? { ebicsKeystore: hostPorts.ebicsKeystore } : {}),
+    ...(extra.settlementFeed !== undefined ? { settlementFeed: extra.settlementFeed } : {}),
   };
   return { deps, store };
 }
@@ -596,7 +619,7 @@ export async function startMcpServer(
   // D108: attach the private live bank wire when the operator configured one; otherwise the EBICS
   // network steps degrade honestly. Resolved once at startup and shared by every session's deps.
   const hostPorts = await resolveEbicsRuntime();
-  const opened = makeApiDeps(opts.dbPath, hostPorts);
+  const opened = makeApiDeps(opts.dbPath, hostPorts, { settlementFeed: resolveSettlementFeedPort() });
   const { store } = opened;
   // N02 (D183): stdio is a LOCAL door (the agent runs on this computer), so it may hand TILL a receipt by
   // path, confined to `files.source_roots`. `till serve` builds its deps through `makeApiDeps` too and

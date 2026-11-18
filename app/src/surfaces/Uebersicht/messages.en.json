@@ -139,14 +139,20 @@
           "tile": "Bank now as a tile.",
           "card": "Bank now as a card on top.",
           "bar": "Bank now as a slim bar."
-        }
+        },
+        "double": "{name} now double width."
       },
       "ghostName": "{name}, hidden",
       "unavailable": "Unavailable",
       "size": "Resize: {name}",
       "double": "{name} now double width.",
       "single": "{name} now single width.",
-      "comparePage": "Like the page"
+      "comparePage": "Like the page",
+      "widthSingle": "{name}: single width",
+      "widthDouble": "{name}: double width",
+      "compareGroup": "Compare",
+      "trendOn": "Show trend",
+      "trendOff": "Hide trend"
     },
     "doors": {
       "label": "Common actions",
@@ -448,7 +454,6 @@
       "bankBooked": "Bank, booked"
     },
     "library": {
-      "title": "Key figures",
       "groups": {
         "money": "Money",
         "result": "Result",
@@ -458,21 +463,40 @@
       }
     },
     "settings": {
-      "open": "Choose key figures",
-      "back": "Back to the overview",
       "about": "What is {name}?",
-      "compare": "Comparison: {name}",
       "modes": {
         "previous_year": "Previous year",
         "previous_period": "Previous period",
         "none": "No comparison"
+      }
+    },
+    "suggestions": {
+      "title": "Suggestions",
+      "count": "{count} open",
+      "all": "See all",
+      "allCount": "See all {count}",
+      "none": "Nothing open",
+      "error": "The suggestions could not be loaded.",
+      "denied": "You lack the right to read the suggestions."
+    },
+    "sheet": {
+      "title": "Cards",
+      "open": "Choose cards",
+      "add": "Card",
+      "close": "Close cards",
+      "search": "Search",
+      "none": "No card found",
+      "reset": "Reset filter",
+      "groups": {
+        "work": "Work",
+        "cards": "Charts and lists"
       }
     }
   },
   "help": {
     "Uebersicht": {
       "title": "Overview",
-      "body": "Your key figures, each with its value, its date and a way into the screen behind it. A tile never shows a false zero.\n\nArrange key figures and cards here: drag the grip, move with Alt and an arrow key or through More, hide or show with the eye, widen with Resize. Every change is saved at once. The content in My settings sets which cards you start with.\n\nThe slim bar of the bank has three symbols: the person for lines that need you, the check mark for sure proposals, the crossed-out paperclip for lines without a receipt. The dot by your bank: green runs, orange waits, red failed, grey is off.",
+      "body": "Your books' home: the agent's suggestions first, then the key figures. A tile whose module is not set up never shows a fake zero.\n\nClick a suggestion for details; approve or reject in its line.\n\nPoint at a card to hide it, resize it, or find comparison and trend under More; drag it by its grip. + Card opens a sheet where you pick what the overview shows, saved at once. A key figure opens its surface; the arrow leads back.\n\nAt the bank: the person marks lines that need you, the check safe suggestions, the struck paperclip bookings without a receipt. The dot: green runs, orange waits, red is broken, grey is off.",
       "concepts": [],
       "docsPath": "quickstart"
     }

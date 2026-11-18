@@ -101,8 +101,8 @@ export function maintenanceActions(h: MaintenanceActionHelpers): readonly Action
     ctxAction(
       'asset_maintenance_log_cancel',
       'write:correctable:internal',
-      'Soft-cancel a maintenance log entry entered in error (H08): it sets status=cancelled and stores a required non-empty reason. The row is NEVER hard-deleted (append-oriented, OR 957/958): a cancelled entry stays visible under the list "any" status filter for audit, and is excluded from the default completed-only list and the cost roll-up. Idempotent: cancelling an already-cancelled entry is a no-op that keeps the first reason and writes nothing. Refused with invalid_input for an empty reason and not_found for a foreign id (§H-TENANT). Posts nothing.',
-      ctxSchema({ id: STR, reason: STR, idempotencyKey: STR }, ['id', 'reason', 'idempotencyKey']),
+      'Soft-cancel a maintenance log entry entered in error (H08): it sets status=cancelled and stores an optional reason (D204: never required). The row is NEVER hard-deleted (append-oriented, OR 957/958): a cancelled entry stays visible under the list "any" status filter for audit, and is excluded from the default completed-only list and the cost roll-up. Idempotent: cancelling an already-cancelled entry is a no-op that writes nothing. Refused not_found for a foreign id (§H-TENANT). Posts nothing.',
+      ctxSchema({ id: STR, reason: STR, idempotencyKey: STR }, ['id', 'idempotencyKey']),
       (ctx, input) => assetMaintenanceLogCancel(ctx, as(input)),
     ),
     ctxAction(

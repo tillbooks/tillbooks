@@ -1,0 +1,4 @@
+/* D204: Ablehnen is one click (an icon, or words on a selection bar); no step opens under it. */
+.reject-control {
+  display: inline-flex;
+}

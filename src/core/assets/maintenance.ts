@@ -16,7 +16,7 @@
  * returns the original result and adds no rows (§H-IDEMPOTENT, idempotent on ROWS).
  *
  * APPEND-ORIENTED, NOT A DESTRUCTIVE EDIT. A `completed` entry may be descriptively corrected while it
- * is recent, and soft-cancelled to `cancelled` with a reason if it was entered in error (spec
+ * is recent, and soft-cancelled to `cancelled` (D204: a reason optional) if it was entered in error (spec
  * §2/US-H08.5). After the workspace soft-edit window (default 90 days from created_at) only cancel is
  * allowed; a descriptive update is refused with `log_locked` (spec §4/§6). A row is never hard-deleted
  * (the DB trigger enforces it), so the OR 957/958 history can never lose an entry.
@@ -370,8 +370,8 @@ export function assetMaintenanceLogCancel(ctx: WorkspaceContext, input: CancelMa
     if (replayed !== undefined) return replayed;
   }
 
-  const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
-  if (reason.length === 0) return err('invalid_input', { field: 'reason' });
+  // D204: the reason is optional; a blank one is stored as NULL, never a refusal.
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
 
   const current = readLog(ctx, input.id);
   if (current === undefined) return err('not_found', { id: input.id });

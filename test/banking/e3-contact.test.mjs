@@ -8,7 +8,7 @@
  * What is held here, on ROWS, not only on answers: the Guthaben is ONE A14 payment with the contact as
  * counterparty and no allocation (A16 lists it, `allocate_payment` applies it later); the Anzahlung is ONE
  * A02 entry on the configured account; a replay writes nothing; `reopen_bank_line` reverses what the
- * decision created; a per-call mode override needs its reason and records it; every refusal writes
+ * decision created; a per-call mode override is recorded (D204: its reason optional); every refusal writes
  * nothing; and another workspace's contact is `not_found` (§H-TENANT).
  */
 
@@ -185,14 +185,24 @@ test('Anzahlung mode (the setting): ONE entry on the configured account; refused
   assert.equal(balanceOf(t.store, t.workspaceId, '2030'), 12000);
 });
 
-test('a per-call mode override needs its reason, records it on the decision and answers overridden', () => {
+test('D204 a per-call mode override needs no reason: it books, the decision names what differed, the audit who and when', async () => {
+  const { assertWhoWhen } = await import('../support/d204.mjs');
   const t = world();
   const { lines } = fourLines(t);
   must(createAccount(t.ctx, { number: '2030', name: 'Erhaltene Anzahlungen', type: 'liability', idempotencyKey: 'acc-2030' }), '2030');
-  const counts = rowCounts(t.store, t.workspaceId);
-  refused(bookBankLine(t.ctx, { bankTxnId: lines['IN-CUST'], target: { kind: 'contact', contactId: t.customerId, mode: 'anzahlung' }, idempotencyKey: 'ov1' }), 'reason_required');
-  refused(bookBankLine(t.ctx, { bankTxnId: lines['IN-CUST'], target: { kind: 'contact', contactId: t.customerId, mode: 'anzahlung', overrideReason: '   ' }, idempotencyKey: 'ov2' }), 'reason_required');
-  assert.deepEqual(rowCounts(t.store, t.workspaceId), counts);
+  const bare = must(bookBankLine(t.ctx, { bankTxnId: lines['IN-CUST'], target: { kind: 'contact', contactId: t.customerId, mode: 'anzahlung', overrideReason: '   ' }, idempotencyKey: 'ov1' }), 'override without a reason');
+  assert.equal(bare.contact.overridden, true);
+  assert.equal(bare.contact.overrideReason ?? null, null);
+  const bareLine = lines['IN-CUST'];
+  assert.equal(decisionOf(t, bareLine).note, 'abweichend: anzahlung', 'what differed, with no empty Grund');
+  const who = decisionWhoWhen(t, bareLine);
+  assertWhoWhen(who.actor, who.at);
+});
+
+test('a per-call mode override records a given reason on the decision and answers overridden', () => {
+  const t = world();
+  const { lines } = fourLines(t);
+  must(createAccount(t.ctx, { number: '2030', name: 'Erhaltene Anzahlungen', type: 'liability', idempotencyKey: 'acc-2030' }), '2030');
   const res = must(
     bookBankLine(t.ctx, { bankTxnId: lines['IN-CUST'], target: { kind: 'contact', contactId: t.customerId, mode: 'anzahlung', overrideReason: 'Projektvorschuss laut Vertrag' }, idempotencyKey: 'ov3' }),
     'override',
@@ -333,3 +343,27 @@ test('the setting bank.anzahlung_fx_mode foreign keeps the Anzahlung in EUR, rev
   const numbers = must(computeFxRevaluation(t.ctx, { periodEnd: '2026-07-31' }), 'reval').positions.map((p) => p.accountNumber);
   assert.ok(numbers.includes('2030'), 'held in EUR, the Anzahlung is revalued');
 });
+
+test('D204 a booked line reopens with no reason: the booking is reversed, the old decision names who and when', async () => {
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
+  const t = world();
+  const { lines } = fourLines(t);
+  const booked = must(bookBankLine(t.ctx, { bankTxnId: lines['IN-CUST'], target: { kind: 'contact', contactId: t.customerId }, idempotencyKey: 'd204-b' }), 'book');
+  const undone = must(reopenBankLine(t.ctx, { bankTxnId: lines['IN-CUST'], idempotencyKey: 'd204-r' }), 'reopen without a reason');
+  assert.equal(undone.state, 'open', 'what: the line is open again');
+  assert.ok(undone.reversedEntryIds.length + undone.reversedPaymentIds.length > 0, 'the booking is reversed, never edited');
+  assert.ok(booked.ok);
+  const old = t.store.db
+    .prepare('SELECT superseded_by, superseded_at, supersede_reason FROM bank_line_decision WHERE workspace_id = ? AND bank_txn_id = ? AND superseded_at IS NOT NULL')
+    .get(t.workspaceId, lines['IN-CUST']);
+  assertWhoWhen(old.superseded_by, old.superseded_at);
+  assert.equal(old.supersede_reason, null);
+  assertPermission('reopen_bank_line');
+});
+
+/** D204: the live decision row of a bank line names who decided and when. */
+function decisionWhoWhen(t, bankTxnId) {
+  return t.store.db
+    .prepare('SELECT created_by AS actor, created_at AS at FROM bank_line_decision WHERE workspace_id = ? AND bank_txn_id = ? AND superseded_at IS NULL ORDER BY rowid DESC LIMIT 1')
+    .get(t.workspaceId, bankTxnId);
+}

@@ -38,6 +38,7 @@ import { LegsPreview, type PreviewRow } from './LegsPreview';
 import { explainRefusal } from './errors';
 import { lineFactsOf } from './statementFacts';
 import type { BookState } from './rowState';
+import { useAskReason } from '../../lib/useAskReason';
 
 type T = (key: string, params?: Record<string, string | number>) => string;
 
@@ -235,6 +236,15 @@ export function useFxMode(workspaceId: string): string {
 export function useRowApproveMode(workspaceId: string | null): 'direct' | 'review' {
   const read = useOnce(workspaceId ?? '', 'settings_get', { key: 'bank.row_approve' }, (body) => str(rec(rec(body)?.setting)?.value), workspaceId !== null);
   return read.value === 'review' ? 'review' : 'direct';
+}
+
+/**
+ * D195: the workspace's `bank.bulk_book_scope` (D172), read once: `bookable` (the default, also while unread or
+ * refused) books every ticked line that is complete as its row shows it; `sure` keeps the D184 rule.
+ */
+export function useBulkBookScope(workspaceId: string | null): 'bookable' | 'sure' {
+  const read = useOnce(workspaceId ?? '', 'settings_get', { key: 'bank.bulk_book_scope' }, (body) => str(rec(rec(body)?.setting)?.value), workspaceId !== null);
+  return read.value === 'sure' ? 'sure' : 'bookable';
 }
 
 /**
@@ -568,6 +578,8 @@ export function KontaktPane({
   withPicker?: boolean;
 }) {
   const t = useT();
+  // D204: a differing mode needs no reason; the note field shows only when the workspace asks for one.
+  const askReason = useAskReason();
   const id = useId();
   const contacts = useContacts(workspaceId, true);
   const contact = target?.kind === 'contact' ? target : null;
@@ -627,10 +639,10 @@ export function KontaktPane({
             onChange={setMode}
             disabled={busy || !canPost}
           />
-          {contact.mode !== null && (
+          {contact.mode !== null && askReason && (
             <label className="bank-field" htmlFor={`${id}-why`}>
               <span className="bank-field__label">{t('bankInbox.kontakt.reason')}</span>
-              <input id={`${id}-why`} type="text" className="field" maxLength={500} value={contact.overrideReason} aria-required="true" aria-invalid={contact.overrideReason.trim() === '' || undefined} onChange={(e) => onTarget({ ...contact, overrideReason: e.target.value })} />
+              <input id={`${id}-why`} type="text" className="field" maxLength={500} value={contact.overrideReason} onChange={(e) => onTarget({ ...contact, overrideReason: e.target.value })} />
             </label>
           )}
           {view !== null && (

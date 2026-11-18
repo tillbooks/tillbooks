@@ -1092,16 +1092,15 @@ export function goodsReceiptAcceptLines(ctx: WorkspaceContext, input: GoodsRecei
 /**
  * Refuse held lines (US-I02.5). No movement and no PO quantity: a rejected quantity never entered
  * stock, so the ordered quantity simply stays open and can be received again on a later delivery.
- * The decision is an append-only event with the actor and the reason on it.
+ * The decision is an append-only event with the actor and time on it (D204: the reason when given).
  */
 export function goodsReceiptRejectLines(ctx: WorkspaceContext, input: GoodsReceiptLineDecisionInput): Result {
   const capable = ctx.capabilities.assert(WRITE_CAP);
   if (!capable.ok) return capable;
   const keyErr = requireKey(input.idempotencyKey);
   if (keyErr !== undefined) return keyErr;
-  if (typeof input.reason !== 'string' || input.reason.trim().length === 0) {
-    return err('invalid_input', { field: 'reason' });
-  }
+  // D204: no reason is required; the append-only event keeps who and when, and a given reason.
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
 
   const run = (): Result => {
     const doc = readDoc(ctx, input.grId);
@@ -1117,8 +1116,8 @@ export function goodsReceiptRejectLines(ctx: WorkspaceContext, input: GoodsRecei
         .prepare(
           "UPDATE goods_receipt_doc_line SET inspection_status = 'rejected', rejected_at = ?, reject_reason = ? WHERE workspace_id = ? AND id = ?",
         )
-        .run(now, input.reason ?? null, ctx.workspaceId, line.id);
-      recordEvent(ctx, doc.id, line.id, 'rejected', input.reason ?? null);
+        .run(now, reason, ctx.workspaceId, line.id);
+      recordEvent(ctx, doc.id, line.id, 'rejected', reason);
     }
     touchDoc(ctx, doc.id);
     return ok(detailOf(ctx, doc.id));
@@ -1158,9 +1157,8 @@ export function goodsReceiptReverse(ctx: WorkspaceContext, input: GoodsReceiptRe
   if (!capable.ok) return capable;
   const keyErr = requireKey(input.idempotencyKey);
   if (keyErr !== undefined) return keyErr;
-  if (typeof input.reason !== 'string' || input.reason.trim().length === 0) {
-    return err('invalid_input', { field: 'reason' });
-  }
+  // D204: no reason is required; the append-only event keeps who and when, and a given reason.
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
 
   const run = (): Result => {
     const doc = readDoc(ctx, input.grId);
@@ -1232,7 +1230,7 @@ export function goodsReceiptReverse(ctx: WorkspaceContext, input: GoodsReceiptRe
         "UPDATE goods_receipt_doc SET status = 'reversed', reversed_at = ?, reversed_by = ?, updated_at = ? WHERE workspace_id = ? AND id = ?",
       )
       .run(now, ctx.actor, now, ctx.workspaceId, doc.id);
-    recordEvent(ctx, doc.id, null, 'reversed', input.reason ?? null);
+    recordEvent(ctx, doc.id, null, 'reversed', reason);
     return ok(detailOf(ctx, doc.id));
   };
 

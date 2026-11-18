@@ -21,6 +21,7 @@ import { getAuditLog } from '../../dist/core/ledger/auditLog.js';
 import { must, secondWorkspace, assertClaimInvariantHolds } from '../banking/bank-inbox-support.mjs';
 import { ruleWorld, debits, bookAsProposed, autopilot, at, TELCO } from '../banking/n04-autobook-support.mjs';
 import { receipt, confirmedReceipt, assignBeleg, activeOf } from '../banking/a41-beleg-support.mjs';
+import { assertNotApplied } from '../settings/support.mjs';
 
 afterEach(assertClaimInvariantHolds);
 
@@ -46,9 +47,11 @@ test('D1 (held): the three human-only settings refuse an agent over REST and MCP
   const t = granted('d1');
   for (const [key, value] of SETTINGS) {
     const args = { workspaceId: t.workspaceId, key, value, reason: 'critic', idempotencyKey: `d1-${key}` };
-    assert.equal(handleRest('settings_set', args, { ...t.deps, actor: 'agent' }).body.error, 'human_only', `REST ${key}`);
+    // D202 point 5: the agent only proposes a protected setting (a person approves it); a plugin stays refused.
+    assertNotApplied(handleRest('settings_set', args, { ...t.deps, actor: 'agent' }).body, `REST ${key}`);
     const mcp = JSON.parse(callTool({ ...t.deps, actor: 'agent' }, 'settings_set', { ...args, idempotencyKey: `d1m-${key}` }).content[0].text);
-    assert.equal(mcp.error, 'human_only', `MCP ${key}`);
+    assertNotApplied(mcp, `MCP ${key}`);
+    assert.equal(t.store.db.prepare("SELECT COUNT(*) AS n FROM workspace_setting_change WHERE workspace_id = ? AND key = ? AND actor = 'agent'").get(t.workspaceId, key).n, 0, `${key} not applied`);
     const plugin = withinPluginCall('user_1', () => getAction('settings_set').run({ ...t.deps, actor: 'user_1' }, { ...args, idempotencyKey: `d1p-${key}` }));
     assert.equal(plugin.error, 'human_only', `plugin ${key}`);
     const rule = getAction('create_automation_rule').run({ ...t.deps, actor: 'user_1' }, {

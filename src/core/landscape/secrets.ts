@@ -72,6 +72,12 @@ export const SECRET_COLUMNS: readonly SecretColumn[] = [
     why: 'The HPB-verified bank public-key fingerprints. Not private, but part of an active connection`s trust state; cleared as defense in depth so a copied connection carries nothing it can act on.',
   },
   {
+    table: 'settlement_source',
+    column: 'token_ref',
+    strategy: 'null',
+    why: 'D198: a locator into the OS keychain where the settlement feed token lives. Retaining it lets a copy pull the producer feed and book from it. Nulled: the copy has no token to pull with.',
+  },
+  {
     table: 'managed_connection',
     column: 'consent_ref',
     strategy: 'null',

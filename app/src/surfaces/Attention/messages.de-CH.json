@@ -19,7 +19,7 @@
       "ask": "Frage stellen"
     },
     "empty": {
-      "title": "Nichts wartet auf dich.",
+      "title": "Nichts offen.",
       "hint": "Was eine Entscheidung von dir braucht, erscheint hier.",
       "action": "Zur Übersicht"
     },
@@ -27,9 +27,9 @@
       "bank": "Bank",
       "sales": "Verkauf",
       "system": "System",
-      "accounting": "Buchhaltung"
+      "accounting": "Buchhaltung",
+      "tasks": "Aufgaben"
     },
-    "new": "neu",
     "providerFailed": "{queue} konnte nicht geladen werden.",
     "urgency": {
       "overdue": "überfällig",
@@ -60,8 +60,6 @@
     "collapsedWith": "auch in {queue}",
     "overflow": {
       "label": "Aktionen für {title}",
-      "copyRef": "Referenz kopieren",
-      "createTask": "Aufgabe erstellen",
       "open": "Öffnen"
     },
     "remainder": {
@@ -163,12 +161,11 @@
       "rejectKeep": "Behalten",
       "busy": "Wird ausgeführt",
       "dismissFeedback": "Ausblenden",
-      "taskCreated": "Aufgabe erstellt.",
       "done": {
         "apply": "Zahlung übernommen und gebucht.",
         "dismiss": "Abgelegt: keine Kundenzahlung.",
-        "approve": "Vorschlag genehmigt und ausgeführt.",
-        "approve_allow": "Vorschlag genehmigt. Diese Art führt der Agent künftig direkt aus.",
+        "approve": "Vorschlag freigegeben und ausgeführt.",
+        "approve_allow": "Vorschlag freigegeben. Diese Art führt der Agent künftig direkt aus.",
         "reject": "Vorschlag abgelehnt. Gebucht wurde nichts.",
         "resolve": "Markierung erledigt, Buchung freigegeben.",
         "issue": "Mahnlauf ausgestellt.",
@@ -192,7 +189,9 @@
         "human_only": "Das bestätigt eine Person, nicht der Agent.",
         "gap_has_waiting_statement": "In dieser Lücke wartet ein Auszug, der nicht anschliesst. Sie lässt sich nicht bestätigen: importiere die fehlenden Auszüge.",
         "receipt_already_booked": "Der Beleg ist bereits gebucht. Genehmige diese Zeile einzeln und gib den Grund für die zweite Buchung an.",
-        "holders_changed": "Nicht ausgeführt: Der Beleg wurde inzwischen anderswo gebucht. Die Zeile zeigt jetzt, wo."
+        "holders_changed": "Nicht ausgeführt: Der Beleg wurde inzwischen anderswo gebucht. Die Zeile zeigt jetzt, wo.",
+        "already_resolved": "Dieser Vorschlag ist schon entschieden.",
+        "not_batchable": "Diesen Vorschlag gibst du einzeln frei."
       },
       "checkInBank": "In der Bank prüfen",
       "assign": "Zuordnen",
@@ -205,26 +204,27 @@
       "undo": "Rückgängig",
       "autobookOff": "Automatik aus"
     },
-    "grouping": {
-      "label": "Gruppierung",
-      "byArea": "Nach Bereich",
-      "byKind": "Nach Art"
-    },
     "kind": {
       "approve": "Genehmigen",
       "do": "Erledigen",
       "note": "Hinweise"
     },
     "section": {
-      "more": "Weitere {count} anzeigen"
+      "more": "Weitere {count} anzeigen",
+      "bank": "Bankbuchungen",
+      "other": "Weitere Vorschläge",
+      "todo": "Zu erledigen",
+      "count": "{count} offen",
+      "importContext": "Fehlende Kontoauszüge: {count}"
     },
     "row": {
       "dueOn": "fällig {date}",
       "overdueSince": "überfällig seit {date}",
-      "checklistTitle": "{template} {period}: {title}"
+      "checklistTitle": "{template} {period}: {title}",
+      "details": "Details: {title}"
     },
     "vorschlag": {
-      "stale": "Seit dem Vorschlag geändert, nicht mehr genehmigbar",
+      "stale": "Seit dem Vorschlag geändert, nicht mehr freizugeben",
       "target": {
         "ignore": "Nicht buchen",
         "openItem": "Offener Posten",
@@ -232,44 +232,50 @@
         "paymentBatch": "Zahlungsauftrag",
         "rule": "Buchungsregel"
       },
-      "staleShort": "Seit dem Vorschlag geändert",
+      "staleShort": "Geändert",
       "titleWith": "{counterparty} · {thing}",
       "scheduledByAgent": "Dauerbuchung, vom Agenten eingerichtet"
     },
     "batch": {
-      "label": "Vorschläge gemeinsam genehmigen",
+      "label": "Vorschläge gemeinsam freigeben",
       "selectAll": "Alle Vorschläge auswählen",
       "selectRow": "{title} auswählen",
-      "approveSelected": "Ausgewählte genehmigen ({count})",
-      "approveAll": "Alle genehmigen ({count})",
+      "approveSelected": "Freigeben ({count})",
+      "approveAll": "Alle freigeben ({count})",
       "waiting": "Wartet",
-      "running": "Wird genehmigt",
-      "ok": "Genehmigt",
-      "notOffered": "Hier nicht genehmigbar.",
-      "doneAll": "{count} genehmigt.",
-      "doneSome": "{ok} genehmigt, {refused} nicht genehmigt.",
+      "running": "Wird freigegeben",
+      "ok": "Freigegeben",
+      "notOffered": "Hier nicht freizugeben.",
+      "doneAll": "{count} freigegeben.",
+      "doneSome": "{ok} freigegeben, {refused} nicht freigegeben.",
       "refusedLine": "{title}: {reason}",
       "confirm": {
-        "title": "{count} Vorschläge genehmigen?",
+        "title": "{count} Vorschläge freigeben?",
         "each": "Jeder Vorschlag läuft einzeln, wie mit seinem eigenen Knopf. Einer, der sich seit dem Vorschlag geändert hat, läuft nicht und bleibt in der Liste.",
-        "yes": "{count} genehmigen",
+        "yes": "{count} freigeben",
         "close": "Schliessen",
         "in": "Eingang {amount}",
         "out": "Ausgang {amount}",
         "withoutAmount": "Dazu {count} ohne Betrag."
       },
       "selectShown": "Alle angezeigten Vorschläge auswählen",
-      "approveShown": "Angezeigte genehmigen ({count})",
-      "approvedLine": "{title}: genehmigt",
+      "approveShown": "Angezeigte freigeben ({count})",
+      "approvedLine": "{title}: freigegeben",
       "openEntry": "Buchung öffnen",
       "info": {
-        "label": "Was Genehmigen bewirkt",
+        "label": "Was Freigeben bewirkt",
         "summary": "{count} Vorschläge, {amounts}",
         "summaryOne": "1 Vorschlag, {amounts}",
         "summaryNoAmount": "{count} Vorschläge",
         "none": "Noch nichts ausgewählt."
       },
-      "title": "Vorschläge"
+      "title": "Vorschläge",
+      "rejectSelected": "Ablehnen ({count})",
+      "rejecting": "Wird abgelehnt",
+      "rejectedAll": "{count} abgelehnt. Gebucht wurde nichts.",
+      "rejectedSome": "{ok} abgelehnt, {refused} nicht abgelehnt.",
+      "selectSection": "Alle in {section} auswählen",
+      "selectSectionShown": "Alle angezeigten in {section} auswählen"
     },
     "group": {
       "payments": "{count} Zahlungen ohne Zuordnung",
@@ -309,7 +315,6 @@
       "title": "Regel vorschlagen: {counterparty}, {repeats}× gleich gebucht",
       "backtest": "Seit {date}: {hits} Zeilen, {identical} genau so gebucht",
       "create": "Regel anlegen",
-      "adjust": "Anpassen",
       "dismiss": "Nicht vorschlagen",
       "evidence": "Gleich gebucht",
       "evidenceValue": "{date}, {amount}"
@@ -319,12 +324,108 @@
       "meta": "Bis {ceiling} pro Zeile, nur in {currency}",
       "grant": "Künftig automatisch",
       "dismiss": "Nicht jetzt"
+    },
+    "filter": {
+      "search": "Pendenzen durchsuchen",
+      "searchPlaceholder": "Suchen",
+      "clear": "Filter zurücksetzen",
+      "empty": "Keine Treffer.",
+      "kindLabel": "Art",
+      "kinds": {
+        "approve": "Vorschläge",
+        "do": "Erledigen",
+        "note": "Hinweise"
+      },
+      "area": "Bereich",
+      "actorLabel": "Von",
+      "actors": {
+        "agent": "Agent",
+        "till": "TILL"
+      },
+      "sections": {
+        "all": "Alle",
+        "bank": "Bank",
+        "other": "Vorschläge",
+        "todo": "Erledigen"
+      }
+    },
+    "settingChange": {
+      "title": "Agent möchte {setting} von {from} auf {to} setzen",
+      "titleTo": "Agent möchte {setting} auf {to} setzen",
+      "widens": "Gibt dem Agenten mehr Rechte."
+    },
+    "autoRule": {
+      "done": "Gebucht. Regel gespeichert.",
+      "unchanged": "Gebucht. Die Regel gab es schon.",
+      "replaced": "Gebucht. Die Regel ersetzt die bisherige.",
+      "failed": "Gebucht. Regel nicht gespeichert: {reason}",
+      "retry": "Erneut versuchen",
+      "undo": "Rückgängig",
+      "undone": "Regel entfernt. Die Buchung bleibt.",
+      "undoFailed": "Regel nicht entfernt: {reason}",
+      "confirm": "Regel: {counterparty} auf {accounts}, MWST wie hier",
+      "confirmYes": "Freigeben und Regel speichern",
+      "confirmNo": "Abbrechen",
+      "error": {
+        "no_counterparty": "Die Bankzeile nennt keine Gegenpartei.",
+        "not_booked_to_accounts": "Die Zeile ist nicht auf Konten gebucht.",
+        "permission_denied": "Dir fehlt das Recht, Regeln zu speichern.",
+        "invalid_account": "Ein Konto der Buchung kann keine Regel tragen.",
+        "vat_not_applicable": "Die MWST passt nicht zum Konto.",
+        "invalid_tax_code": "Der MWST-Code ist nicht mehr aktiv.",
+        "generic": "Die Regel liess sich nicht speichern.",
+        "rule_slot_changed": "Die Regel dieser Gegenpartei wurde inzwischen geändert."
+      },
+      "replaces": "Ersetzt die bestehende Regel: {name}.",
+      "slotUnread": "Die bestehende Regel liess sich nicht lesen. Gebucht wurde nichts.",
+      "ignoreRule": "Nicht buchen"
+    },
+    "line": {
+      "out": "Ausgang",
+      "in": "Eingang",
+      "sourceAgent": "Vorschlag des Agenten",
+      "sourceRule": "Buchungsregel «{name}», seit {since}",
+      "sourceRuleNoDate": "Buchungsregel «{name}»",
+      "approve": "Freigeben",
+      "approveAndRule": "Freigeben und als Regel speichern",
+      "attach": "Anhängen",
+      "missingBeleg": "Beleg fehlt: ohne Beleg keine Vorsteuer",
+      "accountsIn": "Ertrag",
+      "accountsOut": "Aufwand",
+      "accountsOther": "Weitere Konten",
+      "vatCodes": "MWST-Codes",
+      "openLabel": "Buchung ändern",
+      "text": "Buchungstext",
+      "account": "Konto",
+      "vat": "MWST-Code",
+      "adaptRule": "Regel anpassen",
+      "saveRule": "Als Regel speichern",
+      "ruleContext": "Künftig so buchen",
+      "commentContext": "Kommentar an den Agenten",
+      "comment": "Kommentar an den Agenten",
+      "beleg": "Beleg",
+      "payoutWarn": "Auszahlung: Der Umsatz kommt aus der Abrechnung, nicht auf ein Ertragskonto.",
+      "openRule": "Regel in Bank",
+      "openLine": "Bankzeile in Bank",
+      "book": "Buchen",
+      "undone": "Rückgängig gemacht. Die Zeile ist wieder offen.",
+      "attached": "Beleg angehängt.",
+      "done": {
+        "booked": "Gebucht.",
+        "noted": "Gebucht. Kommentar gespeichert."
+      },
+      "approveAndReplace": "Freigeben, ersetzt Regel «{name}»",
+      "replacesRule": "Ersetzt Regel «{name}»",
+      "unnamedRule": "ohne Namen",
+      "waysGroup": "Weitere Wege",
+      "toTurnover": "Als Umsatz buchen",
+      "inBank": "In Bank öffnen"
     }
   },
   "help": {
     "Attention": {
       "title": "Pendenzen",
-      "body": "Pendenzen zeigt alles, was auf eine Entscheidung von dir wartet, vollständig und in Abschnitten: nach Bereich (die Bank zuerst) oder nach Art (Genehmigen, Erledigen, Hinweise). Die Zahlen der Abschnitte ergeben zusammen die Zahl im Menü.\n\nJede Zeile hat einen Knopf für den nächsten Schritt; weitere Möglichkeiten stehen unter ⋯, und das (i) sagt, warum die Zeile wartet und was der Schritt bewirkt.\n\nBank-Vorschläge des Agenten kannst du auswählen und gemeinsam genehmigen. Jeder läuft einzeln, wie mit seinem eigenen Knopf.",
+      "body": "Pendenzen zeigt, was auf dich wartet: Bankbuchungen, weitere Vorschläge und was zu erledigen ist. Die Chips oben filtern nach Abschnitt.\n\nJede Zeile nennt Gegenpartei, Buchungstext, Konto, Datum und Betrag. Ein kleiner Stern vor dem Konto heisst: Eine Buchungsregel bucht sie. Ein Klick öffnet darunter eine Zeile, in der du Text, Konto und MWST änderst. Der Stern rechts speichert die Buchung als Regel, die Sprechblase gibt dem Agenten einen Kommentar dazu.\n\nTasten: Pfeil hoch und runter wechseln die Zeile, Enter öffnet sie, F gibt frei, R lehnt ab. Nach dem Freigeben bietet die Meldung kurz Rückgängig.",
       "concepts": [],
       "docsPath": "introduction"
     }

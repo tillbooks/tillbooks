@@ -11,9 +11,9 @@
  *     all-clear state does not get a colour). `not_asserted` and `not_computable` render
  *     `--t-warn`, which is ORANGE, never amber (brass occupies amber); `failed` renders
  *     `--t-danger`. Status is always glyph PLUS text, never colour alone.
- *   - Waiving sits on the individual control row, never as a panel-level action, and the reason is
- *     required BEFORE the call: the engine refuses a blank reason (`waiver_needs_reason`) and the
- *     panel says why rather than round-tripping to find out.
+ *   - Waiving sits on the individual control row, never as a panel-level action. D204: it needs no
+ *     reason (one click; who and when are recorded); the optional note opens first only when the
+ *     workspace asks (`audit.ask_reason = optional`).
  *   - Readiness never reads plain-ready over waivers: with N waivers the line is
  *     "bereit, mit N Ausnahmen".
  */
@@ -23,6 +23,7 @@ import { useClient } from '../../lib/client-context';
 import { isErr } from '../../lib/client';
 import { formatMoney, useT } from '../../i18n';
 import { ErrorBanner, Skeleton } from '../../components/states';
+import { optionalReason, useAskReason } from '../../lib/useAskReason';
 
 function newIdempotencyKey(): string {
   return crypto.randomUUID();
@@ -101,7 +102,7 @@ export function OpeningCheck(props: { workspaceId: string; planId: string; stepI
   const [currency, setCurrency] = useState('CHF');
   const [waivingId, setWaivingId] = useState<string | null>(null);
   const [reason, setReason] = useState('');
-  const [reasonHint, setReasonHint] = useState(false);
+  const askReason = useAskReason();
   const [exportedAs, setExportedAs] = useState<string | null>(null);
   // A refused write used to reload in silence: the run, waive and export handlers now name the failure
   // as text (role="alert") instead of leaving the screen unchanged after a call the engine rejected.
@@ -156,13 +157,12 @@ export function OpeningCheck(props: { workspaceId: string; planId: string; stepI
   }
 
   async function waive(controlId: string): Promise<void> {
-    if (reason.trim() === '') {
-      // The engine would refuse with waiver_needs_reason; the panel says why without a round trip.
-      setReasonHint(true);
-      return;
-    }
+    // D204: a waiver needs no reason (who and when are recorded); a note travels only when written.
     setActionError(null);
-    const waived = (await client.call('migration_waive_control', { workspaceId, controlId, reason: reason.trim(), idempotencyKey: newIdempotencyKey() })).body;
+    const note = optionalReason(reason);
+    const waived = (
+      await client.call('migration_waive_control', { workspaceId, controlId, ...(note === undefined ? {} : { reason: note }), idempotencyKey: newIdempotencyKey() })
+    ).body;
     if (isErr(waived)) {
       setActionError('waive');
       return;
@@ -177,7 +177,6 @@ export function OpeningCheck(props: { workspaceId: string; planId: string; stepI
     }
     setWaivingId(null);
     setReason('');
-    setReasonHint(false);
     await load();
   }
 
@@ -298,24 +297,18 @@ export function OpeningCheck(props: { workspaceId: string; planId: string; stepI
                     <>
                       <label>
                         {t('check.waive.reason')}
-                        <input
-                          className="field"
-                          type="text"
-                          value={reason}
-                          onChange={(e) => setReason(e.target.value)}
-                          aria-invalid={reasonHint ? true : undefined}
-                        />
+                        <input className="field" type="text" value={reason} onChange={(e) => setReason(e.target.value)} />
                       </label>
-                      {reasonHint && <p className="check-waive-hint" role="alert">{t('check.waive.needsReason')}</p>}
                       <button className="btn btn--secondary" type="button" onClick={() => void waive(control.controlId)}>{t('check.waive.action')}</button>
                     </>
                   ) : (
                     <button className="btn btn--secondary"
                       type="button"
                       onClick={() => {
-                        setWaivingId(control.controlId);
+                        // D204: waive at once; the optional note opens first only when the workspace asks.
                         setReason('');
-                        setReasonHint(false);
+                        if (askReason) setWaivingId(control.controlId);
+                        else void waive(control.controlId);
                       }}
                     >
                       {t('check.waive.action')}

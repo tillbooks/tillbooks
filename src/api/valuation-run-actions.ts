@@ -96,8 +96,8 @@ export function valuationRunActions(h: ValuationRunActionHelpers): readonly Acti
     ctxAction(
       'inventory_valuation_reverse',
       'write:correctable:books',
-      'Reverse a posted valuation run. Posts the exact A02 mirror of the run journal via reverseEntry (which moves the GL back by the delta and restores the baseline every later run measures against), marks the original run reversed and records the reversing journal. The original run and its journal are never mutated: a correction is a reverse plus a fresh run. A reason is required. Idempotent: a replay returns the already-reversed run and posts no second compensation. A run that posted no journal (zero delta) is marked reversed with nothing to reverse.',
-      ctxSchema({ runId: STR, reason: STR, idempotencyKey: STR }, ['runId', 'reason', 'idempotencyKey']),
+      'Reverse a posted valuation run. Posts the exact A02 mirror of the run journal via reverseEntry (which moves the GL back by the delta and restores the baseline every later run measures against), marks the original run reversed and records the reversing journal. The original run and its journal are never mutated: a correction is a reverse plus a fresh run. A reason is optional (D204). Idempotent: a replay returns the already-reversed run and posts no second compensation. A run that posted no journal (zero delta) is marked reversed with nothing to reverse.',
+      ctxSchema({ runId: STR, reason: STR, idempotencyKey: STR }, ['runId', 'idempotencyKey']),
       (ctx, input) => inventoryValuationReverse(ctx, as(input)),
     ),
     ctxAction(

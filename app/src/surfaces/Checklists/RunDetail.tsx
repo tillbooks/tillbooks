@@ -67,9 +67,9 @@ export interface RunDetailProps {
   /** The refusal code of the last write, keyed by the item it targeted. */
   refusal: { itemId: string | null; code: string; detail: string | null } | null;
   onComplete: (itemId: string, evidence: Evidence | null) => void;
-  onSkip: (itemId: string, reason: string) => void;
+  onSkip: (itemId: string, reason: string | undefined) => void;
   onReopen: (itemId: string) => void;
-  onAbandon: (reason: string) => void;
+  onAbandon: (reason: string | undefined) => void;
   onAct: (itemId: string, calls: ActCall[]) => void;
   /** The result the seal (`close_year`) answered in this session, with its unit; shown on the seal row. */
   sealResult?: { minor: number; currency: string } | null;
@@ -639,7 +639,7 @@ export function RunDetail({ run, workspaceId, canManage, canFile, canPost, canPe
           working={working}
           initialReason={dialog.item.itemId === 'umsatzabstimmung' ? t('checklists.acknowledge.prefillReviewed') : ''}
           lead={<p>{dialog.item.validationResult?.explanation ?? ''}</p>}
-          onConfirm={(reason) => onComplete(dialog.item.itemId, { kind: 'signoff', ref: reason })}
+          onConfirm={(reason) => onComplete(dialog.item.itemId, reason === undefined ? { kind: 'signoff' } : { kind: 'signoff', ref: reason })}
         />
       )}
       {dialog?.kind === 'signoff' && dialog.item.signoffKind === 'statements_signoff' && (

@@ -55,7 +55,7 @@ const FOCUSABLE_CONTROLS = [
   'ws-switcher-item',
   'ws-switcher-retry',
   'rail-search',
-  'rail-env-pill',
+  'rail-env-btn',
   'rail-link',
   'rail-treeitem',
   // D178 (N6): the Favoriten and Menü section headers, and the menu editor's group/parent disclosure.

@@ -15,6 +15,7 @@ import type { BankLineProposal } from '../../../../src/core/banking/bankProposal
 // The ONE asset-range predicate the composer and the bill drawer read too (owner D152 point 5, 04.10.2026).
 // An explicit `.ts` specifier: root suites import this module through Node's type stripping.
 import { isVatAssetAccount } from '../Journal/composerPayload.ts';
+import { formatPrefsNow } from '../../i18n/formatPrefs.ts';
 // Type-only: the root suites load this module straight through Node's type stripping, which cannot
 // follow the Agent model's JSON and i18n imports, so the parser below stays local.
 import type { VorschlagFigures } from '../Agent/model';
@@ -472,7 +473,7 @@ export type DraftTarget =
   | { kind: 'allocations'; allocations: DraftAllocation[]; remainder: RemainderMode | null }
   /**
    * D178 E3 (A39 §17.1): bexio's Kundenbuchung, a line booked to a contact with no document. `mode` null
-   * books in the workspace setting's mode; a differing mode needs `overrideReason` (D172).
+   * books in the workspace setting's mode; a differing mode is an audited override (D172; D204: `overrideReason` optional).
    */
   | { kind: 'contact'; contactId: string; contactName?: string; mode: ContactBookingMode | null; overrideReason: string }
   /** D178 E3 (A39 §17.3): approved Spesen paid from a debit line through E02's reimbursement. */
@@ -483,7 +484,7 @@ export type DraftTarget =
       totalMinor?: number;
     }
   | { kind: 'payment_batch'; batchId: string }
-  /** `differenceReason` is required with `acceptDifference` (critic A39-12): the books keep why. */
+  /** `acceptDifference` is the explicit accept (critic A39-12); D204: `differenceReason` is optional. */
   | {
       kind: 'existing_entry';
       entryId: string;
@@ -654,13 +655,13 @@ export function isBookable(line: BankInboxLine, target: DraftTarget | null): boo
   if (target.kind === 'rule') return target.asks.every((a) => isComputedAsIs(a) || askMinor(a) !== null);
   // D176: an ignore is decided as it stands.
   if (target.kind === 'ignore') return true;
-  // An accepted difference states its reason, or the engine refuses it (critic A39-12).
-  if (target.kind === 'existing_entry') return !target.acceptDifference || (target.differenceReason ?? '').trim() !== '';
+  // D204: an accepted difference needs no reason (the accept itself is the explicit act, critic A39-12).
+  if (target.kind === 'existing_entry') return true;
   // D178 E3: the engine's preview decides the deviation; the Studio checks only what is plainly missing.
   if (target.kind === 'allocations') return target.allocations.length > 0 && target.allocations.every((a) => a.amountMinor > 0);
   if (target.kind === 'expense_claims') return target.claimIds.length > 0;
-  // A mode other than the setting's carries its reason (the pane sends `mode` only when it differs).
-  if (target.kind === 'contact') return target.mode === null || target.overrideReason.trim() !== '';
+  // D204: a mode other than the setting's is an audited override with no reason needed.
+  if (target.kind === 'contact') return true;
   if (target.kind !== 'accounts') return true;
   if (target.legs.length === 0 || target.legs.some((l) => l.accountId === '' || l.amountMinor === 0)) return false;
   return target.legs.reduce((s, l) => s + l.amountMinor, 0) === absAmount(line);
@@ -713,7 +714,12 @@ export function bookTargetOf(target: DraftTarget): Record<string, unknown> {
       return { kind: 'payment_batch', batchId: target.batchId };
     case 'existing_entry':
       return target.acceptDifference
-        ? { kind: 'existing_entry', entryId: target.entryId, acceptDifference: true, differenceReason: (target.differenceReason ?? '').trim() }
+        ? {
+            kind: 'existing_entry',
+            entryId: target.entryId,
+            acceptDifference: true,
+            ...((target.differenceReason ?? '').trim() === '' ? {} : { differenceReason: (target.differenceReason ?? '').trim() }),
+          }
         : { kind: 'existing_entry', entryId: target.entryId };
   }
 }
@@ -1005,6 +1011,10 @@ export interface BankStandard {
   /** D176: the Vorlage offered as the next step, while one is live. */
   followUpStandardId: string | null;
   followUpLabel: string | null;
+  /** D208: the owner's comment to the agent on the rule (data, never an instruction), and who wrote it when. */
+  note: string | null;
+  noteSetBy: string | null;
+  noteSetAt: string | null;
   /** The rest leg, kept for the D167 readers ('' for an ignore rule, which has no legs). */
   accountId: string;
   accountNumber: string;
@@ -1092,6 +1102,9 @@ export function parseStandards(body: unknown): BankStandard[] {
       ignoreNote: str(s.ignoreNote),
       followUpStandardId: str(s.followUpStandardId),
       followUpLabel: str(s.followUpLabel),
+      note: str(s.note),
+      noteSetBy: str(s.noteSetBy),
+      noteSetAt: str(s.noteSetAt),
       accountId,
       accountNumber,
       accountName,
@@ -1203,6 +1216,10 @@ export function lineDate(line: Pick<BankInboxLine, 'bookingDate' | 'valueDate'>)
 /** "23.09." for a row, the year only in the panel. */
 export function shortDate(iso: string | null): string {
   if (iso === null || iso.length < 10) return '';
+  // D195: the day and month in the person's date format (`appearance.date_format`), the year left off.
+  const format = formatPrefsNow().dateFormat;
+  if (format === 'iso') return `${iso.slice(5, 7)}-${iso.slice(8, 10)}`;
+  if (format === 'us') return `${iso.slice(5, 7)}/${iso.slice(8, 10)}`;
   return `${iso.slice(8, 10)}.${iso.slice(5, 7)}.`;
 }
 

@@ -112,6 +112,7 @@ import {
 // one-directional and stays that way.
 import { lockPeriodSealed } from '../ledger/periods.js';
 import { vatBridgeOf } from './bridge.js';
+import { settlementVatFindings } from '../settlement/vatFindings.js';
 
 /**
  * The output VAT account (Umsatzsteuer) and the two Vorsteuer accounts, by KMU number.
@@ -1255,6 +1256,9 @@ export function computeVatReturn(ctx: WorkspaceContext, input: ComputeVatReturnI
       totalTaxDueMinor,
       reconciliation: { applicable: !saldo, outputVatAccount: OUTPUT_VAT_ACCOUNT, outputVatBookedMinor, driftMinor },
     }),
+    // D198 point 7: the settlement feed's pre-filing findings (processor sales whose payout never reached
+    // a bank line, sources whose pulls do not cover the period). A finding, never a block.
+    settlement: settlementVatFindings(ctx, periodStart, periodEnd),
   });
 }
 

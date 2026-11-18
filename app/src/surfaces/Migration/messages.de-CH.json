@@ -507,8 +507,7 @@
     "declare": "Summe angeben",
     "waive": {
       "action": "Zurückstellen",
-      "reason": "Begründung",
-      "needsReason": "Gib einen Grund an, damit die Ausnahme nachvollziehbar bleibt"
+      "reason": "Begründung"
     },
     "waivers": {
       "count": "{n} Kontrollen zurückgestellt"

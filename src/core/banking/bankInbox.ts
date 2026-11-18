@@ -36,12 +36,13 @@ import { IS_HEAD } from '../files/head.js';
 import { STATEMENT_IS_VOUCHER_SQL } from '../accounts/accounts.js';
 import { readLineFactsMap } from './statementFacts.js';
 import type { BankLineFacts } from './statementFacts.js';
-import { BELEG_READ_CAPABILITY, belegCandidatesForLine, belegMatchContext, holdsRead } from './belegMatch.js';
+import { BELEG_READ_CAPABILITY, belegMatchContext, holdsRead } from './belegMatch.js';
 import type { BelegCandidateGroup } from './belegMatch.js';
 import { belegAssignmentView, newVersionOriginOf, newVersionToAssignView } from './belegAssignment.js';
 import type { BelegAssignmentView } from './belegAssignment.js';
-import { bookedVatOf, computedVatOf, evidenceContext, evidenceForBooking, withVatComparisons } from './belegEvidence.js';
-import type { EvidenceContext, VorschlagEvidence } from './belegEvidence.js';
+import { bookedLegsOf, bookedVatOf, computedVatOf, entrySelfAssessed, evidenceContext, evidenceForBooking, receiptVatCheck, receiptVatViewOf, targetSelfAssessed, withVatComparisons } from './belegEvidence.js';
+import type { EvidenceContext, ReceiptVatView, VatCheck, VorschlagEvidence } from './belegEvidence.js';
+import { attachReceiptVat, receiptVatContext, withReceiptReader } from './receiptVat.js';
 import { DUPLICATE_PENDING_SQL, readDuplicateCandidatesMap, readDuplicateDecisionMap, readPossibleDuplicateMap } from './statementDedupe.js';
 import type { DuplicateCandidateView, DuplicateDecisionView, DuplicateFlag } from './statementDedupe.js';
 
@@ -202,6 +203,15 @@ export type BankInboxLine = {
    * machine intake by its "Zuordnen", so its figures need "Zahlen bestätigen". Optional for Studio fixtures.
    */
   newVersionOrigin?: 'person' | 'machine' | null;
+  /**
+   * A41.8 (D193): how the line's receipt VAT (its assigned or filed receipt, else its single candidate) stands beside
+   * what the booking books: `match`, `differs`, `unread` (the receipt's figures are below
+   * `belege.autobook_figure_trust`) or `none` (no receipt, a silent one, nothing comparable). The engine always sets
+   * it; optional in the type only for Studio fixtures written before it.
+   */
+  vatCheck?: VatCheck;
+  /** A41.8: the receipt behind `vatCheck` and its figures, or null (and for a seat that may not read receipts). */
+  receiptVat?: ReceiptVatView | null;
 };
 
 // --- D142: the attention facets and the receipts (A39 §11) --------------------------------------------
@@ -246,7 +256,7 @@ export function newestVorschlagByLine(ctx: WorkspaceContext): Map<string, string
 /**
  * Can the proposal's target be booked exactly as it stands? The engine twin of the Studio's `isBookable`:
  * an accounts booking needs at least one leg, an account and a non-zero amount on every leg, and legs
- * summing to the line; an accepted difference needs its reason (critic A39-12).
+ * summing to the line. D204: an accepted difference needs no reason (critic A39-12 kept the explicit accept).
  */
 export function isProposalBookable(absAmountMinor: number, target: BankProposalTarget | null, reasonCode?: BankProposalReason): boolean {
   if (target === null) return false;
@@ -263,7 +273,7 @@ export function isProposalBookable(absAmountMinor: number, target: BankProposalT
     if (asks.length === 0) return reasonCode === 'rule_computed';
     return asks.every((v) => Number.isSafeInteger(v) && v > 0);
   }
-  if (target.kind === 'existing_entry') return target.acceptDifference !== true || (target.differenceReason ?? '').trim() !== '';
+  if (target.kind === 'existing_entry') return true;
   if (target.kind !== 'accounts') return true;
   if (target.legs.length === 0 || target.legs.some((l) => l.accountId === '' || l.amountMinor === 0)) return false;
   return target.legs.reduce((sum, l) => sum + l.amountMinor, 0) === absAmountMinor;
@@ -383,7 +393,8 @@ export function bankInboxAttention(
     )
     .all(...params) as (BankTxnRow & BankTxnDetailRow)[];
   if (open.length > 0) {
-    const pc = proposalContext(ctx);
+    // A41.8 (critic r1, bulk safety): the band counts a line as the list shows it, the receipt's cap included.
+    const pc = withReceiptReader(ctx, proposalContext(ctx));
     const named = vorschlagLineIds(ctx);
     for (const r of open) {
       const detail: BankTxnDetailRow = {
@@ -865,6 +876,10 @@ export function listBankInbox(ctx: WorkspaceContext, input: ListBankInboxInput =
     page.some((r) => r.credit_debit === 'DBIT' && r.line_state !== 'ignored' && r.line_state !== 'matched') && holdsRead(ctx, BELEG_READ_CAPABILITY)
       ? belegMatchContext(ctx)
       : null;
+  // A41.8 (D193): the page's receipt reader; under `belege.vat_from_receipt` = `propose` the proposals take its code.
+  const rc = receiptVatContext(ctx, belege, (id) => factsOf.get(id) ?? null);
+  if (pc !== null) attachReceiptVat(pc, rc);
+  const baseCurrency = baseCurrencyOf(ctx);
   let ec: EvidenceContext | null = null;
   let tolerance: number | null = null;
   const vatTolerance = (): number => (tolerance ??= getSetting<number>(ctx, 'belege.vat_delta_tolerance_rappen'));
@@ -888,12 +903,30 @@ export function listBankInbox(ctx: WorkspaceContext, input: ListBankInboxInput =
       receiptCount === 0 &&
       (statementCovers.get({ entry: entryId, bank: r.bank_account_id, ws: ctx.workspaceId }) as { covered: number }).covered !== 1;
     const found =
-      belege !== null && (r.line_state === 'open' || needsReceipt) ? belegCandidatesForLine(ctx, belege, { row: r, detail, facts: factsOf.get(r.id) ?? null }) : [];
+      belege !== null && (r.line_state === 'open' || needsReceipt) ? rc.candidatesFor(r, detail) : [];
     // A41.4: each group's printed VAT beside what the booking computes (open: the proposal's target; booked:
     // the entry's stored trace), only when a receipt states one.
     const belegCandidates = !found.some((g) => g.files.some((f) => f.vatAmountMinor !== null))
       ? found
       : withVatComparisons(found, r.line_state === 'open' ? computedVatOf(ctx, r, proposal?.target ?? null) : bookedVatOf(ctx, entryId), vatTolerance());
+    // A41.8: the line's receipt beside the booking, through the same comparison.
+    const readings = rc.readingsFor(r, detail, { state: r.line_state === 'open' ? 'open' : r.line_state === 'booked' ? 'booked' : 'other', entryId, needsReceipt });
+    const vat =
+      readings.length === 0
+        ? { vatCheck: 'none' as const, comparison: null }
+        : receiptVatCheck(
+            readings,
+            r,
+            baseCurrency,
+            r.line_state === 'open'
+              ? {
+                  booksAccounts: bookedLegsOf(ctx, r, proposal?.target ?? null) !== null,
+                  vatMinor: computedVatOf(ctx, r, proposal?.target ?? null),
+                  selfAssessed: targetSelfAssessed(ctx, r, proposal?.target ?? null),
+                }
+              : { booksAccounts: decision?.targetKind === 'accounts', vatMinor: bookedVatOf(ctx, entryId), selfAssessed: entrySelfAssessed(ctx, entryId) },
+            vatTolerance(),
+          );
     // A41.2: the engine's evidence for the line's pending booking Vorschlag.
     const actionId = named.get(r.id);
     let vorschlagEvidence: VorschlagEvidence | null = null;
@@ -943,6 +976,8 @@ export function listBankInbox(ctx: WorkspaceContext, input: ListBankInboxInput =
         r.line_state === 'open' &&
         isBulkBookable(proposal, Math.abs(r.amount_minor), actionId === undefined ? null : { evidence: vorschlagEvidence }, bulkLearnedMin),
       belegAssignment: belegAssignmentView(ctx, r.id),
+      vatCheck: vat.vatCheck,
+      receiptVat: receiptVatViewOf(readings, vat.comparison),
       ...(() => {
         const mark = r.line_state === 'open' ? newVersionToAssignView(ctx, r.id) : null;
         return { newVersionToAssign: mark, newVersionOrigin: newVersionOriginOf(ctx, mark) };

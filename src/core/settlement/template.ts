@@ -27,6 +27,7 @@ import type { WorkspaceContext } from '../context.js';
 import { ok, err } from '../result.js';
 import type { Err, Result } from '../result.js';
 import { SETTLEMENT_KINDS, normalizeSourceName } from './format.js';
+import { isRevenueAccount, PAYOUT_KINDS } from './revenueAccounts.js';
 import type { SettlementKind } from './format.js';
 
 export const TEMPLATE_ACTIONS = ['book', 'skip', 'attention'] as const;
@@ -104,6 +105,14 @@ export function checkTemplate(ctx: WorkspaceContext, template: SettlementTemplat
     if (account === undefined) return err('invalid_account', { field, account: rule.accountId, reason: 'no_such_account' });
     if (account.archived === 1) return err('account_archived', { field, account: account.number });
     if (account.id === clearing.id) return err('invalid_account', { field, account: account.number, reason: 'the contra account cannot be the clearing account' });
+    // D203 (critic r1 L3): a payout is never turnover, so it is never booked to a revenue account.
+    if (PAYOUT_KINDS.has(kind) && isRevenueAccount(account)) {
+      return err('payout_not_turnover', {
+        field,
+        account: account.number,
+        reason: 'a payout moves the processor balance to the bank and is never turnover: book it to a balance account (the bank), never to a revenue account (Nettoerlöse, 30xx to 38xx)',
+      });
+    }
     if (rule.taxCode !== null) {
       const code = ctx.store.db
         .prepare('SELECT kind, active FROM tax_code WHERE workspace_id = ? AND code = ? ORDER BY valid_from DESC LIMIT 1')

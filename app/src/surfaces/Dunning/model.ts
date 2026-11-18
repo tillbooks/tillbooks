@@ -55,7 +55,8 @@ export interface DunningConfigView {
 export interface DunningRefreezeOverride {
   refreeze: DunningRefreezeMode;
   letterDate: DunningLetterDate;
-  overrideReason: string;
+  /** D204: optional; sent only when the person wrote one. */
+  overrideReason?: string;
 }
 
 export interface DunningItemView {

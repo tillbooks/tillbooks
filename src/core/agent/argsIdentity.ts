@@ -24,18 +24,38 @@ import {
 } from '../store/idempotencyArgs.js';
 import { getSetting } from '../settings/settings.js';
 import { APPROVAL_CONFIRMS_FIELD } from './dialMap.js';
+import { SECRET_ARG_FIELDS } from './secretArgs.js';
 
 function transportOf(verb: string): string[] {
   const confirm = APPROVAL_CONFIRMS_FIELD[verb];
   return confirm === undefined ? [] : [confirm];
 }
 
+/**
+ * D198 (security review, 12.11.2026): a verb's SECRET arguments, from the one registry (`secretArgs.ts`, re-cut
+ * R7). A plain hash of a credential in `idempotency_args` would let anyone holding the book test a guessed
+ * token offline, so the field is replaced by whether it was given: the same key with a token and without one
+ * still differs, while the value never reaches the book.
+ */
+
+function withoutSecrets(verb: string, input: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+  const fields = SECRET_ARG_FIELDS[verb];
+  if (fields === undefined) return input;
+  const out: Record<string, unknown> = { ...input };
+  for (const f of fields) {
+    const given = typeof out[f] === 'string' && (out[f] as string).length > 0;
+    delete out[f];
+    out[`${f}Given`] = given;
+  }
+  return out;
+}
+
 export function verbArgsIdentity(verb: string, input: Readonly<Record<string, unknown>>): ArgsIdentity {
-  return idempotencyArgsIdentity(input, transportOf(verb));
+  return idempotencyArgsIdentity(withoutSecrets(verb, input), transportOf(verb));
 }
 
 export function verbArgsHash(verb: string, input: Readonly<Record<string, unknown>>): string {
-  return idempotencyArgsHash(input, transportOf(verb));
+  return idempotencyArgsHash(withoutSecrets(verb, input), transportOf(verb));
 }
 
 /** The workspace's `idempotency.hash_free_text`, or the default when it cannot be read. */

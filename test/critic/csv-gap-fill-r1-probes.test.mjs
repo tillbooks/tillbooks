@@ -13,6 +13,7 @@ import { importBankStatement, bankCsvPreview, prevalidateImportBankStatement } f
 import { presetFor } from '../../dist/core/banking/csvMapping.js';
 import { evaluateValidation } from '../../dist/core/checklists/validations.js';
 import { postEntry } from '../../dist/core/ledger/index.js';
+import { settingsSet } from '../../dist/core/settings/settings.js';
 import { assertClaimInvariantHolds, world, must, refused, camt } from '../banking/bank-inbox-support.mjs';
 
 afterEach(assertClaimInvariantHolds);
@@ -278,6 +279,10 @@ test('C5: the agent draft path agrees with the run path on an EBICS account (fil
   refused(prevalidateImportBankStatement(t.ctx, { bankAccountId: t.bankAccountId, content: CSV, mapping: MAPPING, idempotencyKey: key() }), 'bank_feed_account');
   const noBal = { ...MAPPING, columns: { ...MAPPING.columns } };
   delete noBal.columns.balance;
+  // A20 §13.3: under the default `auto` the neighbour sum decides stretch by stretch; only
+  // `running_balance_only` refuses a fill without a balance column at draft time.
+  assert.equal(prevalidateImportBankStatement(t.ctx, { bankAccountId: t.bankAccountId, content: CSV, mapping: noBal, fill: {}, idempotencyKey: key() }), undefined);
+  must(settingsSet(t.ctx, { key: 'bank.csv_fill_proof', value: 'running_balance_only', idempotencyKey: 'rbo', reason: 'test' }));
   refused(prevalidateImportBankStatement(t.ctx, { bankAccountId: t.bankAccountId, content: CSV, mapping: noBal, fill: {}, idempotencyKey: key() }), 'csv_fill_needs_balance');
 });
 

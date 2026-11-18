@@ -15,12 +15,13 @@ import type { ReactElement } from 'react';
 import { RouteCrash } from './ErrorBoundary';
 import { Shell } from './Shell';
 import { Placeholder } from './Placeholder';
-import { NAV_ITEMS, ROUTE_REGISTRY } from './nav';
+import { AREA_ROUTE, NAV_ITEMS, ROUTE_REGISTRY } from './nav';
 import { NotFound } from './NotFound';
 import { WorkspaceRoute, WorkspaceSurfaceRoute } from './workspace';
 import { installMotionNavigation } from '../lib/motion';
 
 import Setup from '../surfaces/Setup';
+import Settings from '../surfaces/Settings/Settings';
 import Operations from '../surfaces/Operations';
 import Members from '../surfaces/Members';
 import Customization from '../surfaces/Customization';
@@ -40,6 +41,7 @@ import Dunning from '../surfaces/Dunning';
 import Bills from '../surfaces/Bills';
 import CaptureInbox from '../surfaces/Capture';
 import BankAccounts from '../surfaces/BankAccounts';
+import Umsatz from '../surfaces/Umsatz';
 import CreditorPayments from '../surfaces/CreditorPayments';
 import Bank from '../surfaces/Bank';
 import Reports from '../surfaces/Reports';
@@ -98,6 +100,7 @@ import InventoryAlerts from '../surfaces/InventoryAlerts';
 import Review from '../surfaces/Review/Review';
 import Drop from '../surfaces/Drop';
 import Export from '../surfaces/Review/Export';
+import GroupOverview from '../surfaces/GroupOverview';
 
 /** Built surfaces, keyed by their route path. Unlisted paths render the Placeholder. */
 const SURFACES: Record<string, ReactElement> = {
@@ -105,6 +108,8 @@ const SURFACES: Record<string, ReactElement> = {
   '/search': <Search />,
   '/agent': <Agent />,
   '/setup': <Setup />,
+  // D202: the Einstellungen; `/settings/<area>` resolves inside the surface (splat below).
+  '/settings': <Settings />,
   '/operations': <Operations />,
   '/members': <Members />,
   '/customization': <Customization />,
@@ -126,6 +131,7 @@ const SURFACES: Record<string, ReactElement> = {
   '/bills': <Bills />,
   '/capture-inbox': <CaptureInbox />,
   '/bank-accounts': <BankAccounts />,
+  '/umsatz': <Umsatz />,
   '/creditor-payments': <CreditorPayments />,
   '/bank': <Bank />,
   '/reports': <Reports />,
@@ -180,6 +186,9 @@ const SURFACES: Record<string, ReactElement> = {
   '/inventory-alerts': <InventoryAlerts />,
   '/review': <Review />,
   '/export': <Export />,
+  // D201: the area overview, one page of tiles per menu group and nested parent. Not a catalog
+  // surface (a group is no tree destination), so it is mounted beside the registry routes below.
+  '/area/:groupId': <GroupOverview />,
 };
 
 /**
@@ -219,8 +228,8 @@ const surfaceRoutes: RouteObject[] = ROUTE_REGISTRY.map((entry) => ({
   // The path is stored with a leading slash in the registry; the child route wants it relative.
   // Documents owns a nested route tree (list / new / :id), so it mounts with a splat and resolves
   // its own sub-routes internally. Payments does the same for `/payments/new`, the P21 handover.
-  // D186: `/overview/kennzahlen` is the Übersicht's key-figure settings screen.
-  path: ['/documents', '/payments', '/overview'].includes(entry.path)
+  // D186, D204: `/overview/kennzahlen` opens the Übersicht with its card sheet.
+  path: ['/documents', '/payments', '/overview', '/settings'].includes(entry.path)
     ? `${entry.path.replace(/^\//, '')}/*`
     : entry.path.replace(/^\//, ''),
   element: SURFACES[entry.path] ?? <Placeholder titleKey={entry.labelKey} />,
@@ -251,6 +260,7 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <Navigate to={NAV_ITEMS[0].path} replace /> },
       ...surfaceRoutes,
+      { path: AREA_ROUTE.replace(/^\//, ''), element: SURFACES[AREA_ROUTE], errorElement: <RouteCrash /> },
       ...Object.keys(REDIRECTS).map((from) => ({ path: from.replace(/^\//, ''), element: <LegacyRedirect from={from} />, errorElement: <RouteCrash /> })),
       // K-10, US-G16.9: an address the router does not know is a detour in plain words, never the
       // crash screen. RouteCrash stays what it is, the panel for a route that THREW.

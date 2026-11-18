@@ -216,7 +216,7 @@ describe('GoodsReceipt, the receipt document surface', () => {
     expect(await screen.findByText(de.goodsReceipt.errors.period_locked)).toBeInTheDocument();
   });
 
-  it('offers no edit on a POSTED receipt, only the reversal, and refuses to send one without a reason', async () => {
+  it('D204 offers no edit on a POSTED receipt, only the reversal, ready with no reason field', async () => {
     const canned = baseCanned();
     canned.goods_receipt_list = ok({ goodsReceipts: [ROW({ status: 'posted' })] });
     canned.goods_receipt_get = ok(DETAIL({ status: 'posted' }, [LINE({ movementId: 'stockmv_1' })]));
@@ -228,14 +228,12 @@ describe('GoodsReceipt, the receipt document surface', () => {
     expect(screen.queryByRole('button', { name: de.goodsReceipt.cancel })).not.toBeInTheDocument();
     // The movement the line minted is visible, which is what makes the receipt auditable from here.
     expect(screen.getByText('stockmv_1')).toBeInTheDocument();
-    // Reverse stays disabled until a reason is typed: a compensating movement without a stated
-    // reason is exactly the audit gap §H-AUDIT exists to close.
-    expect(screen.getByRole('button', { name: de.goodsReceipt.reverse })).toBeDisabled();
-    await userEvent.type(screen.getByLabelText(de.goodsReceipt.form.reverseReason), 'Fehllieferung');
+    // D204: the reverse needs no reason (the event keeps who and when), so it is ready at once.
     expect(screen.getByRole('button', { name: de.goodsReceipt.reverse })).not.toBeDisabled();
+    expect(screen.queryByLabelText(de.goodsReceipt.form.reverseReason)).toBeNull();
   });
 
-  it('shows held lines with an accept and a reject, and sends the reject reason', async () => {
+  it('D204 shows held lines with an accept and a reject; the reject sends no reason', async () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     const canned = baseCanned();
     canned.goods_receipt_list = ok({ goodsReceipts: [ROW({ status: 'posted' })] });
@@ -245,14 +243,12 @@ describe('GoodsReceipt, the receipt document surface', () => {
 
     await openReceipt();
     expect(await screen.findByText(de.goodsReceipt.holdTitle)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: de.goodsReceipt.reject })).toBeDisabled();
-
-    await userEvent.type(screen.getByLabelText(de.goodsReceipt.form.rejectReason), 'Transportschaden');
+    expect(screen.queryByLabelText(de.goodsReceipt.form.rejectReason)).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: de.goodsReceipt.reject }));
 
     await waitFor(() => expect(asked.some((a) => a.action === 'goods_receipt_reject_lines')).toBe(true));
     const call = asked.find((a) => a.action === 'goods_receipt_reject_lines');
-    expect(call?.input.reason).toBe('Transportschaden');
+    expect(call?.input).not.toHaveProperty('reason');
     expect(call?.input.lineIds).toEqual(['grl_1']);
   });
 

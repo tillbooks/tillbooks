@@ -51,7 +51,7 @@ export type AttentionKind = (typeof ATTENTION_KINDS)[number];
  */
 export const ATTENTION_AREA_ORDER: readonly string[] = ['bank', 'accounting', 'sales', 'system'];
 
-/** The two ways to cut Pendenzen into sections (the per-person `attention.grouping` preference). */
+/** The two ways `attention_list` cuts Pendenzen into sections. The Studio reads `by_kind` and shows one list (D201). */
 export const ATTENTION_GROUPINGS = ['by_area', 'by_kind'] as const;
 export type AttentionGrouping = (typeof ATTENTION_GROUPINGS)[number];
 
@@ -124,6 +124,20 @@ export interface AttentionDecisionOption {
  * The fields from `decisionOptions` down are the F-01 additions (2026-09-05): every one is optional
  * and additive, so a consumer that reads only the day-one shape is unchanged.
  */
+/** D202: what a settings Vorschlag changes, in both languages. */
+export interface AttentionSettingChange {
+  readonly key: string;
+  readonly label: { readonly en: string; readonly 'de-CH': string };
+  readonly area: string;
+  /** The value in force now, in words ('' when the caller may not read the settings). */
+  readonly from: { readonly en: string; readonly 'de-CH': string };
+  readonly to: { readonly en: string; readonly 'de-CH': string };
+  /** A protected setting: approved by a person, one at a time, never in a batch. */
+  readonly personOnly: boolean;
+  /** Approving it gives the agent more rights. */
+  readonly widensAgent: boolean;
+}
+
 export interface AttentionItem {
   readonly queueId: string;
   /** OP3-registered kind + id: the collapse key (§5c guarantee 11) and the deep-link target. */
@@ -205,6 +219,8 @@ export interface AttentionItem {
   readonly autobookOffer?: AttentionAutobookOffer;
   /** N04 (critic F5): a Dauerbuchung's Vorschlag (drafted by `system`) names who set the schedule. */
   readonly scheduledBy?: { readonly actor: string; readonly agent: boolean };
+  /** D202: a settings Vorschlag in words (`vorschlaege.ts`): what it changes, from what to what. */
+  readonly settingChange?: AttentionSettingChange;
   /** N04 (D183): one day's automatic bookings (the digest card, queue `autopilot`). */
   readonly autobookDigest?: AttentionAutobookDigest;
 }

@@ -4,7 +4,7 @@
  *
  *   POST /studio-drop/resolve  `{ token }`: what the link points at and whether it is still open.
  *   POST /studio-drop/redeem   `{ token, contentBase64, filename, bookAgain?, overrideReason? }`: the person's
- *                              drop (R1: the reason confirms a receipt that is already booked elsewhere).
+ *                              drop (R1: bookAgain confirms a receipt that is already booked elsewhere; D204: the reason is optional).
  *
  * WHY NOT A VERB. Every registry verb is an MCP tool too, and an agent that could call the redemption
  * could redeem the very link it minted, which would turn "a person drops the receipt" into "the agent

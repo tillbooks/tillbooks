@@ -130,8 +130,8 @@ export function poAmendmentActions(h: PoAmendmentActionHelpers): readonly Action
     ctxAction(
       'po_amendment_reject',
       'write:correctable:internal',
-      'Lehne eine Änderung als Genehmiger ab (OP14): status -> rejected with a mandatory reason, the live PO untouched. Allowed from draft or pending_approval; an applied amendment cannot be rejected (invalid_transition). A missing reason is invalid_input. Idempotent.',
-      ctxSchema({ amendmentId: STR, reason: STR, actor: STR, idempotencyKey: STR }, ['amendmentId', 'reason']),
+      'Lehne eine Änderung als Genehmiger ab (OP14): status -> rejected (D204: reason optional; who and when are kept), the live PO untouched. Allowed from draft or pending_approval; an applied amendment cannot be rejected (invalid_transition). A missing reason is invalid_input. Idempotent.',
+      ctxSchema({ amendmentId: STR, reason: STR, actor: STR, idempotencyKey: STR }, ['amendmentId']),
       (ctx, input) => poAmendmentReject(ctx, as(input)),
     ),
   ];

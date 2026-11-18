@@ -1,9 +1,10 @@
 /**
  * G22's dialogs on the shared `Modal` (D118 B2): Start (the template radio and the period, the last
  * ended one pre-filled), Attest ("Eingereicht am", a date not before the export), Skip ("Nicht
- * zutreffend", a required reason), Abandon (a required reason), Sign-off (a confirm with an optional
- * reference), and leg 2's three: Acknowledge (a warn validation's reason, S9), GV (the attestation
- * date with the reason a date before the sign-off needs) and ConfirmAct (the consequence confirm in
+ * zutreffend"), Abandon, Sign-off (a confirm with an optional reference), and leg 2's three:
+ * Acknowledge (a warn validation, S9), GV (the attestation date; one before the sign-off warns) and
+ * ConfirmAct. D204: no dialog needs a reason; an optional note shows only when `audit.ask_reason` is
+ * `optional`. ConfirmAct (the consequence confirm in
  * front of every domain verb a posting row calls, D118 C4). Each carries its consequence sentence in
  * the body, keeps the typed value across a validation error, and renders its refusal inline.
  */
@@ -15,6 +16,7 @@ import { Modal, type ModalRole } from '../../components/Modal';
 import { DetailDrawer } from '../../components/DetailDrawer';
 import { Select } from '../../components/Select';
 import { useT } from '../../i18n';
+import { optionalReason, useAskReason } from '../../lib/useAskReason';
 import { periodTitle, TEMPLATE_IDS, type PeriodOption, type TemplateId } from './model';
 
 /**
@@ -231,9 +233,10 @@ export interface GvDialogProps {
   onAttest: (date: string, reason: string | null) => void;
 }
 
-/** The GV attestation (S7): a date, and the reason the engine asks for when the GV predates the sign-off. */
+/** The GV attestation (S7): a date; a GV before the sign-off warns (D204: an optional note only when the workspace asks). */
 export function GvDialog({ open, onClose, today, signedAt, refusal, working, onAttest }: GvDialogProps) {
   const t = useT();
+  const askReason = useAskReason();
   const id = useId();
   const [date, setDate] = useState(today);
   const [reason, setReason] = useState('');
@@ -245,14 +248,10 @@ export function GvDialog({ open, onClose, today, signedAt, refusal, working, onA
       setLocalError(t('checklists.gv.needsDate'));
       return;
     }
-    if (predates && reason.trim().length === 0) {
-      setLocalError(t('checklists.gv.needsReason'));
-      return;
-    }
     setLocalError(null);
     onAttest(date, reason.trim().length === 0 ? null : reason.trim());
   };
-  const error = localError ?? (refusal === null ? null : refusal === 'acknowledge_needs_reason' ? t('checklists.gv.needsReason') : refusal === 'already_attested' ? t('checklists.gv.alreadyAttested') : t('checklists.error.refused', { code: refusal }));
+  const error = localError ?? (refusal === null ? null : refusal === 'already_attested' ? t('checklists.gv.alreadyAttested') : t('checklists.error.refused', { code: refusal }));
   return (
     <Modal
       open={open}
@@ -275,7 +274,7 @@ export function GvDialog({ open, onClose, today, signedAt, refusal, working, onA
         <Field label={t('checklists.gv.date')}>
           <input className="field" id={`${id}-date`} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>
-        {(predates || refusal === 'acknowledge_needs_reason') && (
+        {predates && askReason && (
           <Field label={t('checklists.gv.reason')}>
             <textarea className="field" id={`${id}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} rows={2} />
           </Field>
@@ -309,25 +308,24 @@ export interface ReasonDialogProps {
   initialReason?: string;
   /** The warning restated above the reason (the acknowledge dialog, S9). */
   lead?: ReactNode;
-  onConfirm: (reason: string) => void;
+  /** D204: the note when the workspace asks for one and the person wrote it, else undefined. */
+  onConfirm: (reason: string | undefined) => void;
 }
 
-/** The Skip, Abandon and Acknowledge dialogs share one shape: a required reason and a consequence sentence. */
+/**
+ * The Skip, Abandon and Acknowledge dialogs share one shape: a confirm with a consequence sentence.
+ * D204: no reason is required; the note field shows only when `audit.ask_reason` is `optional`.
+ */
 export function ReasonDialog({ open, onClose, title, label, consequence, action, workingLabel, refusal, working, danger = false, initialReason = '', lead, onConfirm }: ReasonDialogProps) {
   const t = useT();
   const id = useId();
+  const askReason = useAskReason();
   const [reason, setReason] = useState(initialReason);
-  const [localError, setLocalError] = useState<string | null>(null);
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (reason.trim().length === 0) {
-      setLocalError(t('checklists.reason.needed'));
-      return;
-    }
-    setLocalError(null);
-    onConfirm(reason.trim());
+    onConfirm(askReason ? optionalReason(reason) : undefined);
   };
-  const error = localError ?? (refusal === null ? null : t('checklists.error.refused', { code: refusal }));
+  const error = refusal === null ? null : t('checklists.error.refused', { code: refusal });
   return (
     <Modal
       open={open}
@@ -349,9 +347,11 @@ export function ReasonDialog({ open, onClose, title, label, consequence, action,
     >
       <form id={`${id}-form`} onSubmit={submit} className="chk-dialog-form">
         {lead !== undefined && <div className="chk-dialog-lead">{lead}</div>}
-        <Field label={label}>
-          <textarea className="field" id={`${id}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} rows={3} aria-required="true" />
-        </Field>
+        {askReason && (
+          <Field label={label}>
+            <textarea className="field" id={`${id}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />
+          </Field>
+        )}
         <p id={`${id}-consequence`} className="chk-consequence">
           {consequence}
         </p>

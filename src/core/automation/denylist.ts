@@ -636,6 +636,17 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   // where every later settlement entry goes. A stored rule makes neither (legs (c) and (e)).
   'import_settlement',
   'set_settlement_template',
+  // A43 §2: the table mapping decides which cell is an amount, a kind and an id of every later table (leg (c)).
+  'set_settlement_table_mapping',
+  // D198: the pull asserts a feed's processor facts and books them (legs (c) and (e), as the import); a
+  // source decides where those facts come from and stores a credential.
+  'pull_settlement',
+  'set_settlement_source',
+  // D198 re-cut R6: whether a settlement event is a test, booked elsewhere or not to book is a person's
+  // judgment with an audited reason, never a rule's (legs (c) and (e), like the import).
+  'resolve_settlement_event',
+  // A42: whether an event is booked or ignored is a person's answer in the Umsatz review, never a rule's.
+  'set_settlement_event_ignored',
   // D178 point 19: whether a line is a duplicate is the person's judgment (the owner's decision), never a rule's.
   'resolve_possible_duplicate',
   'set_write_off_threshold',
@@ -682,6 +693,9 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   'book_bank_lines',
   'post_entries',
   'approve_drafted_actions',
+  // D196 item 9: the batch reject dispatches `reject_drafted_action` per id, the other half of the same
+  // human decision (a rule silently discarding Vorschläge would hide them from the person meant to see them).
+  'reject_drafted_actions',
   'call_tool',
   // (e) N04 (D183 §7): earned autonomy administers the unattended subsystem itself. A grant lets a rule book
   // with no person looking, and a Dauerbuchung schedule books (or proposes) on its own; a stored rule
@@ -693,6 +707,8 @@ export const NOT_AUTOMATABLE: ReadonlySet<string> = new Set([
   'set_vorlage_schedule',
   'clear_vorlage_schedule',
   'autopilot_mark_seen',
+  // O00 (D199): the What's new marker belongs to the install, not the tenant a rule lives in (leg (d)).
+  'whats_new_mark_seen',
   // (e) A41.3 re-cut v2 (D184): which receipt is a bank line's Beleg, and which receipt figures are trusted,
   // decide what an unattended booking may rest on (I-B, I-F). They are a person's acts, human-only in the
   // engine; a stored rule assigning, releasing or vouching for a receipt would arm autobook with nobody
@@ -821,6 +837,7 @@ export const NOT_AUTOMATABLE_LEGS: Readonly<Record<string, readonly DenylistLeg[
   post_entries: ['e'],
   call_tool: ['e'],
   reject_drafted_action: ['e'],
+  reject_drafted_actions: ['e'],
   agent_ask: ['e'],
   agent_prose_delete: ['a', 'e'],
   // (b)+(c) G09/G11/G18/G21 migration
@@ -883,6 +900,11 @@ export const NOT_AUTOMATABLE_LEGS: Readonly<Record<string, readonly DenylistLeg[
   set_bank_csv_mapping: ['c'],
   import_settlement: ['c', 'e'],
   set_settlement_template: ['c'],
+  set_settlement_table_mapping: ['c'],
+  pull_settlement: ['c', 'e'],
+  set_settlement_source: ['c', 'e'],
+  resolve_settlement_event: ['c', 'e'],
+  set_settlement_event_ignored: ['c', 'e'],
   resolve_possible_duplicate: ['c'],
   set_write_off_threshold: ['c', 'e'],
   record_payment: ['c', 'e'],
@@ -906,6 +928,8 @@ export const NOT_AUTOMATABLE_LEGS: Readonly<Record<string, readonly DenylistLeg[
   set_vorlage_schedule: ['e'],
   clear_vorlage_schedule: ['e'],
   autopilot_mark_seen: ['e'],
+  // (d) O00 the install's notes marker
+  whats_new_mark_seen: ['d'],
   // (e) A41.3: the receipt assignment and the figure confirmation that unattended booking rests on
   assign_beleg: ['e'],
   release_beleg: ['e'],

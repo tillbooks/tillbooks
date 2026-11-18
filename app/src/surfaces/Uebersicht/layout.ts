@@ -16,6 +16,8 @@ import {
   OVERVIEW_CONTENT_WIDGETS,
   OVERVIEW_TILE_IDS,
   OVERVIEW_TILES_DOUBLE_BY_DEFAULT,
+  OVERVIEW_TILES_FULL_BY_DEFAULT,
+  OVERVIEW_TILES_LEAD_BY_DEFAULT,
   OVERVIEW_TILES_OFF_BY_DEFAULT,
   OVERVIEW_WIDGET_IDS,
   type OverviewTileId,
@@ -44,21 +46,36 @@ export type CompareMode = (typeof OVERVIEW_COMPARE_MODES)[number];
  * A key figure (the bank item, `bank_inbox`, among them while it sits in the tile zone). D186: its width
  * (`w`, absent is the tile's default: double for the bank figure, single for the rest), its own
  * comparison (`compare`, absent follows the page's `overview.compare`) and its twelve-month line (`trend`).
+ * D201: the suggestions card spans the whole row (`full`, its default) or two columns (`double`).
  */
 export interface TileSlot extends Slot<OverviewTileId> {
-  w?: 'single' | 'double';
+  w?: 'single' | 'double' | 'full';
   compare?: CompareMode;
   trend?: true;
 }
 
 const COMPARE_SET: ReadonlySet<string> = new Set(OVERVIEW_COMPARE_MODES);
 /** The key figures D186 added (09.11.2026): a layout saved before them never names them. */
-const ADDED_BY_D186: ReadonlySet<string> = new Set(['bank_balance', 'free_cash', 'runway', 'low_point', 'expense', 'result', 'margin', 'revenue_ltm', 'dso', 'top_customer', 'auto_rate', 'receipt_rate']);
+const ADDED_BY_D186: ReadonlySet<string> = new Set(['bank_balance', 'free_cash', 'runway', 'low_point', 'expense', 'result', 'margin', 'revenue_ltm', 'dso', 'top_customer', 'auto_rate', 'receipt_rate', 'suggestions']);
 const OFF_BY_DEFAULT: ReadonlySet<string> = new Set(OVERVIEW_TILES_OFF_BY_DEFAULT);
 const DOUBLE_BY_DEFAULT: ReadonlySet<string> = new Set(OVERVIEW_TILES_DOUBLE_BY_DEFAULT);
+const FULL_BY_DEFAULT: ReadonlySet<string> = new Set(OVERVIEW_TILES_FULL_BY_DEFAULT);
+const LEAD_BY_DEFAULT: ReadonlySet<string> = new Set(OVERVIEW_TILES_LEAD_BY_DEFAULT);
+
+/** D201: the items whose size choice is the whole row or two columns (the suggestions card). */
+export function spansRow(id: string): boolean {
+  return FULL_BY_DEFAULT.has(id);
+}
+
+/** D201: whether an item spans the whole row: its own choice, else its default. */
+export function isFull(slot: TileSlot): boolean {
+  if (!spansRow(slot.id)) return false;
+  return slot.w === undefined || slot.w === 'full';
+}
 
 /** Whether a tile shows double width: its own choice, else its default. */
 export function isDouble(slot: TileSlot): boolean {
+  if (spansRow(slot.id)) return slot.w === 'double';
   return slot.w === undefined ? DOUBLE_BY_DEFAULT.has(slot.id) : slot.w === 'double';
 }
 
@@ -88,7 +105,7 @@ function tileOf(raw: unknown): TileSlot | null {
   return {
     id: id as OverviewTileId,
     on: on !== false,
-    ...(w === 'single' || w === 'double' ? { w } : {}),
+    ...(w === 'single' || w === 'double' || (w === 'full' && spansRow(id)) ? { w } : {}),
     ...(typeof compare === 'string' && COMPARE_SET.has(compare) ? { compare: compare as CompareMode } : {}),
     ...(trend === true ? { trend: true as const } : {}),
   };
@@ -147,10 +164,14 @@ export function tileArrangement(stored: unknown, available: readonly string[]): 
   // books' cash figure yields to the bank figure only where the bank figure is there to replace it: a role
   // that may not read bank lines keeps the books' figure as its money tile.
   const offByDefault = (id: string): boolean => OFF_BY_DEFAULT.has(id) && (id !== 'cash' || can.has('bank_balance'));
+  const lead: TileSlot[] = [];
   for (const id of available) {
-    if (KNOWN_TILES.has(id) && !out.some((s) => s.id === id)) out.push({ id: id as OverviewTileId, on: !offByDefault(id) });
+    if (!KNOWN_TILES.has(id) || out.some((s) => s.id === id)) continue;
+    // D201: an item that leads by default (the suggestions card) leads a list saved before it existed too.
+    if (LEAD_BY_DEFAULT.has(id)) lead.push({ id: id as OverviewTileId, on: !offByDefault(id) });
+    else out.push({ id: id as OverviewTileId, on: !offByDefault(id) });
   }
-  return out;
+  return [...lead, ...out];
 }
 
 /** The value to store for the tiles: the arranged slots, then the stored ones not arranged now, kept. */
@@ -181,9 +202,16 @@ export function toggleSlot<T extends Slot>(slots: readonly T[], id: string): T[]
   return slots.map((s) => (s.id === id ? { ...s, on: !s.on } : s));
 }
 
-/** D186: the tile `id` switched between single and double width, a new array. */
+/**
+ * D186: the tile `id` switched between single and double width, a new array. D201: the suggestions card
+ * switches between the whole row and two columns.
+ */
 export function toggleTileWidth(slots: readonly TileSlot[], id: string): TileSlot[] {
-  return slots.map((s) => (s.id === id ? { ...s, w: isDouble(s) ? ('single' as const) : ('double' as const) } : s));
+  return slots.map((s) => {
+    if (s.id !== id) return s;
+    if (spansRow(s.id)) return { ...s, w: isFull(s) ? ('double' as const) : ('full' as const) };
+    return { ...s, w: isDouble(s) ? ('single' as const) : ('double' as const) };
+  });
 }
 
 /** D186: the tile `id` with its own comparison, or following the page again (`null`), a new array. */

@@ -42,6 +42,9 @@ CREATE TABLE IF NOT EXISTS workspace_setting_change (
 CREATE INDEX IF NOT EXISTS workspace_setting_change_by_key
   ON workspace_setting_change (workspace_id, key, at);
 
+-- D202: seat, via, approved_by, drafted_action_id and capability ride SETTINGS_ADDITIVE_COLUMNS below, so a
+-- fresh book and an older one get them the same way (ADD COLUMN on open).
+
 CREATE TRIGGER IF NOT EXISTS workspace_setting_change_no_update
   BEFORE UPDATE ON workspace_setting_change
   BEGIN SELECT RAISE(ABORT, 'workspace_setting_change is append-only'); END;
@@ -49,3 +52,23 @@ CREATE TRIGGER IF NOT EXISTS workspace_setting_change_no_delete
   BEFORE DELETE ON workspace_setting_change
   BEGIN SELECT RAISE(ABORT, 'workspace_setting_change is append-only'); END;
 `;
+
+/**
+ * D202 (I9): how a change came about, on its history row. Nullable with a NULL default, which is all
+ * `ALTER TABLE ... ADD COLUMN` supports: a row written before D202 reads NULL in each (unknown, never
+ * claimed), and no schema generation moves (the N03 provenance precedent). The append-only triggers above
+ * cover the new columns as they cover the old ones. `store/schema.ts` spreads this into `ADDITIVE_COLUMNS`.
+ *  - `seat`: person | agent | plugin | system.
+ *  - `via`: direct | vorschlag (a person approved the agent's Vorschlag) | standing (the agent, under the
+ *    owner's area permission `agent.settings_sections`) | dial (the agent, under the dial of the key's family).
+ *  - `approved_by`, `drafted_action_id`: the approver and the Vorschlag of a `vorschlag` change.
+ *  - `capability`: what the change was checked against (the owning capability, `agent.settings_sections:<area>`
+ *    or `dial:<family>`).
+ */
+export const SETTINGS_ADDITIVE_COLUMNS: readonly { table: string; column: string; ddl: string }[] = [
+  { table: 'workspace_setting_change', column: 'seat', ddl: "seat TEXT CHECK (seat IS NULL OR seat IN ('person', 'agent', 'plugin', 'system'))" },
+  { table: 'workspace_setting_change', column: 'via', ddl: "via TEXT CHECK (via IS NULL OR via IN ('direct', 'vorschlag', 'standing', 'dial'))" },
+  { table: 'workspace_setting_change', column: 'approved_by', ddl: 'approved_by TEXT' },
+  { table: 'workspace_setting_change', column: 'drafted_action_id', ddl: 'drafted_action_id TEXT' },
+  { table: 'workspace_setting_change', column: 'capability', ddl: 'capability TEXT' },
+];

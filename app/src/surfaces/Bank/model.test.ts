@@ -414,10 +414,11 @@ describe("a row's draft", () => {
     expect(draftFromVorschlag(undefined)).toBeNull();
   });
 
-  it('matches with a difference only with a stated reason, and sends the reason (critic A39-12)', () => {
+  it('D204 matches with a difference with no reason, and sends a given reason (critic A39-12)', () => {
     const l = line({ amountMinor: -4_250 });
-    expect(isBookable(l, { kind: 'existing_entry', entryId: 'je_1', acceptDifference: true })).toBe(false);
-    expect(isBookable(l, { kind: 'existing_entry', entryId: 'je_1', acceptDifference: true, differenceReason: '  ' })).toBe(false);
+    expect(isBookable(l, { kind: 'existing_entry', entryId: 'je_1', acceptDifference: true })).toBe(true);
+    expect(isBookable(l, { kind: 'existing_entry', entryId: 'je_1', acceptDifference: true, differenceReason: '  ' })).toBe(true);
+    expect(bookTargetOf({ kind: 'existing_entry', entryId: 'je_1', acceptDifference: true, differenceReason: '  ' })).toEqual({ kind: 'existing_entry', entryId: 'je_1', acceptDifference: true });
     const withReason = { kind: 'existing_entry' as const, entryId: 'je_1', acceptDifference: true, differenceReason: ' Bankspesen ' };
     expect(isBookable(l, withReason)).toBe(true);
     expect(bookTargetOf(withReason)).toEqual({ kind: 'existing_entry', entryId: 'je_1', acceptDifference: true, differenceReason: 'Bankspesen' });
@@ -466,5 +467,22 @@ describe('modelPercent (D144, critic C5b)', () => {
     expect(modelPercent(0.99996)).toBe('99');
     expect(modelPercent(1)).toBe('99');
     expect(modelPercent(null)).toBe('');
+  });
+});
+
+describe('shortDate (D195)', () => {
+  it("writes the row's day and month in the person's date format", async () => {
+    const { shortDate } = await import('./model');
+    const { resetFormatPrefs, setFormatPrefs } = await import('../../i18n');
+    try {
+      expect(shortDate('2026-11-01')).toBe('01.11.');
+      setFormatPrefs({ dateFormat: 'iso' });
+      expect(shortDate('2026-11-01')).toBe('11-01');
+      setFormatPrefs({ dateFormat: 'us' });
+      expect(shortDate('2026-11-01')).toBe('11/01');
+      expect(shortDate(null)).toBe('');
+    } finally {
+      resetFormatPrefs();
+    }
   });
 });

@@ -1,7 +1,7 @@
 /**
  * N02 (D183), R1 RECEIPT UNIQUENESS, the data half (`src/core/files/receiptGuard.ts`): the records that
  * already hold a receipt, as the engine answers them on a refusal (`holders`) and on a Vorschlag's card
- * (`receiptHolders`), and the one test for a refusal a person may answer with a reason. The dialog and
+ * (`receiptHolders`), and the one test for a refusal a person may answer with a confirmation. The dialog and
  * the card's warning live in `components/BookAgain.tsx`.
  */
 import type { Err } from './client';
@@ -20,7 +20,8 @@ export interface ReceiptHolder {
 /** The person's confirmation, sent with the retried call. */
 export interface BookAgainConfirmation {
   bookAgain: true;
-  overrideReason: string;
+  /** D204: optional; sent only when the workspace asks for a note and the person wrote one. */
+  overrideReason?: string;
 }
 
 /** The holders of a refusal or a card, defensively: an entry the Studio cannot read is left out. */
@@ -89,11 +90,11 @@ export function isReceiptAssignedRefusal(error: Err | null | undefined): boolean
   return error !== null && error !== undefined && error.error === 'receipt_assigned';
 }
 
-/** The refusals a person may answer with a reason (each carries the engine's `override` hint). */
+/** The refusals a person may answer with a confirmation (each carries the engine's `override` hint). */
 const CONFIRMABLE = ['receipt_already_booked', 'receipt_replace_needs_reason'];
 
 /**
- * A refusal a person may answer with a reason: `receipt_already_booked` (a second booking of a receipt)
+ * A refusal a person may answer with a confirmation (D204: no reason needed): `receipt_already_booked` (a second booking of a receipt)
  * or `receipt_replace_needs_reason` (a new version replacing a booked receipt), with the engine's
  * `override` hint. Under `refuse` the hint is absent and the refusal stands.
  */

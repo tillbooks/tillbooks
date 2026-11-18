@@ -23,7 +23,7 @@ const GLYPH: Record<EgressIndicatorState, string> = {
 
 export interface EgressIndicatorProps {
   state: EgressIndicatorState;
-  /** The state's label text (already localised by the caller), e.g. "Lokal, keine Verbindung". */
+  /** The state's label text (already localised by the caller), e.g. "Lokal". */
   label: string;
   /** Icon-only (the rail form): the glyph shows, the label rides only the aria-label. */
   iconOnly?: boolean;

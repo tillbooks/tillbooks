@@ -11,8 +11,8 @@
  *  - IDEMPOTENT ON ROWS (§H-IDEMPOTENT): a replayed create returns the same match id and increments
  *    billed_qty exactly once; a second create under a DIFFERENT key is refused (match_already_exists).
  *  - TOLERANCE BOUNDARY: at 2.0% passes (matched); one Rappen over blocks (out_of_tolerance).
- *  - OVERRIDE: a variance + reason is overridden and permanent; a missing reason is reason_required;
- *    the override capability is required.
+ *  - OVERRIDE: a variance is overridden and permanent; D204: no reason is needed (who and when are on
+ *    the header); the override capability is required.
  *  - REVERSE restores billed_qty to the EXACT pre-match value and cannot be re-run (match_not_reversible).
  *  - APPEND-ONLY (§H-AUDIT): the match header and lines are immutable (the schema triggers abort).
  *  - §H-TENANT: a cross-tenant bill/match is refused.
@@ -22,6 +22,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { assertWhoWhen, assertPermission } from '../support/d204.mjs';
 
 import { getAction } from '../../dist/api/registry.js';
 import { makeContext } from '../../dist/core/context.js';
@@ -159,7 +160,7 @@ test('I04 tolerance: at 2.0% the match passes; one Rappen over is out_of_toleran
 
 // --- override -----------------------------------------------------------------------------------
 
-test('I04 override: a variance needs a reason and the override capability, and is permanent', () => {
+test('D204 I04 override: a variance needs the override capability and no reason, and is permanent', () => {
   const s = seed('ovr');
   const { poId, lineId } = sentPo(s, 'ovr', 10, 10000);
   receive(s, 'ovr', poId, lineId, 10);
@@ -167,16 +168,13 @@ test('I04 override: a variance needs a reason and the override capability, and i
   const evaluation = must(call(s.deps, 'match_three_way_evaluate', { workspaceId: s.workspaceId, billId }), 'evaluate').evaluation;
   assert.equal(evaluation.status, 'variance');
 
-  // Missing reason -> refused, nothing written. Since D161 the override is dial-governed (pay), so the
-  // registry face answers a BLANK schema-required field first with invalid_input (conformance rule 7);
-  // a reason too short to be one reaches the engine, which answers reason_required.
-  const blank = call(s.deps, 'match_three_way_override', { workspaceId: s.workspaceId, billId, evaluation, reason: '', idempotencyKey: 'ovr-x' });
-  refused(blank, 'invalid_input', 'override with a blank reason');
-  assert.equal(blank.field, 'reason');
-  refused(call(s.deps, 'match_three_way_override', { workspaceId: s.workspaceId, billId, evaluation, reason: 'ok', idempotencyKey: 'ovr-y' }), 'reason_required', 'override with a reason under five characters');
-  assert.equal(count(s.deps, 'three_way_match', s.workspaceId), 0, 'no header after reason_required');
-
-  const ovr = must(call(s.deps, 'match_three_way_override', { workspaceId: s.workspaceId, billId, evaluation, reason: 'Preisdifferenz vereinbart', idempotencyKey: 'ovr-1' }), 'override');
+  // D204: a blank reason overrides too; the header names who and when, and the permission is the
+  // override capability.
+  const ovr = must(call(s.deps, 'match_three_way_override', { workspaceId: s.workspaceId, billId, evaluation, reason: '', idempotencyKey: 'ovr-1' }), 'override');
+  const header = s.deps.store.db.prepare('SELECT reason, overridden_by, overridden_at FROM three_way_match WHERE id = ?').get(ovr.match.id);
+  assert.equal(header.reason, null);
+  assertWhoWhen(header.overridden_by, header.overridden_at);
+  assertPermission('match_three_way_override');
   assert.equal(ovr.match.status, 'overridden');
   assert.equal(billedQty(s.deps, s.workspaceId, lineId), 10, 'override still consumes the open qty');
   // Permanent: no clean re-match of the same bill.
@@ -211,7 +209,7 @@ test('I04 override: the engine gate requires purchasing.match_override (engine-l
 
 // --- reverse ------------------------------------------------------------------------------------
 
-test('I04 reverse: restores billed_qty to the EXACT pre-match value and cannot be re-run', () => {
+test('D204 I04 reverse: with no reason restores billed_qty to the EXACT pre-match value and cannot be re-run', () => {
   const s = seed('rev');
   const { poId, lineId } = sentPo(s, 'rev', 10, 10000);
   receive(s, 'rev', poId, lineId, 10);
@@ -220,12 +218,17 @@ test('I04 reverse: restores billed_qty to the EXACT pre-match value and cannot b
   const created = must(call(s.deps, 'match_three_way_create', { workspaceId: s.workspaceId, billId, evaluation, idempotencyKey: 'rev-m' }), 'create');
   assert.equal(billedQty(s.deps, s.workspaceId, lineId), 10);
 
-  const rev = must(call(s.deps, 'match_three_way_reverse', { workspaceId: s.workspaceId, matchId: created.match.id, reason: 'Falsche Zuordnung', idempotencyKey: 'rev-r' }), 'reverse');
+  // D204: the reverse needs no reason; the compensating record names who and when.
+  const rev = must(call(s.deps, 'match_three_way_reverse', { workspaceId: s.workspaceId, matchId: created.match.id, idempotencyKey: 'rev-r' }), 'reverse');
   assert.equal(billedQty(s.deps, s.workspaceId, lineId), 0, 'billed_qty restored to the pre-match value');
   assert.equal(rev.reversing.status, 'reversed');
+  assert.equal(rev.reversing.reason, null);
+  const comp = s.deps.store.db.prepare('SELECT reversed_by, reversed_at FROM three_way_match WHERE id = ?').get(rev.reversing.id);
+  assertWhoWhen(comp.reversed_by, comp.reversed_at);
+  assertPermission('match_three_way_reverse');
 
   // Idempotent replay: no second reversing record, billed_qty unchanged.
-  must(call(s.deps, 'match_three_way_reverse', { workspaceId: s.workspaceId, matchId: created.match.id, reason: 'Falsche Zuordnung', idempotencyKey: 'rev-r' }), 'reverse replay');
+  must(call(s.deps, 'match_three_way_reverse', { workspaceId: s.workspaceId, matchId: created.match.id, idempotencyKey: 'rev-r' }), 'reverse replay');
   assert.equal(billedQty(s.deps, s.workspaceId, lineId), 0, 'replay does not double-adjust');
   assert.equal(count(s.deps, 'three_way_match', s.workspaceId), 2, 'exactly the original + one reversing record');
 

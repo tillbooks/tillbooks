@@ -393,16 +393,16 @@ describe('A1: Beleg anhängen', () => {
     await satz(dialog, '6900', '1020', '12.00');
     await waitFor(() => expect(postButton(dialog)).toBeEnabled());
     await userEvent.click(postButton(dialog));
-    // The post stands; the person is asked for the reason before the second booking of the receipt.
+    // The post stands; the person confirms the second booking of the receipt (D204: no reason).
     const ask = await screen.findByRole('alertdialog', { name: 'Receipt already booked' });
     expect(onWritten).toHaveBeenCalledWith('je_new');
     expect(within(ask).getByText('je_4')).toBeInTheDocument();
-    fireEvent.change(within(ask).getByLabelText('Reason'), { target: { value: 'Second instalment' } });
     fireEvent.click(within(ask).getByRole('button', { name: 'Book anyway' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     const links = calls.filter((c) => c.action === 'files_link');
     expect(links).toHaveLength(2);
-    expect(links[1]?.input).toMatchObject({ bookAgain: true, overrideReason: 'Second instalment', idempotencyKey: links[0]?.input.idempotencyKey });
+    expect(links[1]?.input).toMatchObject({ bookAgain: true, idempotencyKey: links[0]?.input.idempotencyKey });
+    expect(links[1]?.input).not.toHaveProperty('overrideReason');
     expect(calls.filter((c) => c.action === 'post_entry')).toHaveLength(1);
   });
 

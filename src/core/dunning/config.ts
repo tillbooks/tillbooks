@@ -71,10 +71,9 @@ export function dunningLetterDateOf(ctx: WorkspaceContext): DunningLetterDate {
 }
 
 /**
- * D174: the per-call override of `dunning_fee_reverse` (D172: a single case overrides a setting with a
- * required, audited reason). Pure, shared by the engine and the API's pre-draft validation
- * (`withPrevalidate`), so a reasonless override is refused `reason_required` on every face and is never
- * queued as a Vorschlag that could only fail at approval.
+ * D174: the per-call override of `dunning_fee_reverse` (D172: a single case overrides a setting, audited).
+ * Pure, shared by the engine and the API's pre-draft validation (`withPrevalidate`). D204 (A03 §11): the
+ * override needs no reason; only the shape and the pairing of `overrideReason` with an override are checked.
  */
 export function validateRefreezeOverride(input: { refreeze?: unknown; letterDate?: unknown; overrideReason?: unknown }): Result | undefined {
   if (input.refreeze !== undefined && !(DUNNING_REFREEZE_MODES as readonly unknown[]).includes(input.refreeze)) {
@@ -87,13 +86,6 @@ export function validateRefreezeOverride(input: { refreeze?: unknown; letterDate
     return err('invalid_input', { field: 'overrideReason' });
   }
   const overriding = input.refreeze !== undefined || input.letterDate !== undefined;
-  const reason = typeof input.overrideReason === 'string' ? input.overrideReason.trim() : '';
-  if (overriding && reason === '') {
-    return err('reason_required', {
-      field: 'overrideReason',
-      reason: 'a per-call override of dunning.refreeze or dunning.letter_date names why this run differs from the workspace setting',
-    });
-  }
   if (!overriding && input.overrideReason !== undefined) {
     return err('invalid_input', { field: 'overrideReason', reason: 'a reason is given only with refreeze or letterDate' });
   }

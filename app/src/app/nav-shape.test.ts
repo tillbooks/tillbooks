@@ -17,11 +17,14 @@
  * The model's own properties still hold and are still asserted:
  *   - a parent has no `path`, so it can never become a route to nowhere;
  *   - every path is unique, because two nodes on one path is a route table with a silent winner;
- *   - the glyph column holds: present at the top level, absent underneath a parent.
+ *   - every row carries its glyph, at the top level and underneath a parent alike (D201).
  */
 import { describe, it, expect } from 'vitest';
 
 import {
+  areaNavIdOf,
+  areaPath,
+  findAreaIn,
   firstLeafPath,
   isNavParent,
   isNavTreeParent,
@@ -32,6 +35,7 @@ import {
   resolveActiveNav,
   ROUTE_REGISTRY,
   resolveNavTree,
+  resolveRailActive,
   SURFACE_CATALOG,
   type NavGroup,
   type NavItem,
@@ -93,8 +97,15 @@ describe('the tree and the registry stay in sync (the guard that replaces the ol
       expect(routable.has(surface?.path ?? '')).toBe(true);
       expect(treeLeafIds(NAV_TREE)).not.toContain(id);
     }
-    // The first-run door is the pre-workspace screen, not an Einstellungen leaf.
-    expect([...OFF_RAIL]).toEqual(['first-run']);
+    // D210: the first-run door, Suche, Agent, Aufgaben, /vat and the fifteen Einstellungen pages.
+    expect([...OFF_RAIL].sort()).toEqual(
+      [
+        'first-run', 'search', 'agent', 'tasks', 'vat',
+        'settings-home', 'setup', 'operations', 'my-settings', 'hausbuch', 'members', 'customization',
+        'automations', 'extensions', 'writing-style', 'document-templates', 'dispatch', 'migration',
+        'environments', 'onboarding',
+      ].sort(),
+    );
   });
 
   it('resolves every tree leaf to a catalog surface, hence to a route', () => {
@@ -125,16 +136,21 @@ describe('the tree and the registry stay in sync (the guard that replaces the ol
 });
 
 describe('the resolved rail', () => {
-  it('nests MWST over Abrechnung and Einstellungen, in that order (W1)', () => {
-    const mwst = parents.find((p) => p.labelKey === 'nav.mwst.group');
+  it('carries MWST as ONE leaf in Buchhaltung, no parent over it (D210)', () => {
+    expect(parents.find((p) => p.labelKey === 'nav.mwst.group')).toBeUndefined();
+    const accounting = NAV_RAIL.find((g) => g.navId === 'accounting');
+    const mwst = accounting?.items.find((n) => !isNavParent(n) && n.navId === 'mwst') as NavItem | undefined;
     expect(mwst).toBeDefined();
-    expect(mwst?.children.map((c) => c.path)).toEqual(['/mwst', '/vat']);
+    expect(mwst?.path).toBe('/mwst');
+    expect(mwst?.labelKey).toBe('nav.mwst.group');
   });
 
-  it('leaves the /vat ROUTE untouched: only its label moved under the parent', () => {
-    const vat = NAV_ITEMS.find((i) => i.path === '/vat');
-    expect(vat).toBeDefined();
+  it('leaves the /vat ROUTE untouched: routed and off the rail, reached from the settings page', () => {
+    expect(NAV_ITEMS.find((i) => i.path === '/vat')).toBeUndefined();
+    expect(OFF_RAIL.has('vat')).toBe(true);
+    const vat = SURFACE_CATALOG.find((s) => s.path === '/vat');
     expect(vat?.labelKey).toBe('nav.mwst.settings');
+    expect(ROUTE_REGISTRY.some((r) => r.path === '/vat')).toBe(true);
   });
 
   it('gives a parent no path, so it can never be routed to', () => {
@@ -158,12 +174,15 @@ describe('the resolved rail', () => {
     expect(new Set(paths).size).toBe(paths.length);
   });
 
-  it('carries a glyph on every top-level item and on no nested child', () => {
+  it('carries a glyph on every row, a nested child included (D201: icons on every row)', () => {
     expect(topLevel.length).toBeGreaterThan(0);
     for (const item of topLevel) expect(item.icon).toBeDefined();
     for (const parent of parents) {
       expect(parent.icon).toBeDefined();
-      for (const child of parent.children) expect(child.icon).toBeUndefined();
+      for (const child of parent.children) {
+        // The child's glyph is its own catalog surface's, never a stand-in.
+        expect(child.icon).toBe(SURFACE_CATALOG.find((s) => s.navId === child.navId)?.icon);
+      }
     }
   });
 
@@ -177,6 +196,14 @@ describe('the resolved rail', () => {
 
   it('lands the index redirect on the overview surface, stable across the split', () => {
     expect(NAV_ITEMS[0]?.path).toBe('/overview');
+  });
+
+  it('keeps the rail to the headerless top block and the six headed areas, in order (D210)', () => {
+    expect(NAV_RAIL.map((g) => g.navId)).toEqual([
+      'overview-cluster', 'bank', 'sales', 'purchasing', 'accounting', 'master-data', 'projects',
+    ]);
+    expect(NAV_RAIL[0]!.labelKey).toBeNull();
+    expect(NAV_RAIL[0]!.items.map((n) => n.navId)).toEqual(['overview', 'attention']);
   });
 });
 
@@ -201,7 +228,7 @@ describe('the A2 regrouping (D118): folding the taxonomy', () => {
     ]);
   });
 
-  it('folds the fixed-asset register behind an Anlagen parent (its report door moved to Berichte)', () => {
+  it('folds the fixed-asset register behind an Anlagen parent (its report door sits in Buchhaltung)', () => {
     const anlagen = parentByLabel('nav.parent.anlagen');
     expect(anlagen).toBeDefined();
     expect(anlagen?.children.map((c) => c.path)).toEqual([
@@ -213,45 +240,42 @@ describe('the A2 regrouping (D118): folding the taxonomy', () => {
       '/asset-reconciliation',
       '/asset-maintenance',
     ]);
-    // The report door is NOT here; it lives in the Berichte group.
+    // The report door is NOT here; it lives in Buchhaltung.
     expect(anlagen?.children.map((c) => c.path)).not.toContain('/asset-reports');
   });
 
-  it('gathers the five scattered report doors into one Berichte group', () => {
-    const berichte = groupByLabel('nav.group.berichte');
-    expect(berichte).toBeDefined();
-    expect(berichte?.items.map((n) => (n as NavItem).path).sort()).toEqual(
-      ['/reports', '/report-builder', '/procurement-analytics', '/asset-reports', '/forecast'].sort(),
-    );
+  it('gathers the report doors into Buchhaltung, after the period work (D210)', () => {
+    const accounting = groupByLabel('nav.group.accounting');
+    expect(accounting).toBeDefined();
+    const paths = accounting?.items.map((n) => (n as NavItem).path);
+    for (const door of ['/reports', '/report-builder', '/procurement-analytics', '/asset-reports', '/forecast', '/review', '/export']) {
+      expect(paths).toContain(door);
+    }
+    expect(paths!.indexOf('/periods')).toBeLessThan(paths!.indexOf('/reports'));
+    // The old Berichte, Treuhänder and Einstellungen groups are gone.
+    for (const gone of ['nav.group.berichte', 'nav.group.treuhaender', 'nav.group.einstellungen']) {
+      expect(groupByLabel(gone)).toBeUndefined();
+    }
   });
 
-  it('folds the governance cluster into one Einstellungen group, and it is LAST', () => {
-    const settings = groupByLabel('nav.group.einstellungen');
-    expect(settings).toBeDefined();
-    expect(settings?.items.map((n) => (n as NavItem).path)).toEqual([
-      '/setup',
-      '/operations',
-      // D178 point 7: Meine Einstellungen, the person's own preferences, after the workspace pair (K-16).
-      '/my-settings',
-      // N00: the Hausbuch, beside the workspace settings it belongs to.
-      '/hausbuch',
-      '/members',
-      '/customization',
-      '/automations',
-      '/extensions',
-      '/writing-style',
-      '/document-templates',
-      '/dispatch',
-      '/migration',
-      '/environments',
-      '/onboarding',
-    ]);
-    expect(NAV_RAIL[NAV_RAIL.length - 1]?.labelKey).toBe('nav.group.einstellungen');
+  it('moves the governance cluster off the rail: every Einstellungen page stays routed, none is a row (D210)', () => {
+    const settingsPaths = [
+      '/settings', '/setup', '/operations', '/my-settings', '/hausbuch', '/members', '/customization',
+      '/automations', '/extensions', '/writing-style', '/document-templates', '/dispatch', '/migration',
+      '/environments', '/onboarding',
+    ];
+    const railPaths = new Set(NAV_ITEMS.map((i) => i.path));
+    const routed = new Set(ROUTE_REGISTRY.map((r) => r.path));
+    for (const path of settingsPaths) {
+      expect(railPaths.has(path), `${path} is not a rail row`).toBe(false);
+      expect(routed.has(path), `${path} stays routed`).toBe(true);
+    }
   });
 
-  it('keeps the daily queues top-level (a headerless cluster), not folded into a group', () => {
-    const queueGroup = NAV_RAIL.find((g) => g.items.some((n) => (n as NavItem).path === '/tasks'));
+  it('keeps the daily doors top-level (a headerless cluster), not folded into a group', () => {
+    const queueGroup = NAV_RAIL.find((g) => g.items.some((n) => (n as NavItem).path === '/attention'));
     expect(queueGroup?.labelKey).toBeNull();
+    expect(queueGroup?.items.map((n) => n.navId)).toEqual(['overview', 'attention']);
   });
 });
 
@@ -262,7 +286,8 @@ describe('firstLeafPath: a parent navigates to its natural landing (D135)', () =
     parents.find((p) => p.labelKey === labelKey) as NavParent;
 
   it('resolves a headed group to the path of its first leaf', () => {
-    expect(firstLeafPath(groupByLabel('nav.group.masterData'))).toBe('/accounts');
+    expect(firstLeafPath(groupByLabel('nav.group.masterData'))).toBe('/contacts');
+    expect(firstLeafPath(groupByLabel('nav.group.bank'))).toBe('/bank');
     expect(firstLeafPath(groupByLabel('nav.group.projects'))).toBe('/projects');
     expect(firstLeafPath(groupByLabel('nav.group.accounting'))).toBe('/journal');
   });
@@ -270,7 +295,6 @@ describe('firstLeafPath: a parent navigates to its natural landing (D135)', () =
   it('resolves a nested parent to the path of its first child leaf', () => {
     expect(firstLeafPath(parentByLabel('nav.parent.lager'))).toBe('/inventory');
     expect(firstLeafPath(parentByLabel('nav.parent.anlagen'))).toBe('/asset-categories');
-    expect(firstLeafPath(parentByLabel('nav.mwst.group'))).toBe('/mwst');
   });
 
   it('recurses when a group leads with a nested parent, landing on that parent first leaf', () => {
@@ -333,5 +357,40 @@ describe('resolveActiveNav: the auto-expand chain (keeps routing untouched)', ()
     const { leafNavId, ancestors } = resolveActiveNav('/nowhere');
     expect(leafNavId).toBeNull();
     expect(ancestors.size).toBe(0);
+  });
+});
+
+describe('the area overviews (D201): one page of tiles per group and nested parent', () => {
+  it('round-trips an overview path and refuses every other path', () => {
+    expect(areaPath('master-data')).toBe('/area/master-data');
+    expect(areaNavIdOf('/area/master-data')).toBe('master-data');
+    expect(areaNavIdOf('/area/lager-group/')).toBe('lager-group');
+    expect(areaNavIdOf('/accounts')).toBeNull();
+    expect(areaNavIdOf('/area/a/b')).toBeNull();
+  });
+
+  it('finds every headed group and every nested parent, and no headerless cluster or leaf', () => {
+    for (const group of NAV_RAIL) {
+      if (group.labelKey === null) {
+        expect(findAreaIn(NAV_RAIL, group.navId)).toBeNull();
+        continue;
+      }
+      expect(findAreaIn(NAV_RAIL, group.navId)?.kind).toBe('group');
+      for (const node of group.items) {
+        if (isNavParent(node)) expect([...(findAreaIn(NAV_RAIL, node.navId)?.ancestors ?? [])]).toEqual([group.navId, node.navId]);
+      }
+    }
+    expect(findAreaIn(NAV_RAIL, 'accounts')).toBeNull();
+  });
+
+  it('keeps every overview id apart from every other overview id (one route, one node)', () => {
+    const ids = [...NAV_RAIL.filter((g) => g.labelKey !== null).map((g) => g.navId), ...parents.map((p) => p.navId)];
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('opens the node of an open overview, and lights no leaf there', () => {
+    const active = resolveRailActive({ pathname: '/area/lager-group', favourites: [], rail: NAV_RAIL, rule: 'favourite' });
+    expect(active.treeNavId).toBeNull();
+    expect([...active.expand].sort()).toEqual(['lager-group', 'master-data']);
   });
 });

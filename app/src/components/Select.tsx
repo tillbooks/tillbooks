@@ -21,6 +21,10 @@
  *
  * API is deliberately close to a native select (`value` / `onChange` / `options`) so a migration off
  * `<select>` is mechanical. `groups` renders optgroup-style sections; pass one of `options`/`groups`.
+ *
+ * `MultiSelect` (the Einstellungen redesign, 18.11.2026: the agent's areas as one control, "6 von 10") is the
+ * same control choosing several values: the listbox is `aria-multiselectable`, a click or Enter/Space ticks
+ * or unticks the active option and the list stays open, and the closed trigger shows `displayLabel`.
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -59,6 +63,26 @@ export interface SelectProps {
   readonly onBlur?: () => void;
   /** Marks the control required (aria-required) where a form gates submit on a chosen value. */
   readonly required?: boolean;
+  /** D195: the list may be wider than its trigger (a narrow table cell); in px. */
+  readonly popMinWidth?: number;
+  /** D195: what the closed trigger shows instead of the chosen option's label (a short form of it); the list keeps the full labels. */
+  readonly displayLabel?: string;
+  /** Internal: set by `MultiSelect`, never passed by a caller of `Select`. */
+  readonly multiple?: { readonly values: readonly string[]; readonly onChange: (values: string[]) => void };
+}
+
+export interface MultiSelectProps extends Omit<SelectProps, 'value' | 'onChange' | 'multiple'> {
+  /** The chosen values, in any order. */
+  readonly values: readonly string[];
+  /** Called with the new choice, in the order of `options`. */
+  readonly onChange: (values: string[]) => void;
+}
+
+const NO_CHANGE = () => undefined;
+
+/** The shared dropdown choosing several values: opens below its trigger, ticks stay open (see the header). */
+export function MultiSelect({ values, onChange, ...rest }: MultiSelectProps) {
+  return <Select {...rest} value="" onChange={NO_CHANGE} multiple={{ values, onChange }} />;
 }
 
 interface PopPosition {
@@ -87,6 +111,9 @@ export function Select({
   describedBy,
   onBlur,
   required = false,
+  popMinWidth,
+  displayLabel,
+  multiple,
 }: SelectProps) {
   const [open, setOpen] = useState(false);
   const [activeValue, setActiveValue] = useState<string | null>(value);
@@ -103,8 +130,12 @@ export function Select({
 
   const flat = useMemo(() => flatten(options, groups), [options, groups]);
   const selectable = useMemo(() => flat.filter((o) => o.disabled !== true), [flat]);
-  const selected = flat.find((o) => o.value === value);
-  const triggerLabel = selected?.label ?? placeholder ?? '';
+  const isChosen = (v: string) => (multiple !== undefined ? multiple.values.includes(v) : v === value);
+  const selected = multiple !== undefined ? undefined : flat.find((o) => o.value === value);
+  const triggerLabel =
+    multiple !== undefined
+      ? (displayLabel ?? flat.filter((o) => isChosen(o.value)).map((o) => o.label).join(', ')) || (placeholder ?? '')
+      : ((selected !== undefined ? (displayLabel ?? selected.label) : undefined) ?? placeholder ?? '');
   const optionId = (v: string) => `${baseId}-opt-${flat.findIndex((o) => o.value === v)}`;
 
   // Position the portaled popover against the trigger, flipping above near the viewport bottom.
@@ -155,8 +186,9 @@ export function Select({
   // Seed the active option from the current value each time the list opens.
   useEffect(() => {
     if (!open) return;
+    const first = multiple !== undefined ? selectable.find((o) => multiple.values.includes(o.value))?.value : value;
     setActiveValue(
-      value !== '' && selectable.some((o) => o.value === value) ? value : (selectable[0]?.value ?? null),
+      first !== undefined && first !== '' && selectable.some((o) => o.value === first) ? first : (selectable[0]?.value ?? null),
     );
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -170,11 +202,18 @@ export function Select({
 
   const commit = useCallback(
     (v: string) => {
+      if (multiple !== undefined) {
+        // A tick keeps the list open: the person may choose several before leaving it.
+        const next = multiple.values.includes(v) ? multiple.values.filter((x) => x !== v) : [...multiple.values, v];
+        multiple.onChange(flat.map((o) => o.value).filter((x) => next.includes(x)));
+        triggerRef.current?.focus();
+        return;
+      }
       onChange(v);
       setOpen(false);
       triggerRef.current?.focus();
     },
-    [onChange],
+    [onChange, multiple, flat],
   );
 
   const moveActive = useCallback(
@@ -248,7 +287,7 @@ export function Select({
       key={o.value}
       id={optionId(o.value)}
       role="option"
-      aria-selected={o.value === value}
+      aria-selected={isChosen(o.value)}
       aria-disabled={o.disabled === true || undefined}
       data-value={o.value}
       data-active={o.value === activeValue || undefined}
@@ -257,7 +296,7 @@ export function Select({
       onClick={() => o.disabled !== true && commit(o.value)}
     >
       <span className="select-option-label">{o.label}</span>
-      {o.value === value && (
+      {isChosen(o.value) && (
         // The icon set's check, not a text dingbat from a fallback font (K-37); the SVG is the flex item.
         <CheckGlyph className="select-check" size={16} />
       )}
@@ -272,8 +311,8 @@ export function Select({
       : {
           position: 'fixed',
           zIndex: 'var(--t-z-listbox)',
-          left: pos.left,
-          width: pos.width,
+          left: popMinWidth !== undefined && popMinWidth > pos.width ? Math.max(8, Math.min(pos.left, window.innerWidth - popMinWidth - 8)) : pos.left,
+          width: Math.max(pos.width, popMinWidth ?? 0),
           maxHeight: pos.maxHeight,
           ...(pos.anchor.edge === 'top' ? { top: pos.anchor.px } : { bottom: pos.anchor.px }),
         };
@@ -299,7 +338,7 @@ export function Select({
         onKeyDown={onKeyDown}
         onBlur={onBlur}
       >
-        <span className={`select-value${selected === undefined ? ' select-value--placeholder' : ''}`}>
+        <span className={`select-value${selected === undefined && multiple === undefined ? ' select-value--placeholder' : ''}`}>
           {triggerLabel}
         </span>
         <ChevronDownGlyph className="select-caret" size={16} />
@@ -310,6 +349,7 @@ export function Select({
             id={listboxId}
             role="listbox"
             aria-label={ariaLabel}
+            aria-multiselectable={multiple !== undefined || undefined}
             className="select-pop panel"
             ref={listRef}
             style={popStyle}

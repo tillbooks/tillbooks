@@ -38,7 +38,9 @@ choose "Try the demo" ("Demo ausprobieren").
 
 - Work in the demo company until the user says otherwise.
 - By default, postings, payments, access changes and deletions wait as proposals until the user
-  approves them in the Studio. Tell the user when that happens; never try to approve your own proposal.
+  approves them in the Studio. Tell the user when that happens. Decide a proposal yourself only when the
+  owner has granted it (setting `agent.decide_proposals`, Studio > Setup > Settings > Agent); otherwise
+  the refusal says where the owner grants it.
 - Never ask for, read or type passwords, e-banking logins, EBICS keys or card numbers.
 
 The full guide is in [AGENTS.md](AGENTS.md).

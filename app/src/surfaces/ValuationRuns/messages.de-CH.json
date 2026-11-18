@@ -5,7 +5,6 @@
   "invRun": {
     "title": "Bestandesbewertung und Abstimmung",
     "noWorkspace": "Wähle einen Mandanten, um dessen Warenbestand zu bewerten und mit dem Hauptbuch abzustimmen.",
-    "reverseReason": "Storniert aus der Ansicht Bewertungsläufe",
     "newRun": "Neuer Lauf",
     "reverse": "Stornieren",
     "asOf": "Stichtag",

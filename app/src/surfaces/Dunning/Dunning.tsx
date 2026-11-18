@@ -68,6 +68,7 @@ import {
   type DunningRunSummary,
   type DunningRunView,
 } from './model';
+import { optionalReason, useAskReason } from '../../lib/useAskReason';
 import './Dunning.css';
 
 /** The discard confirmation is consequential, so it is the alertdialog variant (the DataBackup shape). */
@@ -384,15 +385,15 @@ export function Dunning() {
    * already reversed fee by name and writes nothing, and the reload shows the run's real state.
    */
   const reverseFeeKey = useIdempotencyKey([workspaceId, 'reverse-fee', current?.runId ?? '']);
-  const reverseFee = async (reason: string, override: DunningRefreezeOverride | null) => {
+  const reverseFee = async (reason: string | undefined, override: DunningRefreezeOverride | null) => {
     if (workspaceId === null || current === null) return;
     setBusy('reverse-fee');
     setNote(null);
     const response = await client.call('dunning_fee_reverse', {
       workspaceId,
       runId: current.runId,
-      reason,
-      // D174: a per-run override of the re-freeze settings carries its required reason.
+      // D204: a reason travels only when the person wrote one; the override is audited either way.
+      ...(reason === undefined ? {} : { reason }),
       ...(override === null ? {} : override),
       idempotencyKey: reverseFeeKey,
     });
@@ -405,8 +406,6 @@ export function Dunning() {
           ? t('dunning.feeSettled')
           : code === 'already_reversed'
             ? t('dunning.feeAlreadyReversed')
-            : code === 'reason_required'
-              ? t('dunning.overrideReasonRequired')
             : code === 'period_locked'
               ? t('dunning.feeStillLocked')
                 : t('dunning.error.action'),
@@ -707,7 +706,7 @@ function CurrentRun({
   onRecoverFee: () => void;
   onSend: () => void;
   onDiscard: () => void;
-  onReverseFee: (reason: string, override: DunningRefreezeOverride | null) => void;
+  onReverseFee: (reason: string | undefined, override: DunningRefreezeOverride | null) => void;
   onDownload: (debtorId: string, debtorName: string | null) => void;
   /** D174: the workspace settings in force, so the dialog says what happens and can deviate once. */
   refreezeSetting: DunningRefreezeMode;
@@ -723,10 +722,11 @@ function CurrentRun({
   const issued = run.status !== 'proposed';
   // D161.3: the discard asks first, in a dialog that names what it does (the engine's own sentence).
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
-  // D169: the fee's undo asks first too, with a required reason that rides the correcting entry.
+  // D169: the fee's undo asks first too. D204: no reason; an optional note only when the workspace asks.
+  const askReason = useAskReason();
   const [confirmingReverse, setConfirmingReverse] = useState(false);
   const [reverseReason, setReverseReason] = useState('');
-  // D174: deviate from the settings for this run only, with a required reason (audited by the engine).
+  // D174: deviate from the settings for this run only (audited by the engine; D204: no reason needed).
   const [overriding, setOverriding] = useState(false);
   const [overrideRefreeze, setOverrideRefreeze] = useState<DunningRefreezeMode>(refreezeSetting);
   const [overrideLetterDate, setOverrideLetterDate] = useState<DunningLetterDate>(letterDateSetting);
@@ -944,13 +944,13 @@ function CurrentRun({
             <button
               type="button"
               className="btn btn--danger"
-              disabled={reverseReason.trim() === '' || (overriding && overrideReason.trim() === '')}
               onClick={() => {
                 setConfirmingReverse(false);
+                const why = optionalReason(overrideReason);
                 onReverseFee(
-                  reverseReason.trim(),
+                  optionalReason(reverseReason),
                   overriding
-                    ? { refreeze: overrideRefreeze, letterDate: overrideLetterDate, overrideReason: overrideReason.trim() }
+                    ? { refreeze: overrideRefreeze, letterDate: overrideLetterDate, ...(why === undefined ? {} : { overrideReason: why }) }
                     : null,
                 );
               }}
@@ -966,9 +966,11 @@ function CurrentRun({
           <p>{effectiveRefreeze === 'hold' ? t('dunning.reverseFeeUnsentHold') : t('dunning.reverseFeeUnsentReissue')}</p>
           <ConsequenceLine verb="dunning_fee_reverse" />
           <div className="form-stack">
-          <Field label={t('dunning.reverseFeeReason')}>
-            <input className="field" value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} />
-          </Field>
+          {askReason && (
+            <Field label={t('dunning.reverseFeeReason')}>
+              <input className="field" value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} />
+            </Field>
+          )}
           <label className="dunning-reverse-reason">
             <input type="checkbox" checked={overriding} onChange={(e) => setOverriding(e.target.checked)} />{' '}
             <span>{t('dunning.overrideToggle')}</span>
@@ -997,9 +999,11 @@ function CurrentRun({
                   ]}
                 />
               </Field>
-              <Field label={t('dunning.overrideReason')}>
-                <input className="field" value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} />
-              </Field>
+              {askReason && (
+                <Field label={t('dunning.overrideReason')}>
+                  <input className="field" value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} />
+                </Field>
+              )}
             </>
           )}
           </div>

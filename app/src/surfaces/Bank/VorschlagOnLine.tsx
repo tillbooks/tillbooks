@@ -5,8 +5,8 @@
  *
  * D167: on an OPEN line the strip carries no second Buchen. The row's own Buchen approves the pinned
  * Vorschlag (D162), or, once the person changed the line, books their version first and then closes the
- * Vorschlag; what stays here is the reason line and "Ablehnen", which takes an optional reason the
- * agent's next session reads. On a DECIDED line (a drafted reopen) the row has no Buchen, so the host
+ * Vorschlag; what stays here is the reason line and "Ablehnen", one click that asks nothing (D204: nobody
+ * types a reason; a rejection books nothing). On a DECIDED line (a drafted reopen) the row has no Buchen, so the host
  * passes `onApprove` and "Freigeben" stays, with the engine's consequence sentence as its tooltip (C4,
  * D156). The drafting seat never decides its own proposal (`cannot_self_approve`).
  *
@@ -15,7 +15,7 @@
  * it stands and closes the stale Vorschlag. Frozen figures, when the drafted verb pins a record, ride on
  * one quiet line under the sentence.
  */
-import { useId, useState } from 'react';
+import { useId } from 'react';
 
 import { useT, formatDate, formatMoney } from '../../i18n';
 import { Tooltip } from '../../components/Tooltip';
@@ -38,6 +38,7 @@ export interface VorschlagOnLineProps {
   busy: boolean;
   /** "Freigeben", only where the row has no Buchen of its own (a decided line). */
   onApprove?: () => void;
+  /** One click (D204): the host is handed an empty reason and sends none. */
   onReject: (reason: string) => void;
 }
 
@@ -52,8 +53,10 @@ export function vorschlagSentence(t: (k: string, p?: Record<string, string | num
       return leg === undefined ? t('bankInbox.vorschlag.book', { target: what }) : t('bankInbox.vorschlag.bookVat', { target: what, vat: taxPhrase(t, l, leg.taxCode) });
     }
     case 'ignore_bank_line': {
-      const reason = typeof v.payload.reason === 'string' ? v.payload.reason : 'other';
-      return t('bankInbox.vorschlag.ignore', { reason: t(`bankInbox.ignore.reason.${reason}.label`) });
+      // D196 (critic L3): a one-click ignore names no reason; the engine records the workspace default when
+      // it runs, so the card claims none rather than guessing one that may not be the one recorded.
+      const reason = typeof v.payload.reason === 'string' && v.payload.reason.trim() !== '' ? v.payload.reason : null;
+      return reason === null ? t('bankInbox.vorschlag.ignorePlain') : t('bankInbox.vorschlag.ignore', { reason: t(`bankInbox.ignore.reason.${reason}.label`) });
     }
     case 'reopen_bank_line':
       return t('bankInbox.vorschlag.reopen', { reason: typeof v.payload.reason === 'string' ? v.payload.reason : '' });
@@ -113,8 +116,6 @@ export function EvidenceLines({ line, evidence, lookups }: { line: BankInboxLine
 export function VorschlagOnLine({ line, vorschlag, lookups, canDecide, isOwn, busy, onApprove, onReject }: VorschlagOnLineProps) {
   const t = useT();
   const baseId = useId();
-  const [rejecting, setRejecting] = useState(false);
-  const [reason, setReason] = useState('');
   // D156: the engine's one consequence for the drafted verb, the sentence the Vorschläge card shows.
   const consequence = useConsequence(vorschlag.actionTool, vorschlag.dialCapability);
   const date = vorschlag.createdAt.length >= 10 ? formatDate(vorschlag.createdAt.slice(0, 10)) : '';
@@ -144,31 +145,10 @@ export function VorschlagOnLine({ line, vorschlag, lookups, canDecide, isOwn, bu
         <p className="bank-mode__note">{t('bankInbox.vorschlag.own')}</p>
       ) : !canDecide ? (
         <p className="bank-mode__note">{t('bankInbox.vorschlag.noRight')}</p>
-      ) : rejecting ? (
-        <form
-          className="bank-vorschlag__reject"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onReject(reason.trim());
-          }}
-        >
-          <label className="bank-field" htmlFor={`${baseId}-reason`}>
-            <span className="bank-field__label">{t('bankInbox.vorschlag.rejectReason')}</span>
-            <textarea id={`${baseId}-reason`} className="field bank-textarea" rows={2} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />
-          </label>
-          <div className="bank-mode__actions">
-            <button type="submit" className="btn btn--secondary btn--sm" disabled={busy}>
-              {t('bankInbox.vorschlag.rejectConfirm')}
-            </button>
-            <button type="button" className="btn btn--ghost btn--sm" onClick={() => setRejecting(false)}>
-              {t('bankInbox.panel.cancel')}
-            </button>
-          </div>
-        </form>
       ) : (
         <span className="bank-vorschlag__actions">
           {changed || approve === null ? null : consequence !== null ? <Tooltip content={consequence}>{approve}</Tooltip> : approve}
-          <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => setRejecting(true)}>
+          <button type="button" className="btn btn--ghost btn--sm" disabled={busy} onClick={() => onReject('')}>
             {t('bankInbox.vorschlag.reject')}
           </button>
         </span>

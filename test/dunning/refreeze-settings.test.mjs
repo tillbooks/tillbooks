@@ -1,11 +1,11 @@
 // A15 money path: D174's two behaviour choices are registry settings (D172), each overridable for one
-// run with a required, audited reason.
+// run, audited (D204: the override's reason is optional).
 //
 // `dunning.refreeze` (Q1): `re-issue` (default, the critic-passed D174 behaviour: an unsent letter is
 // re-frozen without the reversed fee) | `hold` (D169: the frozen demand stands, send holds the letter
 // as `fee_reversed`). `dunning.letter_date` (Q9): `run_date` (default) | `today` (a re-issued letter is
 // dated the day of the re-issue, fixed at the re-freeze). `dunning_fee_reverse` takes `refreeze` /
-// `letterDate` for one run, and needs `overrideReason` for either (`reason_required` on every face).
+// `letterDate` for one run; `overrideReason` is optional for either (D204, never `reason_required`).
 //
 // SYNTHETIC BY CONSTRUCTION: invented names, addresses and amounts; a published-format test QR-IBAN.
 
@@ -19,6 +19,7 @@ import { callTool } from '../../dist/api/mcp.js';
 import { fixedClock } from '../../dist/core/clock.js';
 import { settingDef } from '../../dist/core/settings/registry.js';
 import { freshDeps, mintWorkspace, recordingRelay } from '../api/support.mjs';
+import { assertWhoWhen, assertPermission } from '../support/d204.mjs';
 
 const FEE = 3000;
 const LATER = '2026-07-23T09:00:00.000Z';
@@ -185,16 +186,13 @@ test('D174 letter_date today: the re-issued letter carries the re-issue day, and
   assert.equal(view(w, r.runId).debtors[0].letterDate, '2026-07-23');
 });
 
-test('D174 override: refreeze/letterDate for one run need an audited reason, written into the mirror; the setting is unchanged', () => {
+test('D174 override: refreeze/letterDate for one run are audited, a given reason written into the mirror; the setting is unchanged', () => {
   const w = world();
   setSetting(w, 'dunning.refreeze', 'hold');
   const r = issuedRun(w);
   w.deps.clock = fixedClock(LATER);
   const entries = () => w.deps.store.db.prepare('SELECT COUNT(*) AS n FROM journal_entry WHERE workspace_id = ?').get(w.workspaceId).n;
   const before = entries();
-  for (const extra of [{ refreeze: 're-issue' }, { letterDate: 'today' }, { refreeze: 're-issue', overrideReason: '   ' }]) {
-    assert.equal(reverse(w, r.runId, `bad-${JSON.stringify(extra)}`, extra).error, 'reason_required', JSON.stringify(extra));
-  }
   assert.equal(reverse(w, r.runId, 'bad-v', { refreeze: 'maybe', overrideReason: 'x' }).error, 'invalid_input');
   assert.equal(reverse(w, r.runId, 'bad-r', { overrideReason: 'ohne Schalter' }).error, 'invalid_input');
   assert.equal(entries(), before, 'a refused override writes nothing');
@@ -212,24 +210,40 @@ test('D174 override: refreeze/letterDate for one run need an audited reason, wri
   assert.equal(must(call(w.deps, 'settings_get', { workspaceId: w.workspaceId, key: 'dunning.refreeze' }), 'get').setting.value, 'hold', 'the workspace setting is untouched');
 });
 
-test('D174 override without a reason: reason_required on the REST face and the MCP face, also for an agent seat, and nothing is drafted', () => {
+test('D204 dunning: an override without a reason reverses the fee, audited as its own row, named in the mirror, with no Grund', () => {
+  for (const overrideReason of [undefined, '   ']) {
+    const w = world();
+    setSetting(w, 'dunning.refreeze', 'hold');
+    const r = issuedRun(w);
+    w.deps.clock = fixedClock(LATER);
+    const res = must(reverse(w, r.runId, 'd204', { refreeze: 're-issue', ...(overrideReason === undefined ? {} : { overrideReason }) }), 'reasonless override');
+    assert.equal(res.overridden, true);
+    assert.equal(res.overrideReason, null);
+    assert.equal(demanded(w, r.itemId), 0, 'the override re-issued the letter without the fee');
+    const row = w.deps.store.db
+      .prepare("SELECT actor, at FROM audit_log WHERE workspace_id = ? AND entity_kind = 'dunning_run' AND entity_id = ? AND action = 'refreeze_override'")
+      .get(w.workspaceId, r.runId);
+    assertWhoWhen(row.actor, row.at);
+    const desc = w.deps.store.db.prepare('SELECT description FROM journal_entry WHERE id = ?').get(res.reversalEntryId).description;
+    assert.match(desc, /abweichend: offene Briefe ohne Gebühr neu ausgestellt/, 'what differed is named');
+    assert.doesNotMatch(desc, /Grund:/, 'no empty Grund');
+    assertPermission('dunning_fee_reverse');
+  }
+});
+
+test('D204 dunning faces: a reasonless override goes through on REST for a person and is drafted, never refused, for an agent seat', () => {
   const w = world();
   const r = issuedRun(w);
-  const input = { workspaceId: w.workspaceId, runId: r.runId, reason: 'Gebühr erlassen', refreeze: 'hold' };
-  for (const actor of ['studio', 'agent']) {
-    const deps = { ...w.deps, actor };
-    const rest = handleRest('dunning_fee_reverse', { ...input, idempotencyKey: `rest-${actor}` }, deps).body;
-    assert.equal(rest.error, 'reason_required', `REST ${actor}: ${JSON.stringify(rest)}`);
-    const mcp = JSON.parse(callTool(deps, 'dunning_fee_reverse', { ...input, overrideReason: '', idempotencyKey: `mcp-${actor}` }).content[0].text);
-    assert.equal(mcp.error, 'reason_required', `MCP ${actor}: ${JSON.stringify(mcp)}`);
-  }
-  const drafted = w.deps.store.db.prepare("SELECT COUNT(*) AS n FROM agent_action WHERE workspace_id = ? AND action_tool = 'dunning_fee_reverse'").get(w.workspaceId).n;
-  assert.equal(drafted, 0, 'no Vorschlag that could only fail at approval');
-  assert.equal(demanded(w, r.itemId), FEE);
-  const okRest = handleRest('dunning_fee_reverse', { ...input, overrideReason: 'Brief bleibt liegen', idempotencyKey: 'rest-ok' }, { ...w.deps, actor: 'studio' }).body;
+  const input = { workspaceId: w.workspaceId, runId: r.runId, refreeze: 'hold' };
+  const okRest = handleRest('dunning_fee_reverse', { ...input, idempotencyKey: 'rest-ok' }, { ...w.deps, actor: 'studio' }).body;
   assert.equal(okRest.ok, true, JSON.stringify(okRest));
   assert.equal(okRest.refreeze, 'hold');
   assert.equal(demanded(w, r.itemId), FEE, 'the override held the letter');
+  const w2 = world();
+  const r2 = issuedRun(w2);
+  const mcp = JSON.parse(callTool({ ...w2.deps, actor: 'agent' }, 'dunning_fee_reverse', { workspaceId: w2.workspaceId, runId: r2.runId, refreeze: 'hold', overrideReason: '', idempotencyKey: 'mcp-agent' }).content[0].text);
+  assert.notEqual(mcp.error, 'reason_required', JSON.stringify(mcp));
+  assert.equal(mcp.drafted, true, `the agent seat drafts: ${JSON.stringify(mcp)}`);
 });
 
 test('D174 settings on REST: settings_set and settings_get carry the dunning keys', () => {

@@ -34,6 +34,9 @@ import { isCapability, type Capability } from '../access/capabilities.js';
 import { BRIEF_SECTIONS_DEFAULT, BRIEF_SECTIONS_MAX_LENGTH } from '../hausbuch/sections.js';
 // D188: the default fee phrases, from a leaf module for the same reason.
 import { BANK_FEE_TEXTS_DEFAULT } from '../banking/feeTexts.js';
+// D202: the closed area names, from a leaf module for the same reason.
+import { SETTINGS_SECTIONS_MAX_LENGTH } from './areas.js';
+import { OWNER_WORD_EXCLUDED_DEFAULT, OWNER_WORD_EXCLUDED_MAX_LENGTH } from '../agent/ownerWordExcluded.js';
 
 /** The agent-dial families a setting's change may draft under (a subset of A26's `DIAL_CAPABILITIES`). */
 export const SETTING_DIAL_CAPABILITIES = ['customize', 'post', 'pay', 'issue', 'send', 'dun', 'vat-file', 'close-period'] as const;
@@ -103,6 +106,23 @@ export const SETTINGS: readonly SettingDef[] = [
       'de-CH': 'Wie viele Tage im Voraus Pendenzen offene Checklisten-Schritte als fällig zeigt. Überfällige Schritte erscheinen immer.',
     },
   },
+  // --- A03, the audit trail (D204) ---------------------------------------------------------------
+  // D204 point 4 (owner, 15.11.2026): no typed reason is ever mandatory. This decides only whether the
+  // Studio OFFERS a reason field: `never` (default) shows none, `optional` offers an optional note that
+  // never disables a button. No value makes the engine refuse; a given reason is recorded (A03 §11).
+  {
+    key: 'audit.ask_reason',
+    schema: { type: 'enum', values: ['never', 'optional'] },
+    default: 'never',
+    owningCapability: 'manage_settings',
+    dialCapability: 'customize',
+    area: { id: 'A03', label: { en: 'Audit trail', 'de-CH': 'Protokoll' } },
+    label: { en: 'Offer a reason field', 'de-CH': 'Feld für einen Grund anbieten' },
+    description: {
+      en: 'never (default): no reason field; every change keeps who, what, when and with which permission. optional: an optional note you may leave empty.',
+      'de-CH': 'never (Standard): kein Feld für einen Grund; jede Änderung hält fest, wer was wann mit welcher Berechtigung getan hat. optional: eine freiwillige Notiz, die du leer lassen kannst.',
+    },
+  },
   // --- A34, the payroll hand-off -------------------------------------------------------------------
   // D173 (owner Q7 + Q8, 15.10.2026): what `wage_journal_post` does when an earlier wage journal for
   // the same month still stands. `refuse` is the decided rule (Q7); `warn` posts and names the standing
@@ -121,22 +141,8 @@ export const SETTINGS: readonly SettingDef[] = [
       'de-CH': 'Was passiert, wenn für einen Monat gebucht wird, dessen Lohnbuchung noch steht: ablehnen (Standard), mit Warnung buchen oder nicht prüfen.',
     },
   },
-  // D173 (owner Q14, 15.10.2026): when a non-regular payroll run (bonus, 13th salary, correction) needs a
-  // reason. `correction` is the decided rule. Every non-regular run is audited whatever this says. Owned by
-  // `post` and drafted under `post`, like `payroll.month_guard`.
-  {
-    key: 'payroll.nonregular_reason',
-    schema: { type: 'enum', values: ['none', 'correction', 'all'] },
-    default: 'correction',
-    owningCapability: 'post',
-    dialCapability: 'post',
-    area: { id: 'A34', label: { en: 'Payroll', 'de-CH': 'Lohn' } },
-    label: { en: 'Reason for a non-regular payroll run', 'de-CH': 'Grund für einen besonderen Lohnlauf' },
-    description: {
-      en: 'Which non-regular wage journals need a reason: none, corrections only (default), or every bonus, 13th salary and correction.',
-      'de-CH': 'Welche besonderen Lohnbuchungen einen Grund brauchen: keine, nur Korrekturen (Standard) oder jeder Bonus, 13. Monatslohn und jede Korrektur.',
-    },
-  },
+  // D204 (16.11.2026): `payroll.nonregular_reason` (D173 Q14) is retired. No run is refused for a missing
+  // reason (A03 §11), so the key gated nothing; a stored row of it is ignored (no reader, no listing).
   // --- H06, the asset disposal ---------------------------------------------------------------------
   // D191 (owner Q4, 15.10.2026): what `asset_transaction_reverse` does with a disposal whose linked
   // proceeds document (an invoice or an incoming payment) still stands. `refuse` is the decided rule
@@ -266,6 +272,188 @@ export const SETTINGS: readonly SettingDef[] = [
       'de-CH': 'Ab wie vielen gleichen früheren Buchungen eine gelernte Zeile mit den sicheren Zeilen gebucht wird. 0: Nur sichere Zeilen. Bis du antwortest, werden gelernte Zeilen nie gesammelt gebucht.',
     },
   },
+  // D198 point 5: how a saved settlement source is pulled. `manual` (the default): a person (or an agent under
+  // the `post` dial) runs pull_settlement. `daily`: the scheduler pulls each source once per Swiss day as the
+  // person who saved it, and books through the saved template. Human-only: it decides that books are posted
+  // with nobody at the keyboard, which an agent may not switch on.
+  {
+    key: 'settlement.pull_mode',
+    schema: { type: 'enum', values: ['manual', 'daily'] },
+    default: 'manual',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    humanOnly: true,
+    area: { id: 'A39', label: { en: 'Bank', 'de-CH': 'Bank' } },
+    label: { en: 'Pull the settlement feed', 'de-CH': 'Abrechnungs-Feed abholen' },
+    description: {
+      en: 'manual: a settlement feed is pulled when someone asks. daily: TILL pulls every saved source once a day and books it through its template.',
+      'de-CH': 'manual: Der Abrechnungs-Feed wird abgeholt, wenn jemand es auslöst. daily: TILL holt jede gespeicherte Quelle einmal am Tag ab und bucht sie nach ihrer Vorlage.',
+    },
+  },
+  // D198 re-cut R1 (owner, 12.11.2026: "be sure we don't record or book test transactions as actual
+  // transactions"): what `import_settlement` (both doors, the pull and a file) does with an event of a TEST
+  // transaction (`refs.test`, sticky per transaction key, `settlement_feed_flag`). `skip` (the default, and
+  // the fallback when unreadable): never booked, kept as seen, listed by the pre-filing check. `book`: booked
+  // like any event. Human-only: it decides what reaches the books.
+  {
+    key: 'settlement.test_events',
+    schema: { type: 'enum', values: ['skip', 'book'] },
+    default: 'skip',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    humanOnly: true,
+    area: { id: 'A39', label: { en: 'Bank', 'de-CH': 'Bank' } },
+    label: { en: 'Test payments in the settlement feed', 'de-CH': 'Testzahlungen im Abrechnungs-Feed' },
+    description: {
+      en: 'skip: events of a test payment are kept but never booked (a test sale, its refund, a test transfer and its reversal). book: they are booked like every other event. Switching to book books a skipped event the next time a feed or file carries it.',
+      'de-CH': 'skip: Ereignisse einer Testzahlung werden festgehalten, aber nie gebucht (Testverkauf, Rückerstattung, Testüberweisung und ihre Rückbuchung). book: Sie werden wie jedes andere Ereignis gebucht. Stellst du auf book um, wird ein übersprungenes Ereignis gebucht, sobald ein Feed oder eine Datei es wieder bringt.',
+    },
+  },
+  // D198 re-cut, the test fee residue (owner, 12.11.2026: "Book as real fees"). Under `settlement.test_events`
+  // skip, the processor fee charged on a TEST payment (`processing_fee`, `service_fee`) is real money the
+  // processor kept. `book` (the default, and the fallback when unreadable): booked like a non-test fee,
+  // through the template's account and tax code, so the clearing account follows the processor balance.
+  // `skip`: left off the books with the rest of the test payment (the residue stays on the clearing account).
+  // Human-only: it decides what reaches the books.
+  {
+    key: 'settlement.test_fees',
+    schema: { type: 'enum', values: ['book', 'skip'] },
+    default: 'book',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    humanOnly: true,
+    area: { id: 'A39', label: { en: 'Bank', 'de-CH': 'Bank' } },
+    label: { en: 'Processor fees on test payments', 'de-CH': 'Gebühren auf Testzahlungen' },
+    description: {
+      en: 'book: the fee a processor charged on a test payment is booked like any fee (its template account and tax code), so the clearing account matches the processor balance. skip: it stays off the books with the test payment, and the clearing account keeps the difference.',
+      'de-CH': 'book: Die Gebühr, die der Zahlungsanbieter auf einer Testzahlung belastet hat, wird wie jede Gebühr gebucht (Konto und Steuercode der Vorlage), so stimmt das Durchlaufkonto mit dem Saldo beim Anbieter überein. skip: Sie bleibt mit der Testzahlung ungebucht, und das Durchlaufkonto behält die Differenz.',
+    },
+  },
+  // A42, the Umsatz review (owner, 13.11.2026): the period the review opens on. `quarter` (the default: the
+  // MWST period of the owner's effective method) | `month` | `year`. A view choice, so not human-only; it books
+  // nothing.
+  {
+    key: 'settlement.review_period',
+    schema: { type: 'enum', values: ['quarter', 'month', 'year'] },
+    default: 'quarter',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    area: { id: 'A39', label: { en: 'Bank', 'de-CH': 'Bank' } },
+    label: { en: 'Umsatz review period', 'de-CH': 'Zeitraum der Umsatz-Prüfung' },
+    description: {
+      en: 'quarter: the Umsatz review opens on the current quarter. month: on the current month. year: on the current year.',
+      'de-CH': 'quarter: Die Umsatz-Prüfung öffnet das laufende Quartal. month: den laufenden Monat. year: das laufende Jahr.',
+    },
+  },
+  // A42 (paper critic r1 M8): whether an agent seat sees a payer's email in the Umsatz review. `masked` (the
+  // default: an agent's context reaches its model provider) | `shown`. Human-only: it decides what personal
+  // data an agent reads.
+  {
+    key: 'settlement.agent_sees_email',
+    schema: { type: 'enum', values: ['masked', 'shown'] },
+    default: 'masked',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    humanOnly: true,
+    area: { id: 'A39', label: { en: 'Bank', 'de-CH': 'Bank' } },
+    label: { en: 'Payer email for the agent', 'de-CH': 'E-Mail der Zahlenden für den Agenten' },
+    description: {
+      en: 'masked: the agent sees that a settlement event has a payer email, never the address. shown: the agent sees the address like a person does.',
+      'de-CH': 'masked: Der Agent sieht, dass ein Abrechnungsereignis eine E-Mail der zahlenden Person trägt, nie die Adresse. shown: Der Agent sieht die Adresse wie eine Person.',
+    },
+  },
+  // D198 re-cut R2: how far a default pull reaches back before the watermark (late events, payouts whose
+  // arrival day lay ahead). The import's idempotency makes the overlap free. Human-only like the pull mode.
+  {
+    key: 'settlement.pull_overlap_days',
+    schema: { type: 'integer', min: 1, max: 60, unit: 'days' },
+    default: 7,
+    owningCapability: 'post',
+    dialCapability: 'post',
+    humanOnly: true,
+    area: { id: 'A39', label: { en: 'Bank', 'de-CH': 'Bank' } },
+    label: { en: 'Settlement pull overlap', 'de-CH': 'Überlappung beim Abholen' },
+    description: {
+      en: "How many days before the last pulled day a pull starts again. Events before a source's from-date are never booked, from a pull or a file: save another from-date to book them.",
+      'de-CH': 'Wie viele Tage vor dem zuletzt abgeholten Tag ein Abholen wieder beginnt. Ereignisse vor dem Startdatum einer Quelle werden nie gebucht, weder aus dem Feed noch aus einer Datei: Speichere ein anderes Startdatum, um sie zu buchen.',
+    },
+  },
+  // D198 re-cut R4: which CANCELLING GROUPS the pre-filing check hides (the unbooked sale and refund events of
+  // one transaction, all in the period, whose amounts, nets and VAT each sum to zero; recomputed on every
+  // read, never a booking). `hide_test` (the default): groups of test events. `hide_all`: real groups too.
+  // `show`: none. Human-only: it decides what a person is warned about before filing.
+  {
+    key: 'settlement.check_cancelling_groups',
+    schema: { type: 'enum', values: ['hide_test', 'hide_all', 'show'] },
+    default: 'hide_test',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    humanOnly: true,
+    area: { id: 'A39', label: { en: 'Bank', 'de-CH': 'Bank' } },
+    label: { en: 'Sales cancelled by a refund, before filing', 'de-CH': 'Durch Rückerstattung aufgehobene Verkäufe vor dem Einreichen' },
+    description: {
+      en: 'hide_test: an unbooked test sale and its full refund are not listed. hide_all: real ones are hidden too; their VAT nets to zero, but Ziffer 200 and 235 stay short by the amount. show: every one is listed.',
+      'de-CH': 'hide_test: Ein ungebuchter Testverkauf und seine volle Rückerstattung werden nicht aufgeführt. hide_all: Auch echte werden ausgeblendet; ihre MWST hebt sich auf, aber Ziffer 200 und 235 fehlen um den Betrag. show: Jeder wird aufgeführt.',
+    },
+  },
+  // D206 (A43 §2, the whole-day mode): how a settlement event read from a turnover TABLE gets its external id, the
+  // key the import's idempotency rests on. `column` (the default): only an id the export carries (one column or
+  // composed), so an id-less table refuses id_column_missing. `column_else_day`: an id-less table whose mapping a
+  // person confirmed lists WHOLE DAYS is read day by day, each row `day:<day>#<n>`, and a day already in the books
+  // is never booked again. Re-added (it was removed while it had one value). Human-only: it decides what counts as
+  // the same event, so what is booked once.
+  {
+    key: 'settlement.table_event_id',
+    schema: { type: 'enum', values: ['column', 'column_else_day'] },
+    default: 'column',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    humanOnly: true,
+    area: { id: 'A39', label: { en: 'Bank', 'de-CH': 'Bank' } },
+    label: { en: 'Event id from a turnover table', 'de-CH': 'Ereignis-ID aus einer Umsatztabelle' },
+    description: {
+      en: 'column: a turnover table is booked only by an id it carries (one column, or several composed); a table without one is refused. column_else_day: a table without an id whose mapping you confirmed lists whole days is booked day by day, and a day already in the books is never booked again; a day that differs from the books is shown and booked by hand.',
+      'de-CH': 'column: Eine Umsatztabelle wird nur über eine ID gebucht, die sie trägt (eine Spalte oder mehrere zusammengesetzt); eine Tabelle ohne ID wird abgelehnt. column_else_day: Eine Tabelle ohne ID, deren Zuordnung du als ganze Tage bestätigt hast, wird Tag für Tag gebucht, und ein Tag, der schon im Buch ist, wird nie ein zweites Mal gebucht; ein Tag, der vom Buch abweicht, wird gezeigt und von Hand gebucht.',
+    },
+  },
+  // D206: in the whole-day mode, what happens to the FIRST and the LAST day of a turnover table, which an export cut
+  // at a time of day lists only in part. `ask` (the default): the Studio asks per file whether they are complete and
+  // passes the answer to the import, which records it. `include`: they are booked like every other day. `exclude`:
+  // they are left out (a later file that covers them whole books them). A day of today or later is never booked.
+  // Human-only: it decides what reaches the books.
+  {
+    key: 'settlement.table_edge_days',
+    schema: { type: 'enum', values: ['ask', 'include', 'exclude'] },
+    default: 'ask',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    humanOnly: true,
+    area: { id: 'A39', label: { en: 'Bank', 'de-CH': 'Bank' } },
+    label: { en: 'First and last day of a turnover table', 'de-CH': 'Erster und letzter Tag einer Umsatztabelle' },
+    description: {
+      en: 'Only for tables read by whole days. ask: you are asked per file whether its first and last day are complete. include: they are booked like every other day. exclude: they are left out until a later file covers them whole. A day of today or later is never booked. Whatever you pick, a new day that shares an amount with a booked day beside it is always asked about (a re-export may have moved that row across midnight).',
+      'de-CH': 'Nur für Tabellen, die nach ganzen Tagen gelesen werden. ask: Du wirst pro Datei gefragt, ob ihr erster und ihr letzter Tag vollständig sind. include: Sie werden wie jeder andere Tag gebucht. exclude: Sie bleiben weg, bis eine spätere Datei sie ganz enthält. Ein Tag von heute oder später wird nie gebucht. Unabhängig davon wirst du immer gefragt, wenn ein neuer Tag einen Betrag mit einem gebuchten Nachbartag teilt (ein neuer Export kann diese Zeile über Mitternacht verschoben haben).',
+    },
+  },
+  // D195: what the pick bar's bulk Buchen books of the lines a person ticked. `bookable` (the default, the
+  // owner's ask of 12.11.2026): every ticked line whose booking is complete as its row shows it, and it says
+  // which it skipped and why. `sure`: the D184 rule, only sure lines and the learned lines the engine backs
+  // under `bank.bulk_learned_min`. A pending agent Vorschlag is never booked over either way. Read by the
+  // Studio only (the engine books one line per call). Human-only: an agent may not widen a person's bulk act.
+  {
+    key: 'bank.bulk_book_scope',
+    schema: { type: 'enum', values: ['bookable', 'sure'] },
+    default: 'bookable',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    humanOnly: true,
+    area: { id: 'A39', label: { en: 'Bank', 'de-CH': 'Bank' } },
+    label: { en: 'What the bulk booking books', 'de-CH': 'Was das Sammelbuchen bucht' },
+    description: {
+      en: 'bookable: every ticked line that is complete as its row shows it; the rest is skipped with its reason. sure: only sure lines and the learned lines allowed by the threshold.',
+      'de-CH': 'bookable: Jede angehakte Zeile, die so, wie sie steht, vollständig ist; die übrigen bleiben mit ihrem Grund stehen. sure: Nur sichere Zeilen und die gelernten Zeilen, die die Schwelle erlaubt.',
+    },
+  },
   // A41.5 (D184 point 7): the ✓ on a bank inbox row. `direct` (the default, the owner's ruling of 07.11.2026):
   // the ✓ books the line as the row shows it (or approves the agent's pending Vorschlag), a "Bitte prüfen" line
   // included. `review`: the ✓ opens the line's review view (the Beleg beside the booking) and the booking is
@@ -303,6 +491,22 @@ export const SETTINGS: readonly SettingDef[] = [
     description: {
       en: "suggest: a line a 'Do not book' rule matches waits for its own click. bulk: the bulk button sets such lines aside with the rule's reason.",
       'de-CH': "suggest: Eine Zeile, auf die eine 'Nicht buchen'-Regel passt, wartet auf deinen Klick. bulk: Der Sammelknopf legt solche Zeilen mit dem Grund der Regel beiseite.",
+    },
+  },
+  // D196 point 2 (founder, 12.11.2026): ONE-CLICK IGNORE. `ignore_bank_line` no longer requires a reason: a
+  // call without one records this default, so "Ignorieren" is one click with an optional note. The closed
+  // reasons stay available per call (a caller that sends one keeps it) and as this default.
+  {
+    key: 'bank.ignore_default_reason',
+    schema: { type: 'enum', values: ['other', 'booked_elsewhere', 'clearing_account', 'before_start', 'duplicate'] },
+    default: 'other',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    area: { id: 'A39', label: { en: 'Bank', 'de-CH': 'Bank' } },
+    label: { en: 'Reason of a one-click ignore', 'de-CH': 'Grund beim Ignorieren mit einem Klick' },
+    description: {
+      en: 'The reason recorded when a bank line is ignored without one: other (default), booked_elsewhere, clearing_account, before_start or duplicate. A note is always optional.',
+      'de-CH': 'Der Grund, der gespeichert wird, wenn eine Bankzeile ohne Grund ignoriert wird: other (Standard), booked_elsewhere, clearing_account, before_start oder duplicate. Eine Notiz ist immer freiwillig.',
     },
   },
   // D177 point 2 (A39 §16.1): a Buchungsregel whose amounts are COMPUTED from the line (`factor` legs, an
@@ -419,6 +623,23 @@ export const SETTINGS: readonly SettingDef[] = [
       'de-CH': 'allow: Ein Bankkonto mit EBICS nimmt einen CSV-Export trotzdem für die Tage, die der Bankkanal nie geliefert hat. refuse: Ein solches Konto nimmt nur camt.053 aus dem Bankkanal.',
     },
   },
+  // A20 §13.3 (D205): a gap between two stored statements proven without a balance column, by the sum.
+  {
+    key: 'bank.csv_fill_proof',
+    schema: { type: 'enum', values: ['auto', 'running_balance_only'] },
+    default: 'auto',
+    owningCapability: 'pay',
+    dialCapability: 'pay',
+    area: { id: 'A39', label: { en: 'Bank', 'de-CH': 'Bank' } },
+    label: {
+      en: 'Gap fill from an export: how the days are proven',
+      'de-CH': 'Lücke aus einem Export füllen: womit die Tage geprüft werden',
+    },
+    description: {
+      en: "auto: by the export's running balance when one is mapped, else, for a gap between two statements in the books, by the sum: the export's rows on the missing days must add up exactly to what the two statements leave open, the export must reach past both ends, hold no unreadable row, and agree with the books on both boundary days. running_balance_only: only the running balance proves a fill.",
+      'de-CH': 'auto: am laufenden Saldo des Exports, wenn einer zugeordnet ist, sonst bei einer Lücke zwischen zwei Auszügen im Buch an der Summe: die Zeilen des Exports an den fehlenden Tagen ergeben genau, was die zwei Auszüge offen lassen, der Export reicht über beide Enden hinaus, hat keine unlesbare Zeile und stimmt an beiden Grenztagen mit dem Buch überein. running_balance_only: nur der laufende Saldo prüft eine Füllung.',
+    },
+  },
   // D188 (A39 §21): a line that names no counterparty (a debit-card purchase, a bank fee) gets the one its
   // text names: the merchant after the masked card number, or the account's own bank for a fee. `on` (the
   // default) reads it wherever the counterparty is read (rules, history, the miner, the inbox); `off` reads
@@ -438,6 +659,26 @@ export const SETTINGS: readonly SettingDef[] = [
     description: {
       en: 'on (default): a bank line without a counterparty name or IBAN gets the one its text names: the merchant of a card purchase, or your bank for a fee line. Rules, history and rule suggestions then work on these lines. off: only what the bank stated counts.',
       'de-CH': 'on (Standard): Eine Bankzeile ohne Namen oder IBAN der Gegenpartei bekommt die Gegenpartei aus ihrem Text: den Händler einer Kartenzahlung oder deine Bank bei einer Gebühr. Buchungsregeln, Verlauf und Regelvorschläge funktionieren dann auch für diese Zeilen. off: Es zählt nur, was die Bank angibt.',
+    },
+  },
+  // D208 point 8: the text of an entry a bank booking posts. `leg` (the default) takes the description of the
+  // booking's rest leg, which is where a Buchungsregel keeps the booking text the person typed with the star;
+  // `bank` keeps the bank's default text ("Bank: counterparty, remittance"), as before. A text the booking
+  // names wins either way. It decides what a booking posts, so `post` owns it and drafts it.
+  {
+    key: 'bank.entry_text_from_leg',
+    schema: { type: 'enum', values: ['leg', 'bank'] },
+    default: 'leg',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    area: { id: 'A39', label: { en: 'Bank', 'de-CH': 'Bank' } },
+    label: {
+      en: 'Entry text of a bank booking',
+      'de-CH': 'Buchungstext einer Bankbuchung',
+    },
+    description: {
+      en: 'leg (default): an entry booked by a Buchungsregel carries the rule\'s booking text. bank: every bank entry carries the bank\'s text with counterparty and remittance. A text you type for one booking always wins.',
+      'de-CH': 'leg (Standard): Eine Buchung über eine Buchungsregel trägt deren Buchungstext. bank: Jede Bankbuchung trägt den Text der Bank mit Gegenpartei und Mitteilung. Ein Text, den du für eine Buchung eingibst, gilt immer.',
     },
   },
   // D188 (A39 §21.1): the CLOSED list of a bank's own fee texts, `;`-separated whole-text patterns (`<bank>`,
@@ -908,6 +1149,263 @@ export const SETTINGS: readonly SettingDef[] = [
       'de-CH': 'tick (Standard): Du wählst Vorschläge aus und genehmigst die Auswahl. single: einzeln. all_with_confirm: ein Knopf für alle, nach einer Bestätigung mit Anzahl und Summe.',
     },
   },
+  // D208 (owner, 18.11.2026): the calm Vorschlag rows of Pendenzen and the Übersicht card. Presentation only:
+  // none of the three changes what a click books. `row_hints`: `missing` (default) shows the one hint a row can
+  // need, a missing Beleg on a line that claims Vorsteuer (the paperclip in the warn ink, which attaches);
+  // `none` shows no hint. `undo_seconds`: how long the confirmation of an approval keeps Rückgängig (0: no
+  // Rückgängig in the confirmation; the booking still follows the normal reversal rules). `keys`: the list's
+  // keys (↑ ↓ move, Enter opens, F freigeben, R ablehnen) on or off.
+  {
+    key: 'attention.row_hints',
+    schema: { type: 'enum', values: ['missing', 'none'] },
+    default: 'missing',
+    owningCapability: 'manage_settings',
+    dialCapability: 'customize',
+    area: { id: 'G15', label: { en: 'Pendenzen', 'de-CH': 'Pendenzen' } },
+    label: { en: 'Hints on proposal rows', 'de-CH': 'Hinweise auf Vorschlagszeilen' },
+    description: {
+      en: 'missing (default): a row shows a glyph only when something is missing (a receipt for a line that claims input tax). none: no hints.',
+      'de-CH': 'missing (Standard): Eine Zeile zeigt ein Zeichen nur, wenn etwas fehlt (der Beleg zu einer Zeile mit Vorsteuer). none: keine Hinweise.',
+    },
+  },
+  {
+    key: 'attention.undo_seconds',
+    schema: { type: 'integer', min: 0, max: 60 },
+    default: 10,
+    owningCapability: 'manage_settings',
+    dialCapability: 'customize',
+    area: { id: 'G15', label: { en: 'Pendenzen', 'de-CH': 'Pendenzen' } },
+    label: { en: 'Seconds to undo an approval', 'de-CH': 'Sekunden zum Rückgängigmachen einer Freigabe' },
+    description: {
+      en: 'How long the confirmation of an approval offers Undo (default 10). 0: no Undo in the confirmation.',
+      'de-CH': 'Wie lange die Bestätigung einer Freigabe Rückgängig anbietet (Standard 10). 0: kein Rückgängig in der Bestätigung.',
+    },
+  },
+  {
+    key: 'attention.keys',
+    schema: { type: 'boolean' },
+    default: true,
+    owningCapability: 'manage_settings',
+    dialCapability: 'customize',
+    area: { id: 'G15', label: { en: 'Pendenzen', 'de-CH': 'Pendenzen' } },
+    label: { en: 'Keys in the list of proposals', 'de-CH': 'Tasten in der Vorschlagsliste' },
+    description: {
+      en: 'On (default): arrow up and down move, Enter opens, F approves, R rejects. Off: only the arrows move.',
+      'de-CH': 'Ein (Standard): Pfeil hoch und runter wechseln die Zeile, Enter öffnet, F gibt frei, R lehnt ab. Aus: nur die Pfeile wechseln.',
+    },
+  },
+  // D207 point 3 (owner, 16.11.2026, pick A): "Freigeben und künftig automatisch" on a bank booking Vorschlag
+  // books the line and saves a Buchungsregel from that booking in ONE click (`never`, the default). `always`
+  // keeps the confirm step the owner did not pick: the rule shows in the opened row first and a second click
+  // saves it. Human-only: it sets how much a person's own click is checked, which an agent may not loosen.
+  {
+    key: 'attention.auto_rule_confirm',
+    schema: { type: 'enum', values: ['never', 'always'] },
+    default: 'never',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    humanOnly: true,
+    area: { id: 'G15', label: { en: 'Pendenzen', 'de-CH': 'Pendenzen' } },
+    label: { en: 'Confirm the rule of "approve and automate"', 'de-CH': 'Regel bei "Freigeben und künftig automatisch" bestätigen' },
+    description: {
+      en: 'never (default): one click books the bank line and saves the Buchungsregel. always: the rule shows first and a second click saves it.',
+      'de-CH': 'never (Standard): Ein Klick bucht die Bankzeile und speichert die Buchungsregel. always: Die Regel erscheint zuerst, ein zweiter Klick speichert sie.',
+    },
+  },
+  // D210 (owner, 18.11.2026): Aufgaben left the menu; the ones due soon arrive in Pendenzen' Erledigen
+  // section. The window is a setting; 0 keeps them on the Aufgaben page only.
+  {
+    key: 'attention.tasks_due_days',
+    schema: { type: 'integer', min: 0, max: 90, unit: 'days' },
+    default: 14,
+    owningCapability: 'manage_settings',
+    dialCapability: 'customize',
+    area: { id: 'G15', label: { en: 'Pendenzen', 'de-CH': 'Pendenzen' } },
+    label: { en: 'Due tasks in Pendenzen', 'de-CH': 'Fällige Aufgaben in Pendenzen' },
+    description: {
+      en: 'How many days ahead Pendenzen lists open tasks as due, overdue ones included. 0 lists no task in Pendenzen.',
+      'de-CH': 'Wie viele Tage im Voraus Pendenzen offene Aufgaben als fällig zeigt, überfällige eingeschlossen. 0 zeigt keine Aufgabe in Pendenzen.',
+    },
+  },
+  // --- A26, the agent's decisions on Vorschläge (D196) ---------------------------------------------
+  // D196 (founder, 12.11.2026): an EXPLICIT, owner-only, revocable grant that lets the governed agent seat
+  // decide Vorschläge itself. `off` (the default): only a person approves or rejects, exactly as before.
+  // `reject`: the agent may reject (`reject_drafted_action`, `reject_drafted_actions`). `decide`: the agent may reject AND approve
+  // (`approve_drafted_action`, `approve_drafted_actions`). Owned by `manage_agent_dial` (the right that
+  // decides) and HUMAN-ONLY, so the agent can neither switch it nor propose switching it. The grant is in
+  // force only while the person who set it still holds `manage_agent_dial` (`core/agent/decisionGrant.ts`):
+  // a demoted grantor's grant fails closed. Every decision taken under it names the grant on the row's
+  // history and in the trace. `customize` is the dial family a change of this setting would draft under.
+  {
+    key: 'agent.decide_proposals',
+    schema: { type: 'enum', values: ['off', 'reject', 'decide'] },
+    default: 'off',
+    owningCapability: 'manage_agent_dial',
+    dialCapability: 'customize',
+    humanOnly: true,
+    area: { id: 'A26', label: { en: 'Agent', 'de-CH': 'Agent' } },
+    label: { en: 'Agent decides proposals', 'de-CH': 'Agent entscheidet Vorschläge' },
+    description: {
+      en: 'off (default): only a person approves or rejects proposals. reject: the agent may reject proposals itself. decide: the agent may also approve bank-line decisions and booking rules; everything else waits for you. TILL\'s own offers always wait for you. Every decision the agent takes shows your grant. Only a person can change this; switch it back to off at any time.',
+      'de-CH': 'off (Standard): Nur eine Person genehmigt oder verwirft Vorschläge. reject: Der Agent darf Vorschläge selbst verwerfen. decide: Der Agent darf zusätzlich Entscheide zu Bankzeilen und Buchungsregeln genehmigen; alles andere wartet auf dich. Die Angebote von TILL warten immer auf dich. Jede Entscheidung des Agenten zeigt deine Freigabe. Nur eine Person kann das ändern; stell es jederzeit auf off zurück.',
+    },
+  },
+  // D209 (owner, 18.11.2026: "If I tell you it's approved, then you must have the ability to actually do this"):
+  // APPROVAL ON THE OWNER'S WORD. `off` (the default): the agent's approval needs the standing grant above or a
+  // person's click. `on`: when the owner approves named Vorschläge in their own message to the agent, the agent
+  // may approve exactly those, every kind (owner's pick "every one"), passing the owner's words verbatim and
+  // when they were said (`ownerWord`); each runs as drafted, as the agent, and the words land on the row's
+  // history and the A03 chain. A protected setting and the dial stay a person's click. TILL cannot read the
+  // chat, so THIS setting is the trust root: owned by `manage_agent_dial`, HUMAN-ONLY (the agent can neither
+  // switch it nor propose switching it to effect), in force only while its grantor still holds
+  // `manage_agent_dial` (`core/agent/decisionGrant.ts`).
+  {
+    key: 'agent.approve_on_owner_word',
+    schema: { type: 'enum', values: ['off', 'on'] },
+    default: 'off',
+    owningCapability: 'manage_agent_dial',
+    dialCapability: 'customize',
+    humanOnly: true,
+    area: { id: 'A26', label: { en: 'Agent', 'de-CH': 'Agent' } },
+    label: { en: 'Agent approves on your word', 'de-CH': 'Agent genehmigt auf dein Wort' },
+    description: {
+      en: 'off (default): a Vorschlag waits for your click, or for the grant above. on: when you tell the agent in your own message that named Vorschläge are approved, it approves exactly those and runs them as drafted, of every kind. Your words are kept verbatim on each Vorschlag and in the Verlauf. Protected settings and "automate from now on" always wait for your click. Only a person can change this.',
+      'de-CH': 'off (Standard): Ein Vorschlag wartet auf deinen Klick oder auf die Freigabe oben. on: Sagst du dem Agenten in deiner eigenen Nachricht, dass genannte Vorschläge genehmigt sind, genehmigt er genau diese und führt sie so aus, wie sie entworfen sind, jede Art. Deine Worte bleiben wörtlich bei jedem Vorschlag und im Verlauf. Geschützte Einstellungen und "künftig automatisch" warten immer auf deinen Klick. Nur eine Person kann das ändern.',
+    },
+  },
+  // D209 (critic r2 L1, D172): how long before a Vorschlag was drafted the owner's words may have been written
+  // ("approved, do it" said just before the agent drafts it). 0 means only words written after the draft count.
+  // Human-only and owned by `manage_agent_dial`, like the setting it qualifies.
+  {
+    key: 'agent.owner_word_before_draft_minutes',
+    schema: { type: 'integer', min: 0, max: 1440 },
+    default: 60,
+    owningCapability: 'manage_agent_dial',
+    dialCapability: 'customize',
+    humanOnly: true,
+    area: { id: 'A26', label: { en: 'Agent', 'de-CH': 'Agent' } },
+    label: { en: 'Approval in chat: words before the proposal', 'de-CH': 'Freigabe im Chat: Worte vor dem Vorschlag' },
+    description: {
+      en: 'How many minutes before the agent drafted a proposal your approving words may have been written (default 60). 0: only words written after the proposal count. Only a person can change this.',
+      'de-CH': 'Wie viele Minuten vor dem Entwurf eines Vorschlags deine Freigabe geschrieben sein darf (Standard 60). 0: Nur Worte nach dem Vorschlag zählen. Nur eine Person kann das ändern.',
+    },
+  },
+  // D209 amendment (owner, 18.11.2026, after a security review: TILL cannot verify a quote the agent supplies):
+  // the dial families the owner's word never approves; they always wait for a person's click. A comma-separated
+  // list of dial families, default filing the VAT return, plugins and sharing with someone outside (D172: a
+  // person may shrink or grow it). Human-only and owned by `manage_agent_dial`, like the setting it limits; read
+  // fail closed (`ownerWordExcludedFamilies` in `core/agent/decisionGrant.ts`).
+  {
+    key: 'agent.owner_word_excluded',
+    schema: { type: 'string', maxLength: OWNER_WORD_EXCLUDED_MAX_LENGTH },
+    default: OWNER_WORD_EXCLUDED_DEFAULT,
+    owningCapability: 'manage_agent_dial',
+    dialCapability: 'customize',
+    humanOnly: true,
+    area: { id: 'A26', label: { en: 'Agent', 'de-CH': 'Agent' } },
+    label: { en: 'Always your click, even on your word', 'de-CH': 'Immer dein Klick, auch auf dein Wort' },
+    description: {
+      en: 'The kinds of proposal the agent never approves on your word; they wait for your click in the Studio. A comma-separated list of dial families, or none. Default: filing VAT, plugins and sharing with someone outside. Only a person can change this.',
+      'de-CH': 'Die Arten von Vorschlägen, die der Agent nie auf dein Wort genehmigt; sie warten auf deinen Klick im Studio. Eine Liste von Freigabe-Familien mit Komma, oder none. Standard: MWST einreichen, Plugins und Freigeben an Aussenstehende. Nur eine Person kann das ändern.',
+    },
+  },
+  // D196 item 8 (owner, 12.11.2026): the agent's one-call Ignorieren under the grant. With `one_call` (the
+  // default) an agent seat's `ignore_bank_line` that drafts (the `post` dial at ask) is approved under a live
+  // `agent.decide_proposals = decide` grant in the same call, through the existing approval
+  // (`src/api/agent-gate.ts`): nothing the two-call path cannot do. `two_calls` keeps the draft and the agent
+  // approves it with a second call (or a person does). Without a `decide` grant it changes nothing. Owned by
+  // `manage_agent_dial` and human-only, like the grant itself.
+  {
+    key: 'agent.ignore_under_grant',
+    schema: { type: 'enum', values: ['one_call', 'two_calls'] },
+    default: 'one_call',
+    owningCapability: 'manage_agent_dial',
+    dialCapability: 'customize',
+    humanOnly: true,
+    area: { id: 'A26', label: { en: 'Agent', 'de-CH': 'Agent' } },
+    label: { en: 'Agent ignores bank lines in one step', 'de-CH': 'Agent ignoriert Bankzeilen in einem Schritt' },
+    description: {
+      en: 'one_call (default): when the agent may decide proposals (decide), its Ignorieren of a bank line is decided in the same step and shows your grant. two_calls: it stays a proposal until the agent or a person approves it. Without the decide grant nothing changes. Only a person can change this.',
+      'de-CH': 'one_call (Standard): Darf der Agent Vorschläge entscheiden (decide), ist sein Ignorieren einer Bankzeile im selben Schritt entschieden und zeigt deine Freigabe. two_calls: Es bleibt ein Vorschlag, bis der Agent oder eine Person ihn genehmigt. Ohne die Freigabe decide ändert sich nichts. Nur eine Person kann das ändern.',
+    },
+  },
+  // D196 item 9 (owner, 13.11.2026, with the batch reject `reject_drafted_actions`): whether the agent must say
+  // WHY when it rejects a Vorschlag under the owner's grant. `optional` (the default since D204, 16.11.2026:
+  // no mandatory reason anywhere, A03 §11): it may leave it out. `required`: a rejection the agent takes
+  // under `agent.decide_proposals` without a reason refuses `reason_required`, for a team that wants the
+  // reason on every row the agent closed (D172 keeps the choice). A person's
+  // rejection never needs one. Checked in `rejectDraftedAction`, so the single verb and the batch agree.
+  // Owned by `manage_agent_dial` and human-only, like the grant itself.
+  {
+    key: 'agent.reject_reason',
+    schema: { type: 'enum', values: ['required', 'optional'] },
+    default: 'optional',
+    owningCapability: 'manage_agent_dial',
+    dialCapability: 'customize',
+    humanOnly: true,
+    area: { id: 'A26', label: { en: 'Agent', 'de-CH': 'Agent' } },
+    label: { en: 'Agent says why it rejects', 'de-CH': 'Agent begründet Ablehnungen' },
+    description: {
+      en: 'optional (default): when the agent rejects proposals under your grant, it may leave the reason out; who rejected and when are always kept. required: it must say why, and you see the reason on every proposal it rejected. Your own rejections never need one. Only a person can change this.',
+      'de-CH': 'optional (Standard): Lehnt der Agent mit deiner Freigabe Vorschläge ab, darf er den Grund weglassen; wer wann abgelehnt hat, bleibt immer festgehalten. required: Er muss sagen, warum, und du siehst den Grund bei jedem Vorschlag, den er abgelehnt hat. Deine eigenen Ablehnungen brauchen nie einen Grund. Nur eine Person kann das ändern.',
+    },
+  },
+  // D202 point 4 (owner, 15.11.2026, pick A): the areas of the Einstellungen in which the agent may change a
+  // setting when the person tells it to, without a Vorschlag. A comma-separated list of area ids
+  // (`./areas.ts`), empty by default (no area). It never covers a human-only setting (those are always a
+  // person-only Vorschlag, D202 point 5). Owned by `manage_agent_dial` (the right that decides what the agent
+  // may do) and HUMAN-ONLY: the agent can propose it, never apply it. In force only while the person who set
+  // it still holds `manage_agent_dial` (`./agentAccess.ts`), like the D196 grant.
+  {
+    key: 'agent.settings_sections',
+    schema: { type: 'string', maxLength: SETTINGS_SECTIONS_MAX_LENGTH },
+    default: '',
+    owningCapability: 'manage_agent_dial',
+    dialCapability: 'customize',
+    humanOnly: true,
+    area: { id: 'A26', label: { en: 'Agent', 'de-CH': 'Agent' } },
+    label: { en: 'Areas the agent may change', 'de-CH': 'Bereiche, die der Agent ändern darf' },
+    description: {
+      en: 'In these areas of the settings the agent changes a setting when you tell it to, without a proposal. Protected settings stay a proposal for you. None by default.',
+      'de-CH': 'In diesen Bereichen der Einstellungen ändert der Agent eine Einstellung, wenn du es ihm sagst, ohne Vorschlag. Geschützte Einstellungen bleiben ein Vorschlag an dich. Standardmässig keiner.',
+    },
+  },
+  // D202 point 5: how many person-only settings Vorschläge (a protected setting the agent proposes) may wait
+  // at once. 3 is the decided rule. Human-only, owned by `manage_agent_dial`, like the permission above.
+  {
+    key: 'agent.settings_proposals_open_max',
+    schema: { type: 'integer', min: 1, max: 10, unit: 'items' },
+    default: 3,
+    owningCapability: 'manage_agent_dial',
+    dialCapability: 'customize',
+    humanOnly: true,
+    area: { id: 'A26', label: { en: 'Agent', 'de-CH': 'Agent' } },
+    label: { en: 'Open setting proposals by the agent', 'de-CH': 'Offene Einstellungs-Vorschläge des Agenten' },
+    description: {
+      en: 'How many proposals to change a protected setting the agent may leave waiting for you at once.',
+      'de-CH': 'Wie viele Vorschläge zu geschützten Einstellungen der Agent dir gleichzeitig offen lassen darf.',
+    },
+  },
+  // D202 critic L1 (D172): whether an area opened to the agent (`agent.settings_sections`) still sends two
+  // kinds of setting to a person: one whose dial family carries D103's strong default (`vat-file`,
+  // `plugin-install`: what files with the ESTV or brings in third-party code), and any setting of the
+  // Agent und Automatik area (what the agent may do and how its calls are judged). `true` (the default):
+  // those stay a one-click Vorschlag even in an opened area. `false`: an opened area applies them at once.
+  // Human-only and owned by `manage_agent_dial`, like the permission it narrows.
+  {
+    key: 'agent.settings_area_respects_strong_default',
+    schema: { type: 'boolean' },
+    default: true,
+    owningCapability: 'manage_agent_dial',
+    dialCapability: 'customize',
+    humanOnly: true,
+    area: { id: 'A26', label: { en: 'Agent', 'de-CH': 'Agent' } },
+    label: { en: 'Opened areas keep asking for sensitive settings', 'de-CH': 'Offene Bereiche fragen bei heiklen Einstellungen nach' },
+    description: {
+      en: 'On (default): even in an area the agent may change, a setting that files with the tax office, installs code, or decides what the agent may do stays a proposal for you. Off: the opened area applies those at once too.',
+      'de-CH': 'Ein (Standard): Auch in einem Bereich, den der Agent ändern darf, bleibt eine Einstellung zur MWST-Abrechnung, zu Erweiterungen oder dazu, was der Agent darf, ein Vorschlag an dich. Aus: Der offene Bereich ändert auch diese sofort.',
+    },
+  },
   // --- N02, Belege aus dem Chat (D183) --------------------------------------------------------------
   // The folders an agent may hand TILL a file from by path (`sourcePath`). HUMAN-ONLY: an agent can never
   // widen its own read roots, not even by proposing it. Owned by `manage_settings` (the owner), because
@@ -1110,6 +1608,23 @@ export const SETTINGS: readonly SettingDef[] = [
     description: {
       en: "How many Rappen the receipt's VAT may differ from the VAT TILL computes before the proposal says to check it. A smaller difference is only noted. TILL always books the computed VAT. 5 by default.",
       'de-CH': 'Um wie viele Rappen die MWST auf dem Beleg von der MWST abweichen darf, die TILL rechnet, bevor der Vorschlag zum Prüfen auffordert. Eine kleinere Abweichung wird nur vermerkt. TILL bucht immer die gerechnete MWST. Standard 5.',
+    },
+  },
+  // A41.8 (D193, owner 12.11.2026): whether the VAT a TRUSTED receipt states picks the input tax code of a bank
+  // line's proposal. `propose` (default): yes; `compare_only`: the ladder's code as before, the receipt only compared.
+  // Human-only under `post` like every belege.* setting (it decides what a proposal books).
+  {
+    key: 'belege.vat_from_receipt',
+    schema: { type: 'enum', values: ['propose', 'compare_only'] },
+    default: 'propose',
+    owningCapability: 'post',
+    dialCapability: 'post',
+    humanOnly: true,
+    area: { id: 'N02', label: { en: 'Receipts', 'de-CH': 'Belege' } },
+    label: { en: 'VAT on the receipt picks the tax code', 'de-CH': 'MWST auf dem Beleg wählt den MWST-Code' },
+    description: {
+      en: 'propose (default): when a bank line has exactly one receipt that covers it, whose figures TILL trusts and which states one VAT rate, the proposal takes the matching Vorsteuer code (8.1, 2.6 or 3.8 %), or no code when the receipt states no VAT, but only if the VAT that code books matches the receipt. TILL still books the VAT it computes. compare_only: the proposal keeps the code of the rule or the history. In both modes a line whose receipt VAT differs, or cannot be checked because it has several receipts, a receipt that does not cover it or one in another currency, is not approved in bulk. Automatic booking waits on a differing receipt only while "Automatic booking needs its receipt" is on.',
+      'de-CH': 'propose (Standard): Hat eine Bankzeile genau einen Beleg, der sie deckt, dessen Zahlen TILL vertraut und der einen MWST-Satz nennt, übernimmt der Vorschlag den passenden Vorsteuer-Code (8.1, 2.6 oder 3.8 %), oder keinen Code, wenn der Beleg keine MWST nennt, aber nur, wenn die MWST dieses Codes zum Beleg passt. TILL bucht weiterhin die MWST, die es rechnet. compare_only: Der Vorschlag behält den Code der Regel oder des Verlaufs. In beiden Fällen gibt TILL eine Zeile nicht gesammelt frei, deren Beleg-MWST abweicht oder sich nicht prüfen lässt, weil sie mehrere Belege hat, einen Beleg, der sie nicht deckt, oder einen in einer anderen Währung. Das automatische Buchen wartet bei abweichender Beleg-MWST nur, solange «Automatisches Buchen braucht den Beleg» eingeschaltet ist.',
     },
   },
   // A41.3 re-cut v2 (D184, I-F, owner decision 07.11.2026): which receipt figures may back an UNATTENDED
@@ -1341,6 +1856,34 @@ export const SETTINGS: readonly SettingDef[] = [
     description: {
       en: 'Before TILL writes a draft into a Thunderbird mbox Drafts file: refuse while a mail app has it open or when the check cannot answer (default), refuse only while a mail app is proven to have it open, or do not check. A Drafts file that changed meanwhile is always refused.',
       'de-CH': 'Bevor TILL einen Entwurf in eine Thunderbird-Entwurfsdatei (mbox) schreibt: ablehnen, solange ein Mail-Programm sie offen hat oder die Prüfung keine Antwort gibt (Standard), nur ablehnen, wenn ein Mail-Programm sie nachweislich offen hat, oder nicht prüfen. Eine Entwurfsdatei, die sich inzwischen geändert hat, wird immer abgelehnt.',
+    },
+  },
+  // --- O00, What's new (D199) ---------------------------------------------------------------------
+  // Display choices of the release notes. Neither changes what money does.
+  {
+    key: 'releases.whats_new_toast',
+    schema: { type: 'boolean' },
+    default: true,
+    owningCapability: 'manage_settings',
+    dialCapability: 'customize',
+    area: { id: 'O00', label: { en: 'Updates', 'de-CH': 'Updates' } },
+    label: { en: "Show What's new after an update", 'de-CH': 'Neuigkeiten nach einem Update zeigen' },
+    description: {
+      en: "After TILL updates, show a short note with a What's new button once. The notes stay in the menu either way.",
+      'de-CH': 'Nach einem Update einmal einen kurzen Hinweis mit Neuigkeiten zeigen. Im Menü bleiben sie so oder so.',
+    },
+  },
+  {
+    key: 'releases.whats_new_versions',
+    schema: { type: 'integer', min: 1, max: 20, unit: 'items' },
+    default: 10,
+    owningCapability: 'manage_settings',
+    dialCapability: 'customize',
+    area: { id: 'O00', label: { en: 'Updates', 'de-CH': 'Updates' } },
+    label: { en: 'Versions in the notes', 'de-CH': 'Versionen in den Neuigkeiten' },
+    description: {
+      en: 'How many versions the notes list shows. Older versions are on tillbooks.ch/changelog.',
+      'de-CH': 'Wie viele Versionen die Neuigkeiten zeigen. Ältere stehen auf tillbooks.ch/changelog.',
     },
   },
 ];

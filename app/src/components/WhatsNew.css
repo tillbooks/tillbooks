@@ -1,0 +1,145 @@
+/* O00/O01 (D199): the release toast and the notes list. Only --t-* tokens. The toast is one quiet panel
+   (bg-elev, one hairline, the overlay shadow), never the accent: the accent stays on the one commit in the
+   confirm dialog. The art tile is the item glyph on the soft accent ground, the kind a neutral corner badge. */
+
+.whatsnew-toast {
+  position: fixed;
+  right: var(--t-space-3);
+  bottom: var(--t-space-3);
+  z-index: var(--t-z-popover);
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  max-width: min(440px, calc(100vw - 2 * var(--t-space-3)));
+  padding: var(--t-space-1) var(--t-space-1) var(--t-space-1) var(--t-space-3);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-lg);
+  box-shadow: var(--t-shadow-overlay);
+  color: var(--t-text);
+}
+
+.whatsnew-toast-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--t-font-sm);
+  font-weight: 600;
+}
+
+.whatsnew-toast[data-kind='running'] {
+  padding-right: var(--t-space-3);
+}
+
+.whatsnew-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.whatsnew-version-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-2);
+  margin: 0;
+  font-size: var(--t-font-xs);
+  font-weight: 600;
+  color: var(--t-text-dim);
+}
+
+.whatsnew-version-name {
+  font-variant-numeric: tabular-nums;
+}
+
+.whatsnew-version-date {
+  font-weight: 400;
+  color: var(--t-text-faint);
+}
+
+.whatsnew-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.whatsnew-item {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: var(--t-space-2);
+  padding: var(--t-space-1) 0;
+}
+
+.whatsnew-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--t-radius-md);
+  background: var(--t-accent-soft);
+  color: var(--t-accent-dim);
+}
+
+.whatsnew-kind {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  color: var(--t-text-dim);
+}
+
+.whatsnew-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.whatsnew-title {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 600;
+}
+
+.whatsnew-body {
+  font-size: var(--t-font-sm);
+  color: var(--t-text-dim);
+}
+
+.whatsnew-all,
+.whatsnew-empty {
+  margin: 0;
+  font-size: var(--t-font-sm);
+  color: var(--t-text-dim);
+}
+
+.whatsnew-command {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  margin-bottom: var(--t-space-3);
+  padding: var(--t-space-1) var(--t-space-2);
+  background: var(--t-bg-soft);
+  border-radius: var(--t-radius-md);
+}
+
+.whatsnew-command code {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--t-font-sm);
+}
+
+.whatsnew-confirm {
+  margin: 0;
+}
+
+.whatsnew-refusal {
+  margin: var(--t-space-2) 0 0;
+  color: var(--t-danger);
+}

@@ -29,6 +29,7 @@ import { Modal } from '../../components/Modal';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
 import { PayrollHandoff } from './PayrollHandoff';
 import { LinkedFiles } from '../Files/LinkedFiles';
+import { optionalReason, useAskReason } from '../../lib/useAskReason';
 import './Hr.css';
 
 const newKey = () => crypto.randomUUID();
@@ -106,10 +107,11 @@ export function Hr() {
   // The claim whose Dateien panel is open. Clicking a claim's title toggles its E00 attachments
   // (the scanned receipt behind the reimbursement) open below the list; no per-claim drawer exists.
   const [openClaimId, setOpenClaimId] = useState<string | null>(null);
-  // D168: the approved claim a person is about to reverse, and the reason they give. The reverse runs
-  // only from the confirm dialog, never straight from the menu.
+  // D168: the approved claim a person is about to reverse. The reverse runs only from the confirm
+  // dialog, never straight from the menu. D204: no reason; an optional note only when the workspace asks.
   const [reversing, setReversing] = useState<Claim | null>(null);
   const [reverseReason, setReverseReason] = useState('');
+  const askReason = useAskReason();
 
   const load = useCallback(async () => {
     if (workspaceId === null) {
@@ -220,10 +222,11 @@ export function Hr() {
   ];
 
   const confirmReverse = useCallback(async () => {
-    if (reversing === null || reverseReason.trim() === '') return;
+    if (reversing === null) return;
     const claimId = reversing.id;
+    const note = optionalReason(reverseReason);
     setReversing(null);
-    await write('expense_claim_reverse', { claimId, reason: reverseReason.trim(), idempotencyKey: newKey() });
+    await write('expense_claim_reverse', { claimId, ...(note === undefined ? {} : { reason: note }), idempotencyKey: newKey() });
     setReverseReason('');
   }, [reversing, reverseReason, write]);
 
@@ -235,7 +238,7 @@ export function Hr() {
     ...(c.status === 'submitted'
       ? [
           { key: 'approve', label: t('spesen.action.approve'), onSelect: () => void write('expense_claim_approve', { claimId: c.id, confirm: true, idempotencyKey: newKey() }) },
-          { key: 'reject', label: t('spesen.action.reject'), danger: true, onSelect: () => void write('expense_claim_reject', { claimId: c.id, reason: t('spesen.reject.default'), idempotencyKey: newKey() }) },
+          { key: 'reject', label: t('spesen.action.reject'), danger: true, onSelect: () => void write('expense_claim_reject', { claimId: c.id, idempotencyKey: newKey() }) },
         ]
       : []),
     ...(c.status === 'approved'
@@ -354,7 +357,7 @@ export function Hr() {
             <button type="button" className="btn btn--secondary" onClick={() => setReversing(null)}>
               {t('spesen.reverseDialog.cancel')}
             </button>
-            <button type="button" className="btn btn--danger" disabled={reverseReason.trim() === ''} onClick={() => void confirmReverse()}>
+            <button type="button" className="btn btn--danger" onClick={() => void confirmReverse()}>
               {t('spesen.reverseDialog.confirm')}
             </button>
           </>
@@ -363,9 +366,11 @@ export function Hr() {
         <div id="hr-reverse-body">
           <p>{t('spesen.reverseDialog.body')}</p>
           <ConsequenceLine verb="expense_claim_reverse" />
-          <Field label={t('spesen.reverseDialog.reason')}>
-            <input className="field" value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} />
-          </Field>
+          {askReason && (
+            <Field label={t('spesen.reverseDialog.reason')}>
+              <input className="field" value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} />
+            </Field>
+          )}
         </div>
       </Modal>
     </section>

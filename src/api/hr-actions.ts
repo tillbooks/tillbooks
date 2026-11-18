@@ -137,8 +137,8 @@ export function hrActions(h: HrActionHelpers): readonly ActionDef[] {
     ctxAction(
       'expense_claim_reject',
       'write:correctable:internal',
-      'Reject a submitted claim with a reason (reason_required if empty). Terminal (submitted -> rejected). An APPROVED (posted) claim is not rejected: it is corrected by an A02 reversing entry plus a fresh claim (invalid_transition otherwise). Requires spesen.approve (approve and reject share the review right).',
-      ctxSchema({ claimId: STR, reason: STR, idempotencyKey: STR }, ['claimId', 'reason', 'idempotencyKey']),
+      'Reject a submitted claim; reason is optional (D204: never required, a given one is kept on the claim). Terminal (submitted -> rejected). An APPROVED (posted) claim is not rejected: it is corrected by an A02 reversing entry plus a fresh claim (invalid_transition otherwise). Requires spesen.approve (approve and reject share the review right).',
+      ctxSchema({ claimId: STR, reason: STR, idempotencyKey: STR }, ['claimId', 'idempotencyKey']),
       (ctx, input) => rejectClaim(ctx, as(input)),
     ),
     ctxAction(
@@ -151,8 +151,8 @@ export function hrActions(h: HrActionHelpers): readonly ActionDef[] {
     ctxAction(
       'expense_claim_reverse',
       'write:correctable:books',
-      'Storniere an APPROVED expense claim (D168), the ONE correction of a booked claim: posts the faithful A02 reversing entry of the approve posting (OR 957a, dated today, the VAT trace carried) and moves the claim approved -> reversed (terminal) in one transaction. Nothing is edited or deleted; the correction of the business fact is a fresh claim. A REIMBURSED claim is refused with claim_reimbursed: reverse the reimbursement payment first (reverse_payment walks the claim back to approved). A second reverse is already_reversed; any other state is invalid_transition; a blank reason is reason_required; period_locked when today is sealed. A claim whose posting a raw reversal already took out (a book from before this verb) adopts that reversal and posts nothing (adopted:true). The raw reverse_entry refuses this entry (owned_by expense_claim_reverse). Requires spesen.approve AND post.',
-      ctxSchema({ claimId: STR, reason: STR, idempotencyKey: STR }, ['claimId', 'reason', 'idempotencyKey']),
+      'Storniere an APPROVED expense claim (D168), the ONE correction of a booked claim: posts the faithful A02 reversing entry of the approve posting (OR 957a, dated today, the VAT trace carried) and moves the claim approved -> reversed (terminal) in one transaction. Nothing is edited or deleted; the correction of the business fact is a fresh claim. A REIMBURSED claim is refused with claim_reimbursed: reverse the reimbursement payment first (reverse_payment walks the claim back to approved). A second reverse is already_reversed; any other state is invalid_transition; reason is optional (D204), a given one rides the mirror description; period_locked when today is sealed. A claim whose posting a raw reversal already took out (a book from before this verb) adopts that reversal and posts nothing (adopted:true). The raw reverse_entry refuses this entry (owned_by expense_claim_reverse). Requires spesen.approve AND post.',
+      ctxSchema({ claimId: STR, reason: STR, idempotencyKey: STR }, ['claimId', 'idempotencyKey']),
       (ctx, input) => reverseClaim(ctx, as(input)),
     ),
     ctxAction(

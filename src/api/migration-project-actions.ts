@@ -111,7 +111,7 @@ export function migrationProjectActions(h: MigrationProjectActionHelpers): reado
     ctxAction(
       'implementation_task_set',
       'write:correctable:internal',
-      'Create or update one implementation task (pass taskId to update). fields carries phase, title, ownerKind, ownerRef, due, status, evidenceKind, evidenceRef, contingency and reason. Completing a task whose prerequisite is still open refuses (prerequisite_open, naming it); completing one that requires evidence without it refuses (evidence_required, naming the kind); marking a task not_applicable needs a recorded reason (not_applicable_needs_reason). Gates on manage_implementation.',
+      'Create or update one implementation task (pass taskId to update). fields carries phase, title, ownerKind, ownerRef, due, status, evidenceKind, evidenceRef, contingency and reason. Completing a task whose prerequisite is still open refuses (prerequisite_open, naming it); completing one that requires evidence without it refuses (evidence_required, naming the kind); marking a task not_applicable keeps who and when, and a reason when given (D204: optional). Gates on manage_implementation.',
       ctxSchema({ projectId: STR, taskId: STR, fields: TASK_FIELDS, idempotencyKey: STR }, ['projectId', 'idempotencyKey']),
       (ctx, input) => projectSetTask(ctx, as(input)),
     ),

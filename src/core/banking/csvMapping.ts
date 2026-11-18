@@ -17,6 +17,9 @@
  */
 
 import type { WorkspaceContext } from '../context.js';
+import { TABULAR_DELIMITERS, TABULAR_ENCODINGS } from '../tabular/index.js';
+import type { TabularDelimiter, TabularEncoding, ImportProfile } from '../tabular/index.js';
+import { IMPORT_PROFILE_FORMAT, profileMatches, readImportProfileEnvelope } from '../tabular/index.js';
 import { ok, err } from '../result.js';
 import type { Err, Result } from '../result.js';
 
@@ -47,13 +50,13 @@ export type CsvTargetField = (typeof CSV_TARGET_FIELDS)[number];
 export const CSV_DATE_FORMATS = ['dd.mm.yyyy', 'dd.mm.yy', 'yyyy-mm-dd', 'dd/mm/yyyy'] as const;
 export type CsvDateFormat = (typeof CSV_DATE_FORMATS)[number];
 
-/** The separators, by the names G09's reader uses (`parseGenericCsv`). */
-export const CSV_DELIMITERS = ['semicolon', 'comma', 'tab'] as const;
-export type CsvDelimiter = (typeof CSV_DELIMITERS)[number];
+/** The separators, by the names the delimited reader uses (A20 §13.1: the tabular layer's). */
+export const CSV_DELIMITERS = TABULAR_DELIMITERS;
+export type CsvDelimiter = TabularDelimiter;
 
 /** The encodings a mapping may force (auto-detection otherwise: BOM, strict UTF-8, else Windows-1252). */
-export const CSV_ENCODINGS = ['utf-8', 'windows-1252'] as const;
-export type CsvEncoding = (typeof CSV_ENCODINGS)[number];
+export const CSV_ENCODINGS = TABULAR_ENCODINGS;
+export type CsvEncoding = TabularEncoding;
 
 /** A20 §12: the order the rows stand in (`auto` reads it from the dates and the running balance). */
 export const CSV_ROW_ORDERS = ['auto', 'newest_first', 'oldest_first'] as const;
@@ -146,27 +149,31 @@ export function readCsvMapping(raw: unknown): Result<{ mapping: CsvMapping }> {
   return ok({ mapping });
 }
 
-// --- Presets (A20 §12) ---------------------------------------------------------------------------------
+// --- Presets (A20 §12) as built-in import profiles (A20 §13.4) ---------------------------------------
 
 /** The presets TILL ships, one per OBSERVED export layout (§H-ENUM, single point; mirrored by the Studio). */
 export const CSV_PRESET_IDS = ['zkb_account_statement'] as const;
 export type CsvPresetId = (typeof CSV_PRESET_IDS)[number];
 
-interface CsvPreset {
-  id: CsvPresetId;
-  /** Every header the preset maps: a file carrying all of them is this layout. */
-  headers: readonly string[];
-  mapping: CsvMapping;
-}
+/** A built-in bank statement profile: the `till-import-profile/v1` envelope, typed. */
+export type BankStatementProfile = ImportProfile<CsvMapping> & { kind: 'bank_statement'; id: CsvPresetId };
 
-const PRESETS: readonly CsvPreset[] = [
+/**
+ * THE BUILT-IN CATALOGUE (A20 §13.4): one entry per observed export layout, in the file format a community
+ * profile is written in. A new one is a pull request with one entry here (and its id in `CSV_PRESET_IDS`)
+ * plus a synthetic fixture; a layout TILL has not observed is never guessed into this list.
+ */
+const RAW_BANK_STATEMENT_PROFILES: readonly BankStatementProfile[] = [
   {
     // ZKB eBanking, "Account statement" CSV export (English interface), observed 09.11.2026 on the owner's
     // own account: the header row below, `;`, every field quoted, dd.mm.yyyy, a point decimal, separate
     // debit and credit columns, the running balance after each row, the newest row first. "Curr" and
     // "Amount details" hold a foreign amount when there is one (the CHF columns are the booked money).
+    format: IMPORT_PROFILE_FORMAT,
+    kind: 'bank_statement',
     id: 'zkb_account_statement',
-    headers: ['Date', 'Booking text', 'Curr', 'Amount details', 'ZKB reference', 'Reference number', 'Debit CHF', 'Credit CHF', 'Value date', 'Balance CHF', 'Payment purpose', 'Details'],
+    label: 'ZKB eBanking, Account statement (CSV)',
+    match: { headers: ['Date', 'Booking text', 'Curr', 'Amount details', 'ZKB reference', 'Reference number', 'Debit CHF', 'Credit CHF', 'Value date', 'Balance CHF', 'Payment purpose', 'Details'] },
     mapping: {
       columns: {
         bookingDate: 'Date',
@@ -191,12 +198,65 @@ const PRESETS: readonly CsvPreset[] = [
   },
 ];
 
-/** The preset whose every header the file carries, or null. A copy: the caller may change it freely. */
+/**
+ * The catalogue, CHECKED AT LOAD: every entry is read back through `readCsvMapping` (the one shape check a
+ * mapping from a person or an agent passes), names a known id, matches every header it maps, and no two
+ * entries share an id. A broken entry stops the engine from loading, so it never ships.
+ */
+export const BANK_STATEMENT_PROFILES: readonly BankStatementProfile[] = RAW_BANK_STATEMENT_PROFILES.map((p, i, all) => {
+  const read = readCsvMapping(p.mapping);
+  if (!read.ok) throw new Error(`built-in import profile ${p.id}: its mapping does not read (${JSON.stringify(read)})`);
+  if (!(CSV_PRESET_IDS as readonly string[]).includes(p.id) || all.findIndex((q) => q.id === p.id) !== i) throw new Error(`built-in import profile ${p.id}: unknown or repeated id`);
+  const unmatched = Object.values(read.mapping.columns).filter((h) => h !== undefined && !p.match.headers.includes(h));
+  if (unmatched.length > 0) throw new Error(`built-in import profile ${p.id}: maps headers it does not match (${unmatched.join(', ')})`);
+  return { ...p, mapping: read.mapping };
+});
+
+/** A copy (the caller may change it freely). */
+function copyOf<T>(v: T): T {
+  return JSON.parse(JSON.stringify(v)) as T;
+}
+
+/** The built-in profile whose every header the file carries, or null. A copy. */
+export function profileFor(headers: readonly string[]): BankStatementProfile | null {
+  const hit = BANK_STATEMENT_PROFILES.find((p) => profileMatches(p, headers));
+  return hit === undefined ? null : copyOf(hit);
+}
+
+/** The preset (A20 §12) whose every header the file carries, or null: the built-in profile's id and mapping. */
 export function presetFor(headers: readonly string[]): { id: CsvPresetId; mapping: CsvMapping } | null {
-  const have = new Set(headers.map((h) => h.trim()));
-  const hit = PRESETS.find((p) => p.headers.every((h) => have.has(h)));
-  if (hit === undefined) return null;
-  return { id: hit.id, mapping: JSON.parse(JSON.stringify(hit.mapping)) as CsvMapping };
+  const hit = profileFor(headers);
+  return hit === null ? null : { id: hit.id, mapping: hit.mapping };
+}
+
+/**
+ * A20 §13.4: a `till-import-profile/v1` file of kind `bank_statement`, read: the envelope checked, its mapping
+ * read through `readCsvMapping`, and every mapped header named in `match.headers`.
+ */
+export function readBankStatementProfile(raw: unknown): Result<{ profile: ImportProfile<CsvMapping> }> {
+  const env = readImportProfileEnvelope(raw);
+  if ('field' in env) return err('invalid_input', { field: env.field, reason: env.reason });
+  if (env.profile.kind !== 'bank_statement') return err('invalid_input', { field: 'profile.kind', reason: 'a bank statement profile (bank_statement)' });
+  const read = readCsvMapping(env.profile.mapping);
+  if (!read.ok) return read;
+  const unmatched = [...new Set(Object.values(read.mapping.columns).filter((h): h is string => h !== undefined && !env.profile.match.headers.includes(h)))];
+  if (unmatched.length > 0) return err('invalid_input', { field: 'profile.match.headers', reason: `name every mapped column too: ${unmatched.join(', ')}` });
+  return ok({ profile: { ...env.profile, mapping: read.mapping } });
+}
+
+/** One Bankkonto's mapping as a profile file: the built-in it equals, else `custom` with the account's name. */
+export function profileOfMapping(mapping: CsvMapping, accountName: string): ImportProfile<CsvMapping> {
+  const same = BANK_STATEMENT_PROFILES.find((p) => JSON.stringify(canonical(p.mapping)) === JSON.stringify(canonical(mapping)));
+  if (same !== undefined) return copyOf(same);
+  const headers = [...new Set(Object.values(mapping.columns).filter((h): h is string => h !== undefined))];
+  return { format: IMPORT_PROFILE_FORMAT, kind: 'bank_statement', id: 'custom', label: accountName.trim() === '' ? 'custom' : accountName.trim().slice(0, 120), match: { headers }, mapping: copyOf(mapping) };
+}
+
+/** A value with every object's keys sorted, so two spellings of one mapping compare equal. */
+function canonical(v: unknown): unknown {
+  if (v === null || typeof v !== 'object') return v;
+  if (Array.isArray(v)) return v.map(canonical);
+  return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([, x]) => x !== undefined).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([k, x]) => [k, canonical(x)]));
 }
 
 /**
@@ -354,25 +414,33 @@ export function writeCsvMapping(ctx: WorkspaceContext, bankAccountId: string, ma
   return { bankAccountId, mapping, updatedBy: ctx.actor, updatedAt: now };
 }
 
-function readAccount(ctx: WorkspaceContext, bankAccountId: unknown): { id: string } | Err {
+function readAccount(ctx: WorkspaceContext, bankAccountId: unknown): { id: string; name: string } | Err {
   if (typeof bankAccountId !== 'string' || bankAccountId.length === 0) return err('invalid_input', { field: 'bankAccountId' });
   const account = ctx.store.db
-    .prepare('SELECT id FROM bank_account WHERE workspace_id = ? AND id = ?')
-    .get(ctx.workspaceId, bankAccountId) as { id: string } | undefined;
+    .prepare('SELECT id, name FROM bank_account WHERE workspace_id = ? AND id = ?')
+    .get(ctx.workspaceId, bankAccountId) as { id: string; name: string } | undefined;
   return account ?? err('needs_bank_account', { bankAccountId });
 }
 
-export type GetBankCsvMappingOk = { bankAccountId: string; mapping: CsvMapping | null; updatedBy: string | null; updatedAt: string | null };
+export type GetBankCsvMappingOk = {
+  bankAccountId: string;
+  mapping: CsvMapping | null;
+  /** A20 §13.4: the same mapping as a `till-import-profile/v1` file (the built-in it equals, else `custom`), or null. */
+  profile: ImportProfile<CsvMapping> | null;
+  updatedBy: string | null;
+  updatedAt: string | null;
+};
 
 /** `get_bank_csv_mapping`: the saved mapping of one Bankkonto, or `mapping: null`. A pure read. */
 export function getBankCsvMapping(ctx: WorkspaceContext, input: { bankAccountId?: unknown }): Result<GetBankCsvMappingOk> {
   const account = readAccount(ctx, input.bankAccountId);
   if ((account as { ok?: unknown }).ok === false) return account as Err;
-  const accountId = (account as { id: string }).id;
+  const { id: accountId, name } = account as { id: string; name: string };
   const stored = readStoredCsvMapping(ctx, accountId);
   return ok<GetBankCsvMappingOk>({
     bankAccountId: accountId,
     mapping: stored?.mapping ?? null,
+    profile: stored === null ? null : profileOfMapping(stored.mapping, name),
     updatedBy: stored?.updatedBy ?? null,
     updatedAt: stored?.updatedAt ?? null,
   });
@@ -382,11 +450,12 @@ export type SetBankCsvMappingOk = { bankAccountId: string; mapping: CsvMapping }
 
 /**
  * `set_bank_csv_mapping`: save one Bankkonto's mapping (the shape is checked; the file is checked at
- * preview and import). Needs `pay`, the right that imports statements. Idempotent per key.
+ * preview and import). Needs `pay`, the right that imports statements. Idempotent per key. A20 §13.4: the
+ * mapping may come as a `till-import-profile/v1` file of kind `bank_statement` (`profile`), exactly one of the two.
  */
 export function setBankCsvMapping(
   ctx: WorkspaceContext,
-  input: { bankAccountId?: unknown; mapping?: unknown; idempotencyKey?: unknown },
+  input: { bankAccountId?: unknown; mapping?: unknown; profile?: unknown; idempotencyKey?: unknown },
 ): Result<SetBankCsvMappingOk> {
   const capable = ctx.capabilities.assert('pay');
   if (!capable.ok) return capable;
@@ -394,9 +463,19 @@ export function setBankCsvMapping(
   const account = readAccount(ctx, input.bankAccountId);
   if ((account as { ok?: unknown }).ok === false) return account as Err;
   const accountId = (account as { id: string }).id;
-  const read = readCsvMapping(input.mapping);
-  if (!read.ok) return read;
-  const mapping = read.mapping;
+  const hasMapping = input.mapping !== undefined && input.mapping !== null;
+  const hasProfile = input.profile !== undefined && input.profile !== null;
+  if (hasMapping === hasProfile) return err('invalid_input', { field: 'mapping', reason: 'exactly one of mapping or profile (a till-import-profile/v1 file)' });
+  let mapping: CsvMapping;
+  if (hasProfile) {
+    const read = readBankStatementProfile(input.profile);
+    if (!read.ok) return read;
+    mapping = read.profile.mapping;
+  } else {
+    const read = readCsvMapping(input.mapping);
+    if (!read.ok) return read;
+    mapping = read.mapping;
+  }
   const scopedKey = JSON.stringify(['set_bank_csv_mapping', accountId, input.idempotencyKey]);
   return ctx.store.rememberIdempotent(ctx.workspaceId, scopedKey, 'set_bank_csv_mapping', () => {
     const saved = writeCsvMapping(ctx, accountId, mapping);

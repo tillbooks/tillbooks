@@ -46,7 +46,9 @@ import {
   resolveSectionLocation,
   surfaceByNavId,
   type ActiveRule,
+  MENU_SCOPES,
   type MenuLayout,
+  type MenuScope,
   type NavGroup,
   type NavItem,
   type RailActive,
@@ -65,6 +67,8 @@ export const NAV_PREF = {
   sections: 'nav.sections',
   menuLayout: 'nav.menu_layout',
   rail: 'nav.rail',
+  sectionHeaders: 'nav.section_headers',
+  menuScope: 'nav.menu_scope',
 } as const;
 
 /** The D118 browser key prefixes, read once per workspace by the legacy import and then cleared. */
@@ -278,12 +282,23 @@ function useLook<T extends string>(key: string, allowed: readonly T[], fallback:
   return typeof value === 'string' && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
 }
 
-/** The three looks (D178 points 15 to 17). */
-export function useNavLook(): { favouriteStyle: FavouriteStyle; activeRule: ActiveRule; groupHeaderStyle: GroupHeaderStyle } {
+/** The looks (D178 points 15 to 17, D210 the section headings and the menu scope). */
+export function useNavLook(): {
+  favouriteStyle: FavouriteStyle;
+  activeRule: ActiveRule;
+  groupHeaderStyle: GroupHeaderStyle;
+  sectionHeaders: boolean;
+  menuScope: MenuScope;
+} {
   return {
-    favouriteStyle: useLook(NAV_PREF.favouriteStyle, FAVOURITE_STYLES, 'icon_star'),
+    // D210: the icon alone is the default; the gold star spent the accent on decoration.
+    favouriteStyle: useLook(NAV_PREF.favouriteStyle, FAVOURITE_STYLES, 'icon_only'),
     activeRule: useLook(NAV_PREF.activeRule, ACTIVE_RULES, 'favourite'),
-    groupHeaderStyle: useLook(NAV_PREF.groupHeaderStyle, HEADER_STYLES, 'text_14_bold'),
+    // D201: `icon_14` (an icon on every row, group headers included) is the default.
+    groupHeaderStyle: useLook(NAV_PREF.groupHeaderStyle, HEADER_STYLES, 'icon_14'),
+    // D210: no "Favoriten" / "Menü" headings by default, and the compact menu.
+    sectionHeaders: useLook(NAV_PREF.sectionHeaders, ['hidden', 'shown'] as const, 'hidden') === 'shown',
+    menuScope: useLook(NAV_PREF.menuScope, MENU_SCOPES, 'compact'),
   };
 }
 
@@ -611,13 +626,17 @@ function useRailModel(): RailState {
       }),
     [favourites.favourites],
   );
-  const menuHeader = resolvedFavourites.length > 0;
+  // D210: with the headings off (the default) neither section has a header, so neither can be folded.
+  const menuHeader = look.sectionHeaders && resolvedFavourites.length > 0;
   // A Menü without a header cannot be unfolded, so it is never shown folded.
   const sections = useMemo<NavSections>(
-    () => ({ favourites: stored.favourites, menu: stored.menu && menuHeader }),
-    [stored.favourites, stored.menu, menuHeader],
+    () => ({ favourites: look.sectionHeaders && stored.favourites, menu: stored.menu && menuHeader }),
+    [look.sectionHeaders, stored.favourites, stored.menu, menuHeader],
   );
-  const rail = useMemo(() => resolveNavTree(personalNavTree(menu.layout, { visibleOnly: true })), [menu.layout]);
+  const rail = useMemo(
+    () => resolveNavTree(personalNavTree(menu.layout, { visibleOnly: true, scope: look.menuScope })),
+    [menu.layout, look.menuScope],
+  );
   const topLevel = useMemo(() => rail.filter((g) => g.labelKey !== null).map((g) => g.navId), [rail]);
   const pinned = useMemo(
     () => resolvedFavourites.map((f) => ({ navId: f.navId, path: f.surface.path })),

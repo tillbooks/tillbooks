@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tillbooks.ch/schemas/till-settlement-v1.schema.json",
+  "title": "till-settlement/v1",
+  "description": "What a payment processor, a marketplace or any system that holds a balance for a company hands TILL about the money that moved through it. A document that validates here can still be refused by the reader for these checks, which JSON Schema cannot state: currency_mismatch (the event is in another currency than the workspace); duplicate_id (another event of the same file carries this id, so which one is right is not knowable); amount_mismatch (amount is not net plus the VAT amount to the Rappen); calendar_date (day must be a real calendar date, so 2026-02-30 is refused though it has the right form); number_decimals (an amount written as a JSON number must be an exact decimal with at most two places (10.815 and 1e-3 are refused); write amounts as decimal strings to have the schema check it); text_length (the length limits count UTF-16 code units, the schema counts characters, so a name or id with characters outside the basic plane can pass the schema and be refused). Unknown extra fields are ignored at every level. Version policy: within v1 only optional fields and new kinds are added; a change to what amount, net, VAT or the sign mean, or to a required field, is v2.",
+  "type": "object",
+  "required": [
+    "schema",
+    "source",
+    "events"
+  ],
+  "properties": {
+    "schema": {
+      "const": "till-settlement/v1"
+    },
+    "source": {
+      "type": "object",
+      "description": "Who produced the document. The pair system and processor is the key TILL keeps the booking template and the idempotency by.",
+      "required": [
+        "system",
+        "processor"
+      ],
+      "properties": {
+        "system": {
+          "type": "string",
+          "description": "The platform or system that emits the document.",
+          "pattern": "\\S",
+          "maxLength": 100
+        },
+        "processor": {
+          "type": "string",
+          "description": "The processor or balance the events moved through.",
+          "pattern": "\\S",
+          "maxLength": 100
+        },
+        "entity": {
+          "type": "string",
+          "description": "The company the document is about."
+        }
+      }
+    },
+    "generatedAt": {
+      "type": "string",
+      "description": "When the producer made the document (an ISO instant)."
+    },
+    "period": {
+      "type": "object",
+      "description": "The days the document covers.",
+      "properties": {
+        "from": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "to": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+      }
+    },
+    "currency": {
+      "type": "string",
+      "description": "The currency of the document."
+    },
+    "clearingAccount": {
+      "type": "string",
+      "description": "The producer's label for the clearing account. TILL never books by it."
+    },
+    "signConvention": {
+      "type": "string",
+      "description": "A sentence saying how the sign of amount reads."
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "What the producer could not state exactly."
+    },
+    "events": {
+      "type": "array",
+      "maxItems": 20000,
+      "items": {
+        "$ref": "#/$defs/event"
+      }
+    }
+  },
+  "$defs": {
+    "event": {
+      "type": "object",
+      "description": "One movement on the processor balance.",
+      "required": [
+        "id",
+        "kind",
+        "day",
+        "currency",
+        "amount",
+        "net"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable and unique per event within the source: a re-import books nothing twice.",
+          "pattern": "\\S",
+          "maxLength": 200
+        },
+        "kind": {
+          "enum": [
+            "sale",
+            "refund",
+            "processing_fee",
+            "service_fee",
+            "third_party_payout",
+            "third_party_payout_reversal",
+            "reserve",
+            "bank_payout",
+            "bank_payout_summary",
+            "other"
+          ],
+          "description": "What the movement is. An older reader refuses an unknown kind per event."
+        },
+        "day": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "The booking day, YYYY-MM-DD, in the company time zone, a real calendar date."
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$",
+          "description": "Must be the currency of the TILL workspace."
+        },
+        "amount": {
+          "description": "The signed effect on the processor balance, gross including VAT; positive means into the balance. At most two decimals.",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^-?\\d{1,13}(\\.\\d{1,2})?$"
+            },
+            {
+              "type": "number",
+              "minimum": -9999999999999.99,
+              "maximum": 9999999999999.99
+            }
+          ]
+        },
+        "net": {
+          "description": "The part of amount that is not VAT, signed like amount.",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^-?\\d{1,13}(\\.\\d{1,2})?$"
+            },
+            {
+              "type": "number",
+              "minimum": -9999999999999.99,
+              "maximum": 9999999999999.99
+            }
+          ]
+        },
+        "vat": {
+          "description": "The VAT in amount, or null when the event carries none.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "amount"
+              ],
+              "properties": {
+                "amount": {
+                  "description": "The VAT part of amount, signed like amount.",
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^-?\\d{1,13}(\\.\\d{1,2})?$"
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -9999999999999.99,
+                      "maximum": 9999999999999.99
+                    }
+                  ]
+                },
+                "code": {
+                  "type": "string",
+                  "description": "The producer's label. TILL books by the owner's template, never by this."
+                },
+                "rate": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "description": "The rate in percent, for the record."
+                }
+              }
+            }
+          ]
+        },
+        "document": {
+          "description": "The document the event belongs to, by which a PDF is linked as a Beleg.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "number": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "counterparty": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "refs": {
+          "type": "object",
+          "description": "External references (charge, payout, order ids), kept with the event."
+        },
+        "date": {
+          "type": "string",
+          "description": "The ISO instant of the event."
+        },
+        "month": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

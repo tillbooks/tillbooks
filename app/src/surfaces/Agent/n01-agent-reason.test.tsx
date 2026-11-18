@@ -13,7 +13,14 @@ import { CapabilitiesContext, ALLOW_ALL } from '../../lib/capabilities';
 import { TillClientProvider } from '../../lib/client-context';
 import { TillClient, type Transport } from '../../lib/client';
 import { WorkspaceProvider } from '../../app/workspace';
-import { VorschlagLine } from './VorschlagLine';
+import { VorschlagDetail } from './VorschlagDetail';
+import { itemOf } from './vorschlagView';
+import type { AccountNameMap } from './vorschlagDetails';
+
+/** D197: the read-back a person judges before approving is the detail pane of the Vorschläge screen. */
+function Detail({ action, accountNames }: { action: DraftedAction; accountNames?: AccountNameMap; onApprove?: unknown; onReject?: unknown }) {
+  return <VorschlagDetail item={itemOf(action, action)} {...(accountNames !== undefined ? { accountNames } : {})} onApprove={() => undefined} onReject={() => undefined} />;
+}
 import { parseDrafted, type DraftedAction } from './model';
 import { vorschlagOf } from '../Attention/model';
 
@@ -66,7 +73,7 @@ describe('N01: the agent reason on a Vorschlag', () => {
   });
 
   it('shows the sentence quoted under the title, with whose words they are for a screen reader', () => {
-    wrap(<VorschlagLine action={post} onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<Detail action={post} onApprove={() => undefined} onReject={() => undefined} />);
     const node = reason();
     expect(node).not.toBeNull();
     expect(node?.textContent).toBe('Begründung des Agenten:«Quittung Papeterie Muster vom 1. März, bar bezahlt»');
@@ -75,7 +82,7 @@ describe('N01: the agent reason on a Vorschlag', () => {
   });
 
   it('shows nothing when the agent gave no reason', () => {
-    wrap(<VorschlagLine action={{ ...post, agentReason: null }} onApprove={() => undefined} onReject={() => undefined} />);
+    wrap(<Detail action={{ ...post, agentReason: null }} onApprove={() => undefined} onReject={() => undefined} />);
     expect(reason()).toBeNull();
   });
 

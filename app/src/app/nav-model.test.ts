@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 
 import {
+  COMPACT_HIDDEN,
   NAV_TREE,
   OFF_RAIL,
   SURFACE_CATALOG,
@@ -29,6 +30,7 @@ import {
   type NavGroup,
   type RailActive,
 } from './nav';
+import { NAV_COMMANDS } from '../lib/command-source';
 
 describe('one open group at a time (judge round 1 L6)', () => {
   const groups = ['projects', 'sales', 'accounting'];
@@ -80,7 +82,7 @@ describe('the canonical layout is the default and the reset target', () => {
     expect(leafIds(layout)).toEqual(canonicalLeaves);
     const tree = personalNavTree(layout, { visibleOnly: true });
     expect(tree[0]).toMatchObject({ navId: TOP_CONTAINER, labelKey: null });
-    expect(tree[0]!.items.map((n) => n.navId)).toEqual(['overview', 'search', 'agent', 'tasks', 'attention', 'correspondence']);
+    expect(tree[0]!.items.map((n) => n.navId)).toEqual(['overview', 'attention']);
     expect(tree.slice(1).map((g) => g.navId)).toEqual(NAV_TREE.filter((g) => g.labelKey !== null).map((g) => g.navId));
   });
 
@@ -118,18 +120,23 @@ describe('normalizeMenuLayout validates against the catalog (unknown ids dropped
   });
 
   it('re-homes a surface the stored layout does not mention after its canonical predecessor', () => {
-    // A layout saved before `creditor-payments` existed: it comes back after `payments`, its predecessor.
+    // A layout saved before `umsatz` existed: it comes back after its canonical predecessor, `bank-inbox`.
     const layout = normalizeMenuLayout({ containers: { bank: ['bank-accounts', 'payments', 'bank-inbox'] } });
-    expect(layout.containers.bank).toEqual(['bank-accounts', 'payments', 'creditor-payments', 'bank-inbox']);
+    expect(layout.containers.bank).toEqual(['bank-accounts', 'payments', 'bank-inbox', 'umsatz']);
+    // D210: `creditor-payments` is canonical in Einkauf; a person who stored it under Bank keeps that.
+    expect(containerOf(canonicalMenuLayout(), 'creditor-payments')).toBe('purchasing');
+    const kept = normalizeMenuLayout({ containers: { bank: ['creditor-payments', 'payments'] } });
+    expect(containerOf(kept, 'creditor-payments')).toBe('bank');
+    expect(kept.containers.purchasing).not.toContain('creditor-payments');
   });
 
   it('keeps a parent out of the top block and out of another parent, and the first claim wins', () => {
     const layout = normalizeMenuLayout({
-      containers: { [TOP_CONTAINER]: ['lager-group', 'journal'], 'mwst-group': ['anlagen-group'], accounting: ['journal'] },
+      containers: { [TOP_CONTAINER]: ['lager-group', 'journal'], 'lager-group': ['anlagen-group'], accounting: ['journal'] },
     });
     expect(layout.containers[TOP_CONTAINER]).toContain('journal');
     expect(layout.containers[TOP_CONTAINER]).not.toContain('lager-group');
-    expect(layout.containers['mwst-group']).not.toContain('anlagen-group');
+    expect(layout.containers['lager-group']).not.toContain('anlagen-group');
     expect(layout.containers.accounting).not.toContain('journal');
     expect(containerOf(layout, 'lager-group')).toBe('master-data');
   });
@@ -146,8 +153,8 @@ describe('the edits (reorder, move, hide, reset)', () => {
   it('moves a group up and down, never past an end', () => {
     const base = canonicalMenuLayout();
     const up = moveMenuRow(base, groupKey('master-data'), 'up');
-    expect(up.groups.slice(0, 2)).toEqual(['master-data', 'projects']);
-    expect(moveMenuRow(up, groupKey('master-data'), 'up')).toBe(up);
+    expect(up.groups).toEqual(['bank', 'sales', 'purchasing', 'master-data', 'accounting', 'projects']);
+    expect(moveMenuRow(base, groupKey('bank'), 'up')).toBe(base);
     const last = base.groups[base.groups.length - 1]!;
     expect(moveMenuRow(base, groupKey(last), 'down')).toBe(base);
     expect(isCanonicalMenuLayout(up)).toBe(false);
@@ -156,7 +163,7 @@ describe('the edits (reorder, move, hide, reset)', () => {
   it('reorders a row within its own list (the drag commit), and refuses a drag across lists', () => {
     const base = canonicalMenuLayout();
     const dragged = reorderMenuRow(base, 'bank-accounts', 'bank-inbox');
-    expect(dragged.containers.bank).toEqual(['bank-accounts', 'bank-inbox', 'payments', 'creditor-payments']);
+    expect(dragged.containers.bank).toEqual(['bank-accounts', 'bank-inbox', 'umsatz', 'payments']);
     expect(reorderMenuRow(base, 'journal', 'bank-inbox')).toBe(base);
   });
 
@@ -167,20 +174,21 @@ describe('the edits (reorder, move, hide, reset)', () => {
     expect(moved.containers.bank!.at(-1)).toBe('journal');
     const top = moveMenuRowTo(base, 'journal', TOP_CONTAINER);
     expect(personalNavTree(top, { visibleOnly: true })[0]!.items.map((n) => n.navId)).toContain('journal');
-    const intoParent = moveMenuRowTo(base, 'fx', 'mwst-group');
-    expect(intoParent.containers['mwst-group']).toEqual(['mwst', 'vat', 'fx']);
+    const intoParent = moveMenuRowTo(base, 'fx', 'lager-group');
+    expect(intoParent.containers['lager-group']!.at(-1)).toBe('fx');
+    expect(intoParent.containers.accounting).not.toContain('fx');
   });
 
   it('moves a parent between headed groups only', () => {
     const base = canonicalMenuLayout();
     expect(moveMenuRowTo(base, 'lager-group', 'purchasing').containers.purchasing!.at(-1)).toBe('lager-group');
     expect(moveMenuRowTo(base, 'lager-group', TOP_CONTAINER)).toBe(base);
-    expect(moveMenuRowTo(base, 'lager-group', 'mwst-group')).toBe(base);
+    expect(moveMenuRowTo(base, 'lager-group', 'anlagen-group')).toBe(base);
     const targets = menuMoveTargets(base, 'lager-group');
     expect(targets).not.toContain(TOP_CONTAINER);
     expect(targets).not.toContain('master-data');
     expect(targets).toContain('purchasing');
-    expect(menuMoveTargets(base, 'journal')).toEqual(expect.arrayContaining([TOP_CONTAINER, 'bank', 'mwst-group']));
+    expect(menuMoveTargets(base, 'journal')).toEqual(expect.arrayContaining([TOP_CONTAINER, 'bank', 'lager-group']));
     expect(menuMoveTargets(base, 'journal')).not.toContain('accounting');
   });
 
@@ -192,11 +200,83 @@ describe('the edits (reorder, move, hide, reset)', () => {
     expect(leafIds(layout, true)).not.toContain('warehouses');
     layout = setMenuRowHidden(layout, groupKey('bank'), true);
     expect(personalNavTree(layout, { visibleOnly: true }).map((g) => g.navId)).not.toContain('bank');
-    // Hide every row of Treuhänder: the group goes too.
+    // Hide every row of Projekte: the group goes too.
     let empty = canonicalMenuLayout();
-    for (const id of empty.containers.treuhaender!) empty = setMenuRowHidden(empty, id, true);
-    expect(personalNavTree(empty, { visibleOnly: true }).map((g) => g.navId)).not.toContain('treuhaender');
+    for (const id of empty.containers.projects!) empty = setMenuRowHidden(empty, id, true);
+    expect(personalNavTree(empty, { visibleOnly: true }).map((g) => g.navId)).not.toContain('projects');
     expect(setMenuRowHidden(setMenuRowHidden(canonicalMenuLayout(), 'deals', true), 'deals', false).hidden).toEqual([]);
+  });
+});
+
+describe('D210: the seven-area menu and the compact scope', () => {
+  const ids = (tree: ReturnType<typeof personalNavTree>) => tree.map((g) => g.navId);
+  const flat = (tree: ReturnType<typeof personalNavTree>) =>
+    tree.flatMap((g) => g.items.flatMap((n) => (isNavTreeParent(n) ? [n.navId, ...n.children.map((c) => c.navId)] : [n.navId])));
+
+  it('keeps the top block to exactly Übersicht and Pendenzen, and the five compact groups in order', () => {
+    const tree = personalNavTree(canonicalMenuLayout(), { visibleOnly: true, scope: 'compact' });
+    expect(tree[0]).toMatchObject({ navId: TOP_CONTAINER, labelKey: null });
+    expect(tree[0]!.items.map((n) => n.navId)).toEqual(['overview', 'attention']);
+    expect(ids(tree).slice(1)).toEqual(['bank', 'sales', 'purchasing', 'accounting', 'master-data']);
+    expect(ids(personalNavTree(canonicalMenuLayout(), { visibleOnly: true, scope: 'all' })).slice(1)).toEqual([
+      'bank', 'sales', 'purchasing', 'accounting', 'master-data', 'projects',
+    ]);
+  });
+
+  it('compact hides exactly COMPACT_HIDDEN, and all shows every row', () => {
+    const every = flat(personalNavTree(canonicalMenuLayout(), { visibleOnly: true, scope: 'all' }));
+    const compactTree = personalNavTree(canonicalMenuLayout(), { visibleOnly: true, scope: 'compact' });
+    const compact = flat(compactTree);
+    const compactKeys = new Set([...compact, ...ids(compactTree).filter((id) => id !== TOP_CONTAINER).map(groupKey)]);
+    const allKeys = new Set([
+      ...every,
+      ...ids(personalNavTree(canonicalMenuLayout(), { visibleOnly: true, scope: 'all' })).filter((id) => id !== TOP_CONTAINER).map(groupKey),
+    ]);
+    const gone = [...allKeys].filter((k) => !compactKeys.has(k));
+    // Every hidden key is a real row of the tree, and a hidden parent takes its leaves with it.
+    for (const key of COMPACT_HIDDEN) expect(allKeys.has(key)).toBe(true);
+    for (const key of COMPACT_HIDDEN) expect(gone).toContain(key);
+    for (const key of gone) {
+      if (COMPACT_HIDDEN.has(key)) continue;
+      // The only other rows that vanish are the children of a hidden parent or the pages of a hidden group.
+      const home = containerOf(canonicalMenuLayout(), key);
+      expect(home !== null && (COMPACT_HIDDEN.has(home) || COMPACT_HIDDEN.has(groupKey(home)))).toBe(true);
+    }
+    expect(compact).toEqual(expect.arrayContaining(['bills', 'capture-inbox', 'creditor-payments', 'journal', 'mwst']));
+    expect(compact).not.toContain('forecast');
+    expect(every).toEqual(expect.arrayContaining(['forecast', 'warehouses', 'assets', 'time', 'deals']));
+  });
+
+  it('defaults to scope all when called directly', () => {
+    expect(flat(personalNavTree(canonicalMenuLayout(), { visibleOnly: true }))).toContain('forecast');
+  });
+
+  it('gives every OFF_RAIL surface except first-run a palette command', () => {
+    const paths = new Set(NAV_COMMANDS.map((c) => c.path));
+    for (const id of OFF_RAIL) {
+      const surface = SURFACE_CATALOG.find((s) => s.navId === id);
+      expect(surface, `${id} is routed`).toBeDefined();
+      expect(paths.has(surface!.path), `${id} is off the rail and must be in the palette`).toBe(id !== 'first-run');
+    }
+  });
+
+  it('normalises a stored layout that still names removed ids without them', () => {
+    const layout = normalizeMenuLayout({
+      groups: ['group:settings', 'group:reports', 'settings', 'reports', 'bank'],
+      containers: {
+        [TOP_CONTAINER]: ['overview', 'agent', 'search', 'tasks', 'settings-home', 'attention'],
+        bank: ['bank-inbox'],
+      },
+      hidden: ['agent', 'search', 'tasks', 'settings-home', 'group:settings', 'group:reports'],
+    });
+    const everyId = [...layout.groups, ...Object.values(layout.containers).flat(), ...layout.hidden];
+    for (const gone of ['agent', 'search', 'tasks', 'settings-home', 'settings', 'reports-group', 'group:settings', 'group:reports']) {
+      expect(everyId, gone).not.toContain(gone);
+    }
+    expect(layout.groups).not.toContain('settings');
+    expect(layout.hidden).toEqual([]);
+    expect(layout.containers[TOP_CONTAINER]).toEqual(['overview', 'attention']);
+    expect([...layout.groups].sort()).toEqual([...canonicalMenuLayout().groups].sort());
   });
 });
 

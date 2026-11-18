@@ -1,18 +1,19 @@
 /**
  * N02 (D183), R1 RECEIPT UNIQUENESS in the Studio: one receipt evidences at most one live booking unless a
- * person confirms a second with a reason (`src/core/files/receiptGuard.ts`).
+ * person confirms a second (`src/core/files/receiptGuard.ts`; D204: no reason needed).
  *
  *  - `ReceiptHolderNotice`: the warning on a Vorschlag's card, "Dieser Beleg ist bereits gebucht (...)",
  *    from the holders the engine stored on it (`receiptHolders` in `list_drafted_actions`). The approval
  *    is judged against exactly that list.
  *  - `BookAgainDialog` + `useBookAgain`: when a call answers `receipt_already_booked` with an `override`
- *    hint (the setting is `confirm`), the person is asked for the reason, and the SAME call is sent again
- *    with `bookAgain: true` and `overrideReason`. Used by the direct attach paths (Bank, Journal, Files),
+ *    hint (the setting is `confirm`), the person is asked to confirm, and the SAME call is sent again
+ *    with `bookAgain: true` (and an `overrideReason` only when `audit.ask_reason` is `optional` and the
+ *    person wrote one, D204). Used by the direct attach paths (Bank, Journal, Files),
  *    the drop page and the approval of a Vorschlag. A refusal under `refuse` carries no hint: it is
  *    shown as a refusal, never as a question.
  *
  * The dialog is an alertdialog (a consequential confirm): it does not close on a scrim click, it stays
- * open with the reason intact when the retry is refused, and its commit is the primary button, never the
+ * open with any note intact when the retry is refused, and its commit is the primary button, never the
  * accent (the accent belongs to the posting click itself).
  */
 import { useCallback, useEffect, useId, useState, type FormEvent, type ReactNode } from 'react';
@@ -20,6 +21,7 @@ import { Link, useInRouterContext } from 'react-router-dom';
 
 import { formatDate, formatMoney, useT } from '../i18n';
 import { isErr, type Err } from '../lib/client';
+import { optionalReason, useAskReason } from '../lib/useAskReason';
 import { useOptionalClient } from '../lib/client-context';
 import { useOptionalWorkspaceId } from '../app/workspace';
 import {
@@ -128,10 +130,11 @@ export interface BookAgainDialogProps {
   /** A new version replacing a booked receipt (its own wording), not a second booking. */
   replace?: boolean;
   holders: readonly ReceiptHolder[];
-  /** The retried call's refusal, shown under the field; the dialog stays open with the reason intact. */
+  /** The retried call's refusal, shown in the dialog; it stays open with any note intact. */
   error: Err | null;
   busy: boolean;
-  onConfirm: (reason: string) => void;
+  /** D204: the note when the workspace asks for one and the person wrote it, else undefined. */
+  onConfirm: (reason: string | undefined) => void;
   onCancel: () => void;
 }
 
@@ -141,16 +144,11 @@ export function BookAgainDialog({ open, replace = false, holders, error, busy, o
   const label = useHolderLabel();
   const id = useId();
   const [reason, setReason] = useState('');
-  const [missing, setMissing] = useState(false);
+  const askReason = useAskReason();
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (reason.trim() === '') {
-      setMissing(true);
-      return;
-    }
-    setMissing(false);
-    onConfirm(reason.trim());
+    onConfirm(askReason ? optionalReason(reason) : undefined);
   };
 
   return (
@@ -184,20 +182,11 @@ export function BookAgainDialog({ open, replace = false, holders, error, busy, o
           ))}
         </ul>
         <p>{t(`${words}.question`)}</p>
-        <label htmlFor={`${id}-reason`}>{t('files.bookAgain.reasonLabel')}</label>
-        <textarea
-          id={`${id}-reason`}
-          className="field"
-          rows={2}
-          value={reason}
-          aria-invalid={missing ? 'true' : undefined}
-          aria-describedby={missing ? `${id}-missing` : undefined}
-          onChange={(event) => setReason(event.target.value)}
-        />
-        {missing && (
-          <p id={`${id}-missing`} className="book-again-error" role="alert">
-            {t('files.bookAgain.error.reason_required')}
-          </p>
+        {askReason && (
+          <>
+            <label htmlFor={`${id}-reason`}>{t('files.bookAgain.reasonLabel')}</label>
+            <textarea id={`${id}-reason`} className="field" rows={2} value={reason} onChange={(event) => setReason(event.target.value)} />
+          </>
         )}
         {error !== null && (
           <p className="book-again-error" role="alert">
@@ -317,7 +306,7 @@ export function AssignedDialog({ open, canRelease = true, holders, released, err
 }
 
 /**
- * A retry of the refused call: with the person's confirmation after a reason, or with none after "Lösen" (the
+ * A retry of the refused call: with the person's confirmation, or with none after "Lösen" (the
  * same call again). Resolves to its refusal, or null.
  */
 export type BookAgainRetry = (confirmation?: BookAgainConfirmation) => Promise<Err | null>;
@@ -358,10 +347,10 @@ export function useBookAgain(onBooked?: () => void): BookAgain {
   }, []);
 
   const confirm = useCallback(
-    async (reason: string) => {
+    async (reason: string | undefined) => {
       if (pending === null) return;
       setBusy(true);
-      const refused = await pending.retry({ bookAgain: true, overrideReason: reason });
+      const refused = await pending.retry(reason === undefined ? { bookAgain: true } : { bookAgain: true, overrideReason: reason });
       setBusy(false);
       if (refused === null) {
         setPending(null);
@@ -391,7 +380,7 @@ export function useBookAgain(onBooked?: () => void): BookAgain {
     setAssigned((a) => (a === null ? a : { ...a, released: true }));
   }, [assigned, client, workspaceId]);
 
-  /** "Nochmals": the refused act once more, on the person's click; a reason-refusal then asks for its reason. */
+  /** "Nochmals": the refused act once more, on the person's click; a booked receipt then asks for the confirmation. */
   const again = useCallback(async () => {
     if (assigned === null) return;
     setBusy(true);

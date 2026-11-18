@@ -16,8 +16,6 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import { HelpHint } from '../../components/HelpHint';
-import { IconButton } from '../../components/IconButton';
-import { OverflowMenu } from '../../components/OverflowMenu';
 import { formatDate, formatMoney, useT } from '../../i18n';
 import { Sparkline } from '../../components/charts/LineChart';
 import type { CompareMode } from './layout';
@@ -298,99 +296,3 @@ export const LIBRARY_GROUPS: readonly { id: string; tiles: readonly string[] }[]
   { id: 'books', tiles: ['auto_rate', 'receipt_rate'] },
   { id: 'operations', tiles: ['utilisation', 'project_margin', 'stock_value'] },
 ];
-
-/** One key figure's row of choices on the settings screen. */
-export interface KpiSettingRow {
-  id: string;
-  on: boolean;
-  double: boolean;
-  trend: boolean;
-  compare: CompareMode | undefined;
-  /** The one sentence the figure needs, shown on hover or focus of its (?) only. */
-  tip: string | null;
-  comparable: boolean;
-  trendable: boolean;
-  /** The bank item has its own size choices on the Übersicht (Kachel, Karte oben, Schmale Leiste). */
-  sizable: boolean;
-}
-
-/**
- * D186 (owner, 09.11.2026): the key-figure settings, their own screen. KISS: per figure a checkbox and its
- * name, and icons for the rest (Vergleichen opens a menu below it, Verlauf and Grösse ändern are pressed or
- * not); words only on hover or focus. Every change is written at once (the `overview.tiles` preference).
- */
-export function KpiSettings({
-  rows,
-  name,
-  onToggle,
-  onCompare,
-  onTrend,
-  onResize,
-}: {
-  rows: readonly KpiSettingRow[];
-  name: (id: string) => string;
-  onToggle: (id: string) => void;
-  onCompare: (id: string, mode: CompareMode | null) => void;
-  onTrend: (id: string) => void;
-  onResize: (id: string) => void;
-}) {
-  const t = useT();
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  const grouped = new Set(LIBRARY_GROUPS.flatMap((g) => g.tiles));
-  const groups = LIBRARY_GROUPS.map((g) => ({ ...g, tiles: g.tiles.filter((id) => byId.has(id)) }));
-  const loose = rows.filter((r) => !grouped.has(r.id)).map((r) => r.id);
-  if (loose.length > 0) groups[groups.length - 1] = { ...groups[groups.length - 1]!, tiles: [...groups[groups.length - 1]!.tiles, ...loose] };
-  return (
-    <div className="uebersicht-settings">
-      {groups
-        .filter((g) => g.tiles.length > 0)
-        .map((g) => (
-          <fieldset key={g.id} className="uebersicht-settings__group">
-            <legend>{t(`dashboard.library.groups.${g.id}`)}</legend>
-            {g.tiles.map((id) => {
-              const r = byId.get(id)!;
-              const label = name(id);
-              return (
-                <div key={id} className="uebersicht-settings__row">
-                  <label className="uebersicht-settings__name">
-                    <input type="checkbox" checked={r.on} onChange={() => onToggle(id)} />
-                    {label}
-                  </label>
-                  {/* Four fixed slots, so every icon stands in its own column down the list. */}
-                  <span className="uebersicht-settings__slot">
-                    {r.tip !== null ? <HelpHint label={t('dashboard.settings.about', { name: label })} title={label} body={r.tip} placement="bottom" /> : null}
-                  </span>
-                  <span className="uebersicht-settings__slot">
-                    {r.comparable ? (
-                      <OverflowMenu
-                        icon="compare"
-                        quiet
-                        portal
-                        label={t('dashboard.settings.compare', { name: label })}
-                        tooltip={r.compare === undefined ? t('dashboard.edit.comparePage') : t(`dashboard.settings.modes.${r.compare}`)}
-                        items={[
-                          { key: 'page', label: t('dashboard.edit.comparePage'), onSelect: () => onCompare(id, null), checked: r.compare === undefined },
-                          ...(['previous_year', 'previous_period', 'none'] as const).map((m) => ({
-                            key: m,
-                            label: t(`dashboard.settings.modes.${m}`),
-                            onSelect: () => onCompare(id, m),
-                            checked: r.compare === m,
-                          })),
-                        ]}
-                      />
-                    ) : null}
-                  </span>
-                  <span className="uebersicht-settings__slot">
-                    {r.trendable ? <IconButton icon="trend" small context={label} aria-pressed={r.trend} onClick={() => onTrend(id)} /> : null}
-                  </span>
-                  <span className="uebersicht-settings__slot">
-                    {r.sizable ? <IconButton icon="resize" small context={label} aria-pressed={r.double} onClick={() => onResize(id)} /> : null}
-                  </span>
-                </div>
-              );
-            })}
-          </fieldset>
-        ))}
-    </div>
-  );
-}

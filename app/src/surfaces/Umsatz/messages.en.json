@@ -1,0 +1,385 @@
+{
+  "nav": {
+    "umsatz": "Turnover"
+  },
+  "umsatz": {
+    "title": "Turnover",
+    "denied": "Reviewing settlement events needs the right to post.",
+    "loadFile": "Load a file",
+    "loadFileContext": "A till-settlement file, or a CSV or XLSX export, reviewed before it is booked",
+    "closeFile": "Close the file",
+    "book": "Book",
+    "booked": "{count} booked",
+    "checkPayouts": "Payouts",
+    "checkVat": "VAT",
+    "check": {
+      "payouts": {
+        "ok": "Every payout is explained by the events the books carry",
+        "differs": "A payout is not explained by the events the books carry",
+        "unknown": "Not checkable: not every payout is explained by its events",
+        "rest": "Payout of {day}: {amount} not explained by the books",
+        "gap": "Payout of {day}: {amount} not explained by its events",
+        "test": "Payout of {day}: {amount} from test payments, not booked",
+        "skipped": "Payout of {day}: {amount} stays on the clearing account (reserve)",
+        "opening": "Payout of {day}: {amount} from before the start date (opening balance)"
+      },
+      "vat": {
+        "ok": "The VAT of the included events is in the books",
+        "differs": "{count} included events carry other VAT than the books",
+        "unknown": "No included event carries VAT"
+      }
+    },
+    "empty": "No settlement events in this period",
+    "caption": "Settlement events from {from} to {to}",
+    "col": {
+      "day": "Date",
+      "kind": "Kind",
+      "who": "Who",
+      "amount": "Amount",
+      "vat": "VAT",
+      "status": "Status",
+      "include": "Include",
+      "derivation": "Derivation"
+    },
+    "kind": {
+      "sale": "Sale",
+      "refund": "Refund",
+      "processing_fee": "Processing fee",
+      "service_fee": "Service fee",
+      "third_party_payout": "Transfer",
+      "third_party_payout_reversal": "Transfer reversed",
+      "reserve": "Reserve",
+      "bank_payout": "Payout",
+      "bank_payout_summary": "Payout",
+      "other": "Other"
+    },
+    "status": {
+      "booked": "Booked",
+      "to_book": "To book",
+      "skipped": "Not booked",
+      "refused": "Refused",
+      "bookedNote": "Booked; the producer states it anew: {note}",
+      "sameAsBooked": "Same as an event already booked",
+      "sameIdOther": "Same id, other figures"
+    },
+    "test": "Test payment",
+    "outsidePeriod": "Outside this period: shown so nothing is booked unseen, not counted here",
+    "masked": "Payer hidden",
+    "include": "Include",
+    "refusal": {
+      "settlement_source_missing": "No settlement source is saved. Load a settlement file, or save the source under Bank accounts.",
+      "settlement_template_missing": "This source has no booking template yet.",
+      "settlement_template_incomplete": "The booking template does not map every kind in this file.",
+      "settlement_incomplete": "The producer marked this document incomplete. Fetch or export it again.",
+      "source_ambiguous": "Several settlement sources are saved.",
+      "token_missing": "The token of this source is missing. Save it under Bank accounts.",
+      "feed_unreachable": "The settlement feed cannot be reached.",
+      "feed_unauthorized": "The feed refused the token. Save the current one under Bank accounts.",
+      "review_stale": "Something changed since you looked. The period was read again; check it and book once more.",
+      "event_booked": "This event is booked. Correct it with a reversing entry.",
+      "handled_outside_active": "This event is marked as handled outside the import.",
+      "invalid_settlement": "The file is not a settlement document.",
+      "unsupported_schema": "The file is not a till-settlement/v1 document.",
+      "day_mode_unconfirmed": "This file holds whole days that no confirmed mapping read. Read the table again.",
+      "person_decides": "Only a person can confirm this."
+    },
+    "derivation": {
+      "open": "Derivation",
+      "close": "Close",
+      "fee": "Platform fee {rate}: {amount}",
+      "feeWaived": "Platform fee waived: {reason}",
+      "waiver": {
+        "new_coach_window": "new coach window",
+        "override": "override",
+        "unknown": "reason unknown",
+        "none": "no reason stated"
+      },
+      "processing": "Processing fee: {amount}",
+      "coach": "To the coach: {amount}",
+      "vat": "VAT {rate} %",
+      "ok": "Derivation adds up",
+      "notOk": "Derivation does not add up",
+      "yes": "yes",
+      "no": "no",
+      "field": {
+        "gross": "Gross",
+        "vat": "VAT",
+        "net": "Net",
+        "payoutNet": "Payout net",
+        "fee": "Platform fee",
+        "processing": "Processing fee",
+        "expected": "To the coach, expected",
+        "selfBill": "Coach self-bill",
+        "transfer": "Transfer to the coach",
+        "adjustment": "Netted",
+        "coachVat": "Coach VAT-registered",
+        "producer": "Producer check",
+        "till": "TILL check",
+        "derivedFrom": "Source",
+        "sellerRole": "Role",
+        "vatRule": "VAT rule",
+        "bookingId": "Booking",
+        "sessionId": "Session",
+        "liveSessionId": "Live session",
+        "paymentIntentId": "Payment intent",
+        "chargeId": "Charge",
+        "transferId": "Transfer",
+        "payoutId": "Payout",
+        "document": "Document",
+        "trimmed": "Trimmed"
+      }
+    },
+    "noId": "No id",
+    "period": "Period",
+    "table": {
+      "nameStep": "Name the source",
+      "mappingStep": "Map the columns",
+      "system": "System",
+      "processor": "Processor",
+      "next": "Next",
+      "none": "None",
+      "empty": "The table has no rows",
+      "events": "{events} events from {rows} rows",
+      "refused": "{count} rows refused",
+      "refusedRow": "row {row}: {code}",
+      "preview": "The first rows of the table",
+      "kindMap": "What each type in the table is",
+      "kindOf": "Kind of {cell}",
+      "dateFormat": "Date format",
+      "decimal": "Decimal mark",
+      "vatMode": "VAT",
+      "vat": {
+        "from_template": "From the booking template",
+        "stated": "From the table",
+        "none": "None"
+      },
+      "source": {
+        "saved": "The mapping saved for this source",
+        "profile": "Profile: {label}",
+        "given": "Your mapping",
+        "guessed": "Guessed from the headers",
+        "pick": "Source",
+        "choose": "Choose a source"
+      },
+      "field": {
+        "day": "Date",
+        "amount": "Amount (gross)",
+        "id": "Id",
+        "kind": "Type",
+        "fee": "Fee",
+        "documentNumber": "Document number",
+        "counterparty": "Who",
+        "description": "Text",
+        "currency": "Currency",
+        "vat": "VAT amount",
+        "net": "Net amount",
+        "payoutId": "Payout"
+      },
+      "refusal": {
+        "table_mapping_mismatch": "The columns differ from the mapping saved for this source. Check the new mapping; Next saves it.",
+        "xls_unsupported": "This is a legacy or encrypted workbook. Save it as xlsx or CSV.",
+        "table_unreadable": "The table cannot be read.",
+        "table_too_large": "The table is too large. Export a shorter period.",
+        "id_column_missing": "Choose the id column: your settings book a table only with one.",
+        "invalid_input": "Something in the mapping is missing.",
+        "day_mode_payout_mapped": "A table with a payout id lists payouts, not whole days. Remove the payout id, or choose id columns.",
+        "unreadable_day": "A day in this table cannot be read, so no day is known to be whole. Check the date format.",
+        "person_decides": "Only a person can confirm this."
+      },
+      "otherFile": "Load another file",
+      "sameAsBooked": "{count} the same as events already booked",
+      "sameAsBookedRow": "row {row}",
+      "warnings": "What the table door noticed",
+      "newSource": "New source",
+      "replace": {
+        "title": "Replace the saved mapping",
+        "risk": "{count} events of this source are booked. If the new mapping reads the same rows with other ids, a later export books them a second time.",
+        "plain": "This source has a saved mapping. The new one replaces it.",
+        "confirm": "Replace",
+        "cancel": "Keep the saved one"
+      },
+      "amountSign": "Sign of the amount",
+      "sign": {
+        "as_stated": "As in the table",
+        "by_kind": "By the kind"
+      },
+      "feeSign": "Sign of the fee",
+      "fee": {
+        "deducted": "Taken from the balance",
+        "signed": "As in the table"
+      },
+      "kindPositive": "Kind of money in",
+      "kindNegative": "Kind of money out",
+      "vatFees": "VAT on fees",
+      "readAs": "Read as",
+      "sameIdOther": "{count} with the id of a booked event but other figures",
+      "id": {
+        "label": "Id",
+        "part": "Id part {n}",
+        "missing": "No id yet: pick the columns that tell every row apart ({candidates})",
+        "notUnique": "{count} rows of this file share an id (only this file is checked)",
+        "unique": "Every row of this file has its own id (only this file is checked)",
+        "precision": "Day in the id",
+        "precisionOf": {
+          "day": "The day",
+          "second": "Day and time"
+        },
+        "amountPart": "The id holds an amount: an equal sale in another file reads as already booked",
+        "textAsNumber": "Excel turned the id column {columns} into a number: leading zeros or long ids may differ from the CSV"
+      },
+      "otherIds": {
+        "title": "Other ids than the booked events",
+        "risk": "{count} events of this source are booked with ids made another way. Reading the table this way, the same rows can book a second time.",
+        "confirm": "Read it this way"
+      },
+      "rowCode": {
+        "id_time_unknown": "the time of day is missing in this workbook date cell: export the table as CSV, or format the column as text in Excel"
+      },
+      "wholeDays": {
+        "label": "Without an id",
+        "no": "Choose id columns",
+        "yes": "Lists whole days",
+        "hint": "Choose this only if the export always lists every row of each day it covers. A day already in the books is never booked again; a day that differs is shown and booked by hand.",
+        "on": "Read by whole days: each row is identified by its day"
+      }
+    },
+    "dayCode": {
+      "day_incomplete": "another row of this day cannot be read",
+      "day_differs": "this day differs from the books",
+      "day_not_over": "this day is not over yet",
+      "edge_day_excluded": "first or last day of the file, left out",
+      "edge_day_unconfirmed": "first or last day of the file, waiting for your answer"
+    },
+    "days": {
+      "label": "Days of the table",
+      "in_books": "{day} already in the books",
+      "differs": "{day} differs: booked {booked}, file {file}",
+      "incomplete": "{day} incomplete: a row cannot be read",
+      "not_over": "{day} not over yet"
+    },
+    "edge": {
+      "label": "First and last day",
+      "ask": "{day} may be cut off",
+      "near": "{day}: {amounts} is also booked on {neighbour}, maybe the same row",
+      "confirm": "{day} is complete",
+      "context": "The export lists every row of this day",
+      "confirmed": "{day} complete, your answer",
+      "undo": "Undo: {day} may be cut off"
+    },
+    "tabs": "Turnover view",
+    "tab": {
+      "zahlen": "Figures",
+      "regeln": "Rules"
+    },
+    "unit": {
+      "label": "Period",
+      "month": "Month",
+      "quarter": "Quarter",
+      "year": "Year"
+    },
+    "periodState": {
+      "to_book": "to book",
+      "booked": "booked",
+      "empty": "empty"
+    },
+    "events": "Events",
+    "showAll": "Show all",
+    "start": {
+      "label": "Bring turnover in",
+      "file": "Load a file",
+      "connect": "Connect a source"
+    },
+    "bookBar": "Book",
+    "bookBarWhat": "{count} events: {net} turnover, {vat} VAT",
+    "booking": "Booking",
+    "answeredBy": "{who}, {at}",
+    "figures": {
+      "kpis": "Key figures",
+      "turnover": "Turnover excl. VAT",
+      "vat": "VAT from settlements",
+      "sales": "Number of sales",
+      "average": "Average sale",
+      "payouts": "Payouts",
+      "toBook": "To book",
+      "toBookValue": "{count}",
+      "toBookAmount": "{net} turnover, {vat} VAT",
+      "compareLabel": "Compare",
+      "compareWord": {
+        "previous_period": "previous period",
+        "previous_year": "previous year"
+      },
+      "same": "same as {word}",
+      "fromZero": "new against {word}",
+      "delta": "{sign}{pct} % against {word} ({value})",
+      "hint": {
+        "turnover": "The revenue accounts 3xxx excl. VAT, as they stand in the books.\nVAT return: line 200, taxable line 299.\nWhat is still to book counts once it is booked.",
+        "vat": "Output VAT on 2200 from your settlements' sales and refunds: line {lines}.\nThe VAT on these sales less the input VAT on their fees {input} (line {inLines}): {net}.",
+        "sales": "Sales from your settlements that stand in the books: booked in the period and not reversed by its end.\nInvoices and manual entries count as turnover, not here. A refund lowers the turnover.",
+        "average": "These sales' revenue excl. VAT, divided by their number.",
+        "payouts": "What left the clearing account {clearing} for the bank account.\nNot turnover: the turnover comes from the sales.",
+        "toBook": "Events of the period that Book brings into the books.\nA click shows only them.",
+        "vatSaldo": "Output VAT on 2200 from your settlements' sales and refunds, as billed: line {lines}.\nUnder the net tax rate method you deduct no input VAT."
+      },
+      "source": {
+        "invoices": "Invoices",
+        "other": "Other entries"
+      },
+      "noCustomer": "Not stated",
+      "restCustomers": "{count} more",
+      "byMonth": "By month",
+      "bySource": "By source",
+      "byCustomer": "By customer",
+      "none": "No turnover",
+      "vatBilled": "VAT billed",
+      "fromSettlement": "{amount} of it from settlements"
+    },
+    "rules": {
+      "templates": "Booking template",
+      "noSource": "No source",
+      "editTemplate": "Edit template",
+      "settings": "Behaviour",
+      "saved": "Saved",
+      "bankRules": "Bank booking rules",
+      "openBankRules": "Booking rules",
+      "openBankRulesContext": "Bank inbox, booking rules",
+      "noBankRule": "No rule for payouts",
+      "setting": {
+        "review_period": {
+          "label": "Period on opening",
+          "quarter": "Quarter",
+          "month": "Month",
+          "year": "Year"
+        },
+        "test_events": {
+          "label": "Test payments",
+          "skip": "Do not book",
+          "book": "Book"
+        },
+        "test_fees": {
+          "label": "Fees on test payments",
+          "book": "Book",
+          "skip": "Do not book"
+        },
+        "pull_mode": {
+          "label": "Pull the feed",
+          "manual": "By hand",
+          "daily": "Daily"
+        },
+        "agent_sees_email": {
+          "label": "Email for the agent",
+          "masked": "Hidden",
+          "shown": "Visible"
+        }
+      }
+    },
+    "bookBarOutside": "{count} of them outside the period"
+  },
+  "help": {
+    "Umsatz": {
+      "title": "Turnover",
+      "body": "Turnover shows a period's turnover from your books: turnover excl. VAT, VAT from settlements, sales, payouts and what is still to book, each against the previous period or year, plus by month, source and customer. Hover a figure to see where it comes from. A payout is never turnover. Below are your payment processor's events before they are booked: ignore what should stay off the books or include it again, with no reason; TILL keeps who and when. When something is ready to book, the bar with Book appears at the bottom. Without a source, load a file or connect one. Rules holds the template, the behaviour and the bank's booking rules.",
+      "concepts": [],
+      "docsPath": "formats/till-settlement"
+    }
+  }
+}

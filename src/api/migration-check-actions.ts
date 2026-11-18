@@ -81,8 +81,8 @@ export function migrationCheckActions(h: MigrationCheckActionHelpers): readonly 
     ctxAction(
       'migration_waive_control',
       'write:correctable:statutory',
-      'Set one control aside with a RECORDED reason, which becomes part of the check and of the Prüfbericht. A waiver without a reason is refused (waiver_needs_reason), empty string included; a waived control reports "waived", never "passed", and readiness renders "bereit, mit N Ausnahmen" rather than plain ready. A passed control cannot be waived.',
-      ctxSchema({ controlId: STR, reason: STR, idempotencyKey: STR }, ['controlId', 'reason', 'idempotencyKey']),
+      'Set one control aside; who and when are recorded and become part of the check and of the Prüfbericht, with the reason when given (D204: optional); a waived control reports "waived", never "passed", and readiness renders "bereit, mit N Ausnahmen" rather than plain ready. A passed control cannot be waived.',
+      ctxSchema({ controlId: STR, reason: STR, idempotencyKey: STR }, ['controlId', 'idempotencyKey']),
       (ctx, input) => waiveControl(ctx, as(input)),
     ),
     ctxAction(

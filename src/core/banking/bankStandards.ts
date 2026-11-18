@@ -51,6 +51,7 @@ import { ok, err } from '../result.js';
 import type { Err, Result } from '../result.js';
 import { requireString } from '../ledger/inputGuards.js';
 import { approvingActionIds } from '../agent/approving.js';
+import { isGovernedSeat } from '../access/capability.js';
 import { BANK_LINE_IGNORE_REASONS, bankLedgerOfLine, controlAccountRoleOf, readActiveLink, readBankTxn, readBankTxnDetail } from './bankLines.js';
 import type { BankLineIgnoreReason, BankTxnRow } from './bankLines.js';
 import { counterpartyKeyOf, lineCounterpartyOf, textTokens } from './bankProposals.js';
@@ -125,6 +126,8 @@ export const BANK_RULE_LABEL_MAX = 80;
 export const BANK_RULE_MATCH_TEXT_MAX = 120;
 /** D176: an ignore rule's note, the length `ignore_bank_line` admits. */
 export const BANK_RULE_IGNORE_NOTE_MAX = 500;
+/** D208 point 8: the person's comment to the agent on a rule (`note`), plain text, never executed. */
+export const BANK_RULE_NOTE_MAX = 500;
 
 /**
  * Why a live rule went quiet (§H-ENUM, single point; the Studio mirrors it): an account of a leg or the
@@ -197,7 +200,20 @@ export type BankStandard = {
   taxCode: string | null;
   setBy: string | null;
   setAt: string;
+  /**
+   * D208 point 8: the person's comment to the agent on this rule (`set_bank_standard { note }`), or null. Plain
+   * text the agent reads before it drafts for this counterparty; never executed. It follows the rule through
+   * every edit (the newest comment along the version chain) and ends with a clear.
+   */
+  note: string | null;
+  noteSetBy: string | null;
+  noteSetAt: string | null;
+  /** Every comment change along the rule's versions, newest first; a cleared comment reads note null. */
+  noteHistory: BankRuleNoteChange[];
 };
+
+/** D208: one change of a rule's comment to the agent (`bank_standard_note`). */
+export type BankRuleNoteChange = { note: string | null; setBy: string | null; setAt: string };
 
 interface StandardRow {
   id: string;
@@ -490,7 +506,53 @@ function toStandard(ctx: WorkspaceContext, r: StandardRow, accounts: ReadonlyMap
     taxCode: ignore ? null : r.tax_code,
     setBy: r.set_by,
     setAt: r.set_at,
+    ...ruleNoteOf(ctx, r.id),
   };
+}
+
+/**
+ * D208 point 8: the comment a rule VERSION carries, and its history: every `bank_standard_note` row written on
+ * this version or an earlier one of its chain (`replaces_id`), newest first. The comment in force is the
+ * newest row's (null when it cleared it, or when there is none). Tenant-bound.
+ */
+export function ruleNoteOf(ctx: WorkspaceContext, standardId: string): Pick<BankStandard, 'note' | 'noteSetBy' | 'noteSetAt' | 'noteHistory'> {
+  const chain: string[] = [];
+  const step = ctx.store.db.prepare('SELECT replaces_id AS r FROM bank_standard WHERE workspace_id = ? AND id = ?');
+  for (let at: string | null = standardId; at !== null && !chain.includes(at); ) {
+    const row = step.get(ctx.workspaceId, at) as { r: string | null } | undefined;
+    if (row === undefined) break;
+    chain.push(at);
+    at = row.r;
+  }
+  if (chain.length === 0) return { note: null, noteSetBy: null, noteSetAt: null, noteHistory: [] };
+  const rows = ctx.store.db
+    .prepare(
+      `SELECT note, set_by, set_at FROM bank_standard_note
+        WHERE workspace_id = ? AND standard_id IN (${chain.map(() => '?').join(', ')})
+        ORDER BY set_at DESC, rowid DESC`,
+    )
+    .all(ctx.workspaceId, ...chain) as { note: string | null; set_by: string | null; set_at: string }[];
+  const history = rows.map((r) => ({ note: r.note, setBy: r.set_by, setAt: r.set_at }));
+  const newest = history[0];
+  return {
+    note: newest?.note ?? null,
+    noteSetBy: newest?.note === null || newest === undefined ? null : newest.setBy,
+    noteSetAt: newest?.note === null || newest === undefined ? null : newest.setAt,
+    noteHistory: history,
+  };
+}
+
+/**
+ * D208: write the comment on the version `standardId` when it differs from the one in force (a string sets it,
+ * null clears it). Returns whether a row was written. Called inside the save's own memoised transaction, so a
+ * replay writes nothing. Tenant-bound.
+ */
+function writeRuleNote(ctx: WorkspaceContext, standardId: string, note: string | null): boolean {
+  if (ruleNoteOf(ctx, standardId).note === note) return false;
+  ctx.store.db
+    .prepare('INSERT INTO bank_standard_note (id, workspace_id, standard_id, note, set_by, set_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(ctx.ids.next('bstdnote'), ctx.workspaceId, standardId, note, ctx.actor, ctx.clock.now());
+  return true;
 }
 
 export function liveRuleFor(ctx: WorkspaceContext, key: string, direction: BankStandardDirection, matchText: string | null): StandardRow | undefined {
@@ -657,6 +719,13 @@ export interface SetBankStandardInput {
   expectSlotStandardId?: string | null;
   /** N03: the miner's evidence a mined Vorschlag shows (its backtest and bookings); the save ignores it. */
   minedFacts?: unknown;
+  /**
+   * D208 point 8: the person's comment to the agent on this rule (at most `BANK_RULE_NOTE_MAX` characters, plain
+   * text, never executed). Absent: the comment in force stays. A text sets it, null or an empty text clears it.
+   * Never a new rule version: it is kept beside the rule (`bank_standard_note`), so a comment never ends an
+   * autopilot grant.
+   */
+  note?: string | null;
   idempotencyKey?: string;
 }
 
@@ -685,6 +754,26 @@ export function setBankStandardRefusal(input: SetBankStandardInput, drafted: boo
     });
   }
   return undefined;
+}
+
+/**
+ * D208 (security review, 18.11.2026): the comment to the agent is the OWNER'S free text, and the agent reads it
+ * back as data about the rule. So only a person acting directly ever writes it (the Studio's star and speech
+ * bubble). Refused `note_human_only`, clearing included: a governed seat (the agent, a plugin, any `agent`
+ * user), TILL itself (`system`, the rule miner), and every save that runs as the replay of an approved
+ * Vorschlag (`approvingActionIds`): a note is typed by the person, never replayed from a draft, so text an
+ * agent read off a bank line can never become a standing instruction. Checked before anything is read, so the
+ * pre-draft screen refuses it too and no such Vorschlag is ever drafted.
+ */
+export function ruleNoteRefusal(ctx: WorkspaceContext, input: Pick<SetBankStandardInput, 'note'>): Err | undefined {
+  if (input.note === undefined) return undefined;
+  const why =
+    approvingActionIds().length > 0
+      ? 'a comment is typed by a person, never replayed from an approved Vorschlag'
+      : ctx.actor === 'system' || isGovernedSeat(ctx.store, ctx.actor)
+        ? 'only a person writes the comment to the agent; an agent or TILL itself never does'
+        : null;
+  return why === null ? undefined : err('note_human_only', { field: 'note', reason: why });
 }
 
 /** Carries a dry run's answer out of the transaction it rolls back. */
@@ -717,7 +806,11 @@ export function prevalidateSetBankStandard(ctx: WorkspaceContext, input: SetBank
   return undefined;
 }
 
-export type SetBankStandardOk = { standard: BankStandard; supersededId: string | null; unchanged: boolean };
+/**
+ * `unchanged`: the rule itself stands as it was (no new version). `noteChanged` (D208): the comment to the agent
+ * changed with this save (on the rule that stands, or on the new version).
+ */
+export type SetBankStandardOk = { standard: BankStandard; supersededId: string | null; unchanged: boolean; noteChanged: boolean };
 
 function invalidRecipe(detail: BankRuleRecipeDetail, extra: Record<string, unknown> = {}): Err {
   return err('invalid_recipe', { detail, ...extra });
@@ -950,7 +1043,10 @@ export interface BookedShape {
 
 /**
  * N03: the legs of a line's booking, read off its posted entry (`entryId`) on the line's bank ledger: every
- * line off the bank ledger and off the VAT accounts, grouped by account. An account the entry moves both
+ * line off the bank ledger and off the VAT accounts, grouped by account AND tax code (critic D207 F1: grouped
+ * by account alone, 60.00 VST-M plus 40.00 VST-M26 on one account became one leg with the first code, and a
+ * coded line plus an uncoded one on one account taxed both; a rule saved from that over-claimed Vorsteuer).
+ * An account the entry moves both
  * ways to nothing is the Durchlaufkonto (the bank against it, it against each leg). A leg's side is its net
  * (a credit on the leg's account is money in), its code the code its tagged line carries, its size the net
  * plus that line's VAT. Null when the entry moves nothing besides the bank, or more than one Durchlaufkonto.
@@ -968,25 +1064,27 @@ export function bookedShapeOf(ctx: WorkspaceContext, row: Pick<BankTxnRow, 'bank
         WHERE l.entry_id = ? ORDER BY l.rowid`,
     )
     .all(ctx.workspaceId, entryId) as { accountId: string; number: string; debit: number; credit: number; taxCode: string | null; taxAmount: number | null }[];
-  const byAccount = new Map<string, { net: number; debits: number; credits: number; taxCode: string | null; tax: number }>();
+  // One group per account and code: the code is part of what a leg books, never the first of several.
+  const byLeg = new Map<string, { accountId: string; net: number; debits: number; credits: number; taxCode: string | null; tax: number }>();
   for (const l of lines) {
     if (l.accountId === ledger || VAT_ACCOUNT_NUMBERS.includes(l.number)) continue;
-    const at = byAccount.get(l.accountId) ?? { net: 0, debits: 0, credits: 0, taxCode: null, tax: 0 };
+    const code = l.taxCode !== null && l.taxCode !== '' ? l.taxCode : null;
+    const key = `${l.accountId}\u0000${code ?? ''}`;
+    const at = byLeg.get(key) ?? { accountId: l.accountId, net: 0, debits: 0, credits: 0, taxCode: code, tax: 0 };
     at.net += l.debit - l.credit;
     if (l.debit > 0) at.debits += 1;
     if (l.credit > 0) at.credits += 1;
-    if (l.taxCode !== null && at.taxCode === null) at.taxCode = l.taxCode;
-    if (l.taxCode !== null) at.tax += Math.abs(l.taxAmount ?? 0);
-    byAccount.set(l.accountId, at);
+    if (code !== null) at.tax += Math.abs(l.taxAmount ?? 0);
+    byLeg.set(key, at);
   }
-  const vias = [...byAccount.entries()].filter(([, a]) => a.net === 0 && a.debits > 0 && a.credits > 0 && a.taxCode === null).map(([id]) => id);
+  const vias = [...new Set([...byLeg.values()].filter((a) => a.net === 0 && a.debits > 0 && a.credits > 0 && a.taxCode === null).map((a) => a.accountId))];
   if (vias.length > 1) return null;
   const moneyIn = row.credit_debit === 'CRDT';
   const legs: BookedLeg[] = [];
-  for (const [accountId, a] of byAccount) {
-    if (vias.includes(accountId) || a.net === 0) continue;
+  for (const a of byLeg.values()) {
+    if ((vias.includes(a.accountId) && a.taxCode === null) || a.net === 0) continue;
     const legIn = a.net < 0;
-    legs.push({ accountId, taxCode: a.taxCode, against: legIn !== moneyIn, sizeMinor: Math.abs(a.net) + a.tax });
+    legs.push({ accountId: a.accountId, taxCode: a.taxCode, against: legIn !== moneyIn, sizeMinor: Math.abs(a.net) + a.tax });
   }
   if (legs.length === 0 || legs.length > BANK_RULE_MAX_LEGS) return null;
   return { legs, viaAccountId: vias[0] ?? null };
@@ -999,10 +1097,21 @@ export function recipeOfShape(ctx: WorkspaceContext, shape: BookedShape): Recipe
     if (!l.against && (restAt < 0 || l.sizeMinor > shape.legs[restAt]!.sizeMinor)) restAt = i;
   });
   if (restAt < 0) return null;
-  const nameOf = ctx.store.db.prepare('SELECT name FROM account WHERE workspace_id = ? AND id = ?');
+  const nameOf = ctx.store.db.prepare('SELECT number, name FROM account WHERE workspace_id = ? AND id = ?');
+  const rateOf = ctx.store.db.prepare('SELECT rate_bp AS rateBp FROM tax_code WHERE workspace_id = ? AND code = ?');
   return shape.legs.map((l, i): RecipeLeg => {
-    const name = ((nameOf.get(ctx.workspaceId, l.accountId) as { name: string } | undefined)?.name ?? '').trim();
-    const label = (name === '' ? 'Betrag' : name).slice(0, BANK_RULE_ASK_LABEL_MAX).trim();
+    const acct = nameOf.get(ctx.workspaceId, l.accountId) as { number: string; name: string } | undefined;
+    const name = (acct?.name ?? '').trim();
+    // Critic D207 re-check (LOW 2): legs are one per account AND code, so two asked legs may share an account;
+    // a coded leg's label says its number and its MWST rate (or code), "6570 Informatik · 2.6 %", so the two
+    // fields the bank inbox asks never read alike. An uncoded leg keeps the account's name.
+    let label = (name === '' ? 'Betrag' : name).slice(0, BANK_RULE_ASK_LABEL_MAX).trim();
+    if (l.taxCode !== null) {
+      const rateBp = (rateOf.get(ctx.workspaceId, l.taxCode) as { rateBp: number } | undefined)?.rateBp ?? 0;
+      const suffix = ` · ${rateBp > 0 ? `${String(rateBp / 100)} %` : l.taxCode}`;
+      const head = [acct?.number ?? '', name === '' ? 'Betrag' : name].filter((x) => x !== '').join(' ');
+      label = `${head.slice(0, Math.max(1, BANK_RULE_ASK_LABEL_MAX - suffix.length)).trim()}${suffix}`;
+    }
     return {
       accountId: l.accountId,
       taxCode: l.taxCode,
@@ -1068,6 +1177,9 @@ function prefillFromBooking(ctx: WorkspaceContext, input: SetBankStandardInput):
 export function setBankStandard(ctx: WorkspaceContext, given: SetBankStandardInput): Result<SetBankStandardOk> {
   const capable = ctx.capabilities.assert('post');
   if (!capable.ok) return capable;
+  // D208 (security review): the comment is typed by a PERSON only.
+  const noteRefused = ruleNoteRefusal(ctx, given);
+  if (noteRefused !== undefined) return noteRefused;
   // N03 (critic, findings 2 and 6): the reserved miner prefix, and a legless save from a booked line while a
   // Vorschlag of it is approved (`approvingActionIds`: the replay of an approval is running).
   const refusedInput = setBankStandardRefusal(given, approvingActionIds().length > 0);
@@ -1146,6 +1258,16 @@ export function setBankStandard(ctx: WorkspaceContext, given: SetBankStandardInp
   const viaAccountId = typeof via === 'string' ? via : null;
   const note = optionalShortText(input.ignoreNote, 'ignoreNote', BANK_RULE_IGNORE_NOTE_MAX);
   if ('error' in note) return note.error;
+  // D208: the comment to the agent; `undefined` keeps the one in force, null or '' clears it.
+  const agentNote = input.note === undefined ? undefined : optionalShortText(input.note, 'note', BANK_RULE_NOTE_MAX);
+  if (agentNote !== undefined && 'error' in agentNote) return agentNote.error;
+  if (agentNote !== undefined && agentNote.value !== null && /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(agentNote.value)) {
+    return err('invalid_input', { field: 'note', reason: 'plain text: no control characters' });
+  }
+  if (agentNote !== undefined && scope === 'manual') {
+    return err('invalid_input', { field: 'note', reason: 'a comment to the agent belongs to a bank rule; a Vorlage carries none' });
+  }
+  const noteValue = agentNote === undefined ? undefined : agentNote.value;
   if (input.replace !== undefined && input.replace !== null) {
     return err('invalid_input', { field: 'replace', reason: 'name the Vorlage to replace with replaceStandardId (its id, as label_taken reports it)' });
   }
@@ -1336,7 +1458,9 @@ export function setBankStandard(ctx: WorkspaceContext, given: SetBankStandardInp
     const slot = liveRuleFor(ctx, target.key, target.direction, matchText);
     // Unchanged: the slot's live row already says exactly this (and an edit names that very row).
     if (slot !== undefined && same(slot) && (target.edited === null || target.edited.id === slot.id)) {
-      return ok<SetBankStandardOk>({ standard: toStandard(ctx, slot, accounts, ledgers), supersededId: null, unchanged: true });
+      // D208: a comment alone is no new version: it is written beside the rule that stands.
+      const noted = noteValue !== undefined && writeRuleNote(ctx, slot.id, noteValue);
+      return ok<SetBankStandardOk>({ standard: toStandard(ctx, slot, accounts, ledgers), supersededId: null, unchanged: true, noteChanged: noted });
     }
     const now = ctx.clock.now();
     const supersede = ctx.store.db.prepare(
@@ -1375,11 +1499,14 @@ export function setBankStandard(ctx: WorkspaceContext, given: SetBankStandardInp
         // versions form one chain (`ruleStats.ts`). A clear leaves no live row, so the next set starts a chain.
         target.edited?.id ?? slot?.id ?? null,
       );
+    // D208: the comment, on the new version (the one in force from the old versions carries over by the chain).
+    const noteChanged = noteValue !== undefined && writeRuleNote(ctx, id, noteValue);
     const written = readLiveRule(ctx, id) as StandardRow;
     return ok<SetBankStandardOk>({
       standard: toStandard(ctx, written, accounts, ledgers),
       supersededId: target.edited?.id ?? slot?.id ?? null,
       unchanged: false,
+      noteChanged,
     });
   });
 }

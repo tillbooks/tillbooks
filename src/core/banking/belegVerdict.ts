@@ -21,7 +21,9 @@
  *   - every file's figures fit the line by the A41.1 amount rule (exact, transaction currency, FX
  *     tolerance), else `beleg_amount_differs`;
  *   - the printed VAT (when one states it in the line's currency) within `belege.vat_delta_tolerance_rappen`
- *     of the VAT the booking computes, else `beleg_vat_differs`.
+ *     of the VAT the booking computes, else `beleg_vat_differs`;
+ *   - A41.8 (D193, critic r1): the assigned receipts' VAT (all of them, one reading) does not `differ` from what the
+ *     booking computes (`vatCheck`), else `beleg_vat_differs`.
  * The receipt guard is the booking's own (the attach seam inside `book_bank_line`): a refusal there rolls the
  * booking back and the line waits `beleg_in_use`.
  *
@@ -35,6 +37,7 @@ import type { BankTxnRow } from './bankLines.js';
 import type { BankProposalTarget } from './bankProposals.js';
 import { amountMatch } from './belegMatch.js';
 import { compareVat, computedVatOf } from './belegEvidence.js';
+import { assignedReceiptDiffers } from './receiptVat.js';
 import { readLineFactsMap } from './statementFacts.js';
 import { activeAssignmentOf, currentEngineSnapshotOf, currentFiguresOf, snapshotOf } from './belegAssignmentStore.js';
 import type { BelegAssignment } from './belegAssignmentStore.js';
@@ -101,6 +104,12 @@ export function assignmentVerdict(ctx: WorkspaceContext, line: BankTxnRow, targe
     if (computed !== null && !compareVat(printed, computed, getSetting<number>(ctx, 'belege.vat_delta_tolerance_rappen')).withinTolerance) {
       return { kind: 'wait', reason: 'beleg_vat_differs', assignmentId: a.id };
     }
+  }
+  // A41.8 (D193, critic r1): nothing books unattended that the assigned receipt's VAT contradicts (`vatCheck` =
+  // `differs`, the bulk cap's own rule, in both modes): the line waits, and a person books it from the inbox. Read
+  // from the assignment's own captures only.
+  if (assignedReceiptDiffers(ctx, line, a.files, target)) {
+    return { kind: 'wait', reason: 'beleg_vat_differs', assignmentId: a.id };
   }
   return { kind: 'book', assignmentId: a.id, files: a.files.map((f) => ({ fileId: f.fileId })) };
 }

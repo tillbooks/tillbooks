@@ -55,11 +55,13 @@
   box-shadow: var(--t-focus-ring);
 }
 
-/* A focusable panel gets the same ring when reached by keyboard, but no persistent border. */
+/* D197 (owner, 12.11.2026): a panel draws no frame. It is a tab stop only while it holds nothing
+   focusable (Tabs.tsx), and even then the ring around a whole surface's panel was noise: no ring, no
+   border, no outline. The controls inside carry their own focus cue. */
+.tabs-panel:focus,
 .tabs-panel:focus-visible {
   outline: none;
-  box-shadow: var(--t-focus-ring);
-  border-color: var(--t-focus-border);
+  box-shadow: none;
 }
 
 /* Vertical: the list is a column of the same pills beside its panel (a category or report list).

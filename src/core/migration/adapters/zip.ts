@@ -119,8 +119,11 @@ export function unzip(input: Uint8Array, opts: { maxTotal?: number } = {}): ZipR
       }
       totalInflated += bytes.byteLength;
       members.push({ name, bytes });
-    } catch {
-      members.push({ name, error: 'corrupt' });
+    } catch (e) {
+      // A20 §13.1: a member whose header understates its size overruns `maxOutputLength` inside zlib
+      // (ERR_BUFFER_TOO_LARGE): that is the ceiling speaking, not a damaged member.
+      const overrun = (e as { code?: unknown }).code === 'ERR_BUFFER_TOO_LARGE';
+      members.push({ name, error: overrun ? 'inflated_size_exceeds_ceiling' : 'corrupt' });
     }
   }
   return { ok: true, members };

@@ -11,17 +11,24 @@
  * imports them through the one statement door). Each statement's outcome is listed in a live region:
  * imported, already there, or refused with the reason and the amount. When the gap is gone the dialog
  * closes and says so; while part of it is still open it names what is left. A chained gap may also be
- * confirmed as holding nothing, with a reason (`confirm_statement_gap`, a person's act).
+ * confirmed as holding nothing (`confirm_statement_gap`, a person's act; D204: no reason needed).
  *
  * Built on the existing `Modal` and `FileDrop` (no new primitive). Opened from the attention item, the
  * Übersicht band and the channel panel, all through `/bank-accounts?repair=<account>&gap=<gap>`.
+ *
+ * ANY EXPORT (A20 §13.2, D205): the one drop zone reads the CONTENT of a file, never its name. XML goes to
+ * `import_camt_files` as above; a bank's CSV or Excel export opens the mapping step shared with the import
+ * dialog (`CsvMappingStep`), the engine's plan for each gap's missing days (`bank_csv_preview` with `fill`),
+ * and then `import_bank_statement` with `fill { from, to }` set to exactly that gap's missing days, ONE call
+ * per gap (for `gap=all` too: between daily statements a single span would turn every unheld weekend into a
+ * statement of its own). Never `fill {}` here: the days before the feed are not what the person asked for.
  *
  * ALL GAPS AT ONCE (owner, 18.10.2026: "if we want to close holes, one button must be sufficient"):
  * `gap=all` opens the dialog for every gap of the account. The file drop already takes any number of
  * statements in any order; the confirmation, offered only when every gap chains, confirms each gap with
  * the one reason (`confirm_statement_gap` per gap, each still a person's act with its own rules).
  */
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
@@ -33,6 +40,10 @@ import { refusalText } from '../../components/states';
 import { announceAttentionChanged } from '../Attention/attentionSummary';
 import { outcomeText, parseFileOutcomes, type FileOutcome } from './importOutcomes';
 import { gapFetchDatesText, gapExplanation, gapRangeText, gapTitle, parseStatementGaps, type StatementGapDto } from './statementGaps';
+import { CsvMappingStep, bytesToBase64, fileBytesOf, sniffBytes, useCsvPreview, useMappingBlocking, type TabularFile } from './CsvMappingStep';
+import { ProofMark, problemSentence, readFillView, stretchName, type CsvFillPartView } from './CsvFillStep';
+import { formatDate } from '../../i18n';
+import { optionalReason, useAskReason } from '../../lib/useAskReason';
 
 export interface GapRepairDialogProps {
   workspaceId: string;
@@ -90,6 +101,19 @@ function spanOf(gaps: StatementGapDto[]): StatementGapDto | null {
   return { ...first, before: last.before, missing: sorted.flatMap((g) => g.missing), missingDates: { from: first.missingDates.from, to: last.missingDates.to } };
 }
 
+/** A20 §13.2: the days one gap's fill takes (its missing days), or null when the engine names none. */
+function fillOf(gap: StatementGapDto): { from: string; to: string } | null {
+  const { from, to } = gap.missingDates;
+  return from !== null && to !== null && from <= to ? { from, to } : null;
+}
+
+/** What the plan says of one stretch, in one sentence. */
+function planSentence(t: ReturnType<typeof useT>, p: CsvFillPartView, currency: string): string {
+  if (p.status === 'ready') return t(p.closesTarget ? 'bankInbox.import.fill.closes' : 'bankInbox.import.fill.stays');
+  if (p.status === 'already_imported') return t('bankInbox.import.fill.already');
+  return problemSentence(t, p, currency) ?? t('gapRepair.export.notReady');
+}
+
 /** The gaps still open inside the original one's span (a partial fill splits it). */
 function remainingWithin(original: StatementGapDto, gaps: StatementGapDto[]): StatementGapDto[] {
   const pos = (e: { year: number; number: number }) => e.year * 1_000_000 + e.number;
@@ -108,8 +132,18 @@ export function GapRepairDialog({ workspaceId, bankAccountId, gapId, onClose, on
   const [rejected, setRejected] = useState(false);
   const [status, setStatus] = useState('');
   const [reason, setReason] = useState('');
+  // D204: the confirmation needs no reason; the note field shows only when the workspace asks for one.
+  const askReason = useAskReason();
   // The gap the dialog was opened for, kept so a partial fill can say what is left of it.
   const [original, setOriginal] = useState<StatementGapDto | null>(null);
+  // A20 §13.2: a bank's CSV or Excel export, its mapping, the engine's plan per gap, and what was written.
+  const [tab, setTab] = useState<TabularFile | null>(null);
+  const [plans, setPlans] = useState<{ gapId: string; parts: CsvFillPartView[] }[] | null>(null);
+  const [planBusy, setPlanBusy] = useState(false);
+  const [filled, setFilled] = useState<CsvFillPartView[]>([]);
+  const [ignored, setIgnored] = useState<{ used: string[]; left: string[] } | null>(null);
+  const { preview, previewBusy, mapping, setMapping, setLayout, sheet, setSheet, parsed } = useCsvPreview({ client, workspaceId, accountId: bankAccountId, file: tab, onError: setError });
+  const { blocking } = useMappingBlocking(preview, mapping, parsed);
 
   const read = useCallback(async (): Promise<Context | null> => {
     const today = new Date().toISOString().slice(0, 10);
@@ -149,6 +183,35 @@ export function GapRepairDialog({ workspaceId, bankAccountId, gapId, onClose, on
     setStatus(t('gapRepair.stillOpen', { range: left.map((g) => gapRangeText(g)).join(', ') }));
   };
 
+  /** The one drop zone: XML is camt, a zip or a text table is an export (A20 §13.2); the content decides. */
+  const takeFiles = async (files: File[]) => {
+    if (busy || files.length === 0) return;
+    setRejected(false);
+    setError(null);
+    const sniffed = await Promise.all(files.map(async (f) => ({ f, bytes: await fileBytesOf(f) })));
+    const kinds = sniffed.map((x) => ({ ...x, kind: sniffBytes(x.bytes) }));
+    const table = kinds.find((x) => x.kind === 'xlsx' || x.kind === 'text');
+    const xml = kinds.filter((x) => x.kind === 'xml');
+    // Critic round 1, L4: a mixed drop says which files it took and which it left, by name.
+    const used = table !== undefined ? [table.f] : xml.map((x) => x.f);
+    const left = files.filter((f) => !used.includes(f));
+    setIgnored(left.length > 0 && used.length > 0 ? { used: used.map((f) => f.name), left: left.map((f) => f.name) } : null);
+    if (table === undefined && xml.length > 0) {
+      setTab(null);
+      await importFiles(xml.map((x) => x.f));
+      return;
+    }
+    if (table === undefined) {
+      setRejected(true);
+      return;
+    }
+    setResults([]);
+    setFilled([]);
+    setPlans(null);
+    setStatus('');
+    setTab({ name: table.f.name, format: table.kind === 'xlsx' ? 'xlsx' : 'csv', base64: bytesToBase64(table.bytes) });
+  };
+
   const importFiles = async (files: File[]) => {
     if (busy || files.length === 0) return;
     setBusy(true);
@@ -169,9 +232,77 @@ export function GapRepairDialog({ workspaceId, bankAccountId, gapId, onClose, on
     await settle('gapRepair.closed');
   };
 
+  // A20 §13.2: the engine's plan for each gap's missing days, read again whenever the mapping changes.
+  const targetsNow = load.status === 'ok' ? targetsOf(load.ctx) : [];
+  const fillTargets = useMemo(() => targetsNow.map((g) => ({ gapId: g.gapId, fill: fillOf(g) })).filter((x): x is { gapId: string; fill: { from: string; to: string } } => x.fill !== null), [JSON.stringify(targetsNow.map((g) => [g.gapId, g.missingDates]))]);
+  const mappingKey = JSON.stringify(mapping);
+  useEffect(() => {
+    if (tab === null || mapping === null || blocking.length > 0 || fillTargets.length === 0) {
+      setPlans(null);
+      return;
+    }
+    let live = true;
+    setPlanBusy(true);
+    void Promise.all(
+      fillTargets.map((x) =>
+        client.call('bank_csv_preview', { workspaceId, bankAccountId, contentBase64: tab.base64, format: tab.format, ...(sheet !== null ? { sheet } : {}), mapping, fill: x.fill }),
+      ),
+    ).then((responses) => {
+      if (!live) return;
+      setPlanBusy(false);
+      const failed = responses.find((r) => isErr(r.body));
+      if (failed !== undefined) {
+        setError(failed.body as Err);
+        setPlans(null);
+        return;
+      }
+      setPlans(responses.map((r, i) => ({ gapId: fillTargets[i]?.gapId ?? '', parts: readFillView((r.body as { fill?: unknown }).fill)?.parts ?? [] })));
+    });
+    return () => {
+      live = false;
+    };
+    // The plan follows the file, the worksheet, the mapping and the gaps; `blocking` from the mapping.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, sheet, mappingKey, blocking.length, fillTargets, client, workspaceId, bankAccountId]);
+
+  /** Write each gap's fill, one call per gap, then re-read the gaps. */
+  const fillGaps = async () => {
+    if (tab === null || mapping === null || busy || plans === null) return;
+    setBusy(true);
+    setError(null);
+    setStatus(t('gapRepair.export.busy'));
+    const written: CsvFillPartView[] = [];
+    for (const x of fillTargets) {
+      const res = await client.call('import_bank_statement', {
+        workspaceId,
+        bankAccountId,
+        contentBase64: tab.base64,
+        fileName: tab.name,
+        format: tab.format,
+        ...(sheet !== null ? { sheet } : {}),
+        mapping,
+        saveMapping: true,
+        fill: x.fill,
+        idempotencyKey: newKey(),
+      });
+      if (isErr(res.body)) {
+        setError(res.body);
+        break;
+      }
+      written.push(...(readFillView((res.body as { fill?: unknown }).fill)?.parts ?? []).filter((p) => p.status !== 'not_in_file'));
+    }
+    setBusy(false);
+    setFilled(written);
+    setTab(null);
+    setPlans(null);
+    setStatus('');
+    await settle('gapRepair.export.closed');
+  };
+
   const confirm = async () => {
     const targets = load.status === 'ok' ? targetsOf(load.ctx) : [];
-    if (targets.length === 0 || busy || reason.trim() === '') return;
+    if (targets.length === 0 || busy) return;
+    const note = optionalReason(reason);
     if (targets.some((g) => g.after.statementRowId === null || g.before.statementRowId === null)) return;
     setBusy(true);
     setError(null);
@@ -181,7 +312,7 @@ export function GapRepairDialog({ workspaceId, bankAccountId, gapId, onClose, on
         bankAccountId,
         afterStatementId: gap.after.statementRowId,
         beforeStatementId: gap.before.statementRowId,
-        reason: reason.trim(),
+        ...(note === undefined ? {} : { reason: note }),
         confirmed: true,
         idempotencyKey: newKey(),
       });
@@ -269,20 +400,81 @@ export function GapRepairDialog({ workspaceId, bankAccountId, gapId, onClose, on
         {canPay ? (
           <FileDrop
             multiple
-            accept=".xml,text/xml,application/xml"
             label={t('gapRepair.choose')}
             prompt={t('gapRepair.drop')}
-            hint={t('gapRepair.hint')}
+            hint={tab !== null ? tab.name : t('gapRepair.hint')}
             disabled={busy}
-            onFiles={(files) => void importFiles(files)}
+            onFiles={(files) => void takeFiles(files)}
             onReject={() => setRejected(true)}
           />
         ) : (
           <p className="gap-repair__denied">{t('gapRepair.denied')}</p>
         )}
         {rejected && <p className="gap-repair__warn">{t('gapRepair.notXml')}</p>}
+        {ignored !== null && (
+          <p className="gap-repair__warn" role="alert">
+            {t('gapRepair.mixed', { used: ignored.used.join(', '), left: ignored.left.join(', ') })}
+          </p>
+        )}
+        {tab !== null && canPay && (
+          <section className="bank-field gap-repair__export" aria-labelledby={`${baseId}-export`} aria-busy={previewBusy || planBusy || busy}>
+            <h3 className="bank-field__label" id={`${baseId}-export`}>
+              {t(`gapRepair.export.title.${tab.format}`)}
+            </h3>
+            {previewBusy || preview === null || mapping === null ? (
+              <p className="bank-mode__lead" role="status">
+                {t('bankInbox.import.reading')}
+              </p>
+            ) : (
+              <>
+                <CsvMappingStep baseId={baseId} preview={preview} mapping={mapping} onMapping={setMapping} onLayout={setLayout} onSheet={setSheet} parsed={parsed} currency={currency} />
+                {blocking.length === 0 && planBusy && (
+                  <p className="bank-mode__lead" role="status">
+                    {t('bankInbox.import.fill.reading')}
+                  </p>
+                )}
+                {blocking.length === 0 && !planBusy && plans !== null && (
+                  <ul className="gap-repair__list">
+                    {plans.flatMap((plan) => plan.parts.filter((p) => p.status !== 'not_in_file')).length === 0 && <li className="gap-repair__result">{t('bankInbox.import.fill.none')}</li>}
+                    {plans.flatMap((plan) =>
+                      plan.parts
+                        .filter((p) => p.status !== 'not_in_file')
+                        .map((p) => (
+                          <li key={`${plan.gapId}-${p.from}`} className={`gap-repair__result is-${p.status === 'ready' ? 'imported' : p.status === 'already_imported' ? 'already_imported' : 'refused'}`}>
+                            {`${t('gapRepair.export.days', { from: formatDate(p.from), to: formatDate(p.to) })}: ${planSentence(t, p, currency)}`}
+                            {p.proof === 'neighbour_sum' && <ProofMark />}
+                          </li>
+                        )),
+                    )}
+                  </ul>
+                )}
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  disabled={busy || planBusy || blocking.length > 0 || plans === null || !plans.some((plan) => plan.parts.some((p) => p.status === 'ready'))}
+                  onClick={() => void fillGaps()}
+                >
+                  {busy ? t('gapRepair.export.busy') : t('bankInbox.import.fill.commit')}
+                </button>
+              </>
+            )}
+          </section>
+        )}
         <div className="gap-repair__results" aria-live="polite" role="status">
           {status !== '' && <p className="gap-repair__status">{status}</p>}
+          {filled.length > 0 && (
+            <ul className="gap-repair__list">
+              {filled.map((p) => (
+                <li key={`filled-${p.from}-${p.to}`} className={`gap-repair__result is-${p.status === 'refused' ? 'refused' : p.status === 'already_imported' ? 'already_imported' : 'imported'}`}>
+                  {p.status === 'refused'
+                    ? t('bankInbox.import.fill.result.refused', { range: stretchName(t, p), why: problemSentence(t, p, currency) ?? '' })
+                    : p.status === 'already_imported'
+                      ? t('bankInbox.import.fill.result.already', { range: stretchName(t, p) })
+                      : t(p.closesTarget ? 'bankInbox.import.fill.result.closed' : 'bankInbox.import.fill.result.imported', { range: stretchName(t, p) })}
+                </li>
+              ))}
+            </ul>
+          )}
           {results.length > 0 && (
             <ul className="gap-repair__list">
               {results.map((r, i) => (
@@ -301,19 +493,21 @@ export function GapRepairDialog({ workspaceId, bankAccountId, gapId, onClose, on
         {allConfirmable && canPay && (
           <div className="gap-repair__confirm">
             <p className="gap-repair__confirm-lead">{t('gapRepair.confirmLead', { range: gapRangeText(shown) })}</p>
-            <label className="bank-field" htmlFor={`${baseId}-reason`}>
-              <span className="bank-field__label">{t('gapRepair.reason')}</span>
-              <input
-                id={`${baseId}-reason`}
-                className="field"
-                type="text"
-                value={reason}
-                placeholder={t('gapRepair.reasonPlaceholder')}
-                disabled={busy}
-                onChange={(e) => setReason(e.target.value)}
-              />
-            </label>
-            <button type="button" className="btn btn--secondary" disabled={busy || reason.trim() === ''} onClick={() => void confirm()}>
+            {askReason && (
+              <label className="bank-field" htmlFor={`${baseId}-reason`}>
+                <span className="bank-field__label">{t('gapRepair.reason')}</span>
+                <input
+                  id={`${baseId}-reason`}
+                  className="field"
+                  type="text"
+                  value={reason}
+                  placeholder={t('gapRepair.reasonPlaceholder')}
+                  disabled={busy}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+              </label>
+            )}
+            <button type="button" className="btn btn--secondary" disabled={busy} onClick={() => void confirm()}>
               {t('gapRepair.confirm')}
             </button>
           </div>

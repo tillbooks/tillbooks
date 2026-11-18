@@ -340,7 +340,7 @@ describe('AssetRegister, H02 acquisition', () => {
     ...over,
   });
 
-  it('D170: a standing event offers Stornieren; the confirm needs a reason and posts asset_transaction_reverse', async () => {
+  it('D204 D170: a standing event offers Stornieren; the confirm needs no reason and posts asset_transaction_reverse', async () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     let ledgerReads = 0;
     const canned: Canned = {
@@ -359,9 +359,8 @@ describe('AssetRegister, H02 acquisition', () => {
     await user.click(screen.getByRole('menuitem', { name: de.assets.ledger.reverse }));
     const confirm = await screen.findByRole('alertdialog');
     const go = within(confirm).getByRole('button', { name: de.assets.ledger.reverseConfirm });
-    expect(go).toBeDisabled();
     expect(asked.some((a) => a.action === 'asset_transaction_reverse')).toBe(false);
-    await user.type(within(confirm).getByLabelText(de.assets.ledger.reverseReason), 'Doppelt erfasst');
+    expect(within(confirm).queryByLabelText(de.assets.ledger.reverseReason)).toBeNull();
     expect(go).toBeEnabled();
     const readsBefore = ledgerReads;
     await user.click(go);
@@ -369,7 +368,7 @@ describe('AssetRegister, H02 acquisition', () => {
     const call = asked.find((a) => a.action === 'asset_transaction_reverse');
     expect(call?.input.assetId).toBe('as_1');
     expect(call?.input.transactionId).toBe('t1');
-    expect(call?.input.reason).toBe('Doppelt erfasst');
+    expect(call?.input).not.toHaveProperty('reason');
     expect(typeof call?.input.idempotencyKey).toBe('string');
     // The ledger is read again so the correcting row shows at once.
     await waitFor(() => expect(ledgerReads).toBeGreaterThan(readsBefore));
@@ -388,7 +387,6 @@ describe('AssetRegister, H02 acquisition', () => {
     await user.click(await screen.findByRole('button', { name: /^Aktionen für die Buchung vom/ }));
     await user.click(screen.getByRole('menuitem', { name: de.assets.ledger.reverse }));
     const confirm = await screen.findByRole('alertdialog');
-    await user.type(within(confirm).getByLabelText(de.assets.ledger.reverseReason), 'Falsch');
     await user.click(within(confirm).getByRole('button', { name: de.assets.ledger.reverseConfirm }));
     expect(await within(confirm).findByRole('alert')).toBeInTheDocument();
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
@@ -636,7 +634,7 @@ describe('AssetRegister, D191 proceeds document', () => {
     expect(call?.input.proceedsPaymentId).toBeUndefined();
   });
 
-  it('a disposal whose proceeds document stands says so; the override needs its own reason and is sent', async () => {
+  it('D204 a disposal whose proceeds document stands says so; the override needs no reason and is sent', async () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     const canned: Canned = {
       ...baseCanned(),
@@ -648,17 +646,15 @@ describe('AssetRegister, D191 proceeds document', () => {
     const user = userEvent.setup();
     const confirm = await openReverse(user);
     expect(within(confirm).getByText(de.assets.ledger.proceedsSettled)).toBeInTheDocument();
-    await user.type(within(confirm).getByLabelText(de.assets.ledger.reverseReason), 'Verkauf geplatzt');
     await user.click(within(confirm).getByLabelText(de.assets.ledger.proceedsOverride));
     const go = within(confirm).getByRole('button', { name: de.assets.ledger.reverseConfirm });
-    expect(go).toBeDisabled();
-    await user.type(within(confirm).getByLabelText(de.assets.ledger.proceedsOverrideReason), 'Gutschrift folgt');
+    expect(within(confirm).queryByLabelText(de.assets.ledger.proceedsOverrideReason)).toBeNull();
     expect(go).toBeEnabled();
     await user.click(go);
     await waitFor(() => expect(asked.some((a) => a.action === 'asset_transaction_reverse')).toBe(true));
     const call = asked.find((a) => a.action === 'asset_transaction_reverse');
     expect(call?.input.overrideProceedsCheck).toBe(true);
-    expect(call?.input.overrideReason).toBe('Gutschrift folgt');
+    expect(call?.input).not.toHaveProperty('overrideReason');
   });
 
   it('an engine proceeds_settled refusal shows the order in words; an unlinked disposal adds no sentence and sends no override', async () => {
@@ -675,7 +671,6 @@ describe('AssetRegister, D191 proceeds document', () => {
     // Cognitive load (critic r1): an unlinked disposal gets no extra sentence in the dialog.
     expect(within(confirm).getByText(de.assets.ledger.reverseBody)).toBeInTheDocument();
     expect(within(confirm).queryByText(de.assets.ledger.proceedsSettled)).toBeNull();
-    await user.type(within(confirm).getByLabelText(de.assets.ledger.reverseReason), 'Falsch');
     await user.click(within(confirm).getByRole('button', { name: de.assets.ledger.reverseConfirm }));
     expect(await within(confirm).findByText(de.assets.ledger.proceedsSettled)).toBeInTheDocument();
     expect(asked.find((a) => a.action === 'asset_transaction_reverse')?.input.overrideProceedsCheck).toBeUndefined();
@@ -724,7 +719,6 @@ describe('AssetRegister, D191 proceeds document', () => {
       expect(within(confirm).queryByLabelText(de.assets.ledger.proceedsOverride)).toBeNull();
       if (mode === 'warn') expect(within(confirm).getByText(de.assets.ledger.proceedsStandsWarn)).toBeInTheDocument();
       else expect(within(confirm).queryByText(de.assets.ledger.proceedsStandsWarn)).toBeNull();
-      await user.type(within(confirm).getByLabelText(de.assets.ledger.reverseReason), 'Verkauf geplatzt');
       await user.click(within(confirm).getByRole('button', { name: de.assets.ledger.reverseConfirm }));
       await waitFor(() => expect(asked.some((a) => a.action === 'asset_transaction_reverse')).toBe(true));
       expect(asked.find((a) => a.action === 'asset_transaction_reverse')?.input.overrideProceedsCheck).toBeUndefined();

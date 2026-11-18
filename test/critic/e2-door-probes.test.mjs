@@ -95,11 +95,13 @@ test('E2-D3b: a preamble padded to the column count (an Excel save) does not bec
 });
 
 test('E2-D3c: the Studio mapping step can correct the separator and the header row the detection chose', () => {
-  const dialog = readFileSync(join(ROOT, 'app', 'src', 'surfaces', 'Bank', 'ImportDialog.tsx'), 'utf8');
+  // A20 §13.2 (D205): the mapping step moved out of ImportDialog into CsvMappingStep.tsx, shared with the gap
+  // dialog; the controls are its `onMapping` calls.
+  const step = readFileSync(join(ROOT, 'app', 'src', 'surfaces', 'Bank', 'CsvMappingStep.tsx'), 'utf8');
   // The engine takes `mapping.delimiter` and `mapping.headerRow`; a person needs a control for each when
   // the detection is wrong, or the file can never be imported from the Studio.
-  assert.ok(/setMapping\(\{[^}]*delimiter/.test(dialog), 'a control that sets mapping.delimiter');
-  assert.ok(/setMapping\(\{[^}]*headerRow/.test(dialog), 'a control that sets mapping.headerRow');
+  assert.ok(/onMapping\(\{[^}]*delimiter/.test(step), 'a control that sets mapping.delimiter');
+  assert.ok(/onMapping\(\{[^}]*headerRow/.test(step), 'a control that sets mapping.headerRow');
 });
 
 // --- E2-D4: the FX text fallback reads a course and a postcode as an exchange -------------------------

@@ -19,7 +19,7 @@
       "ask": "Ask a question"
     },
     "empty": {
-      "title": "Nothing is waiting for you.",
+      "title": "Nothing open.",
       "hint": "Whatever needs a decision from you appears here.",
       "action": "Go to the overview"
     },
@@ -27,9 +27,9 @@
       "bank": "Bank",
       "sales": "Sales",
       "system": "System",
-      "accounting": "Accounting"
+      "accounting": "Accounting",
+      "tasks": "Tasks"
     },
-    "new": "new",
     "providerFailed": "{queue} could not be loaded.",
     "urgency": {
       "overdue": "overdue",
@@ -60,8 +60,6 @@
     "collapsedWith": "also in {queue}",
     "overflow": {
       "label": "Actions for {title}",
-      "copyRef": "Copy reference",
-      "createTask": "Create a task",
       "open": "Open"
     },
     "remainder": {
@@ -163,7 +161,6 @@
       "rejectKeep": "Keep",
       "busy": "Running",
       "dismissFeedback": "Dismiss",
-      "taskCreated": "Task created.",
       "done": {
         "apply": "Payment applied and posted.",
         "dismiss": "Filed: not a customer payment.",
@@ -192,7 +189,9 @@
         "human_only": "A person confirms this, not the agent.",
         "gap_has_waiting_statement": "A statement waiting inside this gap does not follow on. It cannot be confirmed: import the missing statements.",
         "receipt_already_booked": "The receipt is already booked. Approve this line on its own and give the reason for the second booking.",
-        "holders_changed": "Not carried out: the receipt was booked elsewhere in the meantime. The line now shows where."
+        "holders_changed": "Not carried out: the receipt was booked elsewhere in the meantime. The line now shows where.",
+        "already_resolved": "This proposal is already decided.",
+        "not_batchable": "Approve this proposal on its own."
       },
       "checkInBank": "Check in the bank",
       "assign": "Assign",
@@ -205,23 +204,24 @@
       "undo": "Undo",
       "autobookOff": "Automatic off"
     },
-    "grouping": {
-      "label": "Grouping",
-      "byArea": "By area",
-      "byKind": "By kind"
-    },
     "kind": {
       "approve": "Approve",
       "do": "To do",
       "note": "Notes"
     },
     "section": {
-      "more": "Show {count} more"
+      "more": "Show {count} more",
+      "bank": "Bank bookings",
+      "other": "Other suggestions",
+      "todo": "To do",
+      "count": "{count} open",
+      "importContext": "Missing statements: {count}"
     },
     "row": {
       "dueOn": "due {date}",
       "overdueSince": "overdue since {date}",
-      "checklistTitle": "{template} {period}: {title}"
+      "checklistTitle": "{template} {period}: {title}",
+      "details": "Details: {title}"
     },
     "vorschlag": {
       "stale": "Changed since the proposal, can no longer be approved",
@@ -232,7 +232,7 @@
         "paymentBatch": "Payment order",
         "rule": "Booking rule"
       },
-      "staleShort": "Changed since the proposal",
+      "staleShort": "Changed",
       "titleWith": "{counterparty} · {thing}",
       "scheduledByAgent": "Recurring entry set up by the agent"
     },
@@ -240,7 +240,7 @@
       "label": "Approve proposals together",
       "selectAll": "Select all proposals",
       "selectRow": "Select {title}",
-      "approveSelected": "Approve selected ({count})",
+      "approveSelected": "Approve ({count})",
       "approveAll": "Approve all ({count})",
       "waiting": "Waiting",
       "running": "Approving",
@@ -269,7 +269,13 @@
         "summaryNoAmount": "{count} proposals",
         "none": "Nothing selected yet."
       },
-      "title": "Proposals"
+      "title": "Proposals",
+      "rejectSelected": "Reject ({count})",
+      "rejecting": "Rejecting",
+      "rejectedAll": "{count} rejected. Nothing was booked.",
+      "rejectedSome": "{ok} rejected, {refused} not rejected.",
+      "selectSection": "Select all in {section}",
+      "selectSectionShown": "Select all shown in {section}"
     },
     "group": {
       "payments": "{count} unassigned payments",
@@ -309,7 +315,6 @@
       "title": "Propose a rule: {counterparty}, booked the same way {repeats}×",
       "backtest": "Since {date}: {hits} lines, {identical} booked exactly like this",
       "create": "Create rule",
-      "adjust": "Adjust",
       "dismiss": "Don't propose",
       "evidence": "Booked the same way",
       "evidenceValue": "{date}, {amount}"
@@ -319,12 +324,108 @@
       "meta": "Up to {ceiling} per line, only in {currency}",
       "grant": "Book automatically",
       "dismiss": "Not now"
+    },
+    "filter": {
+      "search": "Search Pendenzen",
+      "searchPlaceholder": "Search",
+      "clear": "Reset filters",
+      "empty": "No matches.",
+      "kindLabel": "Kind",
+      "kinds": {
+        "approve": "Proposals",
+        "do": "To do",
+        "note": "Notes"
+      },
+      "area": "Area",
+      "actorLabel": "From",
+      "actors": {
+        "agent": "Agent",
+        "till": "TILL"
+      },
+      "sections": {
+        "all": "All",
+        "bank": "Bank",
+        "other": "Proposals",
+        "todo": "To do"
+      }
+    },
+    "settingChange": {
+      "title": "The agent wants to set {setting} from {from} to {to}",
+      "titleTo": "The agent wants to set {setting} to {to}",
+      "widens": "Gives the agent more rights."
+    },
+    "autoRule": {
+      "done": "Booked. Rule saved.",
+      "unchanged": "Booked. The rule already existed.",
+      "replaced": "Booked. The rule replaces the previous one.",
+      "failed": "Booked. Rule not saved: {reason}",
+      "retry": "Try again",
+      "undo": "Undo",
+      "undone": "Rule removed. The booking stays.",
+      "undoFailed": "Rule not removed: {reason}",
+      "confirm": "Rule: {counterparty} to {accounts}, VAT as here",
+      "confirmYes": "Approve and save the rule",
+      "confirmNo": "Cancel",
+      "error": {
+        "no_counterparty": "The bank line names no counterparty.",
+        "not_booked_to_accounts": "The line is not booked to accounts.",
+        "permission_denied": "You may not save rules.",
+        "invalid_account": "An account of the booking cannot carry a rule.",
+        "vat_not_applicable": "The VAT does not fit the account.",
+        "invalid_tax_code": "The VAT code is no longer active.",
+        "generic": "The rule could not be saved.",
+        "rule_slot_changed": "The rule of this counterparty changed meanwhile."
+      },
+      "replaces": "Replaces the existing rule: {name}.",
+      "slotUnread": "The existing rule could not be read. Nothing was booked.",
+      "ignoreRule": "Do not book"
+    },
+    "line": {
+      "out": "Out",
+      "in": "In",
+      "sourceAgent": "Proposed by the agent",
+      "sourceRule": "Booking rule “{name}”, since {since}",
+      "sourceRuleNoDate": "Booking rule “{name}”",
+      "approve": "Approve",
+      "approveAndRule": "Approve and save as a rule",
+      "attach": "Attach",
+      "missingBeleg": "Receipt missing: no input tax without a receipt",
+      "accountsIn": "Income",
+      "accountsOut": "Expenses",
+      "accountsOther": "Other accounts",
+      "vatCodes": "VAT codes",
+      "openLabel": "Change the booking",
+      "text": "Booking text",
+      "account": "Account",
+      "vat": "VAT code",
+      "adaptRule": "Adjust rule",
+      "saveRule": "Save as a rule",
+      "ruleContext": "Book like this from now on",
+      "commentContext": "Comment to the agent",
+      "comment": "Comment to the agent",
+      "beleg": "Receipt",
+      "payoutWarn": "Payout: the turnover comes from the settlement, not onto an income account.",
+      "openRule": "Rule in Bank",
+      "openLine": "Bank line in Bank",
+      "book": "Book",
+      "undone": "Undone. The line is open again.",
+      "attached": "Receipt attached.",
+      "done": {
+        "booked": "Booked.",
+        "noted": "Booked. Comment saved."
+      },
+      "approveAndReplace": "Approve, replaces rule “{name}”",
+      "replacesRule": "Replaces rule “{name}”",
+      "unnamedRule": "without a name",
+      "waysGroup": "Other ways",
+      "toTurnover": "Book as turnover",
+      "inBank": "Open in Bank"
     }
   },
   "help": {
     "Attention": {
       "title": "Attention",
-      "body": "Pendenzen shows everything that waits for a decision from you, complete and in sections: by area (the bank first) or by kind (approve, to do, notes). The section counts add up to the number in the menu.\n\nEvery row has one button for the next step; other options sit under ⋯, and the (i) says why the row waits and what the step does.\n\nYou can select the agent's bank proposals and approve them together. Each runs on its own, as with its own button.",
+      "body": "Pendenzen shows what waits for you: bank bookings, other proposals and work to do. The chips at the top filter by section.\n\nEach row names the counterparty, the booking text, the account, the date and the amount. A small star before the account means a booking rule books it. A click opens one line beneath where you change the text, the account and the VAT code. The star on the right saves the booking as a rule; the speech bubble adds a comment for the agent.\n\nKeys: arrow up and down move between rows, Enter opens one, F approves, R rejects. After an approval the message briefly offers Undo.",
       "concepts": [],
       "docsPath": "introduction"
     }

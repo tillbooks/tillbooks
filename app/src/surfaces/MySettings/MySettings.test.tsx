@@ -167,7 +167,7 @@ describe('Meine Einstellungen (D178 point 7)', () => {
     expect(theme.getByRole('radio', { name: 'Wie das System' })).toHaveAttribute('aria-checked', 'true');
     // D187 (Einstellungen A): at its default a row offers no "Standard"; the page's own line says it is
     // yours, so only a setting that holds in this workspace alone says so after its explanation.
-    expect(theme.queryByRole('button', { name: 'Standard' })).toBeNull();
+    expect(theme.queryByRole('button', { name: 'Auf Standard zurück' })).toBeNull();
     expect(row('appearance.theme')).not.toHaveTextContent('Gilt in jedem Arbeitsbereich.');
     expect(row('probe.rows')).toHaveTextContent('Gilt nur in diesem Arbeitsbereich.');
     // A structured preference is named, not shown as JSON, and offers its reset.
@@ -175,7 +175,7 @@ describe('Meine Einstellungen (D178 point 7)', () => {
     // One line of state ("Angepasst" or "Standard"), never "Standard: Standard" for a json value.
     expect(order.getByText('Angepasst')).toBeInTheDocument();
     expect(order.queryByText(/^Standard:/)).toBeNull();
-    expect(order.getByRole('button', { name: 'Standard' })).toBeInTheDocument();
+    expect(order.getByRole('button', { name: 'Auf Standard zurück' })).toBeInTheDocument();
     // A group with nothing changed offers no "Alle zurücksetzen".
     expect(within(appearance).queryByRole('button', { name: 'Darstellung: alle zurücksetzen' })).toBeNull();
   });
@@ -193,8 +193,8 @@ describe('Meine Einstellungen (D178 point 7)', () => {
     );
     const theme = within(row('appearance.theme'));
     // "Standard" appears once the value is not the default, and its tooltip names the default.
-    expect(await theme.findByText('Zurück auf den Standard: Wie das System')).toBeInTheDocument();
-    await userEvent.click(theme.getByRole('button', { name: 'Standard' }));
+    expect(await theme.findByText('Standard: Wie das System')).toBeInTheDocument();
+    await userEvent.click(theme.getByRole('button', { name: 'Auf Standard zurück' }));
     await waitFor(() => expect(theme.getByRole('radio', { name: 'Wie das System' })).toHaveAttribute('aria-checked', 'true'));
     expect(e.calls.at(-1)).toEqual({ action: 'prefs_reset', input: { workspaceId: 'ws_test', key: 'appearance.theme' } });
   });

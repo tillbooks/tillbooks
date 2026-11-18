@@ -104,7 +104,7 @@ describe('Trust (E07 Vertrauen panel)', () => {
 
   it('LIMITS: the honest limits list renders IN FULL, iCloud/backup included (snapshot per key)', async () => {
     render(tree(baseCanned()));
-    await screen.findByText(de.egress.indicator.local);
+    expect((await screen.findAllByText(de.egress.indicator.local)).length).toBeGreaterThan(0);
     expect(screen.getByText(de.egress.limits.title)).toBeInTheDocument();
     // Each limit key present: a future tidy cannot quietly drop one (spec §8).
     expect(screen.getByText(de.egress.limits.os)).toBeInTheDocument();
@@ -128,7 +128,7 @@ describe('Trust (E07 Vertrauen panel)', () => {
         egress_self_test: ok({ passed: true, state: 'local', socketsOpened: 0, offenders: [], draftId: 'maildrf_1', steps: [] }),
       }),
     );
-    await screen.findByText(de.egress.indicator.local);
+    expect((await screen.findAllByText(de.egress.indicator.local)).length).toBeGreaterThan(0);
     await userEvent.click(screen.getByRole('button', { name: de.egress.action.run }));
     expect(await screen.findByText(de.egress.setup.passed)).toBeInTheDocument();
   });
@@ -144,7 +144,7 @@ describe('Trust (E07 Vertrauen panel)', () => {
         ),
       }),
     );
-    await screen.findByText(de.egress.indicator.local);
+    expect((await screen.findAllByText(de.egress.indicator.local)).length).toBeGreaterThan(0);
     await userEvent.click(screen.getByRole('button', { name: de.egress.action.run }));
     expect(await screen.findByText(de.egress.violated.report)).toBeInTheDocument();
     expect(screen.getByText(/203\.0\.113\.9/)).toBeInTheDocument();
@@ -157,7 +157,7 @@ describe('Trust (E07 Vertrauen panel)', () => {
 
   it('NO BANNED SUPERLATIVE: the panel underclaims, so the forbidden words never appear', async () => {
     const { container } = render(tree(baseCanned()));
-    await screen.findByText(de.egress.indicator.local);
+    expect((await screen.findAllByText(de.egress.indicator.local)).length).toBeGreaterThan(0);
     const text = container.textContent ?? '';
     for (const banned of ['bulletproof', 'unbreakable', 'impossible', 'military-grade']) {
       expect(text.toLowerCase()).not.toContain(banned);
@@ -166,7 +166,7 @@ describe('Trust (E07 Vertrauen panel)', () => {
 
   it('A11Y: the panel has no axe violations', async () => {
     const { container } = render(tree(baseCanned()));
-    await screen.findByText(de.egress.indicator.local);
+    expect((await screen.findAllByText(de.egress.indicator.local)).length).toBeGreaterThan(0);
     expect(await axe(container)).toHaveNoViolations();
   });
 
@@ -177,14 +177,14 @@ describe('Trust (E07 Vertrauen panel)', () => {
 
   it('M02 SYNC LINE OFF: the line disappears entirely when publishing is off', async () => {
     render(tree({ ...baseCanned(), get_sync_contract: ok({ publishing: false }) }));
-    await screen.findByText(de.egress.indicator.local);
+    expect((await screen.findAllByText(de.egress.indicator.local)).length).toBeGreaterThan(0);
     expect(screen.queryByText(syncTrust)).not.toBeInTheDocument();
   });
 
   it('M02 SYNC LINE ERROR-SILENT: a failed sync read renders nothing extra, the panel is unchanged', async () => {
     // No get_sync_contract handler: the read 404s, fails silent, and the line never appears.
     render(tree(baseCanned()));
-    await screen.findByText(de.egress.indicator.local);
+    expect((await screen.findAllByText(de.egress.indicator.local)).length).toBeGreaterThan(0);
     expect(screen.queryByText(syncTrust)).not.toBeInTheDocument();
   });
 });
@@ -199,7 +199,7 @@ describe('Trust (E07 Vertrauen panel)', () => {
 describe('Trust at rest: one line, the words behind (i) (D152)', () => {
   it('the head line carries the title, the state, the (i) and Jetzt prüfen, and nothing else', async () => {
     const { container } = render(tree(baseCanned()));
-    await screen.findByText(de.egress.indicator.local);
+    expect((await screen.findAllByText(de.egress.indicator.local)).length).toBeGreaterThan(0);
     const head = container.querySelector('.trust-head') as HTMLElement;
     expect(head).not.toBeNull();
     expect(head.querySelector('h2')?.textContent).toBe(de.egress.panel.title);
@@ -212,7 +212,7 @@ describe('Trust at rest: one line, the words behind (i) (D152)', () => {
 
   it('the scope note, the wifi instruction, every limit and the model note sit in the (i) card, hidden at rest', async () => {
     render(tree(baseCanned()));
-    await screen.findByText(de.egress.indicator.local);
+    expect((await screen.findAllByText(de.egress.indicator.local)).length).toBeGreaterThan(0);
     const trigger = screen.getByRole('button', { name: de.egress.info.label });
     const cardId = trigger.getAttribute('aria-describedby');
     expect(cardId).toBeTruthy();
@@ -243,7 +243,7 @@ describe('Trust at rest: one line, the words behind (i) (D152)', () => {
 
   it('the card opens on focus and on hover, and Escape closes it', async () => {
     render(tree(baseCanned()));
-    await screen.findByText(de.egress.indicator.local);
+    expect((await screen.findAllByText(de.egress.indicator.local)).length).toBeGreaterThan(0);
     const trigger = screen.getByRole('button', { name: de.egress.info.label });
     const card = document.getElementById(trigger.getAttribute('aria-describedby') as string) as HTMLElement;
     act(() => trigger.focus());
@@ -256,7 +256,7 @@ describe('Trust at rest: one line, the words behind (i) (D152)', () => {
 
   it('Jetzt prüfen is described by the wifi instruction it needs', async () => {
     render(tree(baseCanned()));
-    await screen.findByText(de.egress.indicator.local);
+    expect((await screen.findAllByText(de.egress.indicator.local)).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: de.egress.action.run })).toHaveAccessibleDescription(de.egress.setup.prompt);
   });
 });
@@ -364,7 +364,7 @@ describe('Trust + SyncHosting live coupling (M02 dial flip, no reload)', () => {
   it('FLIP ON: enabling the dial makes the Trust availability line appear live, no reload', async () => {
     render(coupledTree());
     // Both panels have read the OFF contract: the Trust line is absent to start.
-    await screen.findByText(de.egress.indicator.local);
+    expect((await screen.findAllByText(de.egress.indicator.local)).length).toBeGreaterThan(0);
     expect(screen.queryByText(syncTrust)).not.toBeInTheDocument();
     // Flip the dial on. The switch enables once whoami (manage_sync) has loaded.
     const dial = await screen.findByRole('switch');
@@ -399,7 +399,7 @@ describe('Trust: the self-test refusal names its doors (F-10, J7.6)', () => {
         egress_self_test: reject('needs_setup', { missing: ['mail_store', 'voice_profile', 'local_runtime'] }, 422),
       }),
     );
-    await screen.findByText(de.egress.indicator.local);
+    expect((await screen.findAllByText(de.egress.indicator.local)).length).toBeGreaterThan(0);
     await userEvent.click(screen.getByRole('button', { name: de.egress.action.run }));
     expect(await screen.findByText(de.egress.setup.needsIntro)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Ein Postfach verbinden (Korrespondenz)' })).toHaveAttribute('href', '/correspondence');
@@ -421,7 +421,7 @@ describe('Trust: the self-test refusal names its doors (F-10, J7.6)', () => {
         egress_self_test: reject('needs_setup', { missing: ['draftable_thread'] }, 422),
       }),
     );
-    await screen.findByText(de.egress.indicator.local);
+    expect((await screen.findAllByText(de.egress.indicator.local)).length).toBeGreaterThan(0);
     await userEvent.click(screen.getByRole('button', { name: de.egress.action.run }));
     expect(await screen.findByText(de.egress.setup.needsIntro)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Eine unbeantwortete Nachricht, auf die TILL antworten kann (Korrespondenz)' })).toHaveAttribute(

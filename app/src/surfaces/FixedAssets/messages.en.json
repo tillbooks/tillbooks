@@ -270,7 +270,7 @@
       "reversed": "Reversed",
       "reverseTitle": "Reverse {type} of {date}",
       "reverseBody": "This posts a correcting entry dated today and updates the register; the original entry stays visible. A reversed acquisition or opening balance closes the asset.",
-      "reverseReason": "Reason",
+      "reverseReason": "Note (optional)",
       "reverseConfirm": "Reverse",
       "reverseCancel": "Cancel",
       "reverseActionsLabel": "Actions for the entry of {date}",
@@ -289,7 +289,7 @@
       },
       "proceedsSettled": "The proceeds document of this disposal still stands. Reverse the payment, or cancel or fully credit the invoice, first, then the disposal.",
       "proceedsOverride": "Reverse anyway in this case",
-      "proceedsOverrideReason": "Reason for the exception",
+      "proceedsOverrideReason": "Note on the exception (optional)",
       "proceedsStandsWarn": "The proceeds document of this disposal still stands. The reversal goes ahead (workspace setting) and names it."
     },
     "reconciliation": {
@@ -729,7 +729,7 @@
         "labourCost": "Labour (CHF)",
         "externalReference": "External reference",
         "notes": "Notes",
-        "cancelReason": "Reason"
+        "cancelReason": "Note (optional)"
       },
       "form": {
         "title": "Maintenance entry",

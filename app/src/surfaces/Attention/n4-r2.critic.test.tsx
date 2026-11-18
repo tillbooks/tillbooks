@@ -3,6 +3,10 @@
  * shape the engine sends (`test/critic/n4-r2.test.mjs` proves the engine half). "FINDING" tests pin a defect
  * as observed (they flip when it is fixed); "SOUND" tests hold what the critic checked and found to hold.
  * Synthetic by construction.
+ *
+ * D201 (15.11.2026): the batch is now ONE call of `approve_drafted_actions`, and a box also sits on a
+ * Vorschlag the batch may only REJECT; the critic's points are held on the new shape: Freigeben still counts
+ * and runs only the rows the engine marks batchable.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -16,6 +20,12 @@ import { WorkspaceProvider } from '../../app/workspace';
 import { CapabilitiesContext, type Capabilities } from '../../lib/capabilities';
 import { Attention } from './index';
 import { bankVorschlag, draftedBankLine, groupedOf } from './testing';
+
+/** D208: select-all sits in each section's heading; this ticks every section's box. */
+async function tickAllSections() {
+  for (const box of screen.getAllByRole('checkbox', { name: /^Alle (angezeigten )?in .* auswählen$/ })) await userEvent.click(box);
+}
+
 
 type Call = { action: string; input: Record<string, unknown> };
 type Handler = (input: Record<string, unknown>) => RestResponse | Promise<RestResponse>;
@@ -81,7 +91,7 @@ describe('LOW (fixed, flipped): the batch (i) total counts only what the run boo
   it('a booking of CHF -45.20 and a set-aside of CHF -9.99 read "2 Vorschläge, CHF -45.20"', async () => {
     renderHub({ attention_list: ok(groupedOf([bankVorschlag('b1'), ignoreRow('i1', -999)])), list_drafted_actions: DRAFTED(['b1', 'i1']) });
     await waitFor(() => expect(boxes()).toHaveLength(2));
-    await userEvent.click(screen.getByRole('checkbox', { name: /Vorschläge auswählen/ }));
+    await tickAllSections();
     expect(infoText()).toMatch(/2 Vorschläge, CHF\s?-45\.20$/);
     expect(infoText()).not.toMatch(/55\.19|9\.99/);
   });
@@ -100,7 +110,7 @@ describe('SOUND: the batch (i) total is signed, per currency, never a defaulted 
       list_drafted_actions: DRAFTED(['b1', 'b2', 'b3']),
     });
     await waitFor(() => expect(boxes()).toHaveLength(3));
-    await userEvent.click(screen.getByRole('checkbox', { name: /Vorschläge auswählen/ }));
+    await tickAllSections();
     const text = infoText();
     expect(text).toMatch(/CHF\s?-45\.20/);
     expect(text).toMatch(/EUR\s?120\.00/);
@@ -108,8 +118,8 @@ describe('SOUND: the batch (i) total is signed, per currency, never a defaulted 
   });
 });
 
-describe('SOUND: only rows the engine marks batchable get a box and run', () => {
-  it('a stale row, a changed row and a non-batchable bank Vorschlag (IBAN redirect) get no box; select-all runs the two batchable rows only', async () => {
+describe('SOUND: only rows the engine marks batchable are approved in the batch', () => {
+  it('a stale row gets no box; a changed row and a non-batchable one (IBAN redirect) are only rejected in a batch; Freigeben runs the two batchable rows only', async () => {
     const rows = [
       bankVorschlag('b1'),
       bankVorschlag('s1', { stale: true, changedSinceProposal: true, batchable: false, decisionOptions: [{ id: 'check_in_bank', verb: null, labelKey: 'attention.act.checkInBank', role: 'link', input: {}, deepLink: { route: '/bank', params: { line: 'btx_s1' } } }] }),
@@ -126,22 +136,24 @@ describe('SOUND: only rows the engine marks batchable get a box and run', () => 
         return ok(groupedOf(reads === 1 ? rows : []));
       },
       list_drafted_actions: DRAFTED(['b1', 's1', 'c1', 'iban', 'noflag', 'b2']),
-      approve_drafted_action: ok({ status: 'executed' }),
+      approve_drafted_actions: (input) => ok({ items: (input.ids as string[]).map((actionId, index) => ({ index, actionId, ok: true, result: { ok: true } })) }),
     });
-    await waitFor(() => expect(boxes()).toHaveLength(2));
-    await userEvent.click(screen.getByRole('checkbox', { name: /Vorschläge auswählen/ }));
+    // The stale row (voided) has no box; every other one may at least be rejected.
+    await waitFor(() => expect(boxes()).toHaveLength(5));
+    await tickAllSections();
+    expect(commit()).toHaveTextContent('Freigeben (2)');
     await userEvent.click(commit() as HTMLButtonElement);
-    await screen.findByText(/2 genehmigt/);
-    expect(calls.filter((c) => c.action === 'approve_drafted_action').map((c) => c.input.actionId)).toEqual(['b1', 'b2']);
+    await screen.findByText(/2 freigegeben/);
+    expect(calls.filter((c) => c.action === 'approve_drafted_actions').map((c) => c.input.ids)).toEqual([['b1', 'b2']]);
+    expect(calls.filter((c) => c.action === 'approve_drafted_action')).toHaveLength(0);
   });
 
-  it('nothing is ticked on arrival and the commit is the quiet, disabled secondary with no money claim', async () => {
+  it('nothing is ticked on arrival and there is no commit, so no money claim (D197: no disabled "(0)")', async () => {
     renderHub({ attention_list: ok(groupedOf([bankVorschlag('b1'), bankVorschlag('b2')])), list_drafted_actions: DRAFTED(['b1', 'b2']) });
     await waitFor(() => expect(boxes()).toHaveLength(2));
     expect(boxes().every((b) => !b.checked)).toBe(true);
-    expect(commit()).toBeDisabled();
-    expect(commit()).not.toHaveClass('btn--accent');
-    expect(commit()).not.toHaveAttribute('data-money-commit');
+    expect(commit()).toBeNull();
+    expect(document.querySelectorAll('[data-money-commit]')).toHaveLength(0);
     expect(document.querySelectorAll('.btn--accent')).toHaveLength(0);
   });
 });

@@ -1,0 +1,8 @@
+Kassenexport Muster Bäckerei (erfunden)
+Zeitraum;01.09.2026 bis 30.09.2026
+
+Datum;Transaktions-ID;Typ;Betrag;Gebühr;Beschreibung
+01.09.2026;K-0001;Verkauf;12,50;0,22;Gipfeli und Kaffee
+01.09.2026;K-0002;Verkauf;7,80;0,14;Brot
+02.09.2026;K-0003;Rückerstattung;-7,80;0,00;Brot zurück
+03.09.2026;K-0004;Verkauf;104,00;1,82;Torte

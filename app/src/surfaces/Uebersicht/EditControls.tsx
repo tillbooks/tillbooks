@@ -1,4 +1,10 @@
 /**
+ * D201 (owner, 15.11.2026, pick A): the page is arranged IN PLACE by default, with no mode to enter. Each
+ * item (`mode="inline"`) shows its toolbar on hover or focus: the eye, the size, Mehr, and the grip in its
+ * top-left corner. Its face stays live, so a click on a key figure still drills; a mouse drags only from
+ * the grip (`SortableList mouse="handle"`), a touch after a long press anywhere. D180's edit mode below
+ * survives behind the setting `overview.customize = edit_mode` (`mode="editing"`, and `rest` outside it).
+ *
  * D180: the Übersicht's edit mode, item by item. One `EditItem` wraps every key figure and every card in
  * both modes, and the drag context stays mounted, so switching modes never remounts what an item shows.
  *
@@ -31,7 +37,8 @@ export interface EditItemProps {
   id: string;
   /** The item's name, as a person reads it ("Umsatz", "Offene Kreditoren"). */
   name: string;
-  editing: boolean;
+  /** `inline` (D201): live face, toolbar on hover or focus. `editing` (D180): inert face, whole item drags. `rest`: nothing. */
+  mode: 'inline' | 'editing' | 'rest';
   /** `li` in the key-figure list, `div` in the card grid. */
   as: 'li' | 'div';
   className?: string;
@@ -56,9 +63,11 @@ const LATER = new Set(['ArrowDown', 'ArrowRight']);
 /** A press on the pill is a press on an icon, never the start of a drag. */
 const keepPressHere = (event: PointerEvent<HTMLElement>): void => event.stopPropagation();
 
-export function EditItem({ id, name, editing, as: Tag, className, index, count, onMove, tools, ghost = false, menuItems = [], children }: EditItemProps) {
+export function EditItem({ id, name, mode, as: Tag, className, index, count, onMove, tools, ghost = false, menuItems = [], children }: EditItemProps) {
   const t = useT();
-  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !editing });
+  const editing = mode === 'editing';
+  const arranging = mode !== 'rest';
+  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !arranging });
 
   // dnd-kit decides WHEN the neighbours glide (never right after a drop, which would flicker); the
   // HOW is the Reveal token, so the reduced-motion kill switch zeroes it like every other transition.
@@ -68,7 +77,7 @@ export function EditItem({ id, name, editing, as: Tag, className, index, count, 
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
-    if (!editing || !event.altKey) return;
+    if (!arranging || !event.altKey) return;
     const delta = EARLIER.has(event.key) ? -1 : LATER.has(event.key) ? 1 : 0;
     if (delta === 0) return;
     event.preventDefault();
@@ -82,19 +91,20 @@ export function EditItem({ id, name, editing, as: Tag, className, index, count, 
     { key: 'back', label: t('dashboard.edit.back'), onSelect: () => onMove(1), disabled: index === count - 1 },
   ];
 
-  const classes = ['uebersicht-item', className ?? '', editing ? 'is-editing' : '', ghost ? 'is-ghost' : '', isDragging ? 'is-dragging' : '']
+  const classes = ['uebersicht-item', className ?? '', editing ? 'is-editing' : '', mode === 'inline' ? 'is-inline' : '', ghost ? 'is-ghost' : '', isDragging ? 'is-dragging' : '']
     .filter(Boolean)
     .join(' ');
 
   return (
     <Tag
       ref={setNodeRef}
-      style={editing ? style : undefined}
+      style={arranging ? style : undefined}
       className={classes}
       data-slot={id}
+      data-arrive-key={id}
       onKeyDown={onKeyDown}
-      aria-keyshortcuts={editing ? 'Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight' : undefined}
-      {...(editing ? listeners : {})}
+      aria-keyshortcuts={arranging ? 'Alt+ArrowUp Alt+ArrowDown Alt+ArrowLeft Alt+ArrowRight' : undefined}
+      {...(arranging ? listeners : {})}
     >
       {/* One stable wrapper in both modes (nothing remounts): a named group while editing. */}
       <div
@@ -107,7 +117,7 @@ export function EditItem({ id, name, editing, as: Tag, className, index, count, 
         <div className="uebersicht-item__face" inert={editing}>
           {children}
         </div>
-        {editing ? (
+        {arranging ? (
           <>
             <span className="uebersicht-grip" aria-hidden="true" data-drag-handle="">
               <GripGlyph size={16} />

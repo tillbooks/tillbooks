@@ -87,6 +87,17 @@ function mutate(v) {
 
 const NEVER_ARGUMENTS = new Set(['workspaceId', 'idempotencyKey', ...TRANSPORT_ONLY_FIELDS]);
 
+/**
+ * D198 (security review, 12.11.2026): arguments that are CREDENTIALS. Their value never enters the argument
+ * identity (a plain hash in `idempotency_args` would let anyone holding the book test a guessed token
+ * offline); only whether one was given does (`SECRET_ARG_FIELDS`, src/core/agent/argsIdentity.ts). So a
+ * same-key call with another token is not refused naming it: it replays the first answer, and the verb's
+ * replay check runs before its secret store is touched, so the new token is never stored either.
+ */
+const SECRET_ARGUMENTS = {
+  'set_settlement_source.feedToken': 'the feed token: its value is never hashed into the book; a same-key retry replays and stores nothing',
+};
+
 /** Every write verb with a keyed scenario, and the fields a real-argument mutation may change. */
 function keyedVerbs() {
   const out = [];
@@ -99,7 +110,9 @@ function keyedVerbs() {
       if (typeof input.idempotencyKey !== 'string' || input.idempotencyKey.length === 0) continue;
       // A verb's own free text is not compared under the default policy (`idempotency.hash_free_text`).
       const freeText = freeTextFieldsOf(action.name);
-      const fields = Object.keys(input).filter((f) => !NEVER_ARGUMENTS.has(f) && !freeText.includes(f) && f !== APPROVAL_CONFIRMS_FIELD[action.name]);
+      const fields = Object.keys(input).filter(
+        (f) => !NEVER_ARGUMENTS.has(f) && !freeText.includes(f) && f !== APPROVAL_CONFIRMS_FIELD[action.name] && !(`${action.name}.${f}` in SECRET_ARGUMENTS),
+      );
       out.push({ action, scenario, fields });
     } finally {
       fx.deps.store.close();

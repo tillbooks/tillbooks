@@ -278,14 +278,15 @@ function renderPill(transport: Transport) {
 }
 
 describe('Shell environment pill (D135 face marking, K-01 one footer row)', () => {
-  it('marks a writable local main with the calm Live pill, never the read-only wording', async () => {
+  it('marks a writable local main with the calm Live dot, its words in the name, never the read-only wording', async () => {
     const { container } = renderPill(transportFor({ env_list: listOf([MAIN_LOCAL, TEST, DEVELOP], 'main') }));
     const pill = await screen.findByRole('button', { name: /Umgebung: Live, main/ });
     // Calm, not loud: the Live pill is neutral, never the orange test marking.
     expect(pill).toHaveAttribute('data-face', 'live');
     expect(container.querySelector('[data-face="loud"]')).toBeNull();
-    expect(pill.textContent).toContain('Live');
-    expect(pill.textContent).toContain('main');
+    // D204 one-row footer: the face is a dot; its words live in the accessible name and the tooltip.
+    expect(pill.getAttribute('aria-label') ?? '').toContain('Live');
+    expect(pill.getAttribute('aria-label') ?? '').toContain('main');
     expect(screen.queryByText(/nur lesen/)).toBeNull();
   });
 
@@ -307,17 +308,17 @@ describe('Shell environment pill (D135 face marking, K-01 one footer row)', () =
 
   it('carries the egress state in words, never the dot alone', async () => {
     renderPill(transportFor({ env_list: listOf([MAIN_LOCAL, TEST, DEVELOP], 'main') }));
-    const pill = await screen.findByRole('button', { name: /Lokal, keine Verbindung/ });
+    const pill = await screen.findByRole('button', { name: /^Lokal/ });
     await userEvent.click(pill);
-    // The menu opens on the same dot with its words beside it.
-    expect(screen.getByText('Lokal, keine Verbindung')).toBeInTheDocument();
+    // The menu opens on the same dot and says the egress state in words.
+    expect(screen.getAllByText('Lokal').length).toBeGreaterThan(0);
   });
 
   it('shows the egress word alone when the landscape is unavailable, and the menu stays reachable', async () => {
     renderPill(transportFor({}));
-    const pill = await screen.findByRole('button', { name: /Lokal, keine Verbindung/ });
+    const pill = await screen.findByRole('button', { name: /^Lokal/ });
     expect(pill).toHaveAttribute('data-face', 'none');
-    expect(pill.textContent).toContain('Lokal');
+    expect(pill.getAttribute('aria-label') ?? '').toContain('Lokal');
     await userEvent.click(pill);
     expect(screen.getByRole('menuitemcheckbox', { name: 'Kompakte Ansicht' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Navigation einklappen' })).toBeInTheDocument();
@@ -328,7 +329,7 @@ describe('Shell environment pill (D135 face marking, K-01 one footer row)', () =
     await userEvent.click(await screen.findByRole('button', { name: /Umgebung: Live, main/ }));
     const menu = screen.getByRole('menu');
     const items = [...menu.querySelectorAll('[role^="menuitem"]')].map((el) => el.textContent);
-    expect(items).toEqual(['Umgebungen verwalten', 'main', 'test', 'develop', 'Kompakte Ansicht', 'Navigation einklappen']);
+    expect(items).toEqual(['Umgebungen verwalten', 'main', 'test', 'develop', 'Kompakte Ansicht', 'Navigation einklappen', expect.stringMatching(/^TILL\b/)]);
     expect(screen.getByRole('menuitemradio', { name: 'main' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('menuitemradio', { name: 'test' })).toHaveAttribute('aria-checked', 'false');
     // Focus lands on the first item, and Escape hands it back to the pill.

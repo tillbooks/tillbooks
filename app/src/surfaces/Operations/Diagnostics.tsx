@@ -402,7 +402,7 @@ function DiagnosticsPanel({ workspaceId }: { workspaceId: string }) {
         <SettingRow
           label={t('diagnostics.capture.label')}
           labelId={`${captureId}-name`}
-          description={t('diagnostics.capture.hint')}
+          note={t('diagnostics.capture.hint')}
           dataKey="diagnostics-capture"
         >
           <input
@@ -412,7 +412,7 @@ function DiagnosticsPanel({ workspaceId }: { workspaceId: string }) {
             checked={state.capture}
             disabled={busy}
             aria-labelledby={`${captureId}-name`}
-            aria-describedby={`${captureId}-name-desc`}
+            aria-describedby={`${captureId}-name-note`}
             onChange={(event) => void onToggle(event.target.checked)}
           />
         </SettingRow>

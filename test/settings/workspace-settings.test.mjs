@@ -2,7 +2,7 @@
 //
 // The conformance floor already holds append-only, idempotent-on-rows and §H-TENANT over every verb in
 // ACTIONS. These tests state what the REGISTRY promises on top: a missing row reads the default, an unknown
-// key is refused, a value is checked against its key's schema, a reason is required, every accepted change
+// key is refused, a value is checked against its key's schema, a reason is optional (D202), every accepted change
 // is audited with its old and new value, a replay writes nothing, the owning capability gates the change,
 // a governed seat drafts under the key's dial family, a person's change after a proposal makes the approval
 // stale, a rule can never fire a change, and the seed entry really drives the Pendenzen look-ahead.
@@ -121,7 +121,7 @@ test('idempotent on rows: a replayed key answers the stored result and writes no
   assert.deepEqual(counts(defaultNoRow), { rows: 0, history: 0, audit: 0 });
 });
 
-test('refusals write nothing: unknown_setting, invalid_setting_value, reason_required, invalid_input', () => {
+test('refusals write nothing: unknown_setting, invalid_setting_value, invalid_input (D202: no reason_required)', () => {
   const fx = fixture();
   const refuse = (input, code) => {
     const r = fx.call('settings_set', { idempotencyKey: `x-${code}-${JSON.stringify(input.value)}`, ...input });
@@ -134,13 +134,11 @@ test('refusals write nothing: unknown_setting, invalid_setting_value, reason_req
   refuse({ key: KEY, value: 14.5, reason: 'r' }, 'invalid_setting_value');
   refuse({ key: KEY, value: '21', reason: 'r' }, 'invalid_setting_value');
   refuse({ key: KEY, value: true, reason: 'r' }, 'invalid_setting_value');
-  refuse({ key: KEY, value: 21, reason: '   ' }, 'reason_required');
-  refuse({ key: KEY, value: 21 }, 'reason_required');
+  // D202 point 6: a reason is optional, but one that is not text is refused.
+  refuse({ key: KEY, value: 21, reason: 7 }, 'invalid_input');
   assert.equal(fx.call('settings_get', { key: 'unknown.key' }).error, 'unknown_setting');
   assert.equal(fx.call('settings_reset', { key: 'unknown.key', reason: 'r', idempotencyKey: 'u' }).error, 'unknown_setting');
-  assert.equal(fx.call('settings_reset', { key: KEY, reason: '  ', idempotencyKey: 'u2' }).error, 'reason_required');
-  assert.equal(fx.call('settings_reset', { key: KEY, reason: '', idempotencyKey: 'u3' }).error, 'reason_required');
-  assert.equal(fx.call('settings_reset', { key: KEY, idempotencyKey: 'u4' }).error, 'reason_required');
+  assert.equal(fx.call('settings_reset', { key: KEY, reason: { why: 'x' }, idempotencyKey: 'u2' }).error, 'invalid_input');
   assert.deepEqual(counts(fx), { rows: 0, history: 0, audit: 0 });
 });
 
@@ -209,14 +207,22 @@ test('A24: reading is read_master_data; a change needs the capability that owns 
 test('the dial: a governed seat drafts a change under the key family (customize for the seed), and the approval applies it', () => {
   assert.deepEqual(dialCapabilitiesForCall('settings_set', { key: KEY, value: 21, reason: 'r' }), ['customize']);
   assert.deepEqual(dialCapabilitiesForCall('settings_reset', { key: KEY, reason: 'r' }), ['customize']);
-  // A reasonless call is never drafted: the verb refuses it reason_required and writes nothing.
-  assert.deepEqual(dialCapabilitiesForCall('settings_set', { key: KEY, value: 21 }), []);
+  // D202: the rule keys on the key alone, so a reasonless call is governed exactly like one with a reason.
+  assert.deepEqual(dialCapabilitiesForCall('settings_set', { key: KEY, value: 21 }), ['customize']);
+  assert.deepEqual(dialCapabilitiesForCall('settings_reset', { key: KEY }), ['customize']);
   const fx = fixture();
   const drafted = handleRest('settings_set', { workspaceId: fx.workspaceId, key: KEY, value: 21, reason: 'Agent schlägt vor', idempotencyKey: 'ag' }, { ...fx.deps, actor: 'agent' }).body;
   assert.equal(drafted.drafted, true, JSON.stringify(drafted).slice(0, 300));
   assert.equal(getSetting(ctxOf(fx), KEY), 14, 'nothing changed before the approval');
   const approved = getAction('approve_drafted_action').run({ ...fx.deps, actor: 'studio' }, { workspaceId: fx.workspaceId, actionId: drafted.actionId });
   assert.equal(approved.ok, true, JSON.stringify(approved).slice(0, 300));
+  assert.equal(getSetting(ctxOf(fx), KEY), 21);
+  // D202: without a reason the agent's change drafts exactly the same way, never executes past the dial.
+  const reasonless = handleRest('settings_set', { workspaceId: fx.workspaceId, key: KEY, value: 30, idempotencyKey: 'ag-noreason' }, { ...fx.deps, actor: 'agent' }).body;
+  assert.equal(reasonless.drafted, true, JSON.stringify(reasonless).slice(0, 300));
+  assert.equal(getSetting(ctxOf(fx), KEY), 21, 'nothing changed before the approval');
+  const reasonlessReset = handleRest('settings_reset', { workspaceId: fx.workspaceId, key: KEY, idempotencyKey: 'ag-noreason-reset' }, { ...fx.deps, actor: 'agent' }).body;
+  assert.equal(reasonlessReset.drafted, true, JSON.stringify(reasonlessReset).slice(0, 300));
   assert.equal(getSetting(ctxOf(fx), KEY), 21);
 });
 
@@ -265,14 +271,16 @@ test('end to end: the setting drives the Pendenzen look-ahead for due checklist 
   assert.equal(dueDates(), atDefault, 'the reset restores the default window');
 });
 
-test('critic D172 r1: a missing reason answers reason_required on the REST face, the MCP registry face and the engine alike', async () => {
+test('D202 point 6: a missing reason is accepted alike on the REST face, the MCP registry face and the engine, and stored as empty', async () => {
   const fx = fixture();
-  const body = handleRest('settings_set', { workspaceId: fx.workspaceId, key: KEY, value: 21, idempotencyKey: 'rest' }, fx.deps).body;
-  assert.equal(body.error, 'reason_required', JSON.stringify(body));
-  const viaRun = getAction('settings_reset').run(fx.deps, { workspaceId: fx.workspaceId, key: KEY, idempotencyKey: 'run' });
-  assert.equal(viaRun.error, 'reason_required', JSON.stringify(viaRun));
+  const body = handleRest('settings_set', { workspaceId: fx.workspaceId, key: KEY, value: 21, idempotencyKey: 'rest' }, { ...fx.deps, actor: 'studio' }).body;
+  assert.equal(body.ok, true, JSON.stringify(body));
+  const viaRun = getAction('settings_reset').run({ ...fx.deps, actor: 'studio' }, { workspaceId: fx.workspaceId, key: KEY, idempotencyKey: 'run' });
+  assert.equal(viaRun.ok, true, JSON.stringify(viaRun));
   const { settingsSet } = await import('../../dist/core/settings/index.js');
-  assert.equal(settingsSet(ctxOf(fx), { key: KEY, value: 21, idempotencyKey: 'eng' }).error, 'reason_required');
+  assert.equal(settingsSet(ctxOf(fx), { key: KEY, value: 22, idempotencyKey: 'eng' }).ok, true);
+  const reasons = fx.deps.store.db.prepare('SELECT reason FROM workspace_setting_change WHERE workspace_id = ? ORDER BY at, id').all(fx.workspaceId).map((r) => r.reason);
+  assert.deepEqual(reasons, ['', '', '']);
 });
 
 test('critic D172 r1: a stored override that no longer fits is visible as stale with the ignored raw value, and a reset clears it', () => {

@@ -27,7 +27,12 @@ export type SystemClosureKind = (typeof SYSTEM_CLOSURE_KINDS)[number];
 export type DraftHistoryEntry =
   | { event: 'closed'; kind: SystemClosureKind; at: string; by: string; reason: string; linkId?: string; replacedBy?: string }
   | { event: 'revived'; at: string; by: string; undoneLinkId: string }
-  | { event: 'not_revived'; at: string; by: string; undoneLinkId: string; reason: string };
+  | { event: 'not_revived'; at: string; by: string; undoneLinkId: string; reason: string }
+  // D196: the agent decided this Vorschlag itself, under the owner's grant (`decisionGrant.ts`).
+  | { event: 'decided_under_grant'; decision: 'approved' | 'rejected'; at: string; by: string; scope: 'reject' | 'decide'; grantedBy: string; grantedAt: string }
+  // D209: the agent approved this Vorschlag on the owner's word (`decisionGrant.ts`): the words, verbatim, when
+  // they were said, and the setting `agent.approve_on_owner_word` it rode (who switched it on, and when).
+  | { event: 'decided_on_owner_word'; decision: 'approved'; at: string; by: string; quote: string; saidAt: string; grantedBy: string; grantedAt: string };
 
 /** Append one entry to the row's history (tenant-bound). */
 export function appendDraftHistory(ctx: WorkspaceContext, actionId: string, entry: DraftHistoryEntry): void {

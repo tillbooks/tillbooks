@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import { getAction } from '../../dist/api/registry.js';
 import { eventsEmittedBy, readPath } from '../../dist/core/automation/index.js';
 import { weightedMinor } from '../../dist/core/deals/index.js';
+import { CAPABILITY_FOR_ACTION } from '../../dist/core/access/actionCapabilities.js';
 import { freshDeps, mintWorkspace } from '../api/support.mjs';
 
 const call = (deps, name, workspaceId, input) => getAction(name).run(deps, { workspaceId, ...input });
@@ -263,12 +264,9 @@ test('C01: a stage outside the deal pipeline refuses, and an outcome stage refus
   assert.equal(terminal.error, 'terminal_stage_use_mark');
 });
 
-test('C01: markDeal is the one door: lost needs a reason, won pins 100 and moves to the outcome stage, open reopens', () => {
+test('C01: markDeal is the one door: won pins 100 and moves to the outcome stage, open reopens', () => {
   const { deps, workspaceId, contactId } = world('mark');
   const d = call(deps, 'deals_create', workspaceId, { contactId, title: 'Abschluss', valueMinor: 500000, idempotencyKey: 'k-1' });
-
-  const bare = call(deps, 'deals_mark', workspaceId, { dealId: d.dealId, status: 'lost', idempotencyKey: 'k-2' });
-  assert.equal(bare.error, 'lost_reason_required');
 
   const won = call(deps, 'deals_mark', workspaceId, { dealId: d.dealId, status: 'won', idempotencyKey: 'k-3' });
   assert.equal(won.ok, true);
@@ -292,6 +290,31 @@ test('C01: markDeal is the one door: lost needs a reason, won pins 100 and moves
   assert.equal(reopened.deal.status, 'open');
   assert.equal(reopened.deal.stageId, board.stages[0].id, 'the reopen did not land in the first open stage');
   assert.equal(reopened.deal.lostReason, null);
+});
+
+test('D204 deals: marking a deal lost needs no reason, and its activity row keeps who, when, what and the permission', () => {
+  const { deps, workspaceId, contactId } = world('d204');
+  const d = call(deps, 'deals_create', workspaceId, { contactId, title: 'Ohne Grund', valueMinor: 100000, idempotencyKey: 'd204-1' });
+  const lost = call(deps, 'deals_mark', workspaceId, { dealId: d.dealId, status: 'lost', idempotencyKey: 'd204-2' });
+  assert.equal(lost.ok, true, JSON.stringify(lost));
+  assert.equal(lost.deal.status, 'lost');
+  assert.equal(lost.deal.probability, 0);
+  assert.equal(lost.deal.lostReason, null);
+  assert.equal(lost.lostDealId, d.dealId);
+  const row = deps.store.db
+    .prepare("SELECT body, user_id, created_at FROM contact_activity WHERE workspace_id = ? AND deal_id = ? AND body LIKE 'Deal verloren%'")
+    .get(workspaceId, d.dealId);
+  assert.equal(row.body, 'Deal verloren: Ohne Grund', 'the activity names what changed, with no empty brackets');
+  assert.ok(typeof row.user_id === 'string' && row.user_id.length > 0, 'the activity names the actor');
+  assert.match(row.created_at, /^\d{4}-\d{2}-\d{2}T/, 'the activity carries the time');
+  assert.equal(CAPABILITY_FOR_ACTION.deals_mark, 'deals.write', 'the act names the permission it passed');
+  // A given reason is still kept.
+  const d2 = call(deps, 'deals_create', workspaceId, { contactId, title: 'Mit Grund', valueMinor: 100000, idempotencyKey: 'd204-3' });
+  const lost2 = call(deps, 'deals_mark', workspaceId, { dealId: d2.dealId, status: 'lost', lostReason: '  Budget  ', idempotencyKey: 'd204-4' });
+  assert.equal(lost2.deal.lostReason, 'Budget');
+  // Blank is absent, never a refusal.
+  const d3 = call(deps, 'deals_create', workspaceId, { contactId, title: 'Leer', valueMinor: 100000, idempotencyKey: 'd204-5' });
+  assert.equal(call(deps, 'deals_mark', workspaceId, { dealId: d3.dealId, status: 'lost', lostReason: '   ', idempotencyKey: 'd204-6' }).deal.lostReason, null);
 });
 
 // --- The OP8 null-collapse, checked against the verbs' REAL payloads ----------------------------

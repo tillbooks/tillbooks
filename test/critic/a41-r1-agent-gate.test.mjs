@@ -20,6 +20,7 @@ import { settingsSet, getSetting } from '../../dist/core/settings/settings.js';
 import { must, assertClaimInvariantHolds } from '../banking/bank-inbox-support.mjs';
 import { ruleWorld, debits, bookAsProposed, autopilot, decisionOf, at, TELCO } from '../banking/n04-autobook-support.mjs';
 import { confirmedReceipt } from '../banking/a41-beleg-support.mjs';
+import { assertNotApplied } from '../settings/support.mjs';
 
 // A41.3 re-cut v2 (D184, built 07.11.2026): the findings below run live against the assignment design. A probe
 // whose premise the re-cut changed says so in its body (the verdict reads only the line's assignment).
@@ -65,6 +66,9 @@ test('G2 sound: the agent can neither switch the receipt gate nor answer an ask-
   for (const key of ['rules.autobook_requires_beleg', 'bank.bulk_learned_min', 'rules.autobook_offer_after']) {
     const value = key === 'rules.autobook_requires_beleg' ? 'off' : 5;
     const res = handleRest('settings_set', { workspaceId: t.workspaceId, key, value, reason: 'Agent', idempotencyKey: `ag-${key}` }, { ...t.deps, actor: 'agent' }).body;
-    assert.equal(res.error, 'human_only', `${key}: ${JSON.stringify(res)}`);
+    // D202 point 5: a protected setting is only proposed by the agent; an ask-first one is refused human_only.
+    if (key === 'rules.autobook_requires_beleg') assertNotApplied(res, key);
+    else assert.equal(res.error, 'human_only', `${key}: ${JSON.stringify(res)}`);
+    assert.equal(t.deps.store.db.prepare("SELECT COUNT(*) AS n FROM workspace_setting_change WHERE workspace_id = ? AND key = ? AND actor = 'agent'").get(t.workspaceId, key).n, 0, key);
   }
 });

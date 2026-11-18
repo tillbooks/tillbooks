@@ -1,0 +1,88 @@
+/* The area overview (D201): the tiles of one menu group, in the full width of main. Only --t-* tokens.
+   A tile is the page's icon in a soft square, its name and, where known, one short state; it is a
+   `.panel--interactive` link, so it lifts on hover by the person's motion level and wears the shared
+   focus cue. The grid never forces a sideways scroll: a column is at most the width of main. */
+
+.group-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.group-overview-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.group-overview-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  font-weight: 500;
+  color: var(--t-text-dim);
+}
+
+.group-overview-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+  gap: var(--t-space-2);
+}
+
+.group-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  height: 100%;
+  padding: var(--t-space-2);
+  color: var(--t-text);
+  text-decoration: none;
+}
+
+.group-tile:hover {
+  color: var(--t-text);
+  text-decoration: none;
+}
+
+.group-tile-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+.group-tile-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-soft);
+  color: var(--t-text-dim);
+}
+
+.group-tile-state {
+  padding: 0 var(--t-space-1);
+  border-radius: var(--t-radius-full);
+  background: var(--t-bg-soft);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.group-tile-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}

@@ -105,6 +105,7 @@ import {
   type Figures,
   type FocusNav,
 } from './BookingModes';
+import { useAskReason } from '../../lib/useAskReason';
 
 export type PanelMode = 'details' | 'link' | 'ignore' | 'reopen' | 'receipts' | 'rule';
 
@@ -163,7 +164,7 @@ export interface DetailsPanelProps {
   onOther: () => void;
   onRefusalAction: (action: RefusalAction) => void;
   onIgnore: (reason: IgnoreReason, note: string) => void;
-  onReopen: (reason: string) => void;
+  onReopen: (reason: string | undefined) => void;
   onApprove: (v: LineVorschlag) => void;
   onReject: (v: LineVorschlag, reason: string) => void;
   onAgent: () => void;
@@ -660,6 +661,8 @@ export interface WoherView {
   ruleId?: string;
   /** A link to what the source names (an entry, the agent's Vorschläge). */
   href?: string;
+  /** The source is the agent's Vorschlag (the strip under the panel names it too). */
+  agent?: boolean;
 }
 
 /** The short words for a proposal's reason (Woher), by code; the full sentence is the tooltip. */
@@ -686,7 +689,7 @@ export function woherOf(t: (k: string, p?: Record<string, string | number>) => s
   const code: string = line.proposal?.reasonCode ?? '';
   const date = (v: unknown) => (typeof v === 'string' && v.length >= 10 ? formatDate(v) : '');
   if (source === 'agent') {
-    return { glyph: <AgentGlyph size={16} />, glyphTip: t('bankInbox.woher.glyph.agent'), label: t('bankInbox.woher.agent'), tip: vorschlag !== undefined ? t('bankInbox.woher.agentTip') : t('bankInbox.source.agent'), href: '/attention' };
+    return { glyph: <AgentGlyph size={16} />, glyphTip: t('bankInbox.woher.glyph.agent'), label: t('bankInbox.woher.agent'), tip: vorschlag !== undefined ? t('bankInbox.woher.agentTip') : t('bankInbox.source.agent'), href: '/attention', agent: true };
   }
   if (source === 'standard') {
     const ruleId = target?.kind === 'rule' || target?.kind === 'ignore' ? target.standardId : (proposalRuleId(line) ?? '');
@@ -750,6 +753,9 @@ function Woher({ line, draft, lookups, vorschlag, onOpenRule, onPickRule, onOthe
   const others = [...new Set([...lineRuleIds(line), ...severalRuleIds(line)])].filter((id) => id !== current);
   const showSwitch = (view?.ruleId !== undefined || code === 'several_rules') && (others.length > 0 || current !== null);
   if (view === null && !showSwitch) return null;
+  // D201: the agent's Vorschlag is named ONCE, by its own strip under the panel (`VorschlagOnLine`, its kicker,
+  // its sentence and TILL's verdict); a Woher line saying "Vorschlag des Agenten" above it said it twice.
+  if (view?.agent === true && vorschlag !== undefined && !showSwitch) return null;
   const name =
     view === null ? (
       <span className="bank-woher__name">{plural(t, 'bankInbox.woher.several', Math.max(others.length, 2))}</span>
@@ -888,9 +894,10 @@ function BatchFacts({ workspaceId, line, batchId }: DetailsPanelProps & { batchI
   );
 }
 
-/** A match: the entry, and when the amounts differ, by how much and the reason field (critic A39-12). */
+/** A match: the entry, and when the amounts differ, by how much and the accept (critic A39-12; D204: no reason, an optional note only when the workspace asks). */
 function EntryFacts({ workspaceId, line, lookups, target, onDraft }: DetailsPanelProps & { target: Extract<DraftTarget, { kind: 'existing_entry' }> }) {
   const t = useT();
+  const askReason = useAskReason();
   const { entry, loading } = useEntry(workspaceId, target.entryId);
   if (loading) return null;
   if (entry === null) return <p className="bank-panel__line">{t('bankInbox.compare.readFailed')}</p>;
@@ -909,25 +916,34 @@ function EntryFacts({ workspaceId, line, lookups, target, onDraft }: DetailsPane
       <p className="bank-panel__line">
         {what} <span className="bank-panel__warn">{t('bankInbox.details.entryDiffers', { amount })}</span>
       </p>
-      <label className="bank-field" htmlFor={`difference-reason-${line.bankTxnId}`}>
-        <span className="bank-field__label">{t('bankInbox.compare.differenceReason', { amount })}</span>
+      <label className="bank-choice">
         <input
-          id={`difference-reason-${line.bankTxnId}`}
-          type="text"
-          className="field"
-          maxLength={500}
-          value={target.differenceReason ?? ''}
-          onChange={(e) => {
-            const reason = e.target.value;
+          type="checkbox"
+          checked={target.acceptDifference}
+          onChange={(e) =>
             onDraft(
-              reason.trim() === ''
-                ? { kind: 'existing_entry', entryId: target.entryId, acceptDifference: false }
-                : { kind: 'existing_entry', entryId: target.entryId, acceptDifference: true, differenceReason: reason },
+              e.target.checked
+                ? { kind: 'existing_entry', entryId: target.entryId, acceptDifference: true, ...(target.differenceReason === undefined ? {} : { differenceReason: target.differenceReason }) }
+                : { kind: 'existing_entry', entryId: target.entryId, acceptDifference: false },
               'edited',
-            );
-          }}
-        />
+            )
+          }
+        />{' '}
+        <span>{t('bankInbox.compare.acceptDifference', { amount })}</span>
       </label>
+      {askReason && target.acceptDifference && (
+        <label className="bank-field" htmlFor={`difference-reason-${line.bankTxnId}`}>
+          <span className="bank-field__label">{t('bankInbox.compare.differenceReason', { amount })}</span>
+          <input
+            id={`difference-reason-${line.bankTxnId}`}
+            type="text"
+            className="field"
+            maxLength={500}
+            value={target.differenceReason ?? ''}
+            onChange={(e) => onDraft({ kind: 'existing_entry', entryId: target.entryId, acceptDifference: true, differenceReason: e.target.value }, 'edited')}
+          />
+        </label>
+      )}
     </div>
   );
 }

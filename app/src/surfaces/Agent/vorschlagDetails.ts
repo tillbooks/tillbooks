@@ -11,7 +11,7 @@
  */
 import { formatDate, formatMoney, type Locale } from '../../i18n';
 import { formatMonth } from '../../lib/format';
-import { LABELLED_FIELDS, type DraftedAction } from './model';
+import { LABELLED_FIELDS, type DraftedAction, type VorschlagFigures } from './model';
 
 type T = (key: string, params?: Record<string, string | number>) => string;
 
@@ -45,7 +45,8 @@ export function payloadTitle(payload: Record<string, unknown>): { key: string; t
 
 /** Keys that are transport plumbing, never a fact about the proposal. */
 // N03: a mined rule's stored evidence and the slot guard are the engine's bookkeeping, said in their own rows or not at all.
-const PLUMBING: ReadonlySet<string> = new Set(['workspaceId', 'idempotencyKey', 'confirmed', 'minedFacts', 'expectSlotStandardId']);
+// D197 (audit F-11): the agent's reason is quoted on the face, so its key never prints as "Agent reason".
+const PLUMBING: ReadonlySet<string> = new Set(['workspaceId', 'idempotencyKey', 'confirmed', 'minedFacts', 'expectSlotStandardId', 'agentReason']);
 
 /** The bank-line verbs that carry a "Zur Bankzeile" link (A39). */
 const BANK_LINE_VERBS: ReadonlySet<string> = new Set(['book_bank_line', 'ignore_bank_line', 'reopen_bank_line']);
@@ -260,8 +261,12 @@ function accountWords(t: T, accounts: AccountNameMap, id: unknown): string {
  * The pinned figures (D162) lead; where nothing is pinned the payload is read, its accounts resolved
  * through the chart's names. Null when the act carries none of these: the line then shows `keyFigure`.
  */
-export function essentials(t: T, locale: Locale, action: DraftedAction, accounts: AccountNameMap = NO_ACCOUNTS): string | null {
-  const parts: string[] = [];
+/**
+ * D197: the accounts an act books, in words, for the row's face: "6500 Büromaterial an 1020 Bank" for a
+ * posting of two lines, the one account of a bank booking ("6570 Informatik", or "auf 6570 Informatik" with
+ * `onto`), "3 Konten" past that; null when the act names no account.
+ */
+export function accountsPhrase(t: T, action: DraftedAction, accounts: AccountNameMap = NO_ACCOUNTS, onto = true): string | null {
   const p = action.payload;
   const lines = Array.isArray(p.lines) ? (p.lines as LineLike[]).filter((l) => l !== null && typeof l === 'object') : [];
   const target = p.target !== null && typeof p.target === 'object' ? (p.target as { kind?: unknown; legs?: unknown }) : null;
@@ -269,14 +274,22 @@ export function essentials(t: T, locale: Locale, action: DraftedAction, accounts
   if (lines.length === 2) {
     const debit = lines.find((l) => typeof l.debit === 'number' && l.debit > 0) ?? lines[0];
     const credit = lines.find((l) => l !== debit) ?? lines[1];
-    parts.push(t('agent.line.essentials.pair', { debit: accountWords(t, accounts, debit?.account ?? debit?.accountId), credit: accountWords(t, accounts, credit?.account ?? credit?.accountId) }));
-  } else if (lines.length > 2) {
-    parts.push(t('agent.line.essentials.many', { count: lines.length }));
-  } else if (legs.length === 1) {
-    parts.push(t('agent.line.essentials.onto', { account: accountWords(t, accounts, legs[0]?.accountId ?? legs[0]?.account) }));
-  } else if (legs.length > 1) {
-    parts.push(t('agent.line.essentials.many', { count: legs.length }));
+    return t('agent.line.essentials.pair', { debit: accountWords(t, accounts, debit?.account ?? debit?.accountId), credit: accountWords(t, accounts, credit?.account ?? credit?.accountId) });
   }
+  if (lines.length > 2) return t('agent.line.essentials.many', { count: lines.length });
+  if (legs.length === 1) {
+    const account = accountWords(t, accounts, legs[0]?.accountId ?? legs[0]?.account);
+    return onto ? t('agent.line.essentials.onto', { account }) : account;
+  }
+  if (legs.length > 1) return t('agent.line.essentials.many', { count: legs.length });
+  return null;
+}
+
+export function essentials(t: T, locale: Locale, action: DraftedAction, accounts: AccountNameMap = NO_ACCOUNTS): string | null {
+  const parts: string[] = [];
+  const p = action.payload;
+  const phrase = accountsPhrase(t, action, accounts);
+  if (phrase !== null) parts.push(phrase);
   const f = action.figures ?? null;
   if (f !== null && f.counterparty !== null) parts.push(f.counterparty);
   if (f !== null && f.recipient !== null) parts.push(t('agent.line.essentials.recipient', { recipient: f.recipient }));
@@ -297,4 +310,123 @@ export function bankLineOf(action: DraftedAction): string | null {
   if (!BANK_LINE_VERBS.has(action.actionTool)) return null;
   const id = action.payload.bankTxnId;
   return typeof id === 'string' && id.length > 0 ? id : null;
+}
+
+/** D207: the Buchungsregel "Freigeben und künftig automatisch" saves, built from the APPROVED legs. */
+export interface RuleRecipe {
+  legs: { accountId: string; taxCode: string | null; amount: { kind: 'rest' } }[];
+  viaAccountId: string | null;
+}
+
+/**
+ * D207 (critic F1): the rule a bank booking Vorschlag stands for, read off the Vorschlag the person approves,
+ * never off a booking re-read later. Only a booking of the WHOLE line to ONE account (with its own MWST code, or
+ * none) is automated faithfully: the rule books every later line to that account and code. A split would make a
+ * rule that asks an amount every time (or guesses a proportion), so it gets no third icon: Freigeben only. Any
+ * other target (an open item, a rule already, a match) carries none either.
+ */
+export function ruleRecipeOf(action: Pick<DraftedAction, 'actionTool' | 'payload'>): RuleRecipe | null {
+  if (action.actionTool !== 'book_bank_line' || typeof action.payload.bankTxnId !== 'string') return null;
+  const target = action.payload.target;
+  if (target === null || typeof target !== 'object') return null;
+  const t = target as { kind?: unknown; legs?: unknown; viaAccountId?: unknown };
+  if (t.kind !== 'accounts' || !Array.isArray(t.legs) || t.legs.length !== 1) return null;
+  const leg = t.legs[0] as LineLike | null;
+  if (leg === null || typeof leg !== 'object') return null;
+  const accountId = typeof leg.accountId === 'string' ? leg.accountId : typeof leg.account === 'string' ? leg.account : null;
+  if (accountId === null || accountId === '') return null;
+  const taxCode = typeof leg.taxCode === 'string' && leg.taxCode !== '' ? leg.taxCode : null;
+  const viaAccountId = typeof t.viaAccountId === 'string' && t.viaAccountId !== '' ? t.viaAccountId : null;
+  return { legs: [{ accountId, taxCode, amount: { kind: 'rest' } }], viaAccountId };
+}
+
+/** Does this Vorschlag carry the third icon (`ruleRecipeOf` answers a rule)? */
+export function automatable(action: Pick<DraftedAction, 'actionTool' | 'payload'>): boolean {
+  return ruleRecipeOf(action) !== null;
+}
+
+/** D207: one proposed booking leg in words: "6570 Informatik 27.92 (VB81)". */
+export interface BookingLeg {
+  account: string;
+  amount: string | null;
+  taxCode: string | null;
+}
+
+/** The legs a bank booking Vorschlag proposes, in words; empty when it books to no accounts. */
+export function bookingLegs(t: T, action: Pick<DraftedAction, 'payload'>, accounts: AccountNameMap = NO_ACCOUNTS, currency = 'CHF'): BookingLeg[] {
+  const target = action.payload.target;
+  if (target === null || typeof target !== 'object') return [];
+  const legs = (target as { legs?: unknown }).legs;
+  if (!Array.isArray(legs)) return [];
+  return (legs as LineLike[])
+    .filter((l) => l !== null && typeof l === 'object')
+    .map((l) => ({
+      account: accountWords(t, accounts, l.accountId ?? l.account),
+      amount: typeof l.amountMinor === 'number' ? formatMoney(Math.abs(l.amountMinor), currency) : null,
+      taxCode: typeof l.taxCode === 'string' && l.taxCode !== '' ? l.taxCode : null,
+    }));
+}
+
+/** The pinned figures (D162) as read-back rows, only the ones the engine could derive. */
+export function figureRows(t: T, f: VorschlagFigures): DetailRow[] {
+  const currency = f.currency ?? 'CHF';
+  const rows: DetailRow[] = [];
+  if (f.amountMinor !== null) {
+    rows.push({ key: '__amount', label: f.amountBasis === 'net' ? t('agent.card.figure.net') : t('agent.field.amount'), value: formatMoney(f.amountMinor, currency), money: true });
+  }
+  if (f.taxMinor !== null && f.grossMinor !== null) {
+    rows.push({ key: '__vat', label: t('agent.card.figure.vat'), value: formatMoney(f.taxMinor, currency), money: true });
+    rows.push({ key: '__gross', label: t('agent.card.figure.gross'), value: formatMoney(f.grossMinor, currency), money: true });
+  }
+  if (f.number !== null || f.numberPending) rows.push({ key: '__number', label: t('agent.card.figure.number'), value: f.number ?? t('agent.card.figure.draft') });
+  if (f.counterparty !== null) rows.push({ key: '__counterparty', label: t('agent.card.figure.counterparty'), value: f.counterparty });
+  if (f.recipient !== null) rows.push({ key: '__recipient', label: t('agent.card.figure.recipient'), value: f.recipient });
+  if (f.lineCount !== null) rows.push({ key: '__lines', label: t('agent.card.figure.lines'), value: String(f.lineCount) });
+  return rows;
+}
+
+/** The Freigabe level as `get_agent_dial` read it, for the read-back's last row. */
+export interface ReadbackLevel {
+  effective: 'ask' | 'auto';
+  strongDefault: boolean;
+}
+
+/**
+ * The read-back of a Vorschlag (D167 Details, D197 the detail pane): the pinned figures, the payload in
+ * words, who proposed it when, and the Freigabe level READ from the dial. Never JSON, never the verb in
+ * code, never the title's own text again.
+ */
+export function readbackRows(
+  t: T,
+  locale: Locale,
+  action: DraftedAction,
+  opts: { accountNames?: AccountNameMap; level?: ReadbackLevel | null; extra?: DetailRow[]; omit?: readonly string[] } = {},
+): DetailRow[] {
+  const figures = action.figures ?? null;
+  const rows: DetailRow[] = [...(opts.extra ?? [])];
+  const omit = new Set<string>(opts.omit ?? []);
+  if (bankLineOf(action) !== null) omit.add('bankTxnId'); // the link names the line; its id is no fact for a person
+  const thing = payloadTitle(action.payload);
+  if (thing !== null) omit.add(thing.key);
+  omit.add('source');
+  const hasLegs = Array.isArray(action.payload.lines) || (action.payload.target !== null && typeof action.payload.target === 'object' && Array.isArray((action.payload.target as { legs?: unknown }).legs));
+  if (figures !== null) {
+    rows.push(...figureRows(t, figures));
+  } else {
+    const lead = hasLegs ? null : payloadAmount(action.payload);
+    if (lead !== null) {
+      const currency = typeof action.payload.currency === 'string' ? action.payload.currency : 'CHF';
+      rows.push({ key: '__lead', label: t('agent.field.amount'), value: formatMoney(lead, currency), money: true });
+      omit.add('amountMinor');
+    }
+  }
+  rows.push(...argumentRows(t, locale, action.payload, action.payloadLabels ?? {}, omit, opts.accountNames ?? NO_ACCOUNTS));
+  const date = action.createdAt.length >= 10 ? formatDate(action.createdAt.slice(0, 10)) : action.createdAt;
+  rows.push({ key: '__proposed', label: t('agent.line.proposed'), value: t('agent.line.proposedValue', { date, actor: t('agent.line.agentActor') }) });
+  const level = opts.level ?? null;
+  if (level !== null) {
+    const word = level.effective === 'auto' ? t('agent.line.levelAuto') : level.strongDefault ? t('agent.line.levelAskAlways') : t('agent.line.levelAsk');
+    rows.push({ key: '__level', label: t('agent.line.level'), value: word, link: { to: '/agent?tab=berechtigungen', label: t('agent.line.levelLink') } });
+  }
+  return rows;
 }

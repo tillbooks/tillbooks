@@ -1,0 +1,55 @@
+{
+  "settingsHub": {
+    "title": "Settings",
+    "loading": "Loading the settings",
+    "areas": "Areas",
+    "pages": "Pages",
+    "openQuestions": "Open questions: {n}",
+    "question": "Open question. Suggested: {value}",
+    "accept": "Accept the suggestion",
+    "humanOnly": "Only a person changes this, never the agent.",
+    "areasChosen": "{n} of {total}",
+    "noneChosen": "None",
+    "saved": "Saved: {setting}",
+    "undo": "Undo",
+    "bounds": "From {min} to {max}",
+    "unit": {
+      "days": "days",
+      "percent": "%"
+    },
+    "search": {
+      "label": "Find a setting",
+      "placeholder": "Search",
+      "results": "Results",
+      "none": "No setting matches “{query}”."
+    },
+    "lock": {
+      "noRight": "You lack the right for this in this workspace."
+    },
+    "history": {
+      "name": "Changes",
+      "none": "Never changed.",
+      "default": "Default",
+      "you": "You",
+      "agent": "Agent",
+      "viaProposal": "The agent's proposal, approved by {person}",
+      "viaStanding": "Agent, with your permission for this area",
+      "plugin": "Extension, allowed by {person}"
+    },
+    "refusal": {
+      "unknown_setting": "This version of TILL does not know this setting.",
+      "invalid_setting_value": "This value is outside what the setting allows.",
+      "invalid_input": "This value does not fit.",
+      "belegnummer_display_clash": "This change could repeat a later voucher number {display} that is already taken. Choose another prefix, start number or numbering.",
+      "belegnummer_prefix_invalid": "A prefix is empty or up to 12 characters from {characters}, starts with a letter or a digit and does not end in a digit."
+    }
+  },
+  "help": {
+    "Settings": {
+      "title": "Settings",
+      "body": "Here you set how TILL works in this workspace. Pick an area on the left; the search at the top right finds any setting of every area in your own words, from the command search too. A change applies at once, and Undo brings the old value back. Hover a row for Back to the default and Changes: who changed what and when. What the agent may change is chosen under Agent and automation. Protected settings it only proposes, and you approve them.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

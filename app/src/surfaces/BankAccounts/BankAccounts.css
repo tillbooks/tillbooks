@@ -724,3 +724,63 @@ ul.bank-channel-accounts {
 .bank-channel-gap p {
   margin: 0;
 }
+
+/* D198: the settlement feeds, below the EBICS channel: a heading row with its icons, one row per source,
+   the editor on demand. Money-free: the rows carry addresses and states, so no tabular figures here. */
+.bank-settlement {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  margin-top: var(--t-space-6);
+}
+.bank-settlement-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+.bank-settlement-title {
+  margin: 0;
+  font-size: var(--t-font-md);
+  font-weight: 600;
+}
+.bank-settlement-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+.bank-settlement-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-3);
+  padding: var(--t-space-2) 0;
+  border-bottom: 1px solid var(--t-border);
+}
+.bank-settlement-name {
+  font-weight: 500;
+}
+.bank-settlement-url,
+.bank-settlement-last {
+  color: var(--t-text-dim);
+}
+.bank-settlement-token {
+  display: inline-flex;
+  align-items: center;
+}
+.bank-settlement-editor {
+  display: grid;
+  grid-template-columns: max-content minmax(12rem, 28rem);
+  align-items: center;
+  gap: var(--t-space-2) var(--t-space-3);
+}
+.bank-settlement-actions {
+  grid-column: 2;
+  display: flex;
+  gap: var(--t-space-2);
+}
+.bank-settlement-done {
+  margin: 0;
+}

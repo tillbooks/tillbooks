@@ -370,9 +370,10 @@ export function markDeal(ctx: WorkspaceContext, input: MarkDealInput): Result {
   if (!isDealStatus(input.status)) {
     return err('invalid_input', { field: 'status', allowed: ['open', 'won', 'lost'] });
   }
-  if (input.status === 'lost' && (typeof input.lostReason !== 'string' || input.lostReason.trim().length === 0)) {
-    return err('lost_reason_required', { dealId: deal.id });
-  }
+  // D204: a lost deal needs no typed reason. A given one is kept on the deal and in its activity; the
+  // activity row keeps who and when, and the lost stage itself says what happened.
+  const givenLostReason =
+    typeof input.lostReason === 'string' && input.lostReason.trim().length > 0 ? input.lostReason.trim() : null;
 
   const run = (): Result => {
     if (deal.status === input.status) {
@@ -392,7 +393,7 @@ export function markDeal(ctx: WorkspaceContext, input: MarkDealInput): Result {
       const stage = outcomeStage(ctx, deal.pipeline_id, input.status);
       if (stage !== undefined) stageId = stage.id;
       probability = input.status === 'won' ? 100 : 0;
-      lostReason = input.status === 'lost' ? (input.lostReason as string).trim() : null;
+      lostReason = input.status === 'lost' ? givenLostReason : null;
     }
     ctx.store.db
       .prepare(
@@ -402,7 +403,7 @@ export function markDeal(ctx: WorkspaceContext, input: MarkDealInput): Result {
       .run(input.status, stageId, probability, lostReason, now, ctx.workspaceId, deal.id);
     const bodies: Record<string, string> = {
       won: `Deal gewonnen: ${deal.title}`,
-      lost: `Deal verloren: ${deal.title} (${lostReason ?? ''})`,
+      lost: lostReason === null ? `Deal verloren: ${deal.title}` : `Deal verloren: ${deal.title} (${lostReason})`,
       open: `Deal wieder geöffnet: ${deal.title}`,
     };
     logActivity(ctx, {

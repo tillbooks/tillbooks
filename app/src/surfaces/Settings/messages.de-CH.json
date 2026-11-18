@@ -1,0 +1,55 @@
+{
+  "settingsHub": {
+    "title": "Einstellungen",
+    "loading": "Einstellungen werden geladen",
+    "areas": "Bereiche",
+    "pages": "Seiten",
+    "openQuestions": "Offene Fragen: {n}",
+    "question": "Offene Frage. Vorschlag: {value}",
+    "accept": "Vorschlag übernehmen",
+    "humanOnly": "Nur eine Person ändert das, nie der Agent.",
+    "areasChosen": "{n} von {total}",
+    "noneChosen": "Keine",
+    "saved": "Gespeichert: {setting}",
+    "undo": "Rückgängig",
+    "bounds": "Von {min} bis {max}",
+    "unit": {
+      "days": "Tage",
+      "percent": "%"
+    },
+    "search": {
+      "label": "Einstellung suchen",
+      "placeholder": "Suchen",
+      "results": "Treffer",
+      "none": "Keine Einstellung passt zu «{query}»."
+    },
+    "lock": {
+      "noRight": "Dafür fehlt dir das Recht in diesem Arbeitsbereich."
+    },
+    "history": {
+      "name": "Änderungen",
+      "none": "Noch nie geändert.",
+      "default": "Standard",
+      "you": "Du",
+      "agent": "Agent",
+      "viaProposal": "Vorschlag des Agenten, freigegeben von {person}",
+      "viaStanding": "Agent, mit deiner Erlaubnis für diesen Bereich",
+      "plugin": "Erweiterung, erlaubt von {person}"
+    },
+    "refusal": {
+      "unknown_setting": "Diese Einstellung kennt diese TILL-Version nicht.",
+      "invalid_setting_value": "Dieser Wert liegt ausserhalb dessen, was die Einstellung erlaubt.",
+      "invalid_input": "Dieser Wert passt nicht.",
+      "belegnummer_display_clash": "Mit dieser Änderung könnte eine spätere Belegnummer {display} wiederholen, die schon vergeben ist. Wähle ein anderes Präfix, eine andere Startnummer oder eine andere Nummerierung.",
+      "belegnummer_prefix_invalid": "Ein Präfix ist leer oder hat bis zu 12 Zeichen aus {characters}, beginnt mit einem Buchstaben oder einer Ziffer und endet nicht mit einer Ziffer."
+    }
+  },
+  "help": {
+    "Settings": {
+      "title": "Einstellungen",
+      "body": "Hier stellst du ein, wie TILL in diesem Arbeitsbereich arbeitet. Links wählst du einen Bereich, die Suche oben rechts findet jede Einstellung aller Bereiche mit deinen eigenen Worten, auch über die Befehlssuche. Eine Änderung gilt sofort, und Rückgängig holt den alten Wert zurück. Fährst du über eine Zeile, erscheinen Auf Standard zurück und Änderungen: wer was wann geändert hat. Was der Agent ändern darf, wählst du unter Agent und Automatik. Geschützte Einstellungen schlägt er nur vor, und du gibst sie frei.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

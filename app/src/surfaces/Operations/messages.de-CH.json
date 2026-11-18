@@ -4,7 +4,7 @@
       "title": "Vertrauen"
     },
     "indicator": {
-      "local": "Lokal, keine Verbindung",
+      "local": "Lokal",
       "unknown": "Nicht geprüft",
       "violated": "Eine Verbindung wurde geöffnet"
     },
@@ -148,7 +148,7 @@
       "infoLabel": "Was Publizieren bedeutet"
     },
     "location": {
-      "local": "Deine Bücher: eine einzelne Datei auf diesem Gerät ({path}). Nichts verlässt TILL von selbst.",
+      "local": "Deine Bücher: eine einzelne Datei auf diesem Gerät ({path}). Nichts aus deinen Büchern verlässt TILL von selbst.",
       "short": "Deine Bücher: {path}",
       "served": "Deine Bücher: eine Datei auf dieser Instanz; Export und Backup jederzeit.",
       "unknown": "Speicherort unbekannt.",

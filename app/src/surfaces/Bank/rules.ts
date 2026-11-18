@@ -157,6 +157,8 @@ export function matchInWords(t: T, s: Pick<BankStandard, 'counterpartyLabel' | '
  * legs; a Vorlage sends its scope, name and legs only.
  */
 export function ruleInputOf(payload: RulePayload): Record<string, unknown> {
+  // D208: the comment to the agent rides only when the person changed it ('' clears it); a Vorlage has none.
+  const note = payload.note !== undefined && payload.scope !== 'manual' ? { note: payload.note === '' ? null : payload.note } : {};
   if (payload.scope === 'manual') return { scope: 'manual', label: payload.label, legs: payload.legs, ...(payload.replaceStandardId !== undefined ? { replaceStandardId: payload.replaceStandardId } : {}) };
   const follow = payload.followUpStandardId !== null ? { followUpStandardId: payload.followUpStandardId } : {};
   const text = payload.matchText !== null ? { matchText: payload.matchText } : {};
@@ -168,6 +170,7 @@ export function ruleInputOf(payload: RulePayload): Record<string, unknown> {
       ...(payload.ignoreNote !== null ? { ignoreNote: payload.ignoreNote } : {}),
       ...text,
       ...follow,
+      ...note,
     };
   }
   const restLeg = payload.legs.find((leg) => leg.amount.kind === 'rest');
@@ -178,6 +181,7 @@ export function ruleInputOf(payload: RulePayload): Record<string, unknown> {
     ...text,
     ...(payload.viaAccountId !== null ? { viaAccountId: payload.viaAccountId } : {}),
     ...follow,
+    ...note,
   };
 }
 

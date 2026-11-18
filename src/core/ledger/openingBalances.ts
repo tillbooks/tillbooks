@@ -41,6 +41,7 @@ import { postEntryInternalChecked } from './innerPosting.js';
 import type { LineInput } from './postEntry.js';
 import { fiscalYearOf } from './periods.js';
 import { baseCurrencyOf } from '../fx/rates.js';
+import { isLiveNow } from './reversalChain.js';
 
 /**
  * KMU 9100 Eröffnungsbilanz, the classic clearing account for an opening position.
@@ -206,7 +207,7 @@ function hasChart(ctx: WorkspaceContext): boolean {
  * position dead, let `setOpeningBalances` stack a SECOND opening entry on top of a live one, and
  * double-count every account in it, which is the exact shape this capability exists to prevent.
  *
- * THE WALK TERMINATES by construction and needs no iteration cap: `postEntry` refuses a second
+ * THE WALK TERMINATES by construction (the shared walk in `reversalChain.ts` also carries a bound): `postEntry` refuses a second
  * reversal of the same target (`already_reversed`), so the chain is linear rather than branching, and
  * a reversal can only name a target that was already posted when it was written, so the chain runs
  * strictly backwards through creation order and cannot close a cycle.
@@ -223,17 +224,9 @@ function hasChart(ctx: WorkspaceContext): boolean {
  * path cannot silently make a pending storno cancel a live position.
  */
 function isLive(ctx: WorkspaceContext, entryId: string): boolean {
-  const nextReversal = ctx.store.db.prepare(
-    "SELECT id FROM journal_entry WHERE workspace_id = ? AND reverses_entry_id = ? AND status = 'posted'",
-  );
-  let current = entryId;
-  let depth = 0;
-  for (;;) {
-    const row = nextReversal.get(ctx.workspaceId, current) as { id: string } | undefined;
-    if (row === undefined) return depth % 2 === 0;
-    current = row.id;
-    depth += 1;
-  }
+  // D198 re-cut (paper critic r7 L7): the walk is the shared, public one (`reversalChain.ts`), so the
+  // settlement feed's LIVE NOW reads exactly this predicate instead of a copy.
+  return isLiveNow(ctx, entryId);
 }
 
 /**

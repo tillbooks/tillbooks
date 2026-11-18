@@ -237,6 +237,34 @@
         "permission_denied": "Dir fehlt das Recht zu buchen.",
         "fallback": "Die Saldierung konnte nicht gelesen oder gebucht werden. Es wurde nichts verändert."
       }
+    },
+    "feed": {
+      "title": "Abrechnungs-Feed",
+      "gap": "{source}: nicht abgeholt vom {from} bis {to}",
+      "show": "Ereignisse zeigen",
+      "tip": {
+        "missing": "{count} Ereignisse dieser Periode sind nicht im Buch ({amount} MWST)",
+        "earlier": "{count} frühere Ereignisse brauchen einen Blick: nicht gebucht, doppelt gebucht oder vom Feed geändert",
+        "double": "{count} Ereignisse sind doppelt gebucht",
+        "amended": "{count} Ereignisse hat der Feed geändert, nachdem der Import sie gebucht hat",
+        "overrideCheck": "{count} Ereignisse, die du als ausserhalb des Imports erledigt markiert hast, hat der Feed seither geändert",
+        "test": "Testzahlungen: {excluded} mit MWST ausgelassen ({vat}), {open} nicht aufgehoben, {booked} gebucht",
+        "ignored": "{count} Ereignisse mit MWST hast du in der Umsatz-Prüfung ignoriert ({vat} MWST ausgelassen)",
+        "residue": "Testzahlungen lassen {amount} auf dem Durchlaufkonto",
+        "unplaceable": "{count} Ereignisse kamen ohne ID aus dem Feed und lassen sich nicht benennen"
+      },
+      "col": {
+        "day": "Tag",
+        "amount": "Betrag",
+        "vat": "MWST",
+        "why": "Grund"
+      },
+      "reason": {
+        "missing": "nicht im Buch",
+        "booked_twice": "doppelt gebucht",
+        "amended": "vom Feed geändert",
+        "override_check": "Zahlen geändert, Override prüfen"
+      }
     }
   },
   "help": {

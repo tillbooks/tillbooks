@@ -270,7 +270,7 @@
       "reversed": "Storniert",
       "reverseTitle": "{type} vom {date} stornieren",
       "reverseBody": "Das bucht eine Korrekturbuchung mit heutigem Datum und passt das Verzeichnis an; die Originalbuchung bleibt sichtbar. Eine stornierte Anschaffung oder Eröffnungsbilanz schliesst die Anlage.",
-      "reverseReason": "Grund",
+      "reverseReason": "Notiz (freiwillig)",
       "reverseConfirm": "Stornieren",
       "reverseCancel": "Abbrechen",
       "reverseActionsLabel": "Aktionen für die Buchung vom {date}",
@@ -289,7 +289,7 @@
       },
       "proceedsSettled": "Der Erlösbeleg dieses Abgangs gilt noch. Storniere zuerst die Zahlung bzw. storniere die Rechnung oder schreibe sie voll gut, dann den Abgang.",
       "proceedsOverride": "In diesem Fall trotzdem stornieren",
-      "proceedsOverrideReason": "Grund für die Ausnahme",
+      "proceedsOverrideReason": "Notiz zur Ausnahme (freiwillig)",
       "proceedsStandsWarn": "Der Erlösbeleg dieses Abgangs gilt noch. Die Stornierung geht trotzdem durch (Einstellung) und nennt ihn."
     },
     "reconciliation": {
@@ -729,7 +729,7 @@
         "labourCost": "Arbeit (CHF)",
         "externalReference": "Externe Referenz",
         "notes": "Notizen",
-        "cancelReason": "Grund"
+        "cancelReason": "Notiz (freiwillig)"
       },
       "form": {
         "title": "Wartungseintrag",

@@ -201,3 +201,51 @@ describe('Tabs, the stylesheet (K-11)', () => {
     expect(css).toMatch(/transition:[^;]*var\(--t-motion-hover\)/);
   });
 });
+
+describe('Tabs, the panel is no focus stop of its own (D197)', () => {
+  it('a panel whose content holds a control is not a tab stop: Tab from the strip lands on the control', async () => {
+    render(<Host initial="notes" />);
+    const panel = screen.getByRole('tabpanel', { name: 'Notizen' });
+    expect(panel).not.toHaveAttribute('tabindex');
+    screen.getByRole('tab', { name: 'Notizen' }).focus();
+    await userEvent.tab();
+    expect(screen.getByRole('textbox', { name: 'Notiz' })).toHaveFocus();
+  });
+
+  it('a panel with nothing focusable keeps its stop, so a keyboard still reaches it', () => {
+    render(<Host />);
+    expect(screen.getByRole('tabpanel', { name: 'Adresse' })).toHaveAttribute('tabindex', '0');
+  });
+
+  it('a panel whose controls arrive later drops its stop as they land', async () => {
+    function Late() {
+      const [ready, setReady] = useState(false);
+      return (
+        <Tabs
+          tabs={[{ id: 'a', label: 'Liste', panel: ready ? <button type="button">Zeile</button> : <button type="button" onClick={() => setReady(true)} hidden>laden</button> }]}
+          activeId="a"
+          onChange={() => undefined}
+          label="Liste"
+        />
+      );
+    }
+    render(<Late />);
+    const panel = screen.getByRole('tabpanel', { name: 'Liste' });
+    expect(panel).not.toHaveAttribute('tabindex');
+    // The shared panel model too: one panel, labelled by the active tab.
+    render(
+      <Tabs tabs={[{ id: 'x', label: 'Leer' }]} activeId="x" onChange={() => undefined} label="Geteilt">
+        <p>Nur Text</p>
+      </Tabs>,
+    );
+    expect(screen.getByRole('tabpanel', { name: 'Leer' })).toHaveAttribute('tabindex', '0');
+  });
+
+  it('draws no focus frame on a panel: no ring, no border colour', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/components/Tabs.css'), 'utf8');
+    const rule = /\.tabs-panel:focus,\s*\.tabs-panel:focus-visible\s*\{([^}]*)\}/.exec(css);
+    expect(rule).not.toBeNull();
+    expect(rule![1]).toMatch(/box-shadow:\s*none/);
+    expect(rule![1]).not.toMatch(/--t-focus-ring|--t-focus-border/);
+  });
+});

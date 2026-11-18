@@ -1,0 +1,119 @@
+/**
+ * D197: the Vorschläge tab, list and detail at full width (no max-width cap, audit F-01). The list column
+ * takes what the rows need, the detail the rest; at 760 px and below one of the two shows at a time.
+ */
+.vq {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  min-width: 0;
+}
+
+/* One toolbar line of fixed height: the selection bar takes its place while rows are ticked, so nothing
+   below it moves. */
+.vq-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-2) var(--t-space-3);
+  min-height: var(--t-control-h);
+}
+
+.vq-toolbar .filter-bar {
+  flex: 1 1 320px;
+  min-width: 0;
+  margin: 0;
+}
+
+.vq-count {
+  min-width: 2ch;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+}
+
+.vq-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--t-space-6);
+  align-items: start;
+  min-width: 0;
+}
+
+/* The detail column exists only once a row is selected; at rest the list takes the whole width. */
+.vq--detail .vq-body {
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 34%, 640px);
+}
+
+.vq--narrow .vq-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.vq-list {
+  min-width: 0;
+  border-top: 1px solid var(--t-border);
+}
+
+.vq-list:focus {
+  outline: none;
+}
+
+.vq-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The detail stays in view while the list scrolls. */
+.vq-detail {
+  position: sticky;
+  top: var(--t-space-3);
+  min-width: 0;
+  padding-left: var(--t-space-6);
+  border-left: 1px solid var(--t-border);
+}
+
+.vq--narrow .vq-detail {
+  position: static;
+  padding-left: 0;
+  border-left: 0;
+}
+
+/* The tick box keeps its 16px look; its hit area reaches 32px (the D116 dense band). */
+.vq-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 32px;
+  cursor: pointer;
+}
+
+.vq-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--t-space-2);
+  padding: var(--t-space-4) 0;
+  color: var(--t-text-dim);
+}
+
+.vq-empty p {
+  margin: 0;
+}
+
+@media (max-width: 1100px) {
+  .vq--detail:not(.vq--narrow) .vq-body {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
+    gap: var(--t-space-4);
+  }
+
+  .vq-detail {
+    padding-left: var(--t-space-4);
+  }
+}
+
+/* Touch width: the tick box's target reaches 44px. */
+.vq--narrow .vq-check {
+  width: 44px;
+  height: 44px;
+}

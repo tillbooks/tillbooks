@@ -38,10 +38,6 @@ export const BANK_TARGET_REFUSALS: Readonly<Record<string, BankTargetSentence>> 
     en: 'This contact was merged into another one. Book to the contact that remains.',
     'de-CH': 'Dieser Kontakt wurde mit einem anderen zusammengeführt. Buche auf den Kontakt, der bleibt.',
   },
-  reason_required: {
-    en: 'A booking that differs from the workspace setting needs a reason.',
-    'de-CH': 'Weicht eine Buchung von der Einstellung ab, braucht sie einen Grund.',
-  },
   allocation_contact_mismatch: {
     en: 'All documents settled by one bank line belong to one contact.',
     'de-CH': 'Alle Belege, die eine Bankzeile begleicht, gehören zu einem Kontakt.',

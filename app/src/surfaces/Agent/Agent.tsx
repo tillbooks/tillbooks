@@ -6,9 +6,9 @@
  *    were made and none landed: the §3e dash-versus-zero rule, shared with Berechtigungen via ONE
  *    helper. Its empty state (no session ever) deep-links to Verbindung, since connecting a client is
  *    the real next step.
- *  - Vorschläge: every pending drafted action, oldest first (the oldest is the one at risk of going
- *    stale), as the SAME one-line component Pendenzen renders (D167), grouped Geld/System above 20.
- *    Pendenzen is where a Vorschlag is decided in the normal course; this tab is the full list.
+ *  - Vorschläge (D197): list and detail at full width, the Status control (Offen, Genehmigt, Abgelehnt,
+ *    Veraltet), search and facets, the batch, icon-only decisions, and the ONE row Pendenzen shares
+ *    (`Vorschlaege.tsx`, `VorschlagRow.tsx`).
  *  - Berechtigungen (was Vertrauen): the ten-row evidence, over a stated window, as the shared
  *    DataTable so the figure columns align cleanly, plus the D103 grant control (owner-gated, absent
  *    without `manage_agent_dial`, never disabled-and-scolding), the strong-default reason, the
@@ -20,7 +20,7 @@
  *    recently connected clients.
  */
 import { IconButton } from '../../components/IconButton';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useT, useI18n, formatDate } from '../../i18n';
@@ -36,30 +36,21 @@ import { SurfaceHelp } from '../../components/SurfaceHelp';
 import { Tabs, type TabItem } from '../../components/Tabs';
 import { DataTable, type DataTableColumn } from '../../components/DataTable';
 import { CopyButton } from '../../components/CopyButton';
-import { ActionFeedback } from '../../components/ActionFeedback';
-import { useBookAgain } from '../../components/BookAgain';
 import { MCP_ENDPOINT } from '../../lib/mcp-transport';
 import { connectSnippet, studioVersion } from './connectSnippet';
 import { TurnList } from './TurnList';
-import { VorschlagLine } from './VorschlagLine';
-import { useDialLevels } from './useDialLevels';
-import { useAccountNames } from './useAccountNames';
+import { Vorschlaege } from './Vorschlaege';
 import {
   GELD_CAPABILITIES,
-  QUEUE_GROUP_THRESHOLD,
   SYSTEM_CAPABILITIES,
   countCell,
   dismissSuggestion,
   isSuggestionDismissed,
-  parseDrafted,
   parseSessionDetail,
   parseSessions,
   parseTrust,
   type AgentSessionDetail,
   type AgentSessionRow,
-  DECIDED_MESSAGE,
-  VORSCHLAG_STALE,
-  type DraftedAction,
   type TrustRow,
   type TrustSummary,
 } from './model';
@@ -224,173 +215,6 @@ function Gespraeche({
         rowLabel={(row) => `${dateOf(row.lastAt)}, ${row.clientLabel ?? t('agent.archive.unknownClient')}`}
         emptyState={<p className="agent-month-empty">{t('agent.archive.monthEmpty')}</p>}
       />
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------------- Vorschläge */
-
-function Vorschlaege({ onConnect }: { onConnect?: () => void }) {
-  const t = useT();
-  const client = useClient();
-  const workspaceId = useWorkspaceId();
-  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [error, setError] = useState<Err | undefined>(undefined);
-  const [actions, setActions] = useState<DraftedAction[]>([]);
-  const [busy, setBusy] = useState(false);
-  // The Commit moment (D122 D-I) for a decision: the card leaves the queue with the re-read (no exit
-  // animation on a list item), so the acknowledgement lands on the banner that names the outcome, as
-  // the bank inbox does for the same two verbs. The `id` re-mounts it, so each approval lands again.
-  const [decided, setDecided] = useState<{ id: number; kind: keyof typeof DECIDED_MESSAGE } | null>(null);
-  // N02 R1: an approval that would book a receipt a second time asks the person for the reason first.
-  const { ask: askBookAgain, dialog: bookAgainDialog } = useBookAgain();
-  const decidedSeq = useRef(0);
-  // D167: the Freigabe level each line names is READ from the dial, re-read after a decision (a
-  // "künftig automatisch" grant moves it).
-  const dial = useDialLevels(true, decided?.id ?? 0);
-  const accountNames = useAccountNames(actions.length > 0);
-
-  // A decision belongs to the workspace it was made in: a switch drops its banner, and an answer that
-  // lands after the switch is discarded (§H-TENANT in the DOM). The ref is the
-  // workspace on screen NOW; the closure of an in-flight `decide` still holds the one it began under.
-  const activeWs = useRef(workspaceId);
-  activeWs.current = workspaceId;
-  useEffect(() => setDecided(null), [workspaceId]);
-
-  const load = useCallback(async () => {
-    if (workspaceId === null) return;
-    const res = await client.call('list_drafted_actions', { workspaceId });
-    if (isErr(res.body)) {
-      setError(res.body);
-      setState('error');
-      return;
-    }
-    setActions(parseDrafted(res.body));
-    setState('ready');
-  }, [client, workspaceId]);
-
-  useEffect(() => {
-    setState('loading');
-    void load();
-  }, [load]);
-
-  const decide = useCallback(
-    async (
-      verb: 'approve_drafted_action' | 'reject_drafted_action',
-      actionId: string,
-      allowFuture: boolean,
-      reason?: string,
-    ) => {
-      if (workspaceId === null || busy) return;
-      const ws = workspaceId;
-      setBusy(true);
-      setDecided(null);
-      const send = (confirmation: Record<string, unknown> = {}) =>
-        client.call(verb, {
-          workspaceId: ws,
-          actionId,
-          ...(allowFuture ? { allowFuture: true } : {}),
-          ...(reason !== undefined ? { reason } : {}),
-          ...confirmation,
-        });
-      const res = await send();
-      setBusy(false);
-      // A switch overtook the answer: neither its banner nor a re-read of the OLD queue may paint the
-      // workspace now on screen (that one's own load already ran on the switch).
-      if (activeWs.current !== ws) return;
-      if (!isErr(res.body)) {
-        setDecided({ id: ++decidedSeq.current, kind: verb === 'approve_drafted_action' ? 'approved' : 'rejected' });
-      } else if (res.body.error === VORSCHLAG_STALE) {
-        // N1: the record changed after the proposal; nothing ran and the row is void. Say so, since
-        // the card leaves the queue with the re-read below.
-        setDecided({ id: ++decidedSeq.current, kind: 'stale' });
-      } else if (res.body.error === 'holders_changed') {
-        // N02 R1: the receipt was booked elsewhere since the card was drawn; the re-read shows where.
-        setDecided({ id: ++decidedSeq.current, kind: 'holdersChanged' });
-      } else if (
-        askBookAgain(res.body, async (confirmation) => {
-          const again = await send({ ...confirmation });
-          if (activeWs.current !== ws) return null;
-          if (isErr(again.body)) {
-            if (again.body.error === 'holders_changed') {
-              setDecided({ id: ++decidedSeq.current, kind: 'holdersChanged' });
-              void load();
-              return null;
-            }
-            return again.body;
-          }
-          setDecided({ id: ++decidedSeq.current, kind: 'approved' });
-          void load();
-          return null;
-        })
-      ) {
-        return;
-      }
-      void load();
-    },
-    [askBookAgain, busy, client, load, workspaceId],
-  );
-
-  if (state === 'loading') return <Skeleton rows={3} height={48} />;
-  if (state === 'error') return <ErrorBanner error={error} context="read" onRetry={() => void load()} />;
-  // The empty state is checked against the SAME list the success state renders (design §3f). K-33:
-  // a proposal only ever comes from a connected agent, so the way forward is the connection.
-  const ack: ReactNode =
-    decided === null ? null : (
-      <ActionFeedback
-        key={decided.id}
-        tone={decided.kind === 'approved' ? 'success' : decided.kind === 'stale' || decided.kind === 'holdersChanged' ? 'warn' : 'info'}
-        message={t(DECIDED_MESSAGE[decided.kind])}
-        landed={decided.kind === 'approved'}
-        onDismiss={() => setDecided(null)}
-        dismissLabel={t('agent.card.ackDismiss')}
-      />
-    );
-  if (actions.length === 0) {
-    return (
-      <>
-        {ack}
-        <EmptyState
-          title={t('agent.queue.empty')}
-          hint={t('agent.queue.emptyHint')}
-          action={onConnect !== undefined ? { label: t('agent.archive.empty.action'), onClick: onConnect } : undefined}
-        />
-      </>
-    );
-  }
-
-  // One line per proposal, every Genehmigen a secondary: a list spends no accent (D167).
-  const card = (action: DraftedAction) => (
-    <VorschlagLine
-      key={action.actionId}
-      action={action}
-      dial={dial}
-      accountNames={accountNames}
-      onApprove={(id, allow) => void decide('approve_drafted_action', id, allow)}
-      onReject={(id, reason) => void decide('reject_drafted_action', id, false, reason)}
-      busy={busy}
-    />
-  );
-
-  if (actions.length <= QUEUE_GROUP_THRESHOLD) {
-    return (
-      <div className="agent-queue">
-        {ack}
-        {bookAgainDialog}
-        {actions.map(card)}
-      </div>
-    );
-  }
-  const geld = actions.filter((a) => (GELD_CAPABILITIES as readonly string[]).includes(a.dialCapability ?? ''));
-  const system = actions.filter((a) => !(GELD_CAPABILITIES as readonly string[]).includes(a.dialCapability ?? ''));
-  return (
-    <div className="agent-queue">
-      {ack}
-      {bookAgainDialog}
-      <h2 className="agent-group-head">{t('agent.queue.group.geld')}</h2>
-      {geld.map(card)}
-      <h2 className="agent-group-head">{t('agent.queue.group.system')}</h2>
-      {system.map(card)}
     </div>
   );
 }
@@ -854,7 +678,7 @@ export function Agent() {
       // tab switch, not a route change, so no new routed surface is introduced.
       panel: <Gespraeche initialSessionId={initialSessionId} onConnect={() => setTab('verbindung')} />,
     },
-    { id: 'vorschlaege', label: t('agent.tab.vorschlaege'), panel: <Vorschlaege onConnect={() => setTab('verbindung')} /> },
+    { id: 'vorschlaege', label: t('agent.tab.vorschlaege'), panel: <Vorschlaege /> },
     { id: 'berechtigungen', label: t('agent.tab.berechtigungen'), panel: <Berechtigungen /> },
     { id: 'verbindung', label: t('agent.tab.verbindung'), panel: <Verbindung /> },
   ];

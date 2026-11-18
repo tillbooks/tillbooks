@@ -25,6 +25,15 @@ function renderTree(initialPath = '/overview', workspaceId: string | null = null
   return renderWithRail(<NavTree />, { path: initialPath, workspaceId, engine });
 }
 
+/** D210: the compact menu hides Lager, Anlagen and Projekte; a test of those rows opens the whole menu. */
+async function renderAllAreas(initialPath = '/overview') {
+  const engine = fakePrefsEngine();
+  engine.put('ws_a', 'nav.menu_scope', 'all');
+  const view = renderTree(initialPath, 'ws_a', engine);
+  await waitFor(() => expect(header('Projekte')).toBeInTheDocument());
+  return view;
+}
+
 /** Let the preference store's read (and a write in flight) land inside act. */
 const settle = async (): Promise<void> => {
   await act(async () => {
@@ -58,18 +67,56 @@ beforeEach(() => {
 });
 
 describe('the default-collapsed shape (the rail never scrolls)', () => {
-  it('shows only the six daily leaves and the nine group headers on a fresh workspace', () => {
+  it('shows only the two daily leaves and the five group headers on a fresh workspace', () => {
     renderTree('/overview');
     const rows = treeitems();
-    // 6 always-visible daily leaves + 9 collapsed group headers = 15 rows, well under a scroll.
-    expect(rows).toHaveLength(15);
-    expect(rows.length).toBeLessThanOrEqual(18);
+    // D210: 2 always-visible daily leaves + 5 collapsed group headers = 7 rows, well under a scroll.
+    expect(rows).toHaveLength(7);
+    expect(rows.map((el) => el.textContent?.trim())).toEqual(
+      expect.arrayContaining(['Übersicht', 'Pendenzen', 'Bank', 'Verkauf', 'Einkauf', 'Buchhaltung', 'Stammdaten']),
+    );
+    expect(screen.queryByRole('treeitem', { name: 'Projekte' })).toBeNull();
+  });
+
+  it('shows Projekte, Lager and Anlagen once the menu scope is all', async () => {
+    await renderAllAreas('/overview');
+    expect(treeitems()).toHaveLength(8);
+    expect(header('Projekte')).toBeInTheDocument();
   });
 
   it('keeps exactly one node in the tab order (roving tabindex)', () => {
     renderTree('/overview');
     const inTabOrder = treeitems().filter((el) => el.getAttribute('tabindex') === '0');
     expect(inTabOrder).toHaveLength(1);
+  });
+});
+
+describe('D201: a group opens with a height animation, its rows mounted and inert while closed', () => {
+  it('keeps a closed group body mounted, inert and hidden from assistive tech, and opens it in place', async () => {
+    renderTree('/overview');
+    const stammdaten = header('Stammdaten');
+    const body = stammdaten.nextElementSibling as HTMLElement;
+    expect(body).toHaveClass('rail-tree-body');
+    // Closed: the rows are in the DOM (so the height can animate) but inert and out of the a11y tree.
+    expect(body.hasAttribute('data-open')).toBe(false);
+    expect(body.hasAttribute('inert')).toBe(true);
+    expect(body).toHaveAttribute('aria-hidden', 'true');
+    expect(body.querySelector('[data-tree-navid="contacts"]')).not.toBeNull();
+    expect(screen.queryByRole('treeitem', { name: 'Kontakte' })).toBeNull();
+    expect(stammdaten).not.toHaveAttribute('aria-owns');
+    // Open: the same element, now live, owned by its header.
+    await userEvent.click(stammdaten.querySelector('.rail-chevron')!);
+    expect(body.hasAttribute('data-open')).toBe(true);
+    expect(body.hasAttribute('inert')).toBe(false);
+    expect(body).not.toHaveAttribute('aria-hidden');
+    expect(screen.getByRole('treeitem', { name: 'Kontakte' })).toBeInTheDocument();
+    expect(header('Stammdaten')).toHaveAttribute('aria-owns', body.querySelector('[role="group"]')!.id);
+  });
+
+  it('never marks a leaf inside a closed group as the current page', () => {
+    // /journal lights the Journal leaf and opens Buchhaltung; no other mounted row carries the mark.
+    renderTree('/journal');
+    expect(document.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
   });
 });
 
@@ -103,36 +150,36 @@ describe('keyboard navigation (WAI-ARIA treeview)', () => {
     expect(stammdaten).toHaveFocus();
 
     await userEvent.keyboard('{ArrowRight}'); // step to first child
-    expect(screen.getByRole('treeitem', { name: 'Konten' })).toHaveFocus();
+    expect(screen.getByRole('treeitem', { name: 'Kontakte' })).toHaveFocus();
 
     await userEvent.keyboard('{ArrowLeft}'); // from a leaf, step out to the parent
     expect(stammdaten).toHaveFocus();
 
     await userEvent.keyboard('{ArrowLeft}'); // collapse in place
     expect(stammdaten).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByRole('treeitem', { name: 'Konten' })).toBeNull();
+    expect(screen.queryByRole('treeitem', { name: 'Kontakte' })).toBeNull();
   });
 
   it('toggles a node with Space', async () => {
     renderTree('/overview');
-    const berichte = screen.getByRole('treeitem', { name: 'Berichte' });
-    focusItem(berichte);
-    expect(berichte).toHaveAttribute('aria-expanded', 'false');
+    const buchhaltung = screen.getByRole('treeitem', { name: 'Buchhaltung' });
+    focusItem(buchhaltung);
+    expect(buchhaltung).toHaveAttribute('aria-expanded', 'false');
     await userEvent.keyboard(' ');
-    expect(berichte).toHaveAttribute('aria-expanded', 'true');
+    expect(buchhaltung).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('activates a leaf with Enter, navigating to its route', async () => {
     renderTree('/overview');
-    focusItem(screen.getByRole('treeitem', { name: 'Agent' }));
+    focusItem(screen.getByRole('treeitem', { name: 'Pendenzen' }));
     await userEvent.keyboard('{Enter}');
-    expect(screen.getByTestId('loc')).toHaveTextContent('/agent');
+    expect(screen.getByTestId('loc')).toHaveTextContent('/attention');
   });
 });
 
 describe('deep-link auto-expand', () => {
-  it('opens the ancestor chain so a deep-linked leaf is visible without a stored preference', () => {
-    renderTree('/inventory-alerts');
+  it('opens the ancestor chain so a deep-linked leaf is visible without a stored preference', async () => {
+    await renderAllAreas('/inventory-alerts');
     expect(screen.getByRole('treeitem', { name: 'Stammdaten' })).toHaveAttribute('aria-expanded', 'true');
     // The Lager parent names no leaf since D152 (its landing leaf is "Lagerbestand", the warehouses
     // leaf "Lagerorte"), so it is the one treeitem with that name. Both being open is what makes the
@@ -204,9 +251,9 @@ describe('F-05: leaves are real links, headers are sentence case, the badge is a
 
   it('a plain click routes in place (no full page load), a modifier click is left to the browser', async () => {
     renderTree('/overview');
-    const leaf = screen.getByRole('treeitem', { name: 'Aufgaben' });
+    const leaf = screen.getByRole('treeitem', { name: 'Pendenzen' });
     await userEvent.click(leaf);
-    expect(screen.getByTestId('loc')).toHaveTextContent('/tasks');
+    expect(screen.getByTestId('loc')).toHaveTextContent('/attention');
     // With a modifier held the handler steps aside: the click keeps its default (the browser's own
     // new-tab behaviour on a real href) and the in-app route does not move.
     const modified = new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true, button: 0 });
@@ -223,14 +270,14 @@ describe('F-05: leaves are real links, headers are sentence case, the badge is a
     });
     document.removeEventListener('click', observe);
     expect(leftToBrowser).toBe(true);
-    expect(screen.getByTestId('loc')).toHaveTextContent('/tasks');
+    expect(screen.getByTestId('loc')).toHaveTextContent('/attention');
   });
 
   it('the pin star inside a leaf toggles the favourite without navigating', async () => {
     renderTree('/overview');
-    const star = screen.getByRole('button', { name: 'Aufgaben zu den Favoriten hinzufügen' });
+    const star = screen.getByRole('button', { name: 'Pendenzen zu den Favoriten hinzufügen' });
     await userEvent.click(star);
-    expect(screen.getByRole('button', { name: 'Aufgaben aus den Favoriten entfernen' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Pendenzen aus den Favoriten entfernen' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('loc')).toHaveTextContent('/overview');
   });
 
@@ -243,23 +290,43 @@ describe('F-05: leaves are real links, headers are sentence case, the badge is a
   });
 });
 
-describe('D135: a parent navigates to its first child, the chevron only toggles', () => {
-  it('navigates a group header to its first child and expands it on a row click', async () => {
+describe('D201: a header opens its overview page and expands, the chevron only toggles', () => {
+  it('opens a group header on its overview page and expands it on a row click, the header lit', async () => {
     renderTree('/overview');
     const stammdaten = header('Stammdaten');
     expect(stammdaten).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(stammdaten);
-    // Stammdaten leads with Konten (/accounts): the header lands on that first child and opens.
-    expect(screen.getByTestId('loc')).toHaveTextContent('/accounts');
+    // Menu pick A (D201): the header lands on the area overview, not on its first page (D135).
+    expect(screen.getByTestId('loc')).toHaveTextContent('/area/master-data');
+    expect(header('Stammdaten')).toHaveAttribute('aria-expanded', 'true');
+    // The overview has no leaf: the header carries the one mark, and the tab stop.
+    expect(header('Stammdaten')).toHaveAttribute('aria-current', 'page');
+    expect(document.querySelectorAll('[aria-current]')).toHaveLength(1);
+    expect(header('Stammdaten')).toHaveAttribute('tabindex', '0');
+  });
+
+  it('folds the group on a second click while its overview is open, without leaving it', async () => {
+    renderTree('/overview');
+    await userEvent.click(header('Stammdaten'));
+    await userEvent.click(header('Stammdaten'));
+    expect(header('Stammdaten')).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByTestId('loc')).toHaveTextContent('/area/master-data');
+  });
+
+  it('opens a nested parent on its own overview page', async () => {
+    await renderAllAreas('/overview');
+    await userEvent.click(header('Stammdaten')); // open the group first
+    await userEvent.click(header('Lager'));
+    expect(screen.getByTestId('loc')).toHaveTextContent('/area/lager-group');
+    expect(header('Lager')).toHaveAttribute('aria-expanded', 'true');
     expect(header('Stammdaten')).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('navigates a nested parent to its own first child leaf', async () => {
-    renderTree('/overview');
-    await userEvent.click(header('Stammdaten')); // open the group first
-    await userEvent.click(header('Lager'));
-    expect(screen.getByTestId('loc')).toHaveTextContent('/inventory');
+  it('opens the group of an overview a deep link lands on', async () => {
+    await renderAllAreas('/area/lager-group');
+    expect(header('Stammdaten')).toHaveAttribute('aria-expanded', 'true');
     expect(header('Lager')).toHaveAttribute('aria-expanded', 'true');
+    expect(header('Lager')).toHaveAttribute('aria-current', 'page');
   });
 
   it('toggles with the chevron WITHOUT navigating, so a peek never leaves the page', () => {
@@ -277,27 +344,26 @@ describe('D135: a parent navigates to its first child, the chevron only toggles'
     expect(screen.getByTestId('loc')).toHaveTextContent('/overview');
   });
 
-  it('navigates and expands on Enter', async () => {
+  it('opens the overview and expands on Enter', async () => {
     renderTree('/overview');
-    focusItem(header('Berichte'));
+    focusItem(header('Buchhaltung'));
     await userEvent.keyboard('{Enter}');
-    // Berichte leads with its first report door (/reports): Enter lands there and opens.
-    expect(screen.getByTestId('loc')).toHaveTextContent('/reports');
-    expect(header('Berichte')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('loc')).toHaveTextContent('/area/accounting');
+    expect(header('Buchhaltung')).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('leaves Space a pure toggle: it opens the group but does not navigate', async () => {
     renderTree('/overview');
-    focusItem(header('Berichte'));
+    focusItem(header('Buchhaltung'));
     await userEvent.keyboard(' ');
-    expect(header('Berichte')).toHaveAttribute('aria-expanded', 'true');
+    expect(header('Buchhaltung')).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByTestId('loc')).toHaveTextContent('/overview');
   });
 });
 
-describe('a group and the page that shares its navId (Projekte, Einkauf, Berichte) keep apart', () => {
+describe('a group and the page that shares its navId (Projekte, Einkauf) keep apart', () => {
   it('keeps ONE tab stop and steps from the Projekte header down to the Projekte page', async () => {
-    renderTree('/time');
+    await renderAllAreas('/time');
     const group = header('Projekte');
     expect(group).toHaveAttribute('aria-expanded', 'true');
     // The open page (Zeiterfassung) holds the tab stop; the group and its same-id page do not both.
@@ -310,19 +376,19 @@ describe('a group and the page that shares its navId (Projekte, Einkauf, Bericht
   });
 });
 
-describe('D135: the top-level headed groups behave as an accordion', () => {
+describe('D135: the top-level headed groups behave as an accordion (unchanged by D201)', () => {
   it('collapses an open sibling group when another top-level group opens', async () => {
     renderTree('/overview');
     await userEvent.click(header('Stammdaten'));
     expect(header('Stammdaten')).toHaveAttribute('aria-expanded', 'true');
-    await userEvent.click(header('Berichte'));
-    expect(header('Berichte')).toHaveAttribute('aria-expanded', 'true');
-    // At most one top-level group open at a time: Stammdaten closed when Berichte opened.
+    await userEvent.click(header('Buchhaltung'));
+    expect(header('Buchhaltung')).toHaveAttribute('aria-expanded', 'true');
+    // At most one top-level group open at a time: Stammdaten closed when Buchhaltung opened.
     expect(header('Stammdaten')).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('does not apply the accordion to nested parents (they keep their independent state)', async () => {
-    renderTree('/overview');
+    await renderAllAreas('/overview');
     await userEvent.click(header('Stammdaten')); // open the group
     await userEvent.click(header('Lager'));
     await userEvent.click(header('Anlagen'));

@@ -44,7 +44,7 @@ describe('Skeleton, the shape props (K-34)', () => {
     const { container } = renderWithI18n(<Skeleton rows={8} columns={4} height={112} />);
     const region = container.querySelector('.skeleton-region') as HTMLElement;
     expect(region).toHaveClass('skeleton-region--grid');
-    expect(region.style.gridTemplateColumns).toBe('repeat(4, minmax(0, 1fr))');
+    expect(region.style.gridTemplateColumns).toMatch(/^repeat\(4, minmax\(0(px)?, 1fr\)\)$/);
     const blocks = Array.from(container.querySelectorAll<HTMLElement>('.skeleton'));
     expect(blocks).toHaveLength(8);
     for (const block of blocks) {

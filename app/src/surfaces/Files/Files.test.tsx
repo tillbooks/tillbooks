@@ -197,7 +197,7 @@ describe('Dateien, the five states', () => {
 });
 
 describe('N02 R1: a new version of a booked receipt', () => {
-  it('asks for the reason, then sends the same version with it', async () => {
+  it('D204 asks for the confirmation, then sends the same version with bookAgain and no reason', async () => {
     const user = userEvent.setup();
     const versions: Record<string, unknown>[] = [];
     renderFiles({
@@ -215,11 +215,11 @@ describe('N02 R1: a new version of a booked receipt', () => {
     await user.upload(within(drawer).getByLabelText('Neue Version'), new File(['%PDF-1.4 x'], 'neu.pdf', { type: 'application/pdf' }));
     const ask = await screen.findByRole('alertdialog', { name: 'Gebuchten Beleg ersetzen' });
     expect(within(ask).getByText('je_5')).toBeInTheDocument();
-    fireEvent.change(within(ask).getByLabelText('Grund'), { target: { value: 'Falsche Seite' } });
     fireEvent.click(within(ask).getByRole('button', { name: 'Trotzdem ersetzen' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(versions).toHaveLength(2);
-    expect(versions[1]).toMatchObject({ fileId: 'file_1', bookAgain: true, overrideReason: 'Falsche Seite', idempotencyKey: versions[0]?.idempotencyKey });
+    expect(versions[1]).toMatchObject({ fileId: 'file_1', bookAgain: true, idempotencyKey: versions[0]?.idempotencyKey });
+    expect(versions[1]).not.toHaveProperty('overrideReason');
   });
 });
 
@@ -651,11 +651,11 @@ describe('the shared linked-files panel', () => {
     await user.upload(screen.getByLabelText('Mit Datensatz verknüpfen'), new File(['x'], 'beleg.pdf', { type: 'application/pdf' }));
     const dialog = await screen.findByRole('alertdialog', { name: 'Beleg schon gebucht' });
     expect(within(dialog).getByText('Kreditorenrechnung')).toBeInTheDocument();
-    await user.type(within(dialog).getByLabelText('Grund'), 'Teillieferung');
     await user.click(within(dialog).getByRole('button', { name: 'Trotzdem buchen' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(links).toHaveLength(2);
-    expect(links[1]).toMatchObject({ bookAgain: true, overrideReason: 'Teillieferung', idempotencyKey: links[0]?.idempotencyKey });
+    expect(links[1]).toMatchObject({ bookAgain: true, idempotencyKey: links[0]?.idempotencyKey });
+    expect(links[1]).not.toHaveProperty('overrideReason');
   });
 
   // F8: attaching is upload THEN link, so the affordance needs BOTH `manage_files` and the target

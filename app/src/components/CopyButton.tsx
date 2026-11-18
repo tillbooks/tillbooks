@@ -27,6 +27,10 @@ export interface CopyButtonProps {
    * which is fine when the value's own label sits immediately beside it.
    */
   label?: string;
+  /** D195: the resting words ("Referenz kopieren"); "Kopieren" when absent. */
+  idleText?: string;
+  /** D195: the trigger's class, replacing the ghost button (a quiet text link in the bank strip). */
+  className?: string;
 }
 
 type Outcome = 'idle' | 'copied' | 'failed';
@@ -34,7 +38,7 @@ type Outcome = 'idle' | 'copied' | 'failed';
 /** How long the confirmation stays before the button returns to its resting label. */
 const SETTLE_MS = 2000;
 
-export function CopyButton({ value, label }: CopyButtonProps) {
+export function CopyButton({ value, label, idleText, className }: CopyButtonProps) {
   const t = useT();
   const [outcome, setOutcome] = useState<Outcome>('idle');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -69,12 +73,12 @@ export function CopyButton({ value, label }: CopyButtonProps) {
   }
 
   const text =
-    outcome === 'copied' ? t('copy.copied') : outcome === 'failed' ? t('copy.failed') : t('copy.action');
+    outcome === 'copied' ? t('copy.copied') : outcome === 'failed' ? t('copy.failed') : (idleText ?? t('copy.action'));
 
   return (
     <button
       type="button"
-      className="btn btn--ghost btn--sm copy-button"
+      className={className ?? 'btn btn--ghost btn--sm copy-button'}
       aria-label={outcome === 'idle' ? (label ?? t('copy.action')) : text}
       onClick={() => void copy()}
     >

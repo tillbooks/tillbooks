@@ -36,6 +36,7 @@ import { postEntry, softCloseMonth } from '../../dist/core/ledger/index.js';
 import { ATTENTION_PROVIDERS } from '../../dist/core/attention/index.js';
 import { must, refused, assertClaimInvariantHolds, secondWorkspace, postedBill, SAVINGS_IBAN } from './bank-inbox-support.mjs';
 import { ruleWorld, debits, bookAsProposed, autopilot, runs, decisionOf, at, entryCount, proposalOf, TELCO, TELCO_IBAN } from './n04-autobook-support.mjs';
+import { assertNotApplied } from '../settings/support.mjs';
 
 afterEach(assertClaimInvariantHolds);
 
@@ -181,9 +182,11 @@ test('I4 grant: an agent seat is refused human_only directly, through the door a
   }
   const human = [['rules.autobook', 'off'], ['rules.autobook_offer_after', 3], ['rules.autobook_amount_headroom', 900], ['rules.autobook_suspend_on_change', 'off'], ['rules.autobook_scope', 'open_lines'], ['recurring.auto_generate', 'honour_auto_issue']];
   for (const [key, value] of human) {
-    assert.equal(agentMcp(t, 'settings_set', { key, value, reason: 'mehr Autonomie', idempotencyKey: 'ho-' + key }).error, 'human_only', key);
+    // D202 point 5: a protected setting is only proposed (a person-only Vorschlag), never applied.
+    assertNotApplied(agentMcp(t, 'settings_set', { key, value, reason: 'mehr Autonomie', idempotencyKey: 'ho-' + key }), key);
   }
-  assert.equal(t.store.db.prepare("SELECT COUNT(*) AS n FROM agent_action WHERE workspace_id = ? AND actor = 'agent'").get(t.workspaceId).n, 0, 'no Vorschlag from the agent');
+  assert.equal(t.store.db.prepare("SELECT COUNT(*) AS n FROM agent_action WHERE workspace_id = ? AND actor = 'agent' AND action_tool NOT IN ('settings_set', 'settings_reset')").get(t.workspaceId).n, 0, 'no grant Vorschlag from the agent');
+  assert.equal(t.store.db.prepare("SELECT COUNT(*) AS n FROM workspace_setting_change WHERE workspace_id = ? AND actor = 'agent'").get(t.workspaceId).n, 0, 'no protected setting applied by the agent');
   assert.equal(t.store.db.prepare('SELECT COUNT(*) AS n FROM rule_autobook_grant').get().n, 0);
 });
 

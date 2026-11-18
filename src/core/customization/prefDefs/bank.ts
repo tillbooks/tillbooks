@@ -19,16 +19,18 @@ const BANK: PrefArea = { id: 'bank', label: { en: 'Bank inbox', 'de-CH': 'Bank' 
 export const BANK_PREFS: readonly PrefDef[] = [
   {
     key: 'bank.detail_position',
-    schema: { type: 'enum', values: ['automatic', 'right', 'bottom'] },
-    default: 'automatic',
+    schema: { type: 'enum', values: ['inline', 'automatic', 'right', 'bottom'] },
+    // D195 (owner, v12 of 12.11.2026): the row is the editor and opens in place; the side and bottom areas stay.
+    default: 'inline',
     scope: 'person',
     area: BANK,
     label: { en: 'Where the details sit', 'de-CH': 'Wo die Details stehen' },
     description: {
-      en: 'Where a bank line\'s details open: automatically, on the right, or at the bottom.',
-      'de-CH': 'Wo die Details einer Bankzeile aufgehen: automatisch, rechts oder unten.',
+      en: 'Where a bank line\'s details open: in its row, automatically, on the right, or at the bottom.',
+      'de-CH': 'Wo die Details einer Bankzeile aufgehen: in der Zeile, automatisch, rechts oder unten.',
     },
     valueLabels: {
+      inline: { en: 'In the row', 'de-CH': 'In der Zeile' },
       automatic: { en: 'Automatic', 'de-CH': 'Automatisch' },
       right: { en: 'Right', 'de-CH': 'Rechts' },
       bottom: { en: 'Bottom', 'de-CH': 'Unten' },

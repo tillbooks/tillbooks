@@ -148,7 +148,7 @@ describe('AssetMaintenance, update', () => {
 });
 
 describe('AssetMaintenance, cancel', () => {
-  it('confirms with a reason then calls asset_maintenance_log_cancel', async () => {
+  it('D204 confirms with no reason field and calls asset_maintenance_log_cancel without a reason', async () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     const canned: Canned = { ...baseCanned(), asset_maintenance_log_cancel: ok({ log: LOG({ status: 'cancelled' }) }) };
     renderSurface(canned, 'ws_test', asked);
@@ -157,12 +157,31 @@ describe('AssetMaintenance, cancel', () => {
     await user.click(screen.getByRole('button', { name: /^Aktionen für den Eintrag/ })); // K-21
     await user.click(screen.getByRole('menuitem', { name: de.assets.maintenance.cancel }));
     const dialog = screen.getByRole('alertdialog');
-    await user.type(within(dialog).getByLabelText(de.assets.maintenance.field.cancelReason), 'Doppelt erfasst');
+    expect(within(dialog).queryByLabelText(de.assets.maintenance.field.cancelReason)).toBeNull();
     await user.click(within(dialog).getByRole('button', { name: de.assets.maintenance.cancel }));
     await waitFor(() => expect(asked.some((a) => a.action === 'asset_maintenance_log_cancel')).toBe(true));
     const call = asked.find((a) => a.action === 'asset_maintenance_log_cancel');
-    expect(call?.input.reason).toBe('Doppelt erfasst');
+    expect(call?.input).not.toHaveProperty('reason');
     expect(call?.input.idempotencyKey).toBeTypeOf('string');
+  });
+
+  it('D204 with audit.ask_reason = optional the note is offered and travels when written', async () => {
+    const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
+    const canned: Canned = {
+      ...baseCanned(),
+      settings_get: ok({ setting: { key: 'audit.ask_reason', value: 'optional' } }),
+      asset_maintenance_log_cancel: ok({ log: LOG({ status: 'cancelled' }) }),
+    };
+    renderSurface(canned, 'ws_test', asked);
+    const user = userEvent.setup();
+    await screen.findByText('Hydraulikpumpen-Dichtung ersetzt');
+    await waitFor(() => expect(asked.some((a) => a.action === 'settings_get')).toBe(true));
+    await user.click(screen.getByRole('button', { name: /^Aktionen für den Eintrag/ }));
+    await user.click(screen.getByRole('menuitem', { name: de.assets.maintenance.cancel }));
+    const dialog = screen.getByRole('alertdialog');
+    await user.type(await within(dialog).findByLabelText(de.assets.maintenance.field.cancelReason), 'Doppelt erfasst');
+    await user.click(within(dialog).getByRole('button', { name: de.assets.maintenance.cancel }));
+    await waitFor(() => expect(asked.find((a) => a.action === 'asset_maintenance_log_cancel')?.input.reason).toBe('Doppelt erfasst'));
   });
 });
 

@@ -120,6 +120,7 @@
   "nav": {
     "label": "Primary navigation",
     "setup": "Setup",
+    "settings": "All settings",
     "operations": "Operations",
     "members": "Access",
     "customization": "Customization",
@@ -154,6 +155,8 @@
     },
     "collapse": "Collapse navigation",
     "expand": "Expand navigation",
+    "collapseContext": "Show icons only",
+    "expandContext": "Show names",
     "agent": "Agent",
     "sections": {
       "menu": "Menu"
@@ -185,10 +188,13 @@
         "reset": "Menu reset to the default"
       }
     },
-    "locked": "Set up a ledger first"
+    "locked": "Set up a ledger first",
+    "settingsEntry": "Every setting of this workspace"
   },
   "theme": {
-    "toggle": "Switch colour scheme"
+    "toggle": "Switch colour scheme",
+    "toggleContext": "Light or dark",
+    "darkItem": "Dark theme"
   },
   "density": {
     "toDense": "Compact view",
@@ -202,6 +208,10 @@
       "loadFailed": "The list of workspaces could not be loaded.",
       "waiting": "{count} waiting"
     }
+  },
+  "surfaceHeader": {
+    "back": "Back to {label}",
+    "settingsContext": "For this page"
   },
   "help": {
     "leavesDevice": "opens a page on the internet, which needs a connection",
@@ -247,6 +257,7 @@
   },
   "feedback": {
     "open": "Send feedback",
+    "openContext": "A bug, an idea or a question",
     "title": "Send feedback",
     "kind": {
       "label": "What kind of feedback is this?",
@@ -394,6 +405,7 @@
       "nav": "Navigation",
       "actions": "Actions",
       "actionsHere": "Actions here",
+      "settings": "Settings",
       "records": "Records",
       "concepts": "Terms"
     },
@@ -705,9 +717,37 @@
     "filterAddLabel": "Add a filter",
     "filterRemove": "Remove",
     "filterChange": "Change {facet}",
-    "settingReset": "Default",
-    "settingResetContext": "Back to the default: {value}",
+    "settingResetContext": "Default: {value}",
     "rowOpen": "Expand",
     "rowClose": "Collapse"
+  },
+  "date": {
+    "placeholder": {
+      "ch": "DD.MM.YYYY",
+      "iso": "YYYY-MM-DD",
+      "us": "MM/DD/YYYY"
+    },
+    "unreadable": "Date as {format}"
+  },
+  "releases": {
+    "close": "Close",
+    "version": "TILL {version}",
+    "menu": "TILL {version}",
+    "notes": {
+      "title": "What's new",
+      "empty": "No notes for this version.",
+      "unreleased": "In development",
+      "show": "Show",
+      "all": "All versions"
+    },
+    "kind": {
+      "new": "New",
+      "improved": "Improved",
+      "fixed": "Fixed"
+    },
+    "toast": {
+      "updated": "Updated to {version}",
+      "dismiss": "Hide this note"
+    }
   }
 }

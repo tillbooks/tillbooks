@@ -12,6 +12,7 @@ import { useId } from 'react';
 
 import { useT } from '../../i18n';
 import { Segmented } from '../../components/Segmented';
+import { DateField } from '../../components/DateField';
 
 export type DirectionValue = 'all' | 'in' | 'out';
 
@@ -34,28 +35,26 @@ export function PeriodFilter({ from, to, onChange }: { from: string | null; to: 
       <legend className="visually-hidden">{t('bankInbox.period.legend')}</legend>
       <label className="bank-period__field" htmlFor={`${id}-from`}>
         <span className="bank-period__label">{t('bankInbox.period.from')}</span>
-        <input
+        <DateField
           id={`${id}-from`}
-          type="date"
-          className="field t-num bank-period__input"
-          value={from ?? ''}
-          max={to ?? undefined}
-          aria-invalid={inverted || undefined}
-          aria-describedby={inverted ? `${id}-why` : undefined}
-          onChange={(e) => onChange(isoDateOrNull(e.target.value), to)}
+          className="bank-period__input"
+          value={from}
+          max={to}
+          invalid={inverted}
+          {...(inverted ? { describedBy: `${id}-why` } : {})}
+          onChange={(next) => onChange(isoDateOrNull(next), to)}
         />
       </label>
       <label className="bank-period__field" htmlFor={`${id}-to`}>
         <span className="bank-period__label">{t('bankInbox.period.to')}</span>
-        <input
+        <DateField
           id={`${id}-to`}
-          type="date"
-          className="field t-num bank-period__input"
-          value={to ?? ''}
-          min={from ?? undefined}
-          aria-invalid={inverted || undefined}
-          aria-describedby={inverted ? `${id}-why` : undefined}
-          onChange={(e) => onChange(from, isoDateOrNull(e.target.value))}
+          className="bank-period__input"
+          value={to}
+          min={from}
+          invalid={inverted}
+          {...(inverted ? { describedBy: `${id}-why` } : {})}
+          onChange={(next) => onChange(from, isoDateOrNull(next))}
         />
       </label>
       {inverted && (

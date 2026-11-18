@@ -713,3 +713,53 @@
   font-size: var(--t-font-md);
   line-height: var(--t-lh-md);
 }
+
+/* D198: the settlement feed's pre-filing finding: a quiet panel under the Abstimmung, one line per kind,
+   the sales behind a disclosure. A finding, so the warn glyph and no accent. */
+.vr-settlement {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+.vr-settlement-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  margin: 0;
+  font-weight: 600;
+}
+.vr-settlement-line {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+.vr-settlement-table {
+  border-collapse: collapse;
+  margin-top: var(--t-space-2);
+}
+.vr-settlement-table th,
+.vr-settlement-table td {
+  padding: var(--t-space-1) var(--t-space-3) var(--t-space-1) 0;
+  text-align: left;
+}
+.vr-settlement-table .t-money {
+  text-align: right;
+}
+
+/* D198 re-cut R4: one icon per kind of finding, its number beside it, the words in the tooltip. */
+.vr-settlement-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-2);
+  margin-left: auto;
+}
+.vr-settlement-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+.vr-settlement-chip:focus-visible {
+  outline: 2px solid var(--t-focus-ring);
+  outline-offset: 2px;
+}

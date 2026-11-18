@@ -392,6 +392,30 @@ test('G13: an expired-period purge removes the rows, keeps the record, marks the
   assert.deepEqual(replay, purged);
 });
 
+test('D204 G13: an expired-period purge takes no reason; the record keeps who and when, the live book is untouched', async () => {
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
+  const { deps, workspaceId } = bothWorlds('d204-purge');
+  const liveBefore = countRows(deps, 'SELECT COUNT(*) AS n FROM journal_entry WHERE workspace_id = ?', workspaceId);
+  const purged = must(
+    call(deps, 'gl_archive_purge', { workspaceId, periodFrom: '2012-01', periodTo: '2012-12', confirmed: true, idempotencyKey: 'd204-purge' }),
+    'purge without a reason',
+  );
+  assert.equal(purged.purgedEntries, 2, 'what: the expired rows');
+  assert.equal(purged.record.reason, null);
+  const record = deps.store.db
+    .prepare("SELECT actor, created_at, reason FROM gl_archive_purge_record WHERE workspace_id = ? AND outcome = 'purged'")
+    .get(workspaceId);
+  assertWhoWhen(record.actor, record.created_at);
+  assert.equal(record.reason, '', 'the stored column is NOT NULL on older books');
+  // One shape in the answer: a reasonless purge reads null on the record and on the period alike.
+  const periods = must(call(deps, 'gl_archive_periods', { workspaceId }), 'periods');
+  assert.equal(periods.purgeRecords.find((r) => r.outcome === 'purged').reason, null);
+  const p2012 = periods.periods.find((p) => p.period.startsWith('2012') && p.purgeRecord !== undefined);
+  if (p2012 !== undefined) assert.equal(p2012.purgeRecord.reason, null);
+  assertPermission('gl_archive_purge');
+  assert.equal(countRows(deps, 'SELECT COUNT(*) AS n FROM journal_entry WHERE workspace_id = ?', workspaceId), liveBefore);
+});
+
 test('G13: purge without confirmed refuses; querying and purging gate on their capabilities', () => {
   const { deps, workspaceId } = bothWorlds('g13-gate');
   const unconfirmed = call(deps, 'gl_archive_purge', {

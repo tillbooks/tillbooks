@@ -2,12 +2,12 @@
  * D178 point 4 (spec A20 §11.3): a bank CSV export, read through a column mapping into the SAME parsed
  * statement shape camt has (`messageType: 'csv'`). Pure: no store, no clock.
  *
- * THE READER IS G09's, UNCHANGED. `parseGenericCsv` (`migration/adapters/parse.ts`) is the repo's one
- * delimited reader: RFC 4180 quoting, `;` `,` and tab, header-keyed rows. This module only does what a
- * bank export needs BEFORE that reader: it detects the encoding (a UTF-8 BOM; strict UTF-8; else
- * Windows-1252, the legacy single-byte export many Swiss e-banking CSVs still are), finds the separator
- * and the header row below a preamble (`detectCsvLayout`), and hands the reader UTF-8 bytes from the
- * header row on, with the separator named.
+ * THE READER IS THE TABULAR LAYER'S (A20 §13.1, D205): `src/core/tabular/` decodes the bytes (a UTF-8 BOM;
+ * strict UTF-8; else Windows-1252, the legacy single-byte export many Swiss e-banking CSVs still are), finds
+ * the separator and the header row below a preamble, and reads RFC 4180 rows from the header on, the same
+ * rows G09's `parseGenericCsv` reads; an XLSX sheet is written out as that text first. This module keeps
+ * what a BANK export needs on top: the amounts, the dates and the statement shape. The old names
+ * (`decodeStatementBytes`, `detectCsvLayout`, `readCsvTable`, `CsvTable`) are re-exported here.
  *
  * AMOUNTS ARE EXACT. `1'234.50`, `1’234.50`, `1 234,50`, `1234,50`, `-12.30`, `12.30-`, `(12.30)`
  * read into integer hundredths (`swissAmountToMinor`); more than two decimals is unreadable, never
@@ -26,186 +26,35 @@
 
 import { createHash } from 'node:crypto';
 
-import { parseGenericCsv, isParseFailure } from '../migration/adapters/parse.js';
+import { decodeTextBytes, detectTableLayout, readTextTable } from '../tabular/index.js';
+import type { DetectedTextEncoding, TabularCellKind, TabularTable } from '../tabular/index.js';
 import type { CamtCreditDebit, ParsedBankStatement, ParsedCamtEntry, SkippedCamtEntry } from './camt.js';
 import { deriveFacts, emptyFacts, parseDecimal, swissAmountToMinor } from './statementFacts.js';
 import type { ParsedLineFacts } from './statementFacts.js';
 import type { CsvDateFormat, CsvDelimiter, CsvEncoding, CsvMapping } from './csvMapping.js';
 
-/** The encoding the bytes were read in (`utf-8-bom` when a BOM said so). */
-export type DetectedCsvEncoding = 'utf-8' | 'utf-8-bom' | 'windows-1252';
+/** The encoding the bytes were read in (`utf-8-bom` when a BOM said so). A20 §13.1: the tabular layer's. */
+export type DetectedCsvEncoding = DetectedTextEncoding;
 
-/** Bytes to text: a forced encoding, else a UTF-8 BOM, else strict UTF-8, else Windows-1252. */
-export function decodeStatementBytes(bytes: Uint8Array, forced?: CsvEncoding): { text: string; encoding: DetectedCsvEncoding } {
-  const bom = bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
-  if (forced === 'windows-1252') return { text: new TextDecoder('windows-1252').decode(bytes), encoding: 'windows-1252' };
-  if (bom) return { text: new TextDecoder('utf-8').decode(bytes.subarray(3)), encoding: 'utf-8-bom' };
-  if (forced === 'utf-8') return { text: new TextDecoder('utf-8').decode(bytes), encoding: 'utf-8' };
-  try {
-    return { text: new TextDecoder('utf-8', { fatal: true }).decode(bytes), encoding: 'utf-8' };
-  } catch {
-    return { text: new TextDecoder('windows-1252').decode(bytes), encoding: 'windows-1252' };
-  }
-}
+/** Bytes to text (A20 §13.1: moved to `tabular/decode.ts`, unchanged). */
+export const decodeStatementBytes: (bytes: Uint8Array, forced?: CsvEncoding) => { text: string; encoding: DetectedCsvEncoding } = decodeTextBytes;
 
-/** The candidates in tie order: `;` (the Swiss export's), then tab, then `,`. */
-const SEPARATORS: readonly { name: CsvDelimiter; ch: string }[] = [
-  { name: 'semicolon', ch: ';' },
-  { name: 'tab', ch: '\t' },
-  { name: 'comma', ch: ',' },
-];
+/** The header row and separator of a bank export (A20 §13.1: moved to `tabular/layout.ts`, unchanged). */
+export const detectCsvLayout: (text: string, forced?: { headerRow?: number; delimiter?: CsvDelimiter }) => { headerRow: number; delimiter: CsvDelimiter } = detectTableLayout;
 
-/** The cells of one line split on `ch` outside double quotes (quotes kept; the reader strips them). */
-function cellsOf(line: string, ch: string): string[] {
-  const cells: string[] = [];
-  let cell = '';
-  let quoted = false;
-  for (const c of line) {
-    if (c === '"') {
-      quoted = !quoted;
-      cell += c;
-    } else if (c === ch && !quoted) {
-      cells.push(cell);
-      cell = '';
-    } else cell += c;
-  }
-  cells.push(cell);
-  return cells;
-}
-
-/** Separators outside double quotes on one line. */
-function separatorCount(line: string, ch: string): number {
-  return cellsOf(line, ch).length - 1;
-}
-
-
-/** The most frequent positive count of a list (the larger count on a tie) and how many lines carry it. */
-function modalCount(counts: readonly number[]): { count: number; support: number } {
-  const freq = new Map<number, number>();
-  for (const c of counts) if (c > 0) freq.set(c, (freq.get(c) ?? 0) + 1);
-  let best = { count: 0, support: 0 };
-  for (const [count, support] of freq) {
-    if (support > best.support || (support === best.support && count > best.count)) best = { count, support };
-  }
-  return best;
-}
+/** A bank export read into a header-keyed table (A20 §13.1: the tabular layer's table; an XLSX carries `container: 'xlsx'`). */
+export type CsvTable = TabularTable;
 
 /**
- * The header row (1-based) and separator of a bank export, read from the first 30 non-empty lines
- * (critic M3):
- *  - the SEPARATOR is the one most lines agree on: for each candidate, the most frequent column count
- *    and how many lines carry it; the most lines win, and on a tie `;` (the Swiss export's separator),
- *    then tab, then `,`. A decimal comma or a card text with commas never outvotes a `;` file whose rows
- *    all have the same width;
- *  - the HEADER (critic R2-4: a `key;value` preamble can outnumber a short month's rows, so the most
- *    frequent width is not the table's) is found among the widths a header AND at least one later line
- *    share, widest first: the first line of that width that is followed by a line of the same width, has
- *    as many filled cells as any such line, and at least `HEADER_MIN_WORDS` distinct cells that are words,
- *    not numbers or dates (a header names columns, a row carries values). A preamble padded to the column
- *    count by a spreadsheet (`Kontoauszug;;;`) has fewer filled cells; `Konto;CH93 ...` is narrower than
- *    the table. When no width has such a line, the most filled line of the widest shared width is taken.
- * A forced separator or row is taken as given; the Studio's mapping step offers both.
- */
-export function detectCsvLayout(text: string, forced: { headerRow?: number; delimiter?: CsvDelimiter } = {}): { headerRow: number; delimiter: CsvDelimiter } {
-  const lines = text.split(/\r\n|\r|\n/);
-  // At most 30 lines of at most 64 KiB each are read: no file can make the detection slow.
-  const sample = lines
-    .slice(0, 200)
-    .map((l, i) => ({ l: l.slice(0, 65_536), i }))
-    .filter((x) => x.l.trim() !== '')
-    .slice(0, 30);
-  let delimiter: CsvDelimiter = forced.delimiter ?? 'semicolon';
-  if (forced.delimiter === undefined) {
-    let best = { support: 0, count: 0 };
-    for (const s of SEPARATORS) {
-      const modal = modalCount(sample.map((x) => separatorCount(x.l, s.ch)));
-      if (modal.support > best.support) {
-        best = modal;
-        delimiter = s.name;
-      }
-    }
-  }
-  if (forced.headerRow !== undefined) return { headerRow: forced.headerRow, delimiter };
-  const ch = (SEPARATORS.find((s) => s.name === delimiter) as { ch: string }).ch;
-  const rows = sample.map((x) => {
-    const cells = cellsOf(x.l, ch).map((c) => c.replace(/"/g, '').trim());
-    const words = new Set(cells.filter((c) => c !== '' && isWordCell(c)));
-    return {
-      i: x.i,
-      separators: cells.length - 1,
-      filled: cells.filter((c) => c !== '').length,
-      words: words.size,
-      numeric: cells.some((c) => c !== '' && !isWordCell(c)),
-    };
-  });
-  // A width counts when a line of it is followed by another line of it: a header and its first row.
-  const followed = rows.filter((r, k) => r.separators > 0 && rows.slice(k + 1).some((o) => o.separators === r.separators));
-  const widths = [...new Set(followed.map((r) => r.separators))].sort((a, b) => b - a);
-  for (const width of widths) {
-    const atWidth = followed.filter((r) => r.separators === width);
-    const most = Math.max(...atWidth.map((r) => r.filled));
-    const header = atWidth.find((r) => r.filled === most && r.words >= HEADER_MIN_WORDS && !r.numeric);
-    if (header !== undefined) return { headerRow: header.i + 1, delimiter };
-  }
-  const widest = widths[0];
-  if (widest === undefined) return { headerRow: (sample[0]?.i ?? 0) + 1, delimiter };
-  const atWidest = followed.filter((r) => r.separators === widest);
-  const most = Math.max(...atWidest.map((r) => r.filled));
-  const header = atWidest.find((r) => r.filled === most);
-  return { headerRow: header === undefined ? 1 : header.i + 1, delimiter };
-}
-
-/** The fewest column names a header carries: what every mapping must map (a booking date and an amount). */
-const HEADER_MIN_WORDS = 2;
-
-/** A cell that names something (it has a letter), not a number, an amount or a date. */
-function isWordCell(cell: string): boolean {
-  return /\p{L}/u.test(cell);
-}
-
-export interface CsvTable {
-  encoding: DetectedCsvEncoding;
-  delimiter: CsvDelimiter;
-  headerRow: number;
-  headers: string[];
-  /** Header-keyed rows (G09's shape), in file order. */
-  records: Readonly<Record<string, string>>[];
-  /** The 1-based file line of each record, in step with `records`. */
-  lines: number[];
-  warnings: string[];
-}
-
-/**
- * Read a bank CSV into a header-keyed table through G09's reader. `bytes` (base64-decoded upload) or
- * `text` (already decoded). Never throws; a file with no header line answers `{ headers: [] }`.
+ * Read a bank CSV into a header-keyed table (A20 §13.1: `tabular/table.ts`, unchanged rows). `bytes`
+ * (base64-decoded upload) or `text` (already decoded). Never throws; a file with no header line answers
+ * `{ headers: [] }`.
  */
 export function readCsvTable(
   input: { bytes?: Uint8Array; text?: string },
   opts: { headerRow?: number; delimiter?: CsvDelimiter; encoding?: CsvEncoding } = {},
 ): CsvTable {
-  const decoded = input.bytes !== undefined ? decodeStatementBytes(input.bytes, opts.encoding) : { text: (input.text ?? '').replace(/^﻿/, ''), encoding: 'utf-8' as const };
-  const layout = detectCsvLayout(decoded.text, opts);
-  const all = decoded.text.split(/\r\n|\r|\n/);
-  const fromHeader = all.slice(layout.headerRow - 1);
-  const parsed = parseGenericCsv(new TextEncoder().encode(fromHeader.join('\n')), { encoding: 'utf-8', delimiter: layout.delimiter });
-  if (isParseFailure(parsed)) {
-    return { encoding: decoded.encoding, delimiter: layout.delimiter, headerRow: layout.headerRow, headers: [], records: [], lines: [], warnings: [parsed.reason] };
-  }
-  // The file line of each record, by the reader's own rule: after the header line, every non-blank line.
-  const lines: number[] = [];
-  const firstNonBlank = fromHeader.findIndex((l) => l.trim() !== '');
-  for (let i = firstNonBlank + 1; i < fromHeader.length; i += 1) {
-    if ((fromHeader[i] as string).trim() !== '') lines.push(layout.headerRow + i);
-  }
-  return {
-    encoding: decoded.encoding,
-    delimiter: layout.delimiter,
-    headerRow: layout.headerRow + Math.max(0, firstNonBlank),
-    headers: parsed.headers.filter((h) => h !== ''),
-    records: [...parsed.rows],
-    lines: lines.slice(0, parsed.rows.length),
-    warnings: [...parsed.warnings],
-  };
+  return readTextTable(input, opts);
 }
 
 /** The longest amount or date cell read; anything longer is unparseable (no pattern ever sees it). */
@@ -216,10 +65,14 @@ function isCurrencyCode(v: string): boolean {
   return v.length === 3 && [...v].every((c) => c >= 'A' && c <= 'Z');
 }
 
-/** A date cell in the mapping's format, as an ISO date, or null when it is not one. */
-export function csvDate(raw: string, format: CsvDateFormat): string | null {
+/**
+ * A date cell in the mapping's format, as an ISO date, or null when it is not one. `isoToo` (A20 §13.1: a
+ * workbook's date cell is written out as its ISO date) also reads a bare `yyyy-mm-dd` whatever the format.
+ */
+export function csvDate(raw: string, format: CsvDateFormat, isoToo = false): string | null {
   if (raw.length > CELL_MAX_CHARS) return null;
   const v = raw.trim();
+  if (isoToo && format !== 'yyyy-mm-dd' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return csvDate(v, 'yyyy-mm-dd');
   let y: number;
   let m: number;
   let d: number;
@@ -245,11 +98,42 @@ export function csvDate(raw: string, format: CsvDateFormat): string | null {
 
 /** A signed amount cell: `-12.30`, `12.30-`, `(12.30)`, `+12.30`, `1'234.50`. Null when unreadable. */
 export function csvSignedAmount(raw: string, decimal?: '.' | ','): number | null {
+  return readMoneyCell(raw, { decimal })?.minor ?? null;
+}
+
+/** One money cell read: its signed minor units, and the ISO 4217 code the cell itself named, if any. */
+export interface MoneyCell {
+  minor: number;
+  currency?: string;
+}
+
+/**
+ * A20 §13.1 (critic round 1, H1; security review): THE ONE money-cell parser of every tabular door (banking, and
+ * the A43 settlement table door), so no second reader can disagree with it. `kind` is the cell's kind as the
+ * table carries it: a workbook's `number` cell is read point-decimal whatever `decimal` says (it is the
+ * workbook's own number, never locale text) and names no currency; a `text` cell (every cell of a delimited
+ * file) is read with `decimal`, and a leading or trailing three-letter code (`EUR 50.00`, `50.00 EUR`,
+ * `CHF -12.30`, `(12.30) USD`) is stripped and answered as `currency`. Two different codes, or anything
+ * unreadable, answer null. Amounts are exact: more than two decimals is unreadable, never rounded.
+ */
+export function readMoneyCell(raw: string, opts: { decimal?: '.' | ',' | undefined; kind?: TabularCellKind | undefined } = {}): MoneyCell | null {
   // Bounded before any pattern reads it: an amount cell is short, and a long one is unparseable.
   if (raw.length > CELL_MAX_CHARS) return null;
+  const decimal = opts.kind === 'number' ? '.' : opts.decimal;
   let v = raw.trim();
-  if (v.length > 3 && isCurrencyCode(v.slice(0, 3))) v = v.slice(3).trimStart();
-  if (v.length > 3 && isCurrencyCode(v.slice(-3))) v = v.slice(0, -3).trimEnd();
+  let currency: string | undefined;
+  if (opts.kind !== 'number') {
+    if (v.length > 3 && isCurrencyCode(v.slice(0, 3))) {
+      currency = v.slice(0, 3);
+      v = v.slice(3).trimStart();
+    }
+    if (v.length > 3 && isCurrencyCode(v.slice(-3))) {
+      const code = v.slice(-3);
+      if (currency !== undefined && currency !== code) return null;
+      currency = code;
+      v = v.slice(0, -3).trimEnd();
+    }
+  }
   if (v === '') return null;
   let negative = false;
   if (/^\(.*\)$/.test(v)) {
@@ -266,7 +150,8 @@ export function csvSignedAmount(raw: string, decimal?: '.' | ','): number | null
   }
   const minor = swissAmountToMinor(v, decimal);
   if (minor === null) return null;
-  return negative ? -minor : minor;
+  const signed = negative ? -minor : minor;
+  return currency === undefined ? { minor: signed } : { minor: signed, currency };
 }
 
 function cell(record: Readonly<Record<string, string>>, header: string | undefined): string {
@@ -280,13 +165,66 @@ function counterpartyOf(raw: string, cut: CsvMapping['counterpartyCut']): string
   return (at < 0 ? raw : raw.slice(0, at)).trim();
 }
 
+/** The kinds of one record's cells by header (A20 §13.1: an XLSX's), or undefined for a delimited file. */
+export type CsvRowKinds = Readonly<Record<string, TabularCellKind>> | undefined;
+
+/**
+ * A20 §13.1 (critic round 1, H1): THE ONE amount reader of a mapped cell. A workbook's `number` cell is the
+ * workbook's own number, written point-decimal, so it is read point-decimal whatever the mapping says; only a
+ * `text` cell is read with the mapping's decimal separator. Every amount a row carries goes through here.
+ */
+export function csvAmountCell(record: Readonly<Record<string, string>>, header: string | undefined, mapping: CsvMapping, kinds: CsvRowKinds): number | null {
+  return csvMoneyCellOf(record, header, mapping, kinds)?.minor ?? null;
+}
+
+/**
+ * The same, with the currency the cell names (`readMoneyCell`). FAIL CLOSED: when the row comes with kinds (a
+ * workbook) and the cell has none, it is unreadable, never read with the mapping's separator as a guess.
+ */
+export function csvMoneyCellOf(record: Readonly<Record<string, string>>, header: string | undefined, mapping: CsvMapping, kinds: CsvRowKinds): MoneyCell | null {
+  const raw = cell(record, header);
+  if (raw === '') return null;
+  const kind = header === undefined ? undefined : kinds?.[header];
+  if (kinds !== undefined && kind === undefined) return null;
+  return readMoneyCell(raw, { decimal: mapping.decimalSeparator, kind });
+}
+
 /**
  * A20 §12: the running balance a row states (the balance after it, as the bank shows it), in minor
  * units, or null when the mapping names no balance column or the cell is empty or unreadable.
  */
-export function csvRowBalance(record: Readonly<Record<string, string>>, mapping: CsvMapping): number | null {
-  const raw = cell(record, mapping.columns.balance);
-  return raw === '' ? null : csvSignedAmount(raw, mapping.decimalSeparator);
+export function csvRowBalance(record: Readonly<Record<string, string>>, mapping: CsvMapping, kinds?: CsvRowKinds): number | null {
+  return csvAmountCell(record, mapping.columns.balance, mapping, kinds);
+}
+
+/** The amount columns a mapping can name (A20 §13.1: what the separator check reads). */
+const AMOUNT_TARGETS = ['amount', 'debit', 'credit', 'balance', 'fee', 'instructedAmount'] as const;
+
+/**
+ * A20 §13.1 (critic round 1, M3): the first TEXT amount cell whose decimal separator contradicts the mapping's
+ * (`12.50` under `,`, `12,50` under `.`), as its row and column, or null. A workbook's number cells are not text and
+ * never contradict; a cell readable either way (`1.234`) is not a contradiction (the parsed sample shows it).
+ */
+export function separatorMismatch(table: Pick<CsvTable, 'records' | 'lines' | 'headerRow' | 'kinds'>, mapping: CsvMapping): { row: number; column: string } | null {
+  const dec = mapping.decimalSeparator;
+  if (dec === undefined) return null;
+  const headers = [...new Set(AMOUNT_TARGETS.map((f) => mapping.columns[f]).filter((h): h is string => h !== undefined))];
+  for (let i = 0; i < table.records.length; i += 1) {
+    const record = table.records[i] as Readonly<Record<string, string>>;
+    // Re-critic L3: only a movement row speaks for the amounts; a dateless footer (`;Total;12.50`) is skipped as
+    // no movement and never refuses the file.
+    if (cell(record, mapping.columns.bookingDate) === '') continue;
+    for (const h of headers) {
+      if (table.kinds?.[i]?.[h] === 'number') continue;
+      const raw = (record[h] ?? '').trim();
+      if (raw === '' || raw.length > CELL_MAX_CHARS) continue;
+      const v = raw.replace(/^[A-Z]{3}\s*/, '').replace(/\s*[A-Z]{3}$/, '');
+      const pointDecimal = /^\(?[-+\u2212]?[\d'\u2019 ]*\d\.\d{1,2}\)?-?$/.test(v) && !v.includes(',');
+      const commaDecimal = /^\(?[-+\u2212]?[\d'\u2019 ]*\d,\d{1,2}\)?-?$/.test(v) && !v.includes('.');
+      if ((dec === ',' && pointDecimal) || (dec === '.' && commaDecimal)) return { row: table.lines[i] ?? table.headerRow + i + 1, column: h };
+    }
+  }
+  return null;
 }
 
 function isIban(v: string): boolean {
@@ -301,6 +239,19 @@ function isIban(v: string): boolean {
  */
 export function csvStatementOf(table: CsvTable, mapping: CsvMapping, accountCurrency: string): ParsedBankStatement {
   const c = mapping.columns;
+  // A20 §13.1: a workbook's lines say so (`container`), and its date cells arrive as ISO dates.
+  const xlsx = table.container === 'xlsx';
+  // A workbook's row without kinds is read with EMPTY kinds, so every amount of it is unreadable (fail closed).
+  const kindsOf = (i: number): CsvRowKinds => (xlsx ? (table.kinds?.[i] ?? {}) : table.kinds?.[i]);
+  const amountOf = (i: number, record: Readonly<Record<string, string>>, header: string | undefined): number | null => csvAmountCell(record, header, mapping, kindsOf(i));
+  // A20 §13.1: the currency the booked amount's own cell names (`EUR 50.00`), if any.
+  const namedCurrencyOf = (i: number, record: Readonly<Record<string, string>>): string | null => {
+    for (const h of [c.amount, c.debit, c.credit]) {
+      const m = h === undefined ? null : csvMoneyCellOf(record, h, mapping, kindsOf(i));
+      if (m?.currency !== undefined && m.minor !== 0) return m.currency;
+    }
+    return null;
+  };
   const entries: ParsedCamtEntry[] = [];
   const skipped: SkippedCamtEntry[] = [];
   const seen = new Map<string, number>();
@@ -321,17 +272,17 @@ export function csvStatementOf(table: CsvTable, mapping: CsvMapping, accountCurr
       skipped.push({ entryRef: reference || null, reason: 'not_a_movement', row });
       return;
     }
-    const bookingDate = csvDate(dateRaw, mapping.dateFormat);
+    const bookingDate = csvDate(dateRaw, mapping.dateFormat, xlsx);
     if (bookingDate === null) {
       skipped.push({ entryRef: reference || null, reason: 'unreadable_date', row });
       return;
     }
     let signed: number | null;
     if (c.amount !== undefined) {
-      signed = csvSignedAmount(amountRaw, mapping.decimalSeparator);
+      signed = amountOf(i, record, c.amount);
     } else {
-      const debit = debitRaw === '' ? 0 : csvSignedAmount(debitRaw, mapping.decimalSeparator);
-      const credit = creditRaw === '' ? 0 : csvSignedAmount(creditRaw, mapping.decimalSeparator);
+      const debit = debitRaw === '' ? 0 : amountOf(i, record, c.debit);
+      const credit = creditRaw === '' ? 0 : amountOf(i, record, c.credit);
       if (debit === null || credit === null) signed = null;
       else if (debit !== 0 && credit !== 0) signed = null; // both sides filled: which one is the booking?
       else signed = credit !== 0 ? Math.abs(credit) : -Math.abs(debit);
@@ -344,12 +295,20 @@ export function csvStatementOf(table: CsvTable, mapping: CsvMapping, accountCurr
       skipped.push({ entryRef: reference || null, reason: 'zero_amount', row });
       return;
     }
-    const currency = (cell(record, c.currency) || accountCurrency).toUpperCase();
+    // A20 §13.1 (security review): a code the amount cell itself names counts like the currency column, so a
+    // foreign amount written `EUR 50.00` is never read as the account's money.
+    const named = namedCurrencyOf(i, record);
+    const columnCurrency = cell(record, c.currency).toUpperCase();
+    if (named !== null && columnCurrency !== '' && named !== columnCurrency) {
+      skipped.push({ entryRef: reference || null, reason: 'currency_differs', row });
+      return;
+    }
+    const currency = (columnCurrency || named || accountCurrency).toUpperCase();
     if (currency !== accountCurrency) {
       skipped.push({ entryRef: reference || null, reason: 'currency_differs', row });
       return;
     }
-    const valueDate = c.valueDate === undefined ? null : csvDate(cell(record, c.valueDate), mapping.dateFormat);
+    const valueDate = c.valueDate === undefined ? null : csvDate(cell(record, c.valueDate), mapping.dateFormat, xlsx);
     const creditDebit: CamtCreditDebit = signed > 0 ? 'CRDT' : 'DBIT';
     const amountMinor = Math.abs(signed);
     // Only what every valid mapping maps (critic H1): never the value date or another optional column.
@@ -364,14 +323,15 @@ export function csvStatementOf(table: CsvTable, mapping: CsvMapping, accountCurr
     const ibanRaw = ibanCell.length > CELL_MAX_CHARS ? '' : ibanCell.replace(/\s+/g, '').toUpperCase();
     const instructedRaw = cell(record, c.instructedAmount);
     const instructedCurrency = cell(record, c.instructedCurrency).toUpperCase();
-    const instructedMinor = instructedRaw === '' ? null : csvSignedAmount(instructedRaw, mapping.decimalSeparator);
+    const instructedMinor = instructedRaw === '' ? null : amountOf(i, record, c.instructedAmount);
     const rateRaw = cell(record, c.rate).replace(',', '.');
     const feeRaw = cell(record, c.fee);
-    const feeMinor = feeRaw === '' ? null : csvSignedAmount(feeRaw, mapping.decimalSeparator);
+    const feeMinor = feeRaw === '' ? null : amountOf(i, record, c.fee);
     const instructed =
       instructedMinor !== null && instructedMinor !== 0 && /^[A-Z]{3}$/.test(instructedCurrency) ? { amountMinor: Math.abs(instructedMinor), currency: instructedCurrency } : null;
     const facts: ParsedLineFacts = {
       ...emptyFacts('csv'),
+      ...(xlsx ? { container: 'xlsx' as const } : {}),
       bankText: text === '' ? null : text,
       refs: { endToEndId: null, accountServicerRef: null, instructionId: null, transactionId: null },
       instructed,

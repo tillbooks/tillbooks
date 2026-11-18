@@ -131,6 +131,25 @@ test('the live registry is well formed: the appearance area carries the colour s
   for (const d of PREF_DEFS) assert.equal(prefValueFits(d.schema, d.default), true, `${d.key}: the default fits`);
 });
 
+test('D201: the Übersicht is arranged in place by default, its doors and the old waiting list are off, the suggestions card is an item', () => {
+  const pinned = {
+    'overview.customize': [['inline', 'edit_mode'], 'inline'],
+    'overview.doors': [['hidden', 'shown'], 'hidden'],
+    'overview.suggestions_empty': [['line', 'hide'], 'line'],
+    'overview.waiting_list': [['hidden', 'shown'], 'hidden'],
+  };
+  for (const [key, [values, fallback]] of Object.entries(pinned)) {
+    const d = prefDef(key);
+    assert.deepEqual(d.schema, { type: 'enum', values }, `${key}: its values`);
+    assert.equal(d.default, fallback, `${key}: its default`);
+    assert.equal(d.scope, 'person', `${key}: a person's choice, kept across mandates`);
+    assert.equal(d.area.id, 'overview');
+  }
+  // The suggestions card is arranged in `overview.tiles` like the bank item, and fits with the rest.
+  assert.ok(OVERVIEW_TILE_IDS.includes('suggestions'));
+  assert.ok(OVERVIEW_TILE_IDS.includes('bank_inbox'));
+});
+
 test('D180: the Übersicht arranges its key figures and its cards; a full arrangement of either fits its byte cap', () => {
   const tiles = prefDef('overview.tiles');
   // D186: an entry is `{ id, on, w?, compare?, trend? }` over the whole key-figure library, so the cap is 4096.

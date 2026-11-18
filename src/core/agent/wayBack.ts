@@ -100,6 +100,7 @@ export const MAP_RESOLUTIONS: Readonly<Record<string, { readonly map: readonly s
   migration_set_scope: { map: [], why: 'a correctable write needs a way back: re-including a class recreates its step at the discovery default map, which migration_set_map refines' },
   review_bank_txn: { map: [], why: 'the signal stands; the line it flagged is resolved by booking or ignoring it' },
   reject_drafted_action: { map: [], why: 'the rejection stands in the trace; the agent\'s next proposal of the same call is approved instead' },
+  reject_drafted_actions: { map: [], why: 'every rejection stands in the trace; the agent\'s next proposal of the same call is approved instead' },
 };
 
 /**
@@ -148,6 +149,7 @@ export const WAY_BACK: Readonly<Record<string, readonly string[]>> = {
   prepare_period: ['approve_entry'],
   set_agent_dial: ['self'],
   reject_drafted_action: ['approve_drafted_action'],
+  reject_drafted_actions: ['approve_drafted_action'],
   agent_ask: ['agent_prose_delete'],
   reports_save: ['reports_delete'],
   reports_update: ['self'],
@@ -196,6 +198,15 @@ export const WAY_BACK: Readonly<Record<string, readonly string[]>> = {
   // D185: a settlement entry is corrected by its reversal; a template by saving it again.
   import_settlement: ['reverse_entry'],
   set_settlement_template: ['self'],
+  // A43 §2: a table mapping by saving it again.
+  set_settlement_table_mapping: ['self'],
+  // D198: a pulled entry is corrected by its reversal; a source by saving it again.
+  pull_settlement: ['reverse_entry'],
+  set_settlement_source: ['self'],
+  // D198 stateless check S5: a test answer is undone by the other one (not_test, reopen_test).
+  resolve_settlement_event: ['self'],
+  // A42: an ignore is undone by an include, and back.
+  set_settlement_event_ignored: ['self'],
   confirm_match: ['reopen_bank_line'],
   create_entry_for_txn: ['reopen_bank_line'],
   book_bank_line: ['reopen_bank_line', 'reverse_payment'],

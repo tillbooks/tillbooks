@@ -382,6 +382,12 @@ test('A24: a viewer READS the books, and the reads it is refused are named one b
           // workspaceId), so the viewer's picture of what the SOFTWARE can do is untouched. This
           // is a policy someone made on purpose, per the note above.
           res.capability === 'manage_import' ||
+          // A42 (D200): the Umsatz review is a read that RUNS the settlement import inside a rolled-back
+          // transaction and, for a feed, fetches it with the owner's stored token, so it asks `post`, the
+          // import's and the pull's own right. A viewer reads the booked settlement entries in the journal
+          // as before; it is refused only the dry run. Scoped to this one verb by name, so no other read may
+          // start asking `post` unnoticed. A policy made on purpose, per the note above.
+          (res.capability === 'post' && action.name === 'settlement_review') ||
           // E03: the task queue and the reminder poll gate on `tasks.read`, which is deliberately
           // NOT in the viewer anchor (`capabilities.ts`): a read-only invite looks at the BOOKS,
           // and the operational to-do queue (who is chasing whom by when) is work, not books. A
@@ -579,6 +585,8 @@ test('A24: a viewer READS the books, and the reads it is refused are named one b
     // same strictest read domain as the profile reads below.
     'runtime_catalog',
     'runtime_status',
+    // A42 (D200): the Umsatz review runs the import rolled back and fetches the feed, so it asks `post`.
+    'settlement_review',
     // M02's three raw stream reads, on `sync.read`, which no anchor grants (see the exception note
     // above): the publish stream is an integration feed for the managed runtime, not the books.
     'sync_artifact_read',

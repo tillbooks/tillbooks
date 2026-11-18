@@ -9,6 +9,7 @@ import { I18nProvider } from './i18n';
 import { ThemeProvider } from './app/theme';
 import { DensityProvider } from './app/density';
 import { MotionLevelStamp } from './lib/motion';
+import { FormatPrefsStamp } from './app/formatPrefs';
 import { WorkspaceProvider } from './app/workspace';
 import { FeedbackProvider } from './components/FeedbackProvider';
 import { ErrorBoundary } from './app/ErrorBoundary';
@@ -39,6 +40,8 @@ createRoot(root).render(
               <DensityProvider>
                 {/* D178 point 14: the person's motion level, stamped on the root like the density. */}
                 <MotionLevelStamp />
+                {/* D195: the person's date format and amount signs, for the plain formatters. */}
+                <FormatPrefsStamp />
                 {/* The feedback context sits OUTSIDE the boundary on purpose: a render throw must not
                     take the thing that reports it with it. The boundary then wraps the router, so a
                     throw inside any surface lands on a recoverable panel instead of blanking the

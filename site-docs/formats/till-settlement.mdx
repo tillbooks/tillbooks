@@ -69,6 +69,20 @@ TILL matches `source.system` and `source.processor` without regard to case or su
 | `counterparty`, `description` | no | Texts for the entry. |
 | `refs` | no | Any external references (up to 4 KB as JSON). TILL keeps them with the event. |
 
+### Who paid
+
+A `sale` or `refund` may name the person who paid, in two optional refs. TILL shows them in the Umsatz
+review. It never books by them.
+
+| Ref | Meaning |
+| --- | --- |
+| `refs.counterpartyEmail` | The payer's email address, or `null`. |
+| `refs.counterpartyName` | The payer's name or user name, or `null`. |
+
+Put an email address only in `refs.counterpartyEmail`, never in `counterparty`: `counterparty` becomes
+part of the entry text in your books. A ref of another shape (a number, an object) is ignored, and no
+ref ever refuses an event or a file.
+
 `amount` must equal `net + vat.amount` exactly. For a sale of 10.81 that is 10.00 plus 0.81; for a fee of
 -1.08 it is -1.00 plus -0.08.
 
@@ -120,6 +134,43 @@ TILL refuses a single event, and books all the others, when:
 | `attachment_failed` | A PDF for the event could not be filed as its Beleg, so the event was not booked. |
 
 Unknown fields are ignored, so a producer can add its own.
+
+## Check a file before you import it
+
+The contract is published as a JSON Schema (draft 2020-12): `schemas/till-settlement-v1.schema.json` in the
+repository, `till settlement schema` on the command line, and the MCP resource
+`till://formats/till-settlement-v1` for an agent. Any validator for JSON Schema draft 2020-12 reads it, ajv in
+strict mode included.
+
+A schema cannot state six things, which only TILL's reader checks, so a document can pass the schema and
+still have an event refused:
+
+- the event currency against your workspace (`currency_mismatch`);
+- an id that another event of the file repeats (`duplicate_id`);
+- `amount = net + vat.amount` to the Rappen (`amount_mismatch`);
+- `day` as a real calendar date: `2026-02-30` has the right form and is refused (`invalid_day`);
+- the two-place rule for an amount written as a JSON number: `10.815` passes the schema and is refused
+  (`invalid_amount`). Write amounts as decimal strings and the schema checks it too;
+- the length limits, which TILL counts in UTF-16 code units and the schema in characters.
+
+To run the reader itself, without booking anything:
+
+```sh
+till settlement validate settlement.json
+```
+
+It prints what it found, per kind and per refused event, and exits 0 when no event is refused. It opens no
+book. `--currency EUR` checks against another workspace currency (CHF by default). An agent calls the verb
+`validate_settlement` with the document, and writes nothing either.
+
+### Versions
+
+The version is in `schema`. Within `v1` only optional fields and new kinds are added: a reader that does
+not know a new kind refuses that event and imports the rest, so an older TILL stays safe. A change to what
+`amount`, `net`, VAT or the sign mean, or to a required field, is `v2`. TILL then reads `v2` beside `v1`,
+and a `v1` file keeps importing.
+
+To build a producer, see [Write a connector](/formats/write-a-connector).
 
 ## The booking template
 
@@ -190,6 +241,93 @@ events and the entries TILL booked for them, never from whatever else your clear
 Once the bank lines for the payouts are booked (a Buchungsregel that books the bank line against the
 clearing account does this), the clearing account carries booked plus bank payouts, which is the
 expected change minus what the import left off: what the processor still holds, usually a reserve.
+
+## Pulling a feed instead of importing a file
+
+If the producer serves the same document over HTTPS, TILL can fetch it itself. The request:
+
+```http
+GET {baseUrl}/api/accounting/till-settlement?from=2026-07-01&to=2026-07-31
+Authorization: Bearer <token>
+```
+
+The producer answers `200` with a `till-settlement/v1` document for the days in the range, `401` for a
+wrong token, and `400` for a bad range or one longer than 366 days. A `bank_payout` event's `day` is the
+day the money arrives at the bank, and its `refs.payoutId` names the payout. Each payout appears once.
+
+In TILL you save the source once with `set_settlement_source`: the address, the first day to fetch, and
+the token. Only a person can do this, in the Studio under Bankkonten. The token goes to the macOS
+Keychain. It never goes into your books, a file or a log, and TILL never shows it again. The feed is
+served under `/api/accounting/till-settlement` unless you save another `feedPath` (a path only, no query
+or fragment), so any program on your computer that serves the contract is a source. If you change the
+address or the path later, TILL drops the stored token and asks for it again.
+A book that holds a custom `feedPath` opens in an older TILL too, but the older version does not know the
+path: it asks the default path on the same host. Upgrade again before you pull from such a source.
+
+`pull_settlement` fetches a range and books it exactly like `import_settlement`, through the same
+template. Fetching the same days again books nothing twice. Without a saved template TILL fetches
+nothing. By default a pull starts seven days before the last day already fetched and ends today. The
+workspace setting `settlement.pull_mode` is `manual` by default; set it to `daily` and TILL fetches every
+source once a day. A pull overlaps the days already fetched by `settlement.pull_overlap_days` (7 by
+default). Events dated before the source's first day are never booked, from a pull or from a file.
+
+A test payment is never booked as a real one. Every event of a payment the producer marks
+`refs.test: true` is skipped, and the mark sticks to every event that shares its `chargeId`,
+`paymentIntentId`, `paymentId` or `transferId`, in this file or a later one. The processor's fee on a
+test payment is real money, so it is booked like any fee (`settlement.test_fees`, `book` by default).
+Set `settlement.test_events` to `book` if your producer's test payments should be booked in full. A
+document with `complete: false` is never imported.
+
+A person can mark one payment as not a test after all with `resolve_settlement_event` (`not_test`,
+with a reason), and take that back (`reopen_test`). If you handled an event outside the import (you
+booked it by hand, or it needs no booking), mark it with `resolve_settlement_event` `handled_outside`,
+with a reason: the import then skips it and the check stops listing it as missing. `withdraw_handled`
+takes the mark back. TILL never links your own entries to an event, whatever their reference.
+
+Every time an event arrives, TILL compares it with the figures the producer last stated for it. When
+they differ, the import logs the change, whatever the template does with the event. An event booked
+by the import with figures the producer has since changed is listed as changed by the feed; an event
+you marked as handled that the producer changes afterwards is listed again, so you can check your
+mark and set it again.
+
+TILL keeps every event it fetched, payouts and holds too, and two verbs read them:
+
+- `settlement_payout_for_bank_line` tells you which payout a bank line is and what went into it: the
+  events that name the payout, and a residual of 0 when they add up to it. TILL never guesses
+  members from dates.
+- `vat_return` checks the books: sales, refunds and other events with VAT of the period that the
+  import did not book and nobody marked as handled, events booked twice, events the feed changed after
+  the import booked them, marked events the feed changed after the mark, earlier events with any of these, test payments that were booked
+  or left VAT out or money on the clearing account, events the feed sent unreadable, and days no pull
+  covered. These are warnings only: the return is not
+  changed and nothing is blocked.
+
+## Reviewing before you book
+
+The Umsatz screen in the Studio (`settlement_review`) shows one period of a source before anything is
+booked. You see every event, who paid, what the import will do with it, and the turnover and VAT your
+books will carry. Under the hood it runs the real import and rolls it back. So what the screen shows is
+what the import does. For a feed it fetches the period without booking anything, and only a person can do
+that.
+
+Every event starts out included. To leave one off the books, ignore it with
+`set_settlement_event_ignored`. No reason is asked; TILL keeps who ignored it and when. The
+import and the pull then skip the event, and the VAT check on the MWST-Abrechnung counts its VAT as
+ignored rather than hiding it. Include it again the same way. A test payment stays out until a person
+marks it `not_test`, which covers every event of that payment. A booked event cannot be ignored; book a
+reversing entry instead. An agent can propose an answer, but a person decides it.
+
+Two checks sit above the events. The payout check takes each payout whose events state its `payoutId`
+and asks whether the events your books carry add up to it. Test events of a payout are counted apart.
+Without stated members, the check says it cannot tell. The VAT check compares the VAT the file states for
+the included events with the VAT your books carry for them, up to the end of the period.
+
+The review answers with a `reviewSha256`, a digest of what the import would do. Pass it back as
+`expectReviewSha256` when you book, with `import_settlement` for a file or `pull_settlement` for a feed. If
+the import would now book anything else (the file or feed changed, or an answer, a setting, the template or
+the from-date did), it refuses `review_stale` and books nothing. A file is reviewed and booked one period at
+a time: only its events dated in that period. While you review before booking, keep `settlement.pull_mode` on `manual`: a `daily` pull
+books without a review.
 
 <Note>
   Public beta. Compare the first imported month with the processor's own report before you rely on it.

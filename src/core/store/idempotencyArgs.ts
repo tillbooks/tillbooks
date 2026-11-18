@@ -121,8 +121,10 @@ export const IDEMPOTENCY_KEY_CONFLICT = 'idempotency_key_conflict';
  *  - `autobook:`: N04, a Buchungsregel's automatic booking (`autobookKey`, `src/core/banking/autobook.ts`).
  *  - `schedule:`: N04, a Dauerbuchung's period (`scheduleRunKey`, `src/core/ledger/vorlageSchedule.ts`), the
  *    key its posting runs under and its Vorschlag's approval replays.
+ *  - `settlement-daily:`: D198, the scheduled settlement feed pull (`dailyPullKey`,
+ *    `src/core/settlement/dailyPull.ts`; critic r3 M2: a caller could otherwise spend the day's attempt keys).
  */
-export const RESERVED_IDEMPOTENCY_KEY_PREFIXES: readonly string[] = ['auto:', 'recurring:', 'recurring_issue:', 'a36-auto-', 'autobook:', 'schedule:'];
+export const RESERVED_IDEMPOTENCY_KEY_PREFIXES: readonly string[] = ['auto:', 'recurring:', 'recurring_issue:', 'a36-auto-', 'autobook:', 'schedule:', 'settlement-daily:'];
 
 /** The reserved prefix `key` carries, or undefined for a key a caller may use. */
 export function reservedKeyPrefix(key: unknown): string | undefined {

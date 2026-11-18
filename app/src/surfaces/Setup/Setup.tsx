@@ -8,24 +8,11 @@
  * run, or edit the profile afterwards), including the Arbeitsbereiche list, so the first-run screen
  * stays the single call to action it was designed to be.
  *
- * D172: below the profile, once a workspace exists, the Einstellungen section lists every setting of
- * the workspace settings registry (`WorkspaceSettings`). On first run there is no workspace and no
- * section, so the create face stays the single call to action.
+ * D202: the long list of workspace settings under the profile is gone. The settings live in the
+ * Einstellungen (`/settings`, one page per area), where the profile is the Firma area's page row.
  */
-import { useWorkspaceId } from '../../app/workspace';
 import { CompanyProfile } from './CompanyProfile';
-import { WorkspaceSettings } from './WorkspaceSettings';
 
 export function Setup() {
-  const workspaceId = useWorkspaceId();
-  return (
-    <>
-      <CompanyProfile />
-      {workspaceId !== null && (
-        <div className="setup-surface">
-          <WorkspaceSettings workspaceId={workspaceId} />
-        </div>
-      )}
-    </>
-  );
+  return <CompanyProfile />;
 }

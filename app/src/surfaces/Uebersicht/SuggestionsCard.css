@@ -1,0 +1,73 @@
+/* D201 pick B: the agent's suggestions as a card in the Übersicht's grid. The rows are the shared
+   Vorschlag row (`VorschlagRow`, its own stylesheet); this file only sets the card around them. */
+
+.uebersicht-sugg {
+  gap: var(--t-space-1);
+}
+
+.uebersicht-sugg__mark {
+  flex: 0 0 auto;
+  align-self: center;
+  color: var(--t-text-dim);
+}
+
+/* The count beside the title: ink, tabular, never the accent (zero accent outside a commit). */
+.uebersicht-sugg__count {
+  font-size: var(--t-font-lg);
+  line-height: var(--t-lh-lg);
+  font-weight: 600;
+  color: var(--t-text-dim);
+}
+
+.uebersicht-sugg__all {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.uebersicht-sugg__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* D208 pick Rahmen A: no card, no radius, no border; the card is its heading on the page ground, and the rows
+   have no rule between them (the hover tint carries them). Row actions show on hover, as in Pendenzen. */
+.uebersicht-sugg {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding-left: 0;
+  padding-right: 0;
+  max-width: 1120px;
+}
+
+/* The card's tools sit square in its heading and show on hover or focus (and always on touch). */
+.uebersicht-sugg__tools {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--t-motion-hover) var(--t-ease-out);
+}
+
+.uebersicht-sugg:hover .uebersicht-sugg__tools,
+.uebersicht-sugg:focus-within .uebersicht-sugg__tools {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .uebersicht-sugg__tools {
+    opacity: 1;
+  }
+}
+
+.uebersicht-sugg__refusal {
+  display: block;
+}
+
+.uebersicht-sugg__none {
+  padding: var(--t-space-1) 0;
+}

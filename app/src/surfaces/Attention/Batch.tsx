@@ -1,36 +1,33 @@
 /**
- * D178 point 5, APPROVING SEVERAL BANK VORSCHLÄGE: the batch controls on the section's head line (the
- * fresh-eyes judge, N4 M2: no separate "Vorschläge" row without an end) and the confirm of "Alle genehmigen". The batch never adds a verb: the page runs the existing `approve_drafted_action` once
- * per row, one after the other, so the human-only rule (D161), the stale pin (D162) and the self-approve
- * ban hold per item exactly as for a single approval. It reaches only the rows the ENGINE marks `batchable`
- * (a decision on a bank line, critic N4 M1). This module only draws the controls.
+ * D201 point 4 (owner, 15.11.2026, pick A), SEVERAL VORSCHLÄGE AT ONCE: the multi-select's one sticky action
+ * bar, the confirm of `all_with_confirm`, and the reader of the batch verbs' per-id answers.
  *
- *  - `tick` (the default): a head box that ticks every batchable row ONLY when the person ticks it, and
- *    "Ausgewählte genehmigen (n)", disabled at 0. Nothing is ever ticked on arrival (D152 rule 5). The
- *    explicit ticks are the confirmation (DESIGN.md bans blanket confirmation); an (i) beside the commit
- *    says what approving does and what is selected (N4 H2).
- *  - `single`: no bar at all (each line keeps its own Genehmigen).
- *  - `all_with_confirm`: "Alle genehmigen (n)", which opens an alertdialog naming the count, the money per
- *    currency (in and out apart, never one absolute sum, never a guessed currency) and the consequence
- *    sentence of every drafted verb, before anything runs.
+ *  - THE BAR (`SelectionDock`) appears only while rows are ticked (DESIGN.md "Calm states and honest buttons":
+ *    a bar that commits work appears only when there is something to commit). It says how many are ticked and
+ *    their signed money per currency, then "Freigeben (n)" for the ticked rows the batch may approve (only a
+ *    decision on a bank line, the engine's `batchable`), "Ablehnen (n)" for every ticked row (one click, no
+ *    reason, D204), and a clear. A commit that cannot act is not drawn.
+ *  - THE CALLS are the engine's batch verbs, ONE call per press, never a loop of single calls:
+ *    `approve_drafted_actions { ids }` and `reject_drafted_actions { ids }` (`src/api/batch-actions.ts`). Each
+ *    id is still its own `approve_drafted_action` / `reject_drafted_action` inside the engine, so the
+ *    human-only rule, the stale pin and the self-approve ban hold per id. `parseBatchAnswer` reads the per-id
+ *    outcomes: what went through leaves the list, what failed stays ticked with its cause in its row.
+ *  - `all_with_confirm` (the workspace setting `attention.approval_batch_mode`): "Freigeben (n)" first opens
+ *    the confirm naming the count, the money in and out per currency and the consequence of each drafted
+ *    verb. `single`: the bar offers no Freigeben (each line keeps its own), Ablehnen stays.
  *
- * "Alle" says what it covers (critic N4 L1): while the section holds more rows behind its cursor, the bar
- * says "angezeigte", because only the rows on screen can be ticked.
- *
- * THE PAGE'S ONE ACCENT (DESIGN.md accent discipline, the orchestrator's N4 ruling): the batch commit is
- * the single primary on Pendenzen. "Ausgewählte genehmigen (n)" wears the accent once a row is ticked (at 0
- * it is the quiet, disabled secondary, and the page has no accent at all); under `all_with_confirm` the
- * opener stays quiet and the accent sits on the commit inside the confirm. While another commit's confirm
- * (the Mahnlauf's) is open over the page, the batch commit goes quiet too. Both name what they commit for
- * the accent guard: the approval, and the posting verb it replays (`approve_drafted_action book_bank_line`).
+ * THE PAGE'S ONE ACCENT (DESIGN.md accent discipline): "Freigeben (n)" wears it only while a ticked row POSTS
+ * (the engine's per-row `posts`), and goes quiet while another commit's confirm (the Mahnlauf's) is open. Both
+ * accent sites name what they commit for the accent guard: the approval, and the posting verb it replays.
  */
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useId } from 'react';
 
 import { useI18n, formatMoney } from '../../i18n';
+import type { Err } from '../../lib/client';
 import { Modal } from '../../components/Modal';
 import { ConsequenceLine } from '../../components/ConsequenceLine';
-import { IconButton } from '../../components/IconButton';
-import type { BatchMode } from './model';
+import { VorschlagSelectionBar } from '../Agent/VorschlagRow';
+import { RejectControl } from '../Agent/RejectControl';
 
 /** The money of the batch per currency, in and out apart, and how many rows carry no amount. */
 export interface BatchTotals {
@@ -55,101 +52,99 @@ export function batchTotalsOf(rows: readonly { amountMinor?: number; currency?: 
   return { perCurrency: [...sums.entries()].map(([currency, s]) => ({ currency, ...s })), withoutAmount };
 }
 
-export interface BatchBarProps {
-  mode: BatchMode;
-  /** How many rows the bar acts on (the batchable bank Vorschläge on screen). */
-  rowCount: number;
-  selectedCount: number;
-  running: boolean;
-  /** More rows sit behind the section's cursor: "Alle" covers the shown ones only, and says so. */
-  partial: boolean;
-  onToggleAll: (checked: boolean) => void;
-  onApproveSelected: () => void;
-  onApproveAll: () => void;
-  /** Another commit's confirm is open over the page: the batch commit goes quiet, so one accent shows. */
-  quiet?: boolean;
-  /**
-   * A ticked row POSTS (the engine's `posts`, critic N4 R2-M2): only then is the commit a money write, wears
-   * the accent and claims the booking. Ticking only rows that book nothing (a line set aside, a match to an
-   * entry already in the books) leaves it the quiet secondary.
-   */
-  books?: boolean;
-  /** The bar's own sub-head, "Vorschläge n" (B5: the section head keeps its glyph and count apart). */
-  heading: ReactNode;
-  /** The section glyph, kept in the lead column when the mode has no select-all box. */
-  glyph: ReactNode;
-  /**
-   * What the batch commit does (N4 H2): the engine's consequence of the approved verbs (the row (i)'s own
-   * source), then the selection's count and its signed money per currency. The (i) shows it and the commit
-   * is described by it (D152): ticking rows is the confirmation, so there is no dialog in `tick`.
-   */
-  info: string;
+/** What one call of a batch verb came to, per id: the ids that went through and the ones that did not, with why. */
+export interface BatchAnswer {
+  done: string[];
+  failed: { id: string; refusal: Err }[];
 }
 
-export function BatchBar({ mode, rowCount, selectedCount, running, partial, onToggleAll, onApproveSelected, onApproveAll, quiet = false, books = false, heading, glyph, info }: BatchBarProps) {
+/**
+ * Read `approve_drafted_actions` / `reject_drafted_actions`: `{ items: [{ index, actionId?, ok, result | refusal }] }`.
+ * An item names its id, else its position in `ids` does. An id the answer does not mention is NOT done: it is
+ * reported failed with a generic refusal, so nothing leaves the list on a guess.
+ */
+export function parseBatchAnswer(body: unknown, ids: readonly string[]): BatchAnswer {
+  const items = body !== null && typeof body === 'object' && Array.isArray((body as { items?: unknown }).items) ? ((body as { items: unknown[] }).items) : [];
+  const done: string[] = [];
+  const failed: BatchAnswer['failed'] = [];
+  const seen = new Set<string>();
+  items.forEach((raw, position) => {
+    if (raw === null || typeof raw !== 'object') return;
+    const item = raw as Record<string, unknown>;
+    const index = typeof item.index === 'number' ? item.index : position;
+    const id = typeof item.actionId === 'string' ? item.actionId : ids[index];
+    if (id === undefined || seen.has(id)) return;
+    seen.add(id);
+    if (item.ok === true) done.push(id);
+    else {
+      const refusal = item.refusal;
+      const readable = refusal !== null && typeof refusal === 'object' && typeof (refusal as { error?: unknown }).error === 'string';
+      failed.push({ id, refusal: readable ? (refusal as Err) : ({ ok: false, error: 'refused' } as Err) });
+    }
+  });
+  for (const id of ids) if (!seen.has(id)) failed.push({ id, refusal: { ok: false, error: 'refused' } as Err });
+  return { done, failed };
+}
+
+export interface SelectionDockProps {
+  /** How many rows are ticked. */
+  count: number;
+  /** How many of them the batch may approve (bank-line decisions); 0 draws no Freigeben. */
+  approveCount: number;
+  /** How many of them may be rejected; 0 draws no Ablehnen. */
+  rejectCount: number;
+  /** The ticked rows' signed money per currency. */
+  totals: BatchTotals;
+  /** A ticked, approvable row POSTS: only then is Freigeben a money write and wears the accent. */
+  books: boolean;
+  /** Another commit's confirm is open over the page: Freigeben goes quiet, so one accent shows. */
+  quiet?: boolean;
+  running: boolean;
+  /** What Freigeben does, in the engine's words (its description). */
+  info: string;
+  onApprove: () => void;
+  onReject: () => void;
+  onClear: () => void;
+}
+
+export function SelectionDock({ count, approveCount, rejectCount, totals, books, quiet = false, running, info, onApprove, onReject, onClear }: SelectionDockProps) {
   const { t } = useI18n();
   const infoId = useId();
-  // The commit wears the accent once a row is ticked, unless a confirm over the page holds the one accent.
-  const live = selectedCount > 0 && books && !quiet;
-  const boxRef = useRef<HTMLInputElement | null>(null);
-  const allTicked = rowCount > 0 && selectedCount === rowCount;
-  const someTicked = selectedCount > 0 && selectedCount < rowCount;
-  useEffect(() => {
-    if (boxRef.current !== null) boxRef.current.indeterminate = someTicked;
-  }, [someTicked]);
-  if (mode === 'single') return null;
+  const live = books && !quiet;
+  if (count === 0) return null;
   return (
-    <div className="att-batch" role="group" aria-label={t('attention.batch.label')}>
-      <span className="att-lead">
-        {mode === 'tick' ? (
-          // K-14 (D137): the box keeps its 16px look; its hit area reaches 44px (CSS). It takes the section
-          // glyph's place, as a row's box takes its lead (the design judge's rule).
-          <label className="att-check">
-            <input
-              ref={boxRef}
-              type="checkbox"
-              className="att-batch-box"
-              aria-label={t(partial ? 'attention.batch.selectShown' : 'attention.batch.selectAll')}
-              checked={allTicked}
-              disabled={running || rowCount === 0}
-              onChange={(e) => onToggleAll(e.target.checked)}
-            />
-          </label>
-        ) : (
-          glyph
-        )}
-      </span>
-      {heading}
-      <span className="att-info att-batch-info">
-        <IconButton icon="info" small context={info} />
-      </span>
+    <div className="att-dock" role="region" aria-label={t('attention.batch.label')} aria-busy={running ? 'true' : undefined}>
       <span id={infoId} hidden>
         {info}
       </span>
-      {mode === 'tick' ? (
-        <button
-          type="button"
-          className={live ? 'btn btn--accent btn--sm att-batch-approve' : 'btn btn--secondary btn--sm att-batch-approve'}
-          data-money-commit={live ? 'approve_drafted_action book_bank_line' : undefined}
-          data-batch-approve=""
-          aria-describedby={infoId}
-          disabled={running || selectedCount === 0}
-          onClick={onApproveSelected}
-        >
-          {t('attention.batch.approveSelected', { count: selectedCount })}
-        </button>
-      ) : (
-        <button
-          type="button"
-          className="btn btn--secondary btn--sm att-batch-approve"
-          data-batch-approve=""
-          aria-describedby={infoId}
-          disabled={running || rowCount === 0}
-          onClick={onApproveAll}
-        >
-          {t(partial ? 'attention.batch.approveShown' : 'attention.batch.approveAll', { count: rowCount })}
-        </button>
-      )}
+      <VorschlagSelectionBar
+        count={count}
+        totals={totals}
+        running={running}
+        commit={
+          approveCount === 0 ? (
+            <></>
+          ) : (
+            <button
+              type="button"
+              className={live ? 'btn btn--accent btn--sm att-dock-approve' : 'btn btn--secondary btn--sm att-dock-approve'}
+              data-money-commit={live ? 'approve_drafted_action book_bank_line' : undefined}
+              data-batch-approve=""
+              aria-describedby={infoId}
+              disabled={running}
+              onClick={onApprove}
+            >
+              {t('attention.batch.approveSelected', { count: approveCount })}
+            </button>
+          )
+        }
+        reject={
+          rejectCount === 0 ? undefined : (
+            <RejectControl triggerLabel={t('attention.batch.rejectSelected', { count: rejectCount })} context={t('agent.vq.rejectContext')} busy={running} onReject={onReject} />
+          )
+        }
+        onClear={onClear}
+      />
     </div>
   );
 }

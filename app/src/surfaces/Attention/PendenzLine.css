@@ -1,0 +1,290 @@
+/* D208: the one Vorschlag row of Pendenzen and the Übersicht card. One line, no rule between rows, no card,
+   no radius: the hover tint is the only cue (DESIGN.md Surface hierarchy, the Ruhig sweep Lists). */
+
+.pl {
+  transition: background-color var(--t-motion-hover) var(--t-ease-out);
+}
+
+.pl:hover,
+.pl--open,
+.pl--current {
+  background: var(--t-bg-soft);
+}
+
+.pl-line {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 28px auto;
+  align-items: center;
+  column-gap: var(--t-space-1);
+  min-height: 40px;
+  padding: 0 var(--t-space-1);
+}
+
+.pl-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The row itself is the button that opens its line: the text, the date and the amount. */
+button.pl-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6.5rem 8.5rem;
+  align-items: center;
+  column-gap: var(--t-space-2);
+  min-width: 0;
+  min-height: 40px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.pl-main:focus-visible {
+  outline: none;
+  box-shadow: var(--t-focus-ring);
+}
+
+.pl-text {
+  display: flex;
+  align-items: baseline;
+  gap: var(--t-space-2);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.pl-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.pl-dim {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--t-text-dim);
+}
+
+.pl-account {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  flex: 0 0 auto;
+  color: var(--t-text-faint);
+}
+
+.pl-account-text {
+  white-space: nowrap;
+}
+
+/* The source glyph: small, faint, filled for a rule; its words are the tooltip's. */
+.pl-source {
+  display: inline-flex;
+  align-items: center;
+  color: var(--t-text-faint);
+}
+
+.pl-source svg {
+  width: 12px;
+  height: 12px;
+}
+
+.pl-date {
+  justify-self: end;
+  color: var(--t-text-faint);
+  font-size: var(--t-font-sm);
+  line-height: var(--t-lh-sm);
+  white-space: nowrap;
+}
+
+.pl-date--proposal {
+  color: var(--t-text-faint);
+  font-style: italic;
+}
+
+.pl-amount-cell {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+/* DESIGN.md Money, amended by D208: the figure in ink, a small success plus in, a danger minus out. */
+.pl-amount {
+  color: var(--t-text);
+}
+
+.pl-sign {
+  display: inline-block;
+  min-width: 0.75em;
+  text-align: center;
+}
+
+.pl-sign--in {
+  color: var(--t-success);
+  font-size: var(--t-font-sm);
+  font-weight: 600;
+}
+
+.pl-sign--out {
+  color: var(--t-danger);
+}
+
+/* The one hint: a glyph without a word, in the warn ink (D208 point 9). */
+.pl-hint-cell {
+  display: inline-flex;
+  justify-content: center;
+}
+
+.pl-hint,
+.pl-hint.icon-button {
+  color: var(--t-warn);
+}
+
+.pl-hint--glyph {
+  display: inline-flex;
+}
+
+/* Row actions: on hover, focus-within, the open and the current row, and always on touch. */
+.pl-acts {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  min-width: 96px;
+  opacity: 0;
+  transition: opacity var(--t-motion-hover) var(--t-ease-out);
+}
+
+.pl:hover .pl-acts,
+.pl:focus-within .pl-acts,
+.pl--open .pl-acts,
+.pl--current .pl-acts {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .pl-acts {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pl,
+  .pl-acts {
+    transition: none;
+  }
+}
+
+.pl-approve--disabled {
+  color: var(--t-text-faint);
+  cursor: not-allowed;
+}
+
+.pl-hint-word {
+  font-size: var(--t-font-sm);
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+.pl-stateline {
+  padding: 0 var(--t-space-1) var(--t-space-1) calc(20px + var(--t-space-2));
+}
+
+/* The open line (D208 point 4): one line, no labels, the glyphs and the commit on its right. */
+.pl-open {
+  padding: 0 var(--t-space-1) var(--t-space-1) calc(20px + var(--t-space-2));
+}
+
+.pl-edit {
+  display: grid;
+  gap: var(--t-space-1);
+}
+
+.pl-edit-line {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  flex-wrap: wrap;
+}
+
+.pl-field--text {
+  flex: 1 1 16rem;
+  min-width: 10rem;
+}
+
+.pl-field--account {
+  flex: 0 1 20rem;
+  min-width: 10rem;
+}
+
+/* D210: the dropdown fills its field and a long account name ends in an ellipsis, so it never runs into
+   the MWST field beside it (measured: "6500 Verwaltungs- und Bürokosten" overflowed the 16rem field). */
+.pl-field--account .select,
+.pl-field--vat .select {
+  display: block;
+  width: 100%;
+}
+
+.pl-field--vat {
+  flex: 0 1 11rem;
+  min-width: 8rem;
+}
+
+.pl-field--note {
+  flex: 1 1 auto;
+}
+
+.pl-readback {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--t-text-dim);
+}
+
+.pl-edit-acts {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+/* A pressed toggle is a filled glyph, never a box (D208): no border, no background behind it. */
+.pl-toggle[aria-pressed='true'],
+.pl-toggle[aria-pressed='true']:hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--t-text);
+}
+
+.pl-toggle[aria-pressed='true'] svg {
+  fill: currentColor;
+}
+
+/* The commit: the one primary of the open line (DESIGN.md Accent discipline). */
+.pl-commit,
+.pl-commit:hover {
+  color: var(--t-accent);
+}
+
+.pl-warn {
+  display: inline-flex;
+  color: var(--t-warn);
+}
+
+/* A narrow screen: the date and the booking text step back, the name and the amount stay. */
+@media (max-width: 640px) {
+  button.pl-main {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .pl-date,
+  .pl-dim {
+    display: none;
+  }
+}

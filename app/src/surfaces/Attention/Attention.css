@@ -31,7 +31,9 @@
   flex-direction: column;
   /* N4 L2: no dead band under the header; the sections start one step below it. */
   gap: var(--t-space-2);
-  max-width: 880px;
+  /* D197 (the judge): the shared Vorschlag row carries subject, kind, date, certainty and the signed amount;
+     at 880px it cut every subject while the window stood empty beside it. */
+  max-width: 1280px;
 }
 
 /* N4 L2: the header's own bottom margin is the band the judge measured; the page gap above is enough. */
@@ -111,6 +113,15 @@
   column-gap: var(--att-gap);
   row-gap: var(--t-space-0-5);
   min-height: 32px;
+}
+
+/* D207: the head is an h2 in the body's own type, its count beside the name. */
+h2.att-section-head {
+  margin: 0;
+  font-size: var(--t-font-body);
+  line-height: var(--t-lh-body);
+  font-weight: 600;
+  color: var(--t-text);
 }
 
 .att-section-head > .att-section-title {
@@ -234,8 +245,13 @@
 .att-item--vorschlag .vorschlag-line {
   display: flex;
   flex-direction: column;
-  gap: var(--t-space-1);
-  padding: var(--t-space-1) 0;
+  gap: 0;
+  padding: 0;
+}
+
+/* D197: the shared row draws no hairline of its own here; the hub's list item draws the one rule. */
+.att-item--vorschlag .vrow {
+  border-bottom: 0;
 }
 
 .att-item--vorschlag .vorschlag-line {
@@ -285,10 +301,11 @@ button.att-row-title {
   box-shadow: var(--t-focus-ring);
 }
 
-/* The selected row (a roving focus) is the selection tint on its line, nothing else (K-24). */
-.att-row-line:has([aria-current='true']),
-.att .vorschlag-line-row:has(.vorschlag-line-title[aria-current='true']) {
-  background: var(--t-accent-soft);
+/* D207 (calmer hover): a hovered row and the roving focus's row are tinted with the neutral soft ground,
+   never the brass accent (the accent is for posting clicks only, D137). */
+.att-row-line:hover,
+.att-row-line:has([aria-current='true']) {
+  background: var(--t-bg-soft);
 }
 
 /* The meta line, ONE format on every row (the design judge): values only, 13/18, dim; money in ink at the
@@ -759,4 +776,252 @@ button.att-row-title {
 }
 .att-digest-state {
   color: var(--t-text-dim);
+}
+
+/* D197: the shared selection bar takes the batch head's action slot; at touch width it moves to a line of
+   its own under the head, inside the viewport. */
+.att-batch > .vsel {
+  grid-area: action;
+  justify-self: start;
+  min-width: 0;
+}
+
+@media (max-width: 560px) {
+  .att-batch {
+    grid-template-columns: var(--att-lead) minmax(0, 1fr) auto;
+    grid-template-areas:
+      'glyph text info'
+      'action action action';
+  }
+
+  .att-batch > .vsel {
+    justify-self: stretch;
+  }
+}
+
+/* --- D201 pick A: one list with filters, one line per row, one sticky bar --------------------------- */
+
+.att {
+  /* The lead holds the box (on a Vorschlag) and the kind's glyph, so every title starts on one edge. */
+  --att-lead: 52px;
+}
+
+/* The row's columns: lead, the title and its facts, the one act, the ⋯, the chevron at the end. */
+.att-row-line {
+  grid-template-columns: var(--att-lead) minmax(0, 1fr) var(--att-action) var(--att-more) var(--att-info);
+  grid-template-areas: 'glyph text action more info';
+}
+
+@container att (max-width: 560px) {
+  /* A narrow row: the title and its facts take the width; the act, the ⋯ and the chevron go under them. */
+  .att-row-line {
+    grid-template-columns: var(--att-lead) minmax(0, 1fr) var(--att-more) var(--att-info);
+    grid-template-areas:
+      'glyph text text text'
+      '. action more info';
+  }
+}
+
+.att-lead {
+  gap: var(--t-space-1);
+}
+
+.att-lead-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  flex: 0 0 24px;
+}
+
+.att-kind {
+  display: inline-flex;
+  color: var(--t-text-dim);
+}
+
+/* The title and its facts on ONE line; the facts wrap under it only when the row is too narrow. */
+.att-row-text {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--t-space-2);
+}
+
+.att-row-text > .att-row-title {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.att-row-text > .att-row-meta {
+  flex: 1 1 auto;
+}
+
+/* The shared Vorschlag row in Pendenzen: the wider lead (box and glyph). */
+.att .vrow-grid {
+  grid-template-columns: var(--att-lead) minmax(0, 1fr) auto;
+}
+
+.att .vrow:not(.vrow--actions) .vrow-grid {
+  grid-template-columns: var(--att-lead) minmax(0, 1fr);
+}
+
+.att .vrow-lead {
+  width: var(--att-lead);
+  justify-content: flex-start;
+}
+
+.att .vrow-lead > .att-lead {
+  width: auto;
+}
+
+/* The chevron at the row's end: it turns when the detail opens in place under the line. */
+.att-disclose-cell {
+  grid-area: info;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.att-disclose svg {
+  transition: transform var(--t-motion-hover) var(--t-ease-out);
+}
+
+.att-disclose[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+
+.att-row-detail {
+  display: grid;
+  gap: var(--t-space-1);
+  padding: 0 var(--att-info) var(--t-space-2) var(--att-title-edge);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+}
+
+.att-row-detail p {
+  margin: 0;
+}
+
+.att .vorschlag-line-details {
+  padding-left: var(--att-title-edge);
+}
+
+/* The filter row and the select-all head line above the list. */
+.att-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.att-listhead {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+}
+
+/* D204 Arrive and leave: a row approved or rejected away fades and collapses; its neighbours close the gap. */
+.att-item--leaving {
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+  pointer-events: none;
+  animation: att-leave var(--t-motion-reveal) var(--t-ease-in) forwards;
+}
+
+.att-item--leaving > * {
+  min-height: 0;
+}
+
+@keyframes att-leave {
+  to {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    border-bottom-color: transparent;
+  }
+}
+
+/* THE STICKY BAR: at the bottom of the scroll area, centred, never wider than the page (375 px included). */
+.att-dock {
+  position: sticky;
+  bottom: var(--t-space-2);
+  z-index: var(--t-z-popover);
+  align-self: center;
+  display: flex;
+  max-width: 100%;
+  margin-top: var(--t-space-2);
+  padding: var(--t-space-1) var(--t-space-1) var(--t-space-1) var(--t-space-3);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  box-shadow: var(--t-shadow-overlay);
+}
+
+.att-dock > .vsel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .att-dock {
+    align-self: stretch;
+    padding-left: var(--t-space-2);
+  }
+
+  .att-dock .btn {
+    min-height: 44px;
+  }
+}
+
+/* --- D208 (owner, 18.11.2026): one calm line per row, no frame, no rules -------------------------------- */
+
+.att {
+  /* The lead holds the box only (no kind glyph any more): every title starts on one edge. */
+  --att-lead: 20px;
+  /* Pick Breite A: left aligned, never wider than 1120px. */
+  max-width: 1120px;
+}
+
+/* A section is its heading on the page ground: no rule above the list, none between rows. */
+.att-list,
+.att-group-list,
+.att-events-list {
+  border-top: 0;
+}
+
+.att-item,
+.att-events-row {
+  border-bottom: 0;
+}
+
+/* Every row is tinted on hover only (D207: never the accent). */
+.att-item:not(.att-item--vorschlag):hover {
+  background: var(--t-bg-soft);
+}
+
+/* The heading: the section's select-all in the lead, the name and its count, its one tool on the right. */
+div.att-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  min-height: 36px;
+  padding: 0 var(--t-space-1);
+}
+
+div.att-section-head > .att-lead-box {
+  width: 20px;
+  justify-content: center;
+}
+
+div.att-section-head > h2.att-section-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--t-space-1);
+}
+
+.att-section-tools {
+  margin-left: auto;
+  display: inline-flex;
 }

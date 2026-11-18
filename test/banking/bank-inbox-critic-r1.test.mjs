@@ -381,14 +381,12 @@ test('A39-11: history never pre-fills a control-account booking', () => {
 
 // --- A39-12 (LOW, decided): acceptDifference matches the direction and states its reason ------------
 
-test('A39-12: acceptDifference needs a reason, refuses the opposite direction, and stays visible in the balance', () => {
+test('A39-12: acceptDifference refuses the opposite direction, keeps a given reason, and stays visible in the balance (D204: no reason needed)', () => {
   const t = world();
   const out = must(postEntry(t.ctx, { date: '2026-07-20', source: 'manual', description: 'Zahlung', idempotencyKey: 'o', lines: [{ account: t.acc('6500'), debit: 2400 }, { account: t.acc('1020'), credit: 2400 }] }));
   const inn = must(postEntry(t.ctx, { date: '2026-07-20', source: 'manual', description: 'Eingang', idempotencyKey: 'i', lines: [{ account: t.acc('1020'), debit: 99999 }, { account: t.acc('3000'), credit: 99999 }] }));
   const { lines } = importLines(t, { statementId: 'AD', entries: [{ ref: 'D', amountMinor: 2500, cd: 'DBIT' }] });
   const before = rowCounts(t.store, t.workspaceId);
-  refused(bookBankLine(t.ctx, { bankTxnId: lines.D, target: { kind: 'existing_entry', entryId: out.entryId, acceptDifference: true }, idempotencyKey: 'no-reason' }), 'invalid_input');
-  refused(bookBankLine(t.ctx, { bankTxnId: lines.D, target: { kind: 'existing_entry', entryId: out.entryId, acceptDifference: true, differenceReason: '   ' }, idempotencyKey: 'blank' }), 'invalid_input');
   // Money OUT cannot be matched to an entry that brought money IN, whatever the difference.
   const dir = refused(bookBankLine(t.ctx, { bankTxnId: lines.D, target: { kind: 'existing_entry', entryId: inn.entryId, acceptDifference: true, differenceReason: 'egal' }, idempotencyKey: 'dir' }), 'direction_mismatch');
   assert.equal(dir.lineAmountMinor, -2500);
@@ -403,3 +401,22 @@ test('A39-12: acceptDifference needs a reason, refuses the opposite direction, a
   assert.equal(s.differenceMinor, -100 - 99999, 'the books really differ from the bank by the accepted amount and the unbacked entry');
 });
 
+test('D204 A39-12: an accepted difference needs no reason; the link records the difference and the audit row who and when', async () => {
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
+  const t = world();
+  const out = must(postEntry(t.ctx, { date: '2026-07-20', source: 'manual', description: 'Zahlung', idempotencyKey: 'o', lines: [{ account: t.acc('6500'), debit: 2400 }, { account: t.acc('1020'), credit: 2400 }] }));
+  const { lines } = importLines(t, { statementId: 'AD2', entries: [{ ref: 'D', amountMinor: 2500, cd: 'DBIT' }] });
+  const ok = must(bookBankLine(t.ctx, { bankTxnId: lines.D, target: { kind: 'existing_entry', entryId: out.entryId, acceptDifference: true, differenceReason: '   ' }, idempotencyKey: 'no-reason' }));
+  assert.equal(ok.differenceMinor, -100, 'what: the accepted difference');
+  assert.equal(lineOf(t, lines.D).decision.note, null, 'no reason, no note');
+  const who = decisionWhoWhen(t, lines.D);
+  assertWhoWhen(who.actor, who.at);
+  assertPermission('book_bank_line', { bankTxnId: lines.D, target: { kind: 'existing_entry' } });
+});
+
+/** D204: the live decision row of a bank line names who decided and when. */
+function decisionWhoWhen(t, bankTxnId) {
+  return t.store.db
+    .prepare('SELECT created_by AS actor, created_at AS at FROM bank_line_decision WHERE workspace_id = ? AND bank_txn_id = ? AND superseded_at IS NULL ORDER BY rowid DESC LIMIT 1')
+    .get(t.workspaceId, bankTxnId);
+}

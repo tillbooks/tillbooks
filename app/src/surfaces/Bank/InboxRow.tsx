@@ -28,7 +28,7 @@ import { COMMIT_TARGET_CLASS } from '../../lib/motion';
 import { useRef, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
-import { useT, useI18n, formatMoney } from '../../i18n';
+import { useT, useI18n, formatMoney, signedPrefix } from '../../i18n';
 import { OverflowMenu, type OverflowMenuItem } from '../../components/OverflowMenu';
 import { PickerButton } from '../../components/AccountCombobox';
 import { TaxCodeCombobox } from '../../components/TaxCodeCombobox';
@@ -63,7 +63,7 @@ import { needsBookingPreview, previewBookState, useBookingPreview } from './Book
 import { bookStateOf, vatSummaryOf, type SplitState } from './rowState';
 import { woherOf } from './DetailsPanel';
 import { duplicateFlagOf } from './statementFacts';
-import { StatusWarnGlyph } from '../../components/icons';
+import { StatusNeutralGlyph, StatusWarnGlyph } from '../../components/icons';
 
 /** How long the row waits after the last keystroke in an asked amount before it asks `compose_entry`. */
 const ASK_COMPOSE_DEBOUNCE_MS = 250;
@@ -109,18 +109,23 @@ export function AiTag() {
   );
 }
 
-/** "−89.90": the minus in danger ink (money's semantics), the figure in the text ink, tabular. */
+/**
+ * "−89.90", "+23.75": the minus in danger ink (money's semantics), the plus in the text ink (money in is
+ * normal, not celebratory), the figure in the text ink, tabular. D195: the sign is `formatMoney`'s signed
+ * one, so `appearance.amount_sign = minus_only` drops the plus here as everywhere.
+ */
 export function SignedAmount({ minor, currency, showCurrency }: { minor: number; currency: string; showCurrency: boolean }) {
   const figure = formatMoney(Math.abs(minor), currency).slice(currency.length + 1);
+  const sign = signedPrefix(minor);
   return (
     <span className="bank-amount t-money">
       {showCurrency && <span className="bank-amount__currency">{currency}</span>}
-      {minor < 0 && (
-        <span className="bank-amount__sign" aria-hidden="true">
-          {'−'}
+      {sign !== '' && (
+        <span className="bank-amount__sign" data-sign={minor < 0 ? 'minus' : 'plus'} aria-hidden="true">
+          {sign}
         </span>
       )}
-      <span className="visually-hidden">{minor < 0 ? '-' : ''}</span>
+      <span className="visually-hidden">{minor < 0 ? '-' : sign === '+' ? '+' : ''}</span>
       {figure}
     </span>
   );
@@ -154,7 +159,7 @@ function PartyCell({ party, detail, accountName }: { party: string; detail: stri
 }
 
 /** What a row shares between its open and decided forms: selection, keyboard, and a file dropped on it. */
-interface RowBehaviour {
+export interface RowBehaviour {
   selected: boolean;
   /** The person's act on the row body: select it, or collapse it when it is the selected one. */
   onToggle: () => void;
@@ -170,14 +175,14 @@ interface RowBehaviour {
 }
 
 /** True when a pointer event came from the row's own DOM (not a control in it, not a portal above it). */
-function isRowBodyClick(event: MouseEvent<HTMLTableRowElement>): boolean {
+export function isRowBodyClick(event: MouseEvent<HTMLTableRowElement>): boolean {
   const target = event.target as Node;
   if (!event.currentTarget.contains(target)) return false;
   return (target instanceof Element ? target : target.parentElement)?.closest('button, a, input, label, select, textarea, [role="menu"]') === null;
 }
 
 /** Arrow keys walk the rows, Enter and Space toggle the focused one, Escape collapses it. */
-function onRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, b: RowBehaviour) {
+export function onRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, b: RowBehaviour) {
   if (event.target !== event.currentTarget) return;
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
@@ -198,7 +203,7 @@ function onRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, b: RowBehaviour
 }
 
 /** The drop target: a file dragged over the row is announced by the row's tint, and attached on drop. */
-function useRowDrop(onDropFiles: ((files: File[]) => void) | null) {
+export function useRowDrop(onDropFiles: ((files: File[]) => void) | null) {
   const depth = useRef(0);
   const [over, setOver] = useState(false);
   if (onDropFiles === null) return { over: false, handlers: {} };
@@ -462,6 +467,57 @@ export interface OpenRowProps extends RowBehaviour {
  * click each (D177 point 5); "Anderer Grund" asks for its note in the detail area. Nothing to offer, no
  * trigger.
  */
+/** A41.8: a rate in basis points as people write it ("8.1 %", "19 %"). */
+function ratePercent(rateBp: number): string {
+  return `${rateBp / 100} %`;
+}
+
+/**
+ * A41.8 (D193): the MWST cell's one mark when the line's receipt VAT `differs` from what the proposal books, or the
+ * receipt's figures are below the trust level (`unread`); nothing for `match` and `none`. The engine decides
+ * (`vatCheck`, `receiptVat` on `list_bank_inbox`); this only says it, a glyph with its words in a real tooltip.
+ */
+export function VatCheckMark({ line }: { line: BankInboxLine }) {
+  const t = useT();
+  const check = line.vatCheck ?? 'none';
+  if (check !== 'differs' && check !== 'unread') return null;
+  const rv = line.receiptVat ?? null;
+  let words: string;
+  if (check === 'unread') {
+    words = t('bankInbox.row.vatReceiptUnread');
+  } else {
+    const currency = rv?.currency ?? line.currency;
+    const stated = rv?.amountMinor ?? null;
+    const rateBp = rv?.rateBp ?? null;
+    const several = (rv?.receipts ?? 1) > 1;
+    // Critic r3 F3: several receipts (an invoice and its receipt of one payment, say) are said as several, their
+    // figures summed, never as one receipt's.
+    const receipt = several
+      ? t('bankInbox.row.vatReceiptsSum', { count: rv?.receipts ?? 2, amount: stated === null ? '' : formatMoney(stated, currency) })
+      : stated === null || stated === 0
+        ? t('bankInbox.row.vatReceiptZero')
+        : rateBp !== null && rateBp > 0
+          ? `${ratePercent(rateBp)} = ${formatMoney(stated, currency)}`
+          : formatMoney(stated, currency);
+    const computed = rv?.comparison ?? null;
+    const code = line.proposal?.vatCode ?? null;
+    const proposed =
+      computed === null || computed.untaxed === true || computed.computedMinor === 0
+        ? t('bankInbox.row.vatProposedNone')
+        : code !== null
+          ? `${code} = ${formatMoney(computed.computedMinor, line.currency)}`
+          : formatMoney(computed.computedMinor, line.currency);
+    words = t(several ? 'bankInbox.row.vatReceiptsDiffer' : 'bankInbox.row.vatReceiptDiffers', { receipt, proposed });
+  }
+  return (
+    <Tooltip content={words}>
+      <span className="bank-vat-check" role="img" aria-label={words} tabIndex={0} data-vat-check={check} style={{ display: 'inline-flex', flex: '0 0 auto' }}>
+        {check === 'differs' ? <StatusWarnGlyph size={16} /> : <StatusNeutralGlyph size={16} />}
+      </span>
+    </Tooltip>
+  );
+}
+
 function RowMenu({ party, amount, busy, items }: { party: string; amount: string; busy: boolean; items: OverflowMenuItem[] }) {
   const t = useT();
   if (items.length === 0) return null;
@@ -649,7 +705,17 @@ export function OpenRow({
         className="bank-picker bank-picker--vat"
       />
     );
-    vatCell = vatCode !== undefined ? <Tooltip content={`${vatCode.code} ${vatCode.label}`}>{vatPicker}</Tooltip> : vatPicker;
+    // A41.8: a code the receipt set says so in its own tooltip, while the row still shows the proposal's code.
+    const fromReceipt = line.proposal?.vatFromReceipt;
+    const receiptNote =
+      fromReceipt !== undefined && (singleLeg.taxCode ?? null) === (line.proposal?.vatCode ?? null)
+        ? fromReceipt.overrode !== null
+          ? t('bankInbox.row.vatFromReceiptInstead', { code: fromReceipt.overrode })
+          : t('bankInbox.row.vatFromReceipt')
+        : null;
+    const codeTip = vatCode !== undefined ? `${vatCode.code} ${vatCode.label}` : null;
+    const tip = [codeTip, receiptNote].filter((x): x is string => x !== null).join('. ');
+    vatCell = tip !== '' ? <Tooltip content={tip}>{vatPicker}</Tooltip> : vatPicker;
   } else if (singleLeg !== undefined) {
     vatCell = locked(t('taxCode.none'), t('bankInbox.row.vatNotApplicable', { account: accountLabel(lookups, singleLeg.accountId) || parts.name }));
   } else if (summary !== null && split === null) {
@@ -831,7 +897,19 @@ export function OpenRow({
             </span>
           )}
         </td>
-        {!compact && <td className="bank-cell bank-cell--vat">{vatCell}</td>}
+        {!compact && (
+          <td className="bank-cell bank-cell--vat">
+            {/* A41.8: the receipt's VAT mark beside the field; the row's layout is otherwise unchanged. */}
+            {line.vatCheck === 'differs' || line.vatCheck === 'unread' ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--t-space-0-5)' }}>
+                {vatCell}
+                <VatCheckMark line={line} />
+              </span>
+            ) : (
+              vatCell
+            )}
+          </td>
+        )}
         {!compact && (
           <td className="bank-cell bank-cell--conf">
             <ConfidenceCell line={line} draft={draft} vorschlag={vorschlag} lookups={lookups} />
@@ -881,6 +959,8 @@ export interface DecidedRowProps extends RowBehaviour {
   followUpHref?: (standardId: string) => string;
   /** D177: the Details panel is open beside the table (no MWST and paperclip columns). */
   compact?: boolean;
+  /** D195 (v12): the line opens in place; its receipt shows in the strip, so the paperclip column goes. */
+  inline?: boolean;
   after?: ReactNode;
 }
 
@@ -903,6 +983,7 @@ export function DecidedRow({
   followUp = null,
   followUpHref,
   compact = false,
+  inline = false,
   after,
 }: DecidedRowProps) {
   const t = useT();
@@ -917,7 +998,7 @@ export function DecidedRow({
   return (
     <>
       <tr
-        className="bank-row bank-row--decided"
+        className={inline ? 'bank-row bank-row--decided bank-row--inline' : 'bank-row bank-row--decided'}
         tabIndex={0}
         aria-current={selected ? 'true' : undefined}
         data-selected={selected ? 'true' : undefined}
@@ -950,7 +1031,7 @@ export function DecidedRow({
         <td className="bank-cell bank-cell--amount">
           <SignedAmount minor={line.amountMinor} currency={line.currency} showCurrency={showCurrency} />
         </td>
-        {!compact && (
+        {!compact && !inline && (
           <td className="bank-cell bank-cell--clip">
             <ClipButton line={line} party={party} canAttach={canAttach} busy={false} onAttach={onAttach} onOpenReceipts={onOpenReceipts} onAttachBeleg={onAttachBeleg} />
           </td>

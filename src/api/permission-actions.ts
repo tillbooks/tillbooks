@@ -64,7 +64,7 @@ export function permissionActions(h: PermissionActionHelpers): readonly ActionDe
     ctxAction(
       'whoami',
       'read',
-      'Report who this session is in a workspace: the actor, the role it holds, and the exact capabilities that role resolves to. The ONE source a client may use to pre-disable a write control. For the governed agent seat it also carries agentDial, the effective approval-dial level per capability (auto executes, ask drafts), so an agent can predict whether a write will post or wait for approval without holding the owner-only get_agent_dial.',
+      'Report who this session is in a workspace: the actor, the role it holds, and the exact capabilities that role resolves to. The ONE source a client may use to pre-disable a write control. For the governed agent seat it also carries agentDial, the effective approval-dial level per capability (auto executes, ask drafts), so an agent can predict whether a write will post or wait for approval without holding the owner-only get_agent_dial; while the owner switched on agent.approve_on_owner_word it also carries approveOnOwnerWord { rule, excludedFamilies }, the rule for approving Vorschläge the owner approved in their own message and the dial families that always wait for the owner\'s click (D209, setting agent.owner_word_excluded).',
       ctxSchema(),
       (ctx) => whoami(ctx),
     ),

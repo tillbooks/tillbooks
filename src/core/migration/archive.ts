@@ -706,7 +706,7 @@ export function archivePeriods(ctx: WorkspaceContext, _input: Record<string, nev
       periodFrom: r.period_from,
       periodTo: r.period_to,
       outcome: r.outcome,
-      reason: r.reason,
+      reason: r.reason === '' ? null : r.reason, // D204: a reasonless purge reads null, as on the period
       statutoryRef: r.statutory_ref,
       actor: r.actor,
       rowCount: r.row_count,
@@ -734,9 +734,13 @@ export function archivePurge(
   const guard =
     reqStr(input.periodFrom, 'periodFrom') ??
     reqStr(input.periodTo, 'periodTo') ??
-    reqStr(input.reason, 'reason') ??
     reqStr(input.idempotencyKey, 'idempotencyKey');
   if (guard) return guard;
+  // D204 point 5: a purge takes no reason. The person confirms (the Studio has them type the year being
+  // purged), and the purge record keeps who and when; a given reason is kept beside them. The record's
+  // `reason` column is NOT NULL on stored books, so an absent reason is stored as the empty string.
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
+  const recordReason = reason ?? '';
   if (!PERIOD.test(input.periodFrom as string) || !PERIOD.test(input.periodTo as string)) {
     return err('invalid_input', { field: 'periodFrom', reason: 'YYYY-MM' });
   }
@@ -766,7 +770,7 @@ export function archivePurge(
           `INSERT INTO gl_archive_purge_record (id, workspace_id, period_from, period_to, outcome, reason, statutory_ref, actor, row_count, created_at)
            VALUES (?, ?, ?, ?, 'refused', ?, ?, ?, 0, ?)`,
         )
-        .run(ctx.ids.next('glpurge'), ctx.workspaceId, input.periodFrom, input.periodTo, input.reason, RETENTION_STATUTE, ctx.actor, now);
+        .run(ctx.ids.next('glpurge'), ctx.workspaceId, input.periodFrom, input.periodTo, recordReason, RETENTION_STATUTE, ctx.actor, now);
       return err('retention_active', { until, statutoryRef: RETENTION_STATUTE });
     }
 
@@ -795,7 +799,7 @@ export function archivePurge(
       for (const p of periods) {
         ctx.store.db
           .prepare('UPDATE gl_archive_period SET purged_at = ?, purge_actor = ?, purge_reason = ?, purge_row_count = ? WHERE workspace_id = ? AND period = ?')
-          .run(now, ctx.actor, input.reason, entryIds.length, ctx.workspaceId, p.period);
+          .run(now, ctx.actor, reason, entryIds.length, ctx.workspaceId, p.period);
       }
 
       recordId = ctx.ids.next('glpurge');
@@ -804,7 +808,7 @@ export function archivePurge(
           `INSERT INTO gl_archive_purge_record (id, workspace_id, period_from, period_to, outcome, reason, statutory_ref, actor, row_count, created_at)
            VALUES (?, ?, ?, ?, 'purged', ?, ?, ?, ?, ?)`,
         )
-        .run(recordId, ctx.workspaceId, input.periodFrom, input.periodTo, input.reason, RETENTION_STATUTE, ctx.actor, purgedEntries, now);
+        .run(recordId, ctx.workspaceId, input.periodFrom, input.periodTo, recordReason, RETENTION_STATUTE, ctx.actor, purgedEntries, now);
 
       // The linked source files (E00, US-G13.4): a file leaves only when NO remaining archive entry
       // references it, through E00's own verb, which keeps its own retention gate. A refusal there
@@ -826,7 +830,7 @@ export function archivePurge(
         recordId,
         periodFrom: input.periodFrom,
         periodTo: input.periodTo,
-        reason: input.reason,
+        reason,
         statutoryRef: RETENTION_STATUTE,
         actor: ctx.actor,
         rowCount: purgedEntries,

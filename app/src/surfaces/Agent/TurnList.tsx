@@ -18,6 +18,7 @@ import { useI18n, useT } from '../../i18n';
 import { Status, type StatusKind } from '../../components/Status';
 import { refusalText } from '../../components/states';
 import { argumentRows } from './vorschlagDetails';
+import { actorWords } from './vorschlagView';
 import './VorschlagLine.css';
 import { LABELLED_VERBS, TRACE_COLLAPSE_THRESHOLD, type AgentCall, type AgentTurn } from './model';
 
@@ -108,15 +109,37 @@ function TraceRow({ call }: { call: AgentCall }) {
         )}
         {/* Where the proposal went (F-08, J5.6): a rejection names the human's reason IN the trace,
             so the next session reads it here instead of proposing the same thing again blind. */}
+        {/* D196: a decision the AGENT took under the owner's grant reads differently from a person's, and
+            names the grant (who gave it, when) on hover. */}
         {call.mode === 'draft' && call.draftStatus === 'rejected' && (
-          <span className="trace-decision" data-decision="rejected">
-            {call.rejectReason !== null && call.rejectReason !== ''
-              ? t('agent.trace.rejectedWith', { reason: call.rejectReason })
-              : t('agent.trace.rejectedNoReason')}
+          <span
+            className="trace-decision"
+            data-decision="rejected"
+            data-decided-by={call.decidedUnderGrant ? 'agent' : 'person'}
+            title={call.decidedUnderGrant ? t('agent.trace.underGrant', { grantedBy: actorWords(t, call.decidedUnderGrant.grantedBy), grantedAt: call.decidedUnderGrant.grantedAt.slice(0, 10) }) : undefined}
+          >
+            {call.decidedUnderGrant
+              ? t('agent.trace.rejectedByAgent')
+              : call.rejectReason !== null && call.rejectReason !== ''
+                ? t('agent.trace.rejectedWith', { reason: call.rejectReason })
+                : t('agent.trace.rejectedNoReason')}
           </span>
         )}
         {call.mode === 'draft' && call.draftStatus === 'executed' && (
-          <span className="trace-decision" data-decision="executed">{t('agent.trace.approved')}</span>
+          <span
+            className="trace-decision"
+            data-decision="executed"
+            data-decided-by={call.decidedOnOwnerWord ? 'owner-word' : call.decidedUnderGrant ? 'agent' : 'person'}
+            title={
+              call.decidedOnOwnerWord
+                ? t('agent.trace.onWordTitle', { quote: call.decidedOnOwnerWord.quote, saidAt: call.decidedOnOwnerWord.saidAt.slice(0, 10) })
+                : call.decidedUnderGrant
+                  ? t('agent.trace.underGrant', { grantedBy: actorWords(t, call.decidedUnderGrant.grantedBy), grantedAt: call.decidedUnderGrant.grantedAt.slice(0, 10) })
+                  : undefined
+            }
+          >
+            {call.decidedOnOwnerWord ? t('agent.trace.approvedOnWord') : call.decidedUnderGrant ? t('agent.trace.approvedByAgent') : t('agent.trace.approved')}
+          </span>
         )}
         {/* N1: the proposal is void because its record changed after it was made; nothing ran. */}
         {call.mode === 'draft' && call.draftStatus === 'stale' && (

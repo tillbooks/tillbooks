@@ -43,6 +43,7 @@ const BAZG_DAILY_PAYLOAD = readFileSync(
  * them had piled up by 25.09.2026 and filled the disk until the gate itself failed with ENOSPC. A
  * crashed process now leaves one directory, not thousands.
  */
+
 const RUN_TMP = mkdtempSync(join(tmpdir(), 'till-conf-run-'));
 process.on('exit', () => {
   try {
@@ -811,7 +812,7 @@ export const SCENARIOS = {
   deals_mark: (fx) => {
     const c = fx.call('create_contact', { partyRole: 'customer', name: 'Abschluss AG', idempotencyKey: 'dlk-seed' });
     const d = fx.call('deals_create', { contactId: c.contact.id, title: 'Grossprojekt', valueMinor: 500000, idempotencyKey: 'dlk-deal' });
-    // The lost leg, because it is the guarded one (lostReason required, probability pinned to 0).
+    // The lost leg, because it is the guarded one (probability pinned to 0; the lostReason is optional, D204).
     return { workspaceId: fx.workspaceId, dealId: d.dealId, status: 'lost', lostReason: 'Budget gestrichen', idempotencyKey: 'dlk-1' };
   },
 
@@ -2466,6 +2467,15 @@ export const SCENARIOS = {
     kinds: { sale: { action: 'book', accountId: fx.accId('3400'), taxCode: null } },
     idempotencyKey: 'sst-1',
   }),
+  // A43 §2: the table mapping of one source, saved from the mapping and the headers it was made for.
+  set_settlement_table_mapping: (fx) => ({
+    workspaceId: fx.workspaceId,
+    system: 'Musterplattform',
+    processor: 'Beispielzahl',
+    mapping: { columns: { id: 'Beleg', day: 'Datum', amount: 'Betrag', fee: 'Gebühr' }, dateFormat: 'dd.mm.yyyy', decimalSeparator: ',', vat: { mode: 'from_template' } },
+    headers: ['Beleg', 'Datum', 'Betrag', 'Gebühr'],
+    idempotencyKey: 'sstm-1',
+  }),
   import_settlement: (fx) => {
     fx.call('set_settlement_template', {
       system: 'Musterplattform',
@@ -2486,6 +2496,61 @@ export const SCENARIOS = {
         ],
       },
       idempotencyKey: 'ist-1',
+    };
+  },
+
+  // D198, the settlement feed. The source is a PERSON's act (human-only), so it runs as the Studio seat; the
+  // token lands in the in-memory store the scenario wires, never in a row. The pull fetches an invented feed
+  // and books it through import_settlement: the double call proves a re-pull books nothing twice.
+  set_settlement_source: (fx) => {
+    fx.deps.actor = 'studio';
+    fx.deps.settlementFeed = memorySettlementFeed(settlementFeedDoc());
+    return {
+      workspaceId: fx.workspaceId,
+      system: 'Musterplattform',
+      processor: 'Beispielzahl',
+      baseUrl: 'https://plattform.example',
+      fromDate: '2026-03-01',
+      feedToken: 'conformance_token_0123456789',
+      idempotencyKey: 'sss-1',
+    };
+  },
+  pull_settlement: (fx) => {
+    seedSettlementFeed(fx, 'pls');
+    return { workspaceId: fx.workspaceId, system: 'Musterplattform', processor: 'Beispielzahl', from: '2026-03-01', to: '2026-03-31', idempotencyKey: 'pls-1' };
+  },
+
+  // D198 re-cut R6: a PERSON's resolution of an observed event (human-only, so the Studio seat). The pull
+  // observes the invented sale; not_test is the test track, which needs no booking state. The double call
+  // proves the replay writes nothing new.
+  resolve_settlement_event: (fx) => {
+    seedSettlementFeed(fx, 'rse');
+    fx.call('pull_settlement', { system: 'Musterplattform', processor: 'Beispielzahl', from: '2026-03-01', to: '2026-03-31', idempotencyKey: 'rse-pull' });
+    fx.deps.actor = 'studio';
+    return {
+      workspaceId: fx.workspaceId,
+      system: 'Musterplattform',
+      processor: 'Beispielzahl',
+      eventId: 'feed-sale-1',
+      resolution: 'not_test',
+      reason: 'Echter Verkauf, kein Test (erfunden)',
+      idempotencyKey: 'rse-1',
+    };
+  },
+
+  // A42: a person ignores an invented feed event in the Umsatz review (it need not be imported yet). The double
+  // call proves the replay writes nothing new.
+  set_settlement_event_ignored: (fx) => {
+    seedSettlementFeed(fx, 'ssi');
+    fx.deps.actor = 'studio';
+    return {
+      workspaceId: fx.workspaceId,
+      system: 'Musterplattform',
+      processor: 'Beispielzahl',
+      eventId: 'feed-sale-1',
+      ignored: true,
+      reason: 'Testkauf (erfunden)',
+      idempotencyKey: 'ssi-1',
     };
   },
 
@@ -4067,6 +4132,21 @@ export const SCENARIOS = {
     return { workspaceId: fx.workspaceId, ids };
   },
 
+  // D196 item 9: two Vorschläge rejected in ONE call with one reason, each id ONE reject_drafted_action.
+  // Key-exempt like the single verb: the ids are the keys, and the second call answers already_rejected for
+  // both. The decider is a person (the single verb's scenario); the agent under the grant is the D196 suite's.
+  reject_drafted_actions: (fx) => {
+    fx.deps.actor = 'studio';
+    const ids = [0, 1].map((i) =>
+      seedDraftedAction(fx, `ras-${i}`, 'set_aging_bucket_config', {
+        workspaceId: fx.workspaceId,
+        boundariesDays: [30, 60, 90 + i],
+        idempotencyKey: `ras-${i}-inner`,
+      }),
+    );
+    return { workspaceId: fx.workspaceId, ids, reason: 'Neue Regeln: die Staffelung schlage ich neu vor.' };
+  },
+
   // N01 (US-N01.9): the dispatcher runs post_entry by name; the inner verb carries its own key, so the
   // replay replays the inner post and moves nothing. Pre-workspace itself (the tenant is the args').
   call_tool: (fx) => {
@@ -4145,6 +4225,12 @@ export const SCENARIOS = {
     fx.deps.actor = 'studio';
     return { workspaceId: fx.workspaceId, kind: 'digest', ref: '2026-07-16' };
   },
+
+  // O00 (D199): the install's What's new marker. The scenario's faces have no support folder, so the verb
+  // answers persisted: false and writes nothing; `test/releases/whats-new.test.mjs` drives the write in a temp
+  // folder. Key-exempt (absolute: marking the running version seen twice is the same marker).
+  whats_new_mark_seen: (fx) => ({ workspaceId: fx.workspaceId }),
+
 
   // --- A41.3 re-cut v2 (D184): the person's receipt verbs. Each is a PERSON's act (the engine refuses a
   // governed seat human_only), so these run as the Studio seat (`assignableReceipt` sets it). The receipt is a
@@ -6258,6 +6344,54 @@ function rentVorlage(fx, seed) {
 
 /** One registered Bankkonto, linked to the seeded 1020, for the A19 scenarios that need one to exist. */
 /** D185: an invented clearing account (a balance account the KMU seed does not carry) for the settlement socket. */
+/** D198: an invented feed of one sale, its fee and the payout of the rest. */
+function settlementFeedDoc() {
+  return {
+    schema: 'till-settlement/v1',
+    source: { system: 'Musterplattform', processor: 'Beispielzahl' },
+    events: [
+      { id: 'feed-sale-1', kind: 'sale', day: '2026-02-27', currency: 'CHF', amount: 42.5, net: 42.5, vat: null, refs: { feeWaived: false, test: false } },
+      { id: 'feed-fee-1', kind: 'processing_fee', day: '2026-02-27', currency: 'CHF', amount: '-1.35', net: '-1.35', vat: null },
+      { id: 'feed-payout-1', kind: 'bank_payout', day: '2026-03-02', currency: 'CHF', amount: '-41.15', net: '-41.15', vat: null, refs: { payoutId: 'po_conf_1' } },
+    ],
+  };
+}
+
+/** D198: the feed seam for a scenario: tokens in a Map, `doc` answered to any stored token. */
+function memorySettlementFeed(doc) {
+  const tokens = new Map();
+  return {
+    secretStore: 'memory',
+    storeToken: (ref, token) => (tokens.set(ref, token), { ok: true }),
+    deleteToken: (ref) => (tokens.delete(ref), { ok: true }),
+    hasToken: (ref) => tokens.has(ref),
+    fetchFeed: (req) => (tokens.has(req.tokenRef) ? { kind: 'response', status: 200, body: JSON.stringify(doc) } : { kind: 'no_token' }),
+  };
+}
+
+/** D198: a saved source (as the Studio seat), its template and the feed seam. */
+function seedSettlementFeed(fx, seed) {
+  fx.deps.settlementFeed = memorySettlementFeed(settlementFeedDoc());
+  const actor = fx.deps.actor;
+  fx.deps.actor = 'studio';
+  fx.call('set_settlement_source', {
+    system: 'Musterplattform',
+    processor: 'Beispielzahl',
+    baseUrl: 'https://plattform.example',
+    fromDate: '2026-02-01',
+    feedToken: 'conformance_token_0123456789',
+    idempotencyKey: `${seed}-src`,
+  });
+  fx.deps.actor = actor;
+  fx.call('set_settlement_template', {
+    system: 'Musterplattform',
+    processor: 'Beispielzahl',
+    clearingAccountId: settlementClearing(fx, seed),
+    kinds: { sale: { action: 'book', accountId: fx.accId('3400'), taxCode: null }, processing_fee: { action: 'book', accountId: fx.accId('6900'), taxCode: null } },
+    idempotencyKey: `${seed}-tpl`,
+  });
+}
+
 function settlementClearing(fx, seed) {
   const made = fx.call('create_account', { number: '1095', name: 'Durchlaufkonto Plattform', type: 'asset', idempotencyKey: `${seed}-1095` });
   return made.accountId;
@@ -6545,6 +6679,11 @@ export const READ_SCENARIOS = {
     fx.call('settings_set', { key: 'checklists.attention_window_days', value: 7, reason: 'kurz halten', idempotencyKey: 'sgt-seed' });
     return { workspaceId: fx.workspaceId, key: 'checklists.attention_window_days' };
   },
+  // D202: the history reader over a really-changed setting; a pure read.
+  settings_history: (fx) => {
+    fx.call('settings_set', { key: 'checklists.attention_window_days', value: 7, idempotencyKey: 'shi-seed' });
+    return { workspaceId: fx.workspaceId, key: 'checklists.attention_window_days' };
+  },
   // --- G00, per-person preferences (D178 point 7): two pure reads over a really-stored value ------
   prefs_list: (fx) => {
     fx.call('prefs_set', { key: 'appearance.density', value: 'kompakt' });
@@ -6623,6 +6762,99 @@ export const READ_SCENARIOS = {
     });
     return { workspaceId: fx.workspaceId, system: 'Musterplattform', processor: 'Beispielzahl' };
   },
+  // A43 §2: a table read through a saved mapping and a saved template, so the read answers a real document
+  // with the VAT split from the template; the snapshot proves it writes nothing.
+  settlement_from_table: (fx) => {
+    fx.call('set_settlement_template', {
+      system: 'Musterplattform',
+      processor: 'Beispielzahl',
+      clearingAccountId: settlementClearing(fx, 'sft'),
+      kinds: { sale: { action: 'book', accountId: fx.accId('3400'), taxCode: 'UST81' }, processing_fee: { action: 'book', accountId: fx.accId('6900'), taxCode: null } },
+      idempotencyKey: 'sft-tpl',
+    });
+    fx.call('set_settlement_table_mapping', {
+      system: 'Musterplattform',
+      processor: 'Beispielzahl',
+      mapping: { columns: { id: 'Beleg', day: 'Datum', amount: 'Betrag', fee: 'Gebühr' }, dateFormat: 'dd.mm.yyyy', decimalSeparator: ',' },
+      headers: ['Beleg', 'Datum', 'Betrag', 'Gebühr'],
+      idempotencyKey: 'sft-map',
+    });
+    return { workspaceId: fx.workspaceId, system: 'Musterplattform', processor: 'Beispielzahl', content: 'Beleg;Datum;Betrag;Gebühr\nB-1;02.03.2026;108,10;3,24\nB-2;03.03.2026;54,05;1,62\n' };
+  },
+  // A43 §2: a saved table mapping, so the read answers it with its profile file.
+  get_settlement_table_mapping: (fx) => {
+    fx.call('set_settlement_table_mapping', {
+      system: 'Musterplattform',
+      processor: 'Beispielzahl',
+      mapping: { columns: { id: 'Beleg', day: 'Datum', amount: 'Betrag' }, dateFormat: 'dd.mm.yyyy' },
+      headers: ['Beleg', 'Datum', 'Betrag'],
+      idempotencyKey: 'gstm-map',
+    });
+    return { workspaceId: fx.workspaceId, system: 'Musterplattform', processor: 'Beispielzahl' };
+  },
+  // D198: a saved source over a pull, so the read answers its watermark and last pull (never the token).
+  get_settlement_source: (fx) => {
+    seedSettlementFeed(fx, 'gss');
+    fx.call('pull_settlement', { system: 'Musterplattform', processor: 'Beispielzahl', from: '2026-03-01', to: '2026-03-31', idempotencyKey: 'gss-pull' });
+    return { workspaceId: fx.workspaceId, system: 'Musterplattform', processor: 'Beispielzahl' };
+  },
+  // D198: a bank line of 41.15 coming in the day before the pulled payout's arrival: one match, with the
+  // sale and the fee as its composition.
+  settlement_payout_for_bank_line: (fx) => {
+    seedSettlementFeed(fx, 'spb');
+    fx.call('pull_settlement', { system: 'Musterplattform', processor: 'Beispielzahl', from: '2026-03-01', to: '2026-03-31', idempotencyKey: 'spb-pull' });
+    const line = importedPartyLine(fx, 'spb', 4115, 'CRDT');
+    return { workspaceId: fx.workspaceId, bankTxnId: line.bankTxnId };
+  },
+  // A42: the Umsatz review over the invented feed, as the Studio person: it fetches and runs the real import
+  // rolled back, so the whole-database snapshot proves the dry run leaves nothing, twice.
+  settlement_review: (fx) => {
+    seedSettlementFeed(fx, 'srv');
+    // Only a person reviews the feed (paper critic r2 M1): the Studio seat, as for the D198 person-only verbs.
+    fx.deps.actor = 'studio';
+    return { workspaceId: fx.workspaceId, system: 'Musterplattform', processor: 'Beispielzahl', from: '2026-02-01', to: '2026-03-31' };
+  },
+  // D203: the Umsatz figures from the books over a pulled feed (a booked sale and fee) and a manual sale; the
+  // whole-database snapshot proves both reads write nothing, twice.
+  turnover_summary: (fx) => {
+    seedSettlementFeed(fx, 'tsum');
+    fx.deps.actor = 'studio';
+    fx.call('pull_settlement', { system: 'Musterplattform', processor: 'Beispielzahl', from: '2026-02-01', to: '2026-03-31', idempotencyKey: 'tsum-pull' });
+    return { workspaceId: fx.workspaceId, from: '2026-02-01', to: '2026-03-31', compare: 'previous_year' };
+  },
+  settlement_periods: (fx) => {
+    seedSettlementFeed(fx, 'sper');
+    fx.deps.actor = 'studio';
+    fx.call('pull_settlement', { system: 'Musterplattform', processor: 'Beispielzahl', from: '2026-02-01', to: '2026-03-31', idempotencyKey: 'sper-pull' });
+    return { workspaceId: fx.workspaceId, unit: 'month', around: '2026-03-15', before: 2, after: 1 };
+  },
+  // A43 section 5: the contract check over an invented document with one event that reads and one the
+  // reader refuses; the whole-database snapshot proves it writes nothing, twice.
+  validate_settlement: (fx) => ({
+    workspaceId: fx.workspaceId,
+    settlement: {
+      schema: 'till-settlement/v1',
+      source: { system: 'Musterplattform', processor: 'Beispielzahl' },
+      events: [
+        { id: 'vs-1', kind: 'sale', day: '2026-03-03', currency: 'CHF', amount: 108.1, net: 100, vat: { amount: 8.1 } },
+        { id: 'vs-2', kind: 'sale', day: '2026-02-30', currency: 'CHF', amount: 5, net: 5, vat: null },
+      ],
+    },
+  }),
+  // D208 (point 8, security review): the comment to the agent on a rule, the HUMAN seat's step. The fixture
+  // seat is the agent (`freshDeps`), and an agent seat is refused `note_human_only` (the agent-seat scenario of
+  // set_bank_standard carries no note), so this step switches to the Studio seat, saves a rule with a note, and
+  // reads it back: the read answers the note with its author, and the snapshot proves the read writes nothing.
+  list_bank_standards: (fx) => {
+    fx.deps.actor = 'studio';
+    const line = importedPartyLine(fx, 'lbs', 2150, 'DBIT');
+    const saved = fx.call('set_bank_standard', { bankTxnId: line.bankTxnId, accountId: fx.accId('6500'), taxCode: null, note: 'Nur Büromaterial.', idempotencyKey: 'lbs-set' });
+    const listed = fx.call('list_bank_standards', { scope: 'bank' }).standards.find((r) => r.id === saved.standard.id);
+    if (listed?.note !== 'Nur Büromaterial.' || listed?.noteSetBy !== 'studio') {
+      throw new Error(`list_bank_standards: the human seat's note did not read back with its author: ${JSON.stringify(listed)}`);
+    }
+    return { workspaceId: fx.workspaceId, scope: 'bank' };
+  },
   // --- A39, the bank inbox --------------------------------------------------------------------------
   // Over a real import with one booked and one open line, so the read answers with a proposal, a
   // decision and the per-account balance line rather than the empty path; the whole-database snapshot
@@ -6640,6 +6872,15 @@ export const READ_SCENARIOS = {
       xml: camtFixtureXml({ statementId: 'LBI-OPEN-STMT', iban, entryRef: 'LBI-OPEN-NTRY', amountMinor: 1200, creditDebit: 'DBIT' }),
       idempotencyKey: 'lbi-open-import',
     });
+    // A41.8 (D193): the open line holds a person's assigned QR receipt (Swico tag 32, 8.1 %), so the read runs the
+    // receipt reader, the code step and `vatCheck` over a real capture; the snapshot proves it writes nothing.
+    fx.deps.actor = 'studio';
+    const open = fx.deps.store.db
+      .prepare("SELECT id FROM bank_txn WHERE workspace_id = ? AND entry_ref = 'LBI-OPEN-NTRY'")
+      .get(fx.workspaceId).id;
+    const captureId = seedCapture(fx, 'lbi-rcpt');
+    const fileId = fx.deps.store.db.prepare('SELECT document_id FROM captures WHERE workspace_id = ? AND id = ?').get(fx.workspaceId, captureId).document_id;
+    fx.call('assign_beleg', { bankTxnId: open, fileIds: [fileId], idempotencyKey: 'lbi-rcpt-assign' });
     return { workspaceId: fx.workspaceId, status: 'all', limit: 10 };
   },
   // --- A36, live bank feed: the static bank directory is a pure read over in-package data ---------
@@ -7878,8 +8119,18 @@ function seedForecastWorld(fx, prefix) {
  * N02 (D183) adds `belegeingang_status` (+1, ONE HUNDRED AND THIRTY-SIX): pure SELECTs over the scan row,
  * the settings and the waiting captures, proven inert over a book with a capture waiting.
  * D190 adds `export_statements` over a date range (+1): two calls into A08's renderer, proven inert.
+ * D198 adds two (+2, ONE HUNDRED AND FORTY): `get_settlement_source` over a pulled source and
+ * `settlement_payout_for_bank_line` over a pulled payout and its bank line; both pure SELECTs, proven inert.
+ * A42 adds `settlement_review` (+1, ONE HUNDRED AND FORTY-ONE): the feed fetched and the real import run inside
+ * a discarded transaction; the snapshot proves the dry run leaves nothing.
+ * A43 adds `validate_settlement` (+1, ONE HUNDRED AND FORTY-TWO): the reader over a document, proven inert.
+ * A43 §2 adds two more (+2, ONE HUNDRED AND FORTY-FOUR): `settlement_from_table` over a saved template and mapping,
+ * and `get_settlement_table_mapping` over a saved mapping; both pure reads, proven inert.
+ * D202 adds `settings_history` (+1, ONE HUNDRED AND FORTY-FIVE): the history of a really-changed setting, proven inert.
+ * D203 adds two (+2, ONE HUNDRED AND FORTY-SEVEN): `turnover_summary` and `settlement_periods` over a pulled feed;
+ * both pure SELECTs over the ledger and the settlement record, proven inert.
  */
-export const READ_SCENARIO_FLOOR = 138;
+export const READ_SCENARIO_FLOOR = 148;
 
 /**
  * THE ONE BLESSED READ-VERB WRITER (D96), and nothing else.
@@ -7922,6 +8173,8 @@ export const READ_WRITE_CARVEOUTS = Object.freeze({
  * writes that MINT or MOVE something, and those all carry a key.
  */
 export const IDEMPOTENCY_KEY_EXEMPT = Object.freeze({
+  whats_new_mark_seen:
+    'Asserts the absolute state "the notes up to the running version are read" for this install (one small file in the support folder, rewritten whole): a second delivery writes the same marker, so a key would add ceremony without adding a guarantee (O00 section 5).',
   autopilot_mark_seen:
     'Asserts the absolute state "this digest day (or this schedule note) is closed" for the workspace, one row per thing (INSERT OR IGNORE on its primary key): a second delivery finds it closed, answers alreadySeen and writes nothing, so a key would add ceremony without adding a guarantee (N04 section 6).',
   inventory_ensure_default_location:
@@ -7999,6 +8252,8 @@ export const IDEMPOTENCY_KEY_EXEMPT = Object.freeze({
     'SELF-KEYED per item (N01 US-N01.6): every item is one post_entry carrying its OWN idempotencyKey (an item without one is refused), so a second call replays each item\'s own act and posts nothing. A batch key would key the batch, which is not the thing that must not repeat.',
   approve_drafted_actions:
     'Addressed by actionIds, each of which IS a key (N01 US-N01.7): a second call finds every id resolved and answers already_resolved without running anything, and an id that does run is one approve_drafted_action whose replayed verb carries its own stored key.',
+  reject_drafted_actions:
+    'Addressed by actionIds, each of which IS a key (D196 item 9): every id is one reject_drafted_action, which asserts the absolute state "this drafted action is rejected"; a second call finds every id rejected and each answers already_rejected with the reason the row already holds, writing nothing to the row.',
   call_tool:
     'A dispatcher (N01 US-N01.9): the named verb carries its own idempotencyKey in args, or is itself exempt for its own written reason, so a second call replays the named verb exactly as calling it directly would. A key on call_tool would key the dispatch, which moves nothing.',
   approve_drafted_action:

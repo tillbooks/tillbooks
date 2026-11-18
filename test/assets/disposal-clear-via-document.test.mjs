@@ -238,15 +238,16 @@ test('(d) payment only: a Guthaben is refused proceeds_needs_invoice; issue the 
   assert.equal(net('3200'), 0);
 });
 
-test('(e) a mixed invoice is refused sale_not_single_line; the per-call book_proceeds with a reason clears the vehicle by hand, and 3200 keeps the service once', () => {
+test('(e) a mixed invoice is refused sale_not_single_line; the per-call book_proceeds clears the vehicle by hand (D204: a reason optional), and 3200 keeps the service once', () => {
   const w = world();
   const assetId = w.vehicle();
   const inv = w.invoice(w.ctx, 'e', [['Lieferwagen', 1_800_000], ['Überführung', 50_000]]);
   const refused = w.dispose(w.ctx, assetId, '2026-07-19', { proceedsInvoiceId: inv.id });
   assert.equal(refused.reason, 'sale_not_single_line', JSON.stringify(refused));
   const manual = { proceedsInvoiceId: inv.id, proceedsBooking: 'book_proceeds', proceedsRappen: 1_800_000, proceedsAccountId: w.acc('3200') };
-  const noReason = w.dispose(w.ctx, assetId, '2026-07-19', manual, 'e-1');
-  assert.equal(noReason.error, 'reason_required');
+  // D204: the same override with no reason previews fine and is stamped with the value it chose.
+  const noReason = assetDisposalPreview(w.ctx, { assetId, disposalDate: '2026-07-19', gainLossAccountId: w.acc('8510'), ...manual });
+  assert.equal(noReason.ok, true, JSON.stringify(noReason));
   const tooMuch = assetDisposalPreview(w.ctx, { assetId, disposalDate: '2026-07-19', gainLossAccountId: w.acc('8510'), ...manual, proceedsRappen: 1_850_000, proceedsBookingReason: 'Rechnung mit Dienstleistung' });
   assert.equal(tooMuch.ok, true, JSON.stringify(tooMuch));
   assert.ok(tooMuch.preview.warnings.some((x) => x.code === 'proceeds_exceed_sale_line'), 'above the largest sale line warns');
@@ -378,7 +379,7 @@ test('the year rule reads the workspace\'s fiscal year (04-01): 15.03.2027 and 1
   assert.equal(d.abgrenzung?.kind, 'accrued_income');
 });
 
-test('assets.cross_year_sale refuse: sale_in_other_financial_year with suggestedDisposalDate; a per-call post_abgrenzung needs its reason and is audited', () => {
+test('assets.cross_year_sale refuse: sale_in_other_financial_year with suggestedDisposalDate; a per-call post_abgrenzung is audited, with or without a reason (D204)', () => {
   const w = world();
   w.setSetting(w.ctx, 'assets.cross_year_sale', 'refuse');
   const assetId = w.vehicle();
@@ -387,13 +388,28 @@ test('assets.cross_year_sale refuse: sale_in_other_financial_year with suggested
   const refused = w.dispose(jan5, assetId, '2026-12-28', { proceedsInvoiceId: inv.id });
   assert.equal(refused.error, 'sale_in_other_financial_year');
   assert.equal(refused.suggestedDisposalDate, '2027-01-03');
-  assert.equal(w.dispose(jan5, assetId, '2026-12-28', { proceedsInvoiceId: inv.id, crossYearSale: 'post_abgrenzung' }, 'cy-2').error, 'reason_required');
   const d = w.dispose(jan5, assetId, '2026-12-28', { proceedsInvoiceId: inv.id, crossYearSale: 'post_abgrenzung', crossYearSaleReason: 'Übergabe vor Jahresende' }, 'cy-3');
   assert.equal(d.ok, true, JSON.stringify(d));
   assert.equal(d.abgrenzung.kind, 'accrued_income');
   const audits = w.store.db.prepare('SELECT action FROM audit_log WHERE entity_id = ?').all(d.transaction.id).map((r) => r.action);
   assert.ok(audits.includes('override_cross_year_sale'));
   assert.match(d.transaction.description, /Jahresabgrenzung übersteuert: Übergabe vor Jahresende/);
+});
+
+test('D204 assets: a per-call post_abgrenzung with no reason disposes, stamps what it chose, and audits who and when', async () => {
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
+  const w = world();
+  w.setSetting(w.ctx, 'assets.cross_year_sale', 'refuse');
+  const assetId = w.vehicle();
+  const inv = w.invoice(w.at('2027-01-03T00:00:00.000Z'), 'cy', [['Lieferwagen', 1_800_000]]);
+  const jan5 = w.at('2027-01-05T00:00:00.000Z');
+  const d = w.dispose(jan5, assetId, '2026-12-28', { proceedsInvoiceId: inv.id, crossYearSale: 'post_abgrenzung', crossYearSaleReason: '  ' }, 'd204');
+  assert.equal(d.ok, true, JSON.stringify(d));
+  assert.match(d.transaction.description, /Jahresabgrenzung übersteuert \(post_abgrenzung\)/, 'what: the value that differed');
+  assert.doesNotMatch(d.transaction.description, /übersteuert: /);
+  const row = w.store.db.prepare("SELECT actor, at FROM audit_log WHERE entity_id = ? AND action = 'override_cross_year_sale'").get(d.transaction.id);
+  assertWhoWhen(row.actor, row.at);
+  assertPermission('asset_dispose');
 });
 
 test('years more than one apart are refused years_not_adjacent; a disposal dated after today is refused disposal_date_in_future (critic r3 C1)', () => {

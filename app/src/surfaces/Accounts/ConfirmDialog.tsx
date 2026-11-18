@@ -4,9 +4,10 @@
  * A hard delete never fires on a single click: it is gated behind a deliberate confirm step. The
  * dialog states what will happen and offers an explicit confirm plus a cancel out.
  */
-import { useId } from 'react';
+import { useId, useRef } from 'react';
 
 import { useT } from '../../i18n';
+import { useFocusTrap } from '../../components/useFocusTrap';
 
 export interface ConfirmDialogProps {
   /** The confirmation question (already resolved copy). */
@@ -26,6 +27,10 @@ export interface ConfirmDialogProps {
 export function ConfirmDialog({ message, confirmLabel, cancelLabel, onConfirm, onCancel }: ConfirmDialogProps) {
   const t = useT();
   const titleId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  // A10-G12: the shared trap lands focus inside on open (the first control, the safe way out), closes
+  // on Escape, cycles Tab, and returns focus to the opener on unmount.
+  useFocusTrap(panelRef, { onEscape: onCancel });
   return (
     <div className="acc-confirm-overlay" role="presentation" onClick={onCancel}>
       <div
@@ -33,6 +38,8 @@ export function ConfirmDialog({ message, confirmLabel, cancelLabel, onConfirm, o
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
+        ref={panelRef}
         onClick={(event) => event.stopPropagation()}
       >
         <p id={titleId} className="acc-confirm-message" data-motion-item="1">

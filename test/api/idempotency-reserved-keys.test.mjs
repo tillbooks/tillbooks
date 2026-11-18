@@ -33,6 +33,7 @@ import { derivedIdempotencyKey } from '../../dist/core/automation/fire.js';
 import { autoSyncKey } from '../../dist/core/banking/ebics/autoSync.js';
 import { autobookKey } from '../../dist/core/banking/autobook.js';
 import { scheduleRunKey } from '../../dist/core/ledger/vorlageSchedule.js';
+import { dailyPullKey } from '../../dist/core/settlement/dailyPull.js';
 import { freshDeps, mintWorkspace, manualPost } from './support.mjs';
 import { SCENARIOS, fixture } from './conformance-contract.mjs';
 
@@ -109,6 +110,8 @@ test('every system key builder mints a reserved prefix, and every reserved prefi
     // N04 (D183): an automatic booking of a granted rule, and a Dauerbuchung's period.
     'autobook:': autobookKey('agrant_1', 'btxn_1'),
     'schedule:': scheduleRunKey('bstd_1', '2026-07'),
+    // D198 re-cut R7: the scheduled settlement feed pull.
+    'settlement-daily:': dailyPullKey('stlsrc_1', '2026-07-16', 1),
   };
   assert.deepEqual(Object.keys(minted).sort(), [...RESERVED_IDEMPOTENCY_KEY_PREFIXES].sort());
   for (const [prefix, key] of Object.entries(minted)) {

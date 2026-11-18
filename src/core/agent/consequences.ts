@@ -460,8 +460,8 @@ export const CONSEQUENCE_FOR_VERB: Readonly<Record<string, Consequence>> = {
     reversibility: 'correctable',
   },
   ignore_bank_line: {
-    en: 'Takes the bank line out of the inbox with your reason and books nothing. Its money still has to reach the books elsewhere; you can reopen the line at any time.',
-    'de-CH': 'Nimmt die Bankzeile mit deiner Begründung aus dem Eingang und bucht nichts. Das Geld darauf muss anderswo in die Bücher; du kannst die Zeile jederzeit wieder öffnen.',
+    en: 'Takes the bank line out of the inbox and books nothing. Its money still has to reach the books elsewhere; you can reopen the line at any time.',
+    'de-CH': 'Nimmt die Bankzeile aus dem Eingang und bucht nichts. Das Geld darauf muss anderswo in die Bücher; du kannst die Zeile jederzeit wieder öffnen.',
     reversibility: 'reversible',
   },
   // D178 point 19: the answer to a possible duplicate across statement formats.
@@ -1048,6 +1048,33 @@ export const CONSEQUENCE_FOR_VERB: Readonly<Record<string, Consequence>> = {
   set_settlement_template: {
     en: 'Saves how settlements from this source are booked: the clearing account and, per kind, the account and tax code. Nothing is booked now; saving another template replaces it.',
     'de-CH': 'Speichert, wie Abrechnungen dieser Quelle gebucht werden: das Durchlaufkonto und pro Art Konto und MWST-Code. Gebucht wird jetzt nichts; eine neue Vorlage ersetzt diese.',
+    reversibility: 'reversible',
+  },
+  // A43 §2, the table door.
+  set_settlement_table_mapping: {
+    en: "Saves how this source's tables are read (day, amount, kind, id) for later imports; nothing is booked now. Changing the id columns after a booking needs a confirmation: rows could book twice.",
+    'de-CH': 'Speichert, wie die Tabellen dieser Quelle gelesen werden (Tag, Betrag, Art, ID); gebucht wird jetzt nichts. Die ID-Spalten nach einer Buchung zu ändern braucht eine Bestätigung: Zeilen könnten doppelt buchen.',
+    reversibility: 'reversible',
+  },
+  // D198, the settlement feed.
+  pull_settlement: {
+    en: 'Fetches the settlement feed for the range and books each new event through the template, with the VAT the feed states; events booked before are skipped. A wrong entry is corrected by a reversing entry.',
+    'de-CH': 'Holt den Abrechnungs-Feed für den Zeitraum ab und bucht jedes neue Ereignis nach der Vorlage mit der MWST aus dem Feed; schon Gebuchtes wird übersprungen. Ist eine falsch, korrigierst du sie mit einer Korrekturbuchung.',
+    reversibility: 'correctable',
+  },
+  set_settlement_source: {
+    en: 'Saves where this settlement source is pulled from and, when given, its token in the Keychain. Nothing is booked now; saving again replaces it.',
+    'de-CH': 'Speichert, woher diese Abrechnungsquelle abgeholt wird, und, falls angegeben, ihren Token im Schlüsselbund. Gebucht wird jetzt nichts; erneutes Speichern ersetzt sie.',
+    reversibility: 'reversible',
+  },
+  resolve_settlement_event: {
+    en: 'Records whether this settlement payment is a test: not a test (the next document carrying it books it), or back to its flags. Nothing is booked now; the other answer replaces it.',
+    'de-CH': 'Hält fest, ob diese Abrechnungszahlung ein Test ist: kein Test (das nächste Dokument damit bucht sie) oder zurück zu ihren Markierungen. Gebucht wird jetzt nichts; die andere Antwort ersetzt sie.',
+    reversibility: 'reversible',
+  },
+  set_settlement_event_ignored: {
+    en: 'Records whether this settlement event is ignored or included: an ignored event is never booked, and its VAT is counted beside the MWST check. Nothing is booked now; the other answer replaces it.',
+    'de-CH': 'Hält fest, ob dieses Abrechnungsereignis ignoriert oder einbezogen wird: Ein ignoriertes wird nie gebucht, seine MWST zählt neben der MWST-Prüfung. Gebucht wird jetzt nichts; die andere Antwort ersetzt sie.',
     reversibility: 'reversible',
   },
   set_bank_csv_mapping: {

@@ -1,0 +1,447 @@
+/* A42, Umsatz: one surface layer, a band of five figures, plain rows (DESIGN.md: no boxes, one accent). */
+.umsatz {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+}
+
+.umsatz-period {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+
+
+
+.umsatz-check {
+  display: inline-flex;
+}
+
+.umsatz-checkline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+}
+
+.umsatz-done {
+  margin: 0;
+}
+
+/* D206: the days a whole-day table left out, and the first or last day waiting for an answer. */
+.umsatz-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.umsatz-days li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+.umsatz-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.umsatz-table th,
+.umsatz-table td {
+  padding: var(--t-space-1) var(--t-space-2);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.umsatz-table .num {
+  text-align: right;
+}
+
+.umsatz-kind {
+  white-space: nowrap;
+}
+
+.umsatz-test {
+  margin-left: var(--t-space-1);
+  color: var(--t-text-dim);
+}
+
+.umsatz-who {
+  display: flex;
+  flex-direction: column;
+}
+
+.umsatz-who-second {
+  color: var(--t-text-dim);
+}
+
+.umsatz-row--ignored td:not(:last-child) {
+  text-decoration: line-through;
+  color: var(--t-text-dim);
+}
+
+.umsatz-row--outside td {
+  color: var(--t-text-dim);
+}
+
+/* How a sale is derived: glyph chips, words on hover (DESIGN.md rule 7); every figure in the drawer. */
+.umsatz-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  white-space: nowrap;
+}
+
+.umsatz-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.umsatz-chip--waived {
+  text-decoration: line-through;
+}
+
+.umsatz-chip--ok {
+  color: var(--t-success);
+}
+
+.umsatz-chip--bad {
+  color: var(--t-danger);
+}
+
+.umsatz-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+
+.umsatz-derivation-list {
+  display: grid;
+  grid-template-columns: minmax(8rem, auto) 1fr;
+  gap: var(--t-space-1) var(--t-space-3);
+  margin: 0;
+}
+
+.umsatz-derivation-item {
+  display: contents;
+}
+
+.umsatz-derivation-item dt {
+  color: var(--t-text-dim);
+  margin: 0;
+}
+
+.umsatz-derivation-item dd {
+  margin: 0;
+}
+
+.umsatz-derivation-item .umsatz-code {
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A43 §2: the table intake (name, mapping, template), one step at a time. */
+.umsatz-intake {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+  max-width: 64rem;
+}
+form.umsatz-intake {
+  display: grid;
+  grid-template-columns: max-content minmax(12rem, 24rem);
+  align-items: center;
+  gap: var(--t-space-2) var(--t-space-3);
+}
+.umsatz-intake-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+.umsatz-intake-name {
+  font-weight: 500;
+}
+.umsatz-intake-count,
+.umsatz-intake-refused {
+  color: var(--t-text-dim);
+}
+.umsatz-intake-source,
+.umsatz-intake-refused {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-1);
+}
+.umsatz-intake-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--t-space-2) var(--t-space-3);
+}
+.umsatz-intake-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+}
+.umsatz-intake-preview {
+  overflow-x: auto;
+}
+.umsatz-intake-actions {
+  display: flex;
+  gap: var(--t-space-2);
+}
+form.umsatz-intake .umsatz-intake-actions {
+  grid-column: 2;
+}
+@media (max-width: 40rem) {
+  form.umsatz-intake {
+    grid-template-columns: 1fr;
+  }
+  form.umsatz-intake .umsatz-intake-actions {
+    grid-column: 1;
+  }
+}
+.umsatz-intake-warnings {
+  margin: 0;
+  padding-left: var(--t-space-4);
+  color: var(--t-text-dim);
+}
+.umsatz-intake-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  padding: var(--t-space-3);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+}
+.umsatz-intake-confirm p {
+  margin: 0;
+}
+
+/* D203: two tabs, the KPI tiles first, the breakdowns, the calm start, the book bar only with work. */
+.umsatz-period {
+  flex-wrap: wrap;
+}
+
+.umsatz-zahlen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-3);
+}
+
+.umsatz-compare {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.umsatz-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--t-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.umsatz-kpi-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-1);
+  width: 100%;
+  padding: var(--t-space-2) var(--t-space-3);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.umsatz-kpi-body--button {
+  cursor: pointer;
+}
+
+.umsatz-kpi-body--active {
+  border-color: var(--t-border-strong);
+  background: var(--t-bg-soft);
+}
+
+.umsatz-kpi-label,
+.umsatz-kpi-compare {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+}
+
+.umsatz-kpi-value {
+  font-size: var(--t-font-md);
+  line-height: var(--t-lh-md);
+  min-height: 1.5em;
+}
+
+.umsatz-breakdowns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--t-space-4);
+}
+
+.umsatz-subhead {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-1);
+  margin: 0 0 var(--t-space-1);
+  font-size: var(--t-font-sm);
+  font-weight: 600;
+  color: var(--t-text-dim);
+}
+
+.umsatz-none {
+  margin: 0;
+  color: var(--t-text-dim);
+}
+
+.umsatz-events-head {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+.umsatz-calm {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  color: var(--t-text-dim);
+}
+
+.umsatz-start {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--t-space-3);
+  padding: var(--t-space-4) 0;
+}
+
+.umsatz-start-way {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  padding: var(--t-space-3) var(--t-space-4);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.umsatz-start-way:hover {
+  border-color: var(--t-border-strong);
+}
+
+.umsatz--bar {
+  padding-bottom: calc(var(--t-space-4) * 3);
+}
+
+.umsatz-bookbar {
+  position: sticky;
+  bottom: var(--t-space-2);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--t-space-3);
+  padding: var(--t-space-2) var(--t-space-3);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  background: var(--t-bg-elev);
+  box-shadow: var(--t-shadow-overlay);
+  animation: umsatz-arrive var(--t-motion-arrive) var(--t-ease-out);
+}
+
+.umsatz-bookbar-what {
+  font-variant-numeric: tabular-nums;
+}
+
+.umsatz-bookbar-outside {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+}
+
+@keyframes umsatz-arrive {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .umsatz-bookbar {
+    animation: none;
+  }
+}
+
+.umsatz-rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-4);
+}
+
+.umsatz-rules-sources,
+.umsatz-rules-bank {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.umsatz-rules-source-head,
+.umsatz-rules-bank li {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+.umsatz-rules-route {
+  color: var(--t-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.umsatz-rules-settings {
+  display: grid;
+  grid-template-columns: minmax(12rem, max-content) minmax(10rem, 16rem);
+  gap: var(--t-space-2) var(--t-space-3);
+  margin: 0;
+  align-items: center;
+}
+
+.umsatz-rules-setting {
+  display: contents;
+}
+
+.umsatz-rules-setting dt,
+.umsatz-rules-setting dd {
+  margin: 0;
+}
+
+.umsatz-rules-setting dd {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-2);
+}
+
+.umsatz-rules-saved {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-sm);
+}

@@ -44,6 +44,9 @@ const SCOPED_CALLEES = new Set(['postEntryInternal', 'postEntryInternalChecked',
  * `<file>|<callee>|<key source text>`; a reason is a statement about the code a reader can check.
  */
 const DECIDED = {
+  // --- A42: the Umsatz review runs the real import as a dry run that is always rolled back. ---------------
+  "src/core/settlement/review.ts|importSettlement|`settlement_review:${randomBytes(12).toString('hex')}`":
+    'the review runs import_settlement inside discardingChanges, a transaction that ALWAYS rolls back, the memo row included, so nothing memoised under the key survives the call; the key carries 96 random bits per call, so no caller can claim it first nor replay it',
   // --- D192: the disposal reverse takes back the Abgrenzung its disposal posted. -----------------------
   'src/core/assets/reversal.ts|reverseDisposalAbgrenzungWithin|`${typed.id}:abgrenzung-reverse`':
     "the key is only ever stored as the accrual row's reverse_idempotency_key, never memoised in a public scope: the one public door that reads it, accrual_reverse, refuses every accrual in the asset_transaction: namespace (accrual_backs_disposal) before it looks at the key, the Storno entries post under A38's internal scope (accrual_reverse_internal) and the owned reversal, and the whole call runs inside the asset_transaction_reverse memo, so a replay never reaches it",

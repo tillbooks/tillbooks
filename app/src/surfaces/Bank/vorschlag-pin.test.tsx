@@ -5,7 +5,7 @@
  * holds no second Buchen and no "Freigeben": the row's Buchen approves; "Ablehnen" stays here.
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import { I18nProvider, useT } from '../../i18n';
 import type { Err } from '../../lib/client';
@@ -27,10 +27,10 @@ const base: LineVorschlag = {
   createdAt: '2026-10-11T09:00:00.000Z',
 };
 
-function strip(vorschlag: LineVorschlag) {
+function strip(vorschlag: LineVorschlag, onReject: (reason: string) => void = () => undefined) {
   return render(
     <I18nProvider>
-      <VorschlagOnLine line={line} vorschlag={vorschlag} lookups={EMPTY_LOOKUPS} canDecide isOwn={false} busy={false} onReject={() => undefined} />
+      <VorschlagOnLine line={line} vorschlag={vorschlag} lookups={EMPTY_LOOKUPS} canDecide isOwn={false} busy={false} onReject={onReject} />
     </I18nProvider>,
   );
 }
@@ -42,6 +42,14 @@ describe('the Vorschlag on a bank line', () => {
     expect(screen.queryByRole('button', { name: 'Buchen' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Ablehnen' })).toBeEnabled();
     expect(screen.queryByText(/Seit dem Vorschlag geändert/)).toBeNull();
+  });
+
+  it('Ablehnen is ONE click: no reason field, the host is handed no reason (D204)', () => {
+    const rejected: string[] = [];
+    strip(base, (reason) => rejected.push(reason));
+    fireEvent.click(screen.getByRole('button', { name: 'Ablehnen' }));
+    expect(rejected).toEqual(['']);
+    expect(document.querySelector('textarea')).toBeNull();
   });
 
   it('changed since the proposal: no Freigeben, the sentence says why, Ablehnen stays', () => {

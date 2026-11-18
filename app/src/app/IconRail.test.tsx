@@ -80,7 +80,7 @@ describe('IconRail: the collapsed icon strip and its flyouts (D118 A4)', () => {
     const flyout = screen.getByRole('group', { name: 'Stammdaten' });
     // The flyout is a disclosure, never a modal dialog (the modal-role guard forbids that here).
     expect(flyout).not.toHaveAttribute('role', 'dialog');
-    expect(within(flyout).getByRole('button', { name: 'Konten' })).toBeInTheDocument();
+    expect(within(flyout).getByRole('button', { name: 'Kontakte' })).toBeInTheDocument();
   });
 
   it('closes the flyout on Escape and returns focus to the icon', () => {
@@ -97,8 +97,19 @@ describe('IconRail: the collapsed icon strip and its flyouts (D118 A4)', () => {
     renderIconRail();
     const group = screen.getByRole('button', { name: 'Stammdaten' });
     focus(group);
-    await userEvent.click(within(screen.getByRole('group', { name: 'Stammdaten' })).getByRole('button', { name: 'Konten' }));
-    expect(path()).toBe('/accounts');
+    await userEvent.click(within(screen.getByRole('group', { name: 'Stammdaten' })).getByRole('button', { name: 'Kontakte' }));
+    expect(path()).toBe('/contacts');
+  });
+
+  it('leads a group flyout with the area overview, which opens /area/<group> and then lights the group (D201)', async () => {
+    renderIconRail();
+    focus(screen.getByRole('button', { name: 'Stammdaten' }));
+    const flyout = screen.getByRole('group', { name: 'Stammdaten' });
+    const first = within(flyout).getAllByRole('button')[0];
+    expect(first).toHaveAccessibleName('Bereichsübersicht');
+    await userEvent.click(first);
+    expect(path()).toBe('/area/master-data');
+    expect(screen.getByRole('button', { name: 'Stammdaten' })).toHaveClass('rail-icon-btn--active');
   });
 
   it('navigates directly when a single-destination icon is clicked', async () => {

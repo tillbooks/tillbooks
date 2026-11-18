@@ -745,10 +745,11 @@
  * person always sees what they reach), on the selected or picked row, and on every row once a pick is
  * under way. A filled ★ always shows: it is a state. The header's pick box stays, so picking can start.
  * Opacity, not display: the controls keep their place and stay in the tab order.
+ * D195: the pick box left this rule. It is on every open row, always visible: a box that appears under the
+ * pointer only hid that the list can be booked in bulk.
  */
 @media (hover: hover) {
-  .bank-table:not([data-picking='true']) .bank-row:not(:hover):not(:focus-within):not([data-selected='true']):not([data-picked='true']) .bank-star:not(.bank-star--on),
-  .bank-table:not([data-picking='true']) .bank-row:not(:hover):not(:focus-within):not([data-selected='true']):not([data-picked='true']) .bank-cell--pick .check-cell {
+  .bank-table:not([data-picking='true']) .bank-row:not(:hover):not(:focus-within):not([data-selected='true']):not([data-picked='true']) .bank-star:not(.bank-star--on) {
     opacity: 0;
   }
 }
@@ -984,6 +985,11 @@
 
 .bank-amount__sign {
   color: var(--t-danger);
+}
+
+/* D195: the plus before money in is plain ink: money coming in is normal (DESIGN.md "Money"). */
+.bank-amount__sign[data-sign='plus'] {
+  color: var(--t-text);
 }
 
 .bank-amount__currency {
@@ -3689,4 +3695,19 @@ textarea.field.bank-panel__text-input {
 .bank-row .bank-row__approve:not([aria-disabled='true']):focus-visible {
   border-color: var(--t-accent);
   color: var(--t-accent);
+}
+
+/* A20 §13.3: the glyph of a stretch proven by the neighbour sum, beside its name. */
+.bank-fill__proof {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-inline-start: var(--t-space-1);
+  color: var(--t-text-dim);
+}
+
+/* A20 §13.1 (critic round 1, M3): the date and the signed amount the engine read, beside the raw cells. */
+.bank-import__parsed {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--t-text);
 }

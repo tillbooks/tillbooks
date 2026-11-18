@@ -280,10 +280,19 @@
   --t-motion-grow: 700ms;
   --t-motion-grow-standard: 400ms;
   --t-motion-grow-stagger: 60ms;
+  /* Arrive and leave (D204, 15.11.2026): an item that appears or disappears in place (a card shown or
+     hidden, a row approved away). It fades in and scales from `--t-arrive-scale` in `arrive`
+     (ease-out) and leaves in `leave` (ease-in); its neighbours glide from their old place to the new
+     one in `shift` (FLIP on transform, the Web Animations API, `arriveLeave` in motion.ts), while the
+     layout itself changes at once. The kill switch below and the Off level make it instant. */
+  --t-motion-arrive: 200ms;
+  --t-motion-leave: 120ms;
+  --t-motion-shift: 200ms;
   --t-ease-out: cubic-bezier(0.2, 0, 0, 1);
   --t-ease-in: cubic-bezier(0.4, 0, 1, 1);
   --t-travel: 8px;
   --t-press-scale: 0.98;
+  --t-arrive-scale: 0.98;
   /* How far an interactive tile lifts on hover under Lively (D178 point 14). */
   --t-lift: 2px;
 }

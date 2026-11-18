@@ -1,7 +1,7 @@
 {
   "generatedFrom": "src/api/registry.ts via scripts/generate-command-source.mjs",
   "note": "DO NOT EDIT BY HAND. Regenerate: npm run generate:commands. Guarded by command-source-drift.test.mjs.",
-  "verbCount": 852,
+  "verbCount": 869,
   "consequenceFamilies": {
     "close-period": {
       "en": "Closes the period to further bookings. A soft close or a plain hard lock can be lifted with the right; a filed MWST period or a closed year stays sealed.",
@@ -953,7 +953,7 @@
     {
       "name": "asset_maintenance_log_cancel",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "manage_master_data"
@@ -1126,7 +1126,7 @@
     {
       "name": "asset_transaction_reverse",
       "kind": "write",
-      "reqCount": 3,
+      "reqCount": 2,
       "hasComplexInput": false,
       "capabilities": [
         "post"
@@ -1574,7 +1574,7 @@
     {
       "name": "checklist_abandon",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "manage_checklists"
@@ -1638,7 +1638,7 @@
     {
       "name": "checklist_item_skip",
       "kind": "write",
-      "reqCount": 3,
+      "reqCount": 2,
       "hasComplexInput": false,
       "capabilities": [
         "manage_checklists"
@@ -1844,7 +1844,7 @@
     {
       "name": "confirm_statement_gap",
       "kind": "write",
-      "reqCount": 4,
+      "reqCount": 3,
       "hasComplexInput": false,
       "capabilities": [
         "pay"
@@ -2803,7 +2803,7 @@
     {
       "name": "dunning_fee_reverse",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "dun",
@@ -3131,7 +3131,7 @@
     {
       "name": "expense_claim_reject",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "spesen.approve"
@@ -3144,7 +3144,7 @@
     {
       "name": "expense_claim_reverse",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "spesen.approve",
@@ -3452,7 +3452,7 @@
     {
       "name": "flag_entry",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "review"
@@ -4026,6 +4026,32 @@
       "consequence": null
     },
     {
+      "name": "get_settlement_source",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "get_settlement_table_mapping",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
       "name": "get_settlement_template",
       "kind": "read",
       "reqCount": 0,
@@ -4136,7 +4162,7 @@
     {
       "name": "gl_archive_purge",
       "kind": "write",
-      "reqCount": 3,
+      "reqCount": 2,
       "hasComplexInput": false,
       "capabilities": [
         "purge_archive"
@@ -4309,7 +4335,7 @@
     {
       "name": "goods_receipt_reject_lines",
       "kind": "write",
-      "reqCount": 3,
+      "reqCount": 2,
       "hasComplexInput": true,
       "capabilities": [
         "manage_master_data"
@@ -4322,7 +4348,7 @@
     {
       "name": "goods_receipt_reverse",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "manage_master_data"
@@ -4503,7 +4529,7 @@
     {
       "name": "ignore_bank_line",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "post"
@@ -4512,8 +4538,8 @@
       "denylisted": true,
       "dialCapability": "post",
       "consequence": {
-        "en": "Takes the bank line out of the inbox with your reason and books nothing. Its money still has to reach the books elsewhere; you can reopen the line at any time.",
-        "de-CH": "Nimmt die Bankzeile mit deiner Begründung aus dem Eingang und bucht nichts. Das Geld darauf muss anderswo in die Bücher; du kannst die Zeile jederzeit wieder öffnen.",
+        "en": "Takes the bank line out of the inbox and books nothing. Its money still has to reach the books elsewhere; you can reopen the line at any time.",
+        "de-CH": "Nimmt die Bankzeile aus dem Eingang und bucht nichts. Das Geld darauf muss anderswo in die Bücher; du kannst die Zeile jederzeit wieder öffnen.",
         "reversibility": "reversible"
       }
     },
@@ -5528,7 +5554,7 @@
     {
       "name": "inventory_valuation_reverse",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "post"
@@ -5785,7 +5811,7 @@
     {
       "name": "landed_cost_reverse",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "procurement.landed_cost"
@@ -6885,7 +6911,7 @@
     {
       "name": "match_three_way_override",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "purchasing.match",
@@ -6903,7 +6929,7 @@
     {
       "name": "match_three_way_reverse",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "purchasing.match_override"
@@ -7374,7 +7400,7 @@
     {
       "name": "migration_waive_control",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "manage_import"
@@ -7656,7 +7682,7 @@
     {
       "name": "po_amendment_reject",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "manage_master_data"
@@ -8658,6 +8684,23 @@
       }
     },
     {
+      "name": "pull_settlement",
+      "kind": "write",
+      "reqCount": 2,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post",
+      "consequence": {
+        "en": "Fetches the settlement feed for the range and books each new event through the template, with the VAT the feed states; events booked before are skipped. A wrong entry is corrected by a reversing entry.",
+        "de-CH": "Holt den Abrechnungs-Feed für den Zeitraum ab und bucht jedes neue Ereignis nach der Vorlage mit der MWST aus dem Feed; schon Gebuchtes wird übersprungen. Ist eine falsch, korrigierst du sie mit einer Korrekturbuchung.",
+        "reversibility": "correctable"
+      }
+    },
+    {
       "name": "quotes_accept",
       "kind": "write",
       "reqCount": 0,
@@ -8951,6 +8994,19 @@
       "consequence": null
     },
     {
+      "name": "reject_drafted_actions",
+      "kind": "write",
+      "reqCount": 1,
+      "hasComplexInput": true,
+      "capabilities": [
+        "manage_agent_dial"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
       "name": "release_beleg",
       "kind": "write",
       "reqCount": 1,
@@ -8964,7 +9020,7 @@
     {
       "name": "reopen_bank_line",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "post"
@@ -9229,7 +9285,7 @@
     {
       "name": "requisition_reject",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "manage_master_data"
@@ -9242,7 +9298,7 @@
     {
       "name": "requisition_return",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "manage_master_data"
@@ -9292,6 +9348,23 @@
       "consequence": {
         "en": "Answers a possible duplicate: Duplikat ignores the line with that reason, Kein Duplikat keeps it as its own line. You can reopen an ignored line and decide again.",
         "de-CH": "Entscheidet ein mögliches Duplikat: Duplikat ignoriert die Zeile mit diesem Grund, Kein Duplikat behält sie als eigene Zeile. Eine ignorierte Zeile öffnest du wieder und entscheidest neu.",
+        "reversibility": "reversible"
+      }
+    },
+    {
+      "name": "resolve_settlement_event",
+      "kind": "write",
+      "reqCount": 4,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": {
+        "en": "Records whether this settlement payment is a test: not a test (the next document carrying it books it), or back to its flags. Nothing is booked now; the other answer replaces it.",
+        "de-CH": "Hält fest, ob diese Abrechnungszahlung ein Test ist: kein Test (das nächste Dokument damit bucht sie) oder zurück zu ihren Markierungen. Gebucht wird jetzt nichts; die andere Antwort ersetzt sie.",
         "reversibility": "reversible"
       }
     },
@@ -9525,7 +9598,7 @@
     {
       "name": "revoke_statement_gap_confirmation",
       "kind": "write",
-      "reqCount": 4,
+      "reqCount": 3,
       "hasComplexInput": false,
       "capabilities": [
         "pay"
@@ -9921,8 +9994,8 @@
     {
       "name": "set_bank_csv_mapping",
       "kind": "write",
-      "reqCount": 2,
-      "hasComplexInput": true,
+      "reqCount": 1,
+      "hasComplexInput": false,
       "capabilities": [
         "pay"
       ],
@@ -10182,6 +10255,57 @@
       }
     },
     {
+      "name": "set_settlement_event_ignored",
+      "kind": "write",
+      "reqCount": 4,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post",
+      "consequence": {
+        "en": "Records whether this settlement event is ignored or included: an ignored event is never booked, and its VAT is counted beside the MWST check. Nothing is booked now; the other answer replaces it.",
+        "de-CH": "Hält fest, ob dieses Abrechnungsereignis ignoriert oder einbezogen wird: Ein ignoriertes wird nie gebucht, seine MWST zählt neben der MWST-Prüfung. Gebucht wird jetzt nichts; die andere Antwort ersetzt sie.",
+        "reversibility": "reversible"
+      }
+    },
+    {
+      "name": "set_settlement_source",
+      "kind": "write",
+      "reqCount": 4,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": null,
+      "consequence": {
+        "en": "Saves where this settlement source is pulled from and, when given, its token in the Keychain. Nothing is booked now; saving again replaces it.",
+        "de-CH": "Speichert, woher diese Abrechnungsquelle abgeholt wird, und, falls angegeben, ihren Token im Schlüsselbund. Gebucht wird jetzt nichts; erneutes Speichern ersetzt sie.",
+        "reversibility": "reversible"
+      }
+    },
+    {
+      "name": "set_settlement_table_mapping",
+      "kind": "write",
+      "reqCount": 2,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
+      "dialCapability": "post",
+      "consequence": {
+        "en": "Saves how this source's tables are read (day, amount, kind, id) for later imports; nothing is booked now. Changing the id columns after a booking needs a confirmation: rows could book twice.",
+        "de-CH": "Speichert, wie die Tabellen dieser Quelle gelesen werden (Tag, Betrag, Art, ID); gebucht wird jetzt nichts. Die ID-Spalten nach einer Buchung zu ändern braucht eine Bestätigung: Zeilen könnten doppelt buchen.",
+        "reversibility": "reversible"
+      }
+    },
+    {
       "name": "set_settlement_template",
       "kind": "write",
       "reqCount": 3,
@@ -10264,6 +10388,19 @@
       "consequence": null
     },
     {
+      "name": "settings_history",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_master_data"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
       "name": "settings_list",
       "kind": "read",
       "reqCount": 0,
@@ -10305,6 +10442,58 @@
         "de-CH": "Ändert eine Einstellung für alle hier ab der nächsten Aktion; Gebuchtes oder Versendetes bleibt. Der alte Wert bleibt im Verlauf, du kannst ihn jederzeit wieder setzen oder zurücksetzen.",
         "reversibility": "reversible"
       }
+    },
+    {
+      "name": "settlement_from_table",
+      "kind": "read",
+      "reqCount": 2,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "settlement_payout_for_bank_line",
+      "kind": "read",
+      "reqCount": 1,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "settlement_periods",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "settlement_review",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "post"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
     },
     {
       "name": "sign_requests_complete",
@@ -11037,6 +11226,19 @@
       "consequence": null
     },
     {
+      "name": "turnover_summary",
+      "kind": "read",
+      "reqCount": 2,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
       "name": "unarchive_account",
       "kind": "write",
       "reqCount": 1,
@@ -11278,6 +11480,19 @@
       "reqCount": 2,
       "hasComplexInput": true,
       "capabilities": [],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "validate_settlement",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_books"
+      ],
       "gateDynamic": false,
       "denylisted": false,
       "dialCapability": null,
@@ -11763,7 +11978,7 @@
     {
       "name": "wage_journal_reverse",
       "kind": "write",
-      "reqCount": 2,
+      "reqCount": 1,
       "hasComplexInput": false,
       "capabilities": [
         "post"
@@ -11852,6 +12067,32 @@
       ],
       "gateDynamic": false,
       "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "whats_new",
+      "kind": "read",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_master_data"
+      ],
+      "gateDynamic": false,
+      "denylisted": false,
+      "dialCapability": null,
+      "consequence": null
+    },
+    {
+      "name": "whats_new_mark_seen",
+      "kind": "write",
+      "reqCount": 0,
+      "hasComplexInput": false,
+      "capabilities": [
+        "read_master_data"
+      ],
+      "gateDynamic": false,
+      "denylisted": true,
       "dialCapability": null,
       "consequence": null
     },

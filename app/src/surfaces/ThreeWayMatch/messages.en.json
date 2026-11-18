@@ -24,7 +24,6 @@
       "overrideTitle": "Override the variance?",
       "overrideBody": "The variance is out of tolerance. An override is permanent, clears the bill for payment and stays on the record with your reason.",
       "reason": "Reason",
-      "reasonRequired": "A reason of at least five characters is required.",
       "expected": "Expected",
       "billed": "Billed",
       "valueVar": "Value variance",

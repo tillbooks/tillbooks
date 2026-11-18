@@ -684,7 +684,7 @@ function insertDecision(
  * `supersede_reason`, never delete; its claims are released by the same stamp (trigger). Returns the
  * superseded link, or undefined when the line had none.
  */
-export function supersedeActiveLink(ctx: WorkspaceContext, bankTxnId: string, reason: string): ActiveLink | undefined {
+export function supersedeActiveLink(ctx: WorkspaceContext, bankTxnId: string, reason: string | null): ActiveLink | undefined {
   const link = readActiveLink(ctx, bankTxnId);
   if (link === undefined) return undefined;
   ctx.store.db

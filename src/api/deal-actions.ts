@@ -111,7 +111,7 @@ export function dealActions(h: DealActionHelpers): readonly ActionDef[] {
     ctxAction(
       'deals_mark',
       'write:correctable:internal',
-      'Schliesse einen Deal ab oder öffne ihn wieder: the ONE door to status. won moves the deal into the pipeline outcome stage at probability 100; lost requires a lostReason (lost_reason_required otherwise) and lands at 0; open reopens a misclicked deal into the first open stage. A no-change re-mark is a state assertion and emits nothing; a genuine close emits deal.won or deal.lost. Every terminal move lands on the contact timeline (OP5).',
+      'Schliesse einen Deal ab oder öffne ihn wieder: the ONE door to status. won moves the deal into the pipeline outcome stage at probability 100; lost lands at 0 and takes an optional lostReason (D204: none needed; one given is kept); open reopens a misclicked deal into the first open stage. A no-change re-mark is a state assertion and emits nothing; a genuine close emits deal.won or deal.lost. Every terminal move lands on the contact timeline (OP5).',
       ctxSchema({ dealId: STR, status: STR, lostReason: STR, idempotencyKey: STR }, ['dealId', 'status']),
       (ctx, input) => markDeal(ctx, as(input)),
     ),

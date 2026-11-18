@@ -64,6 +64,11 @@ const VOCABULARY_MS = {
   '--t-motion-grow': 700,
   '--t-motion-grow-standard': 400,
   '--t-motion-grow-stagger': 60,
+  // D204 (15.11.2026), the fourth moment, Arrive and leave: an item fades and scales in, leaves faster,
+  // and its neighbours glide into the freed space (FLIP, `arriveLeave` in motion.ts).
+  '--t-motion-arrive': 200,
+  '--t-motion-leave': 120,
+  '--t-motion-shift': 200,
 };
 
 /** The rest of the vocabulary: the one ease pair, the travel distance, the press scale. */
@@ -73,6 +78,8 @@ const SHAPE_TOKENS = {
   '--t-travel': '8px',
   '--t-press-scale': '0.98',
   '--t-lift': '2px',
+  // D204: the scale an arriving item grows from, and a leaving one shrinks to.
+  '--t-arrive-scale': '0.98',
 };
 
 /** The sentence D122 D-I added to DESIGN.md, verbatim. */

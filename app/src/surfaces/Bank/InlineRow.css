@@ -1,0 +1,406 @@
+/*
+ * D195 (owner, mockup v12 of 12.11.2026): THE ROW IS THE EDITOR. The account, its Buchungstext and MWST are
+ * quiet controls in the row itself: plain at rest, a faint edge on hover or focus, the chevron right after the
+ * text. 13px first lines, 12px dim second lines, weights 400 and 500 only, account numbers regular and dim.
+ * Brass only on the check about to be pressed; orange only for attention. The opened line's cells align to the
+ * top and its strip below holds context under the column it explains.
+ */
+.bank-table[data-layout='inline'] {
+  font-size: var(--t-font-md);
+}
+
+.bank-table[data-layout='inline'] .bank-cell {
+  height: auto;
+  padding-block: var(--t-space-1);
+  font-size: var(--t-font-md);
+}
+
+.bank-table[data-layout='inline'] .bank-row--inline > .bank-cell {
+  height: 52px;
+}
+
+.bank-table[data-layout='inline'] .bank-row[data-selected='true'] > .bank-cell {
+  vertical-align: top;
+  border-bottom-color: transparent;
+}
+
+.bank-table[data-layout='inline'] .bank-cell--date {
+  color: var(--t-text-dim);
+}
+
+/* Two lines: the name (or the control) and, under it, 12px in the dim ink. */
+.bank-two {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.bank-two__a {
+  display: flex;
+  align-items: center;
+  gap: var(--t-space-0-5);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bank-two__b {
+  font-size: var(--t-font-sm);
+  color: var(--t-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bank-table[data-layout='inline'] .bank-party {
+  font-weight: 400;
+}
+
+/* The quiet controls: no box at rest, a faint edge on hover and focus, the chevron after the text. */
+.bank-table[data-layout='inline'] .picker-trigger.bank-quiet {
+  width: auto;
+  max-width: calc(100% + var(--t-space-1));
+  height: 28px;
+  margin-left: calc(-1 * var(--t-space-0-5));
+  padding: 0 var(--t-space-0-5);
+  gap: var(--t-space-0-5);
+  justify-content: flex-start;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.bank-table[data-layout='inline'] .picker-trigger.bank-quiet .picker-trigger__value {
+  flex: 0 1 auto;
+}
+
+.bank-table[data-layout='inline'] .picker-trigger.bank-quiet .picker-trigger__code {
+  font-weight: 400;
+  color: var(--t-text-dim);
+}
+
+.bank-table[data-layout='inline'] .picker-trigger.bank-quiet .picker-trigger__name {
+  font-weight: 400;
+}
+
+.bank-table[data-layout='inline'] .picker-trigger.bank-quiet .picker-trigger__caret {
+  width: 12px;
+  height: 12px;
+  opacity: 0.55;
+}
+
+.bank-table[data-layout='inline'] .bank-row:hover .picker-trigger.bank-quiet,
+.bank-table[data-layout='inline'] .bank-row[data-selected='true'] .picker-trigger.bank-quiet,
+.bank-table[data-layout='inline'] .picker-trigger.bank-quiet:focus-visible,
+.bank-table[data-layout='inline'] .picker-trigger.bank-quiet[aria-expanded='true'] {
+  background: var(--t-bg-elev);
+  border-color: var(--t-border);
+}
+
+.bank-table[data-layout='inline'] .bank-row:hover .picker-trigger.bank-quiet .picker-trigger__caret,
+.bank-table[data-layout='inline'] .bank-row[data-selected='true'] .picker-trigger.bank-quiet .picker-trigger__caret {
+  opacity: 1;
+}
+
+.bank-table[data-layout='inline'] .picker-trigger.bank-quiet:hover:not(:disabled) {
+  border-color: var(--t-border-strong);
+}
+
+.bank-quiet-text {
+  box-sizing: border-box;
+  width: calc(100% + var(--t-space-0-5));
+  height: 22px;
+  margin: 0 0 0 calc(-1 * var(--t-space-0-5));
+  padding: 0 var(--t-space-0-5);
+  font: inherit;
+  font-size: var(--t-font-sm);
+  color: var(--t-text-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--t-radius-sm);
+}
+
+.bank-row:hover .bank-quiet-text,
+.bank-row[data-selected='true'] .bank-quiet-text {
+  border-color: var(--t-border);
+}
+
+.bank-quiet-text:focus,
+.bank-quiet-text:focus-visible {
+  outline: none;
+  color: var(--t-text);
+  background: var(--t-bg-elev);
+  border-color: var(--t-border-strong);
+}
+
+/* MWST: the shared Select, quiet like the account; orange where the receipt says another VAT. */
+.bank-quiet-select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.bank-quiet-select .select-trigger {
+  display: inline-flex;
+  height: 28px;
+  width: auto;
+  max-width: 100%;
+  margin-left: calc(-1 * var(--t-space-0-5));
+  padding: 0 var(--t-space-0-5);
+  gap: var(--t-space-0-5);
+  justify-content: flex-start;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+}
+
+.bank-quiet-select .select-value {
+  flex: 0 1 auto;
+}
+
+.bank-quiet-select .select-caret {
+  width: 12px;
+  height: 12px;
+  opacity: 0.55;
+}
+
+.bank-row:hover .bank-quiet-select .select-trigger,
+.bank-row[data-selected='true'] .bank-quiet-select .select-trigger,
+.bank-quiet-select .select-trigger:focus-visible,
+.bank-quiet-select .select-trigger[aria-expanded='true'] {
+  background: var(--t-bg-elev);
+  border-color: var(--t-border);
+}
+
+.bank-row:hover .bank-quiet-select .select-caret,
+.bank-row[data-selected='true'] .bank-quiet-select .select-caret {
+  opacity: 1;
+}
+
+.bank-quiet-select--warn .select-trigger {
+  color: var(--t-warn);
+}
+
+.bank-row:hover .bank-quiet-select--warn .select-trigger,
+.bank-row[data-selected='true'] .bank-quiet-select--warn .select-trigger {
+  border-color: var(--t-warn);
+}
+
+.bank-vat-fixed {
+  color: var(--t-text-dim);
+  font-size: var(--t-font-md);
+}
+
+.bank-table[data-layout='inline'] .bank-amount {
+  font-weight: 500;
+}
+
+/* The check: a round ring at rest, brass only on the check about to be pressed. */
+.bank-table[data-layout='inline'] .bank-row .bank-check {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--t-radius-full);
+  border: 1.5px solid var(--t-border-strong);
+  color: var(--t-text-dim);
+  background: transparent;
+}
+
+.bank-table[data-layout='inline'] .bank-row .bank-check:not([aria-disabled='true']):hover,
+.bank-table[data-layout='inline'] .bank-row .bank-check:not([aria-disabled='true']):focus-visible,
+.bank-table[data-layout='inline'] .bank-row[data-selected='true'] .bank-check:not([aria-disabled='true']) {
+  background: var(--t-accent);
+  border-color: var(--t-accent);
+  color: var(--t-on-accent);
+}
+
+.bank-table[data-layout='inline'] .bank-row .bank-check[aria-disabled='true'] {
+  border-style: dashed;
+  color: var(--t-text-faint);
+}
+
+/* Mehr beside the check: faint at rest (never hidden), whole on the row under the pointer or open. */
+@media (hover: hover) {
+  .bank-table[data-layout='inline'] .bank-row:not(:hover):not(:focus-within):not([data-selected='true']) .bank-row-menu {
+    opacity: 0.55;
+  }
+}
+
+/* --- the strip ------------------------------------------------------------------------------------------ */
+.bank-strip > td {
+  padding: 0 var(--t-space-1) 14px;
+  background: var(--t-accent-soft);
+  border-bottom: 1px solid var(--t-border);
+  vertical-align: top;
+  font-size: var(--t-font-sm);
+  color: var(--t-text-dim);
+  white-space: normal;
+}
+
+.bank-strip__facts,
+.bank-strip__why {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bank-strip__text,
+.bank-strip__source {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.bank-strip__text {
+  color: var(--t-text);
+}
+
+.bank-strip__source {
+  color: var(--t-text-dim);
+}
+
+.bank-kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px var(--t-space-1);
+  margin: 0;
+}
+
+.bank-kv dt {
+  color: var(--t-text-dim);
+}
+
+.bank-kv dd {
+  margin: 0;
+  color: var(--t-text);
+  font-size: var(--t-font-sm);
+}
+
+/* Links are plain text, underlined. */
+.bank-strip__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--t-font-sm);
+  color: var(--t-text);
+  text-decoration: underline;
+  text-decoration-color: var(--t-border-strong);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.bank-strip__link:hover {
+  text-decoration-color: var(--t-text);
+}
+
+.bank-mini {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-font-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.bank-mini td,
+.bank-mini th {
+  padding: 3px 0;
+  border-top: 1px solid var(--t-border);
+  color: var(--t-text);
+  font-weight: 400;
+  text-align: left;
+}
+
+.bank-mini th {
+  color: var(--t-text-dim);
+}
+
+.bank-mini td + td,
+.bank-mini th + th {
+  padding-left: var(--t-space-1);
+}
+
+.bank-mini td.bank-mini__label {
+  color: var(--t-text-dim);
+  white-space: nowrap;
+}
+
+.bank-mini th.bank-mini__num,
+.bank-mini td.bank-mini__num {
+  text-align: right;
+}
+
+.bank-mini__this td {
+  font-weight: 500;
+}
+
+.bank-strip__cell--doc {
+  text-align: right;
+}
+
+.bank-doc {
+  display: inline-flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.bank-doc__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+}
+
+.bank-doc__name {
+  color: var(--t-text);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+/* The receipt's thumbnail: a small sheet, a click opens it full size. */
+.bank-doc__thumb {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 38px;
+  height: 50px;
+  padding: 6px 5px;
+  border: 0;
+  border-radius: var(--t-radius-sm);
+  background: var(--t-bg-elev);
+  box-shadow: 0 0 0 1px var(--t-border), var(--t-shadow-control);
+  cursor: zoom-in;
+}
+
+.bank-doc__thumb i {
+  display: block;
+  height: 2px;
+  background: var(--t-border);
+}
+
+.bank-doc__attach {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--t-font-sm);
+  color: var(--t-text-dim);
+  cursor: pointer;
+}
+
+.bank-doc__attach:hover {
+  color: var(--t-text);
+}
+
+.bank-strip__cell--panel .bank-panel__body {
+  max-width: 720px;
+}

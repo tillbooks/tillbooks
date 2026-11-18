@@ -23,7 +23,8 @@ export const NAV_PREFS: readonly PrefDef[] = [
   {
     key: 'nav.favourite_style',
     schema: { type: 'enum', values: ['icon_star', 'star_only', 'icon_only'] },
-    default: 'icon_star',
+    // D210: the icon alone; a gold star on every pin spent the accent on decoration (D137).
+    default: 'icon_only',
     scope: 'person',
     area: NAV,
     label: { en: 'Favourites in the menu', 'de-CH': 'Favoriten im Menü' },
@@ -57,7 +58,7 @@ export const NAV_PREFS: readonly PrefDef[] = [
   {
     key: 'nav.group_header_style',
     schema: { type: 'enum', values: ['text_14_bold', 'icon_14', 'label_12'] },
-    default: 'text_14_bold',
+    default: 'icon_14',
     scope: 'person',
     area: NAV,
     label: { en: 'Group names in the menu', 'de-CH': 'Gruppennamen im Menü' },
@@ -129,6 +130,42 @@ export const NAV_PREFS: readonly PrefDef[] = [
     description: {
       en: 'How wide the menu is, or icons only.',
       'de-CH': 'Wie breit das Menü ist, oder nur Symbole.',
+    },
+  },
+  {
+    // D210: the section headers "Favoriten" and "Menü" with their fold chevrons. Hidden by default: the
+    // pins sit above a hairline, the menu needs no title, and "Menü anpassen" lives in the footer.
+    key: 'nav.section_headers',
+    schema: { type: 'enum', values: ['hidden', 'shown'] },
+    default: 'hidden',
+    scope: 'person',
+    area: NAV,
+    label: { en: 'Section headings in the menu', 'de-CH': 'Bereichstitel im Menü' },
+    description: {
+      en: 'Whether Favourites and Menu carry a foldable heading.',
+      'de-CH': 'Ob Favoriten und Menü einen einklappbaren Titel tragen.',
+    },
+    valueLabels: {
+      hidden: { en: 'No headings', 'de-CH': 'Ohne Titel' },
+      shown: { en: 'Foldable headings', 'de-CH': 'Einklappbare Titel' },
+    },
+  },
+  {
+    // D210: the compact menu (the areas a small company books in every month) or every area. The hidden
+    // pages stay one search away and can be pinned.
+    key: 'nav.menu_scope',
+    schema: { type: 'enum', values: ['compact', 'all'] },
+    default: 'compact',
+    scope: 'workspace',
+    area: NAV,
+    label: { en: 'Areas in the menu', 'de-CH': 'Bereiche im Menü' },
+    description: {
+      en: 'The everyday areas, or every area including stock, assets and projects.',
+      'de-CH': 'Die Bereiche für jeden Tag, oder alle mit Lager, Anlagen und Projekten.',
+    },
+    valueLabels: {
+      compact: { en: 'Compact', 'de-CH': 'Kompakt' },
+      all: { en: 'All areas', 'de-CH': 'Alle Bereiche' },
     },
   },
 ];

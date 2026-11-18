@@ -172,7 +172,7 @@ export function SyncHosting() {
         <div className="sync-dial-wrap">
           <SettingRow
             label={t('sync.dial.label')}
-            description={publishing ? t('sync.state.on.body') : t('sync.state.off.body')}
+            note={publishing ? t('sync.state.on.body') : t('sync.state.off.body')}
             dataKey="sync-publish"
             status={
               /* A non-owner sees the switch DISABLED with a padlock and the reason, never

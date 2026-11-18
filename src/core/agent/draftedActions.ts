@@ -13,7 +13,7 @@
  * never return. Every such closure and revive is kept in the row's history (`draftHistory.ts`). `stale` (critic N1) is a Vorschlag whose pinned
  * record changed after the proposal (`vorschlagPin.ts`): it never ran and can never be approved.
  *
- * THE AGENT CAN NEVER SELF-APPROVE (§5, §6b Fixed). It is an ACTOR-and-CAPABILITY rule enforced in the
+ * THE AGENT CAN NEVER SELF-APPROVE (§5, §6b Fixed), UNLESS THE OWNER GRANTS IT (D196, `decisionGrant.ts`). It is an ACTOR-and-CAPABILITY rule enforced in the
  * verb, not a routing trick: `approve_drafted_action` is gated on `manage_agent_dial` (owner-only, so
  * no `agent` role can call it at all), AND the approving actor may never match the drafting actor. The
  * replay runs AS THE APPROVER, so RBAC is re-checked against the human who is taking responsibility
@@ -67,6 +67,28 @@ import { backfillDraftingCall, entityRefOf } from './trace.js';
 import { pinFor, VORSCHLAG_STALE_MESSAGE, type VorschlagFigures } from './vorschlagPin.js';
 import { withApproving } from './approving.js';
 import { appendDraftHistory, draftHistoryOf } from './draftHistory.js';
+import { getSetting } from '../settings/settings.js';
+// D202 point 5: a protected setting's Vorschlag is approved by a person only.
+import { isPersonOnlySettingsRow } from '../settings/agentAccess.js';
+import {
+  agentDecisionGrantFor,
+  carriesOwnerWord,
+  grantExclusionFor,
+  ownerCanGrantHint,
+  ownerWordGrantFor,
+  ownerWordHint,
+  parseOwnerWord,
+  ownerWordBeforeDraftMs,
+  ownerWordExcludedFamilies,
+  ownerWordExclusionFor,
+  type AgentDecisionGrant,
+  type GrantExclusion,
+  type OwnerWord,
+  type OwnerWordExclusion,
+  type OwnerWordGrant,
+} from './decisionGrant.js';
+import { OWNER_WORD_EXCLUDED_SETTING } from './ownerWordExcluded.js';
+import { WAY_BACK } from './wayBack.js';
 
 /**
  * The longest `reject_drafted_action.reason` the engine stores (governance critic F4, 2026-09-05).
@@ -365,6 +387,70 @@ class DraftedActionResolvedMeanwhile extends Error {
 }
 
 /**
+ * D196: the refusal for a Vorschlag the owner's grant does not cover. `permission_denied` on
+ * `manage_agent_dial`, so every face points the agent to where a person decides (`approveAt`).
+ */
+function outsideGrant(actionId: string, row: AgentActionRow, excluded: GrantExclusion): Result {
+  return err('permission_denied', {
+    capability: 'manage_agent_dial',
+    actionId,
+    reason: 'outside_grant',
+    grantExclusion: excluded,
+    actionTool: row.action_tool,
+    dialCapability: row.dial_capability,
+    message: 'the owner\'s grant does not cover this proposal; a person decides it in the Studio',
+  });
+}
+
+/**
+ * D209 amendment (owner, 18.11.2026): the refusal for a Vorschlag the owner's word never approves (a family in
+ * `agent.owner_word_excluded`, or a row whose family cannot be read). `permission_denied` on
+ * `manage_agent_dial`, so every face adds where a person approves it (`approveAt`).
+ */
+function outsideOwnerWord(actionId: string, row: AgentActionRow, excluded: OwnerWordExclusion): Result {
+  return err('permission_denied', {
+    capability: 'manage_agent_dial',
+    actionId,
+    reason: 'owner_word_excluded',
+    ownerWordExclusion: excluded.kind,
+    ...(excluded.kind === 'excluded_family' ? { family: excluded.family, families: excluded.families } : {}),
+    actionTool: row.action_tool,
+    dialCapability: row.dial_capability,
+    setting: OWNER_WORD_EXCLUDED_SETTING,
+    message:
+      excluded.kind === 'excluded_family'
+        ? `the owner's word never approves this kind of proposal (${excluded.family}); ask the owner to approve it with their own click in the Studio`
+        : 'the kind of this proposal cannot be read, so the owner\'s word does not approve it; ask the owner to approve it with their own click in the Studio',
+  });
+}
+
+/** D196 item 9: the setting that asks the agent for a reason when it rejects under the owner's grant. */
+export const REJECT_REASON_SETTING = 'agent.reject_reason';
+
+/**
+ * Whether a rejection under the owner's grant needs a reason (`agent.reject_reason`, `optional` by default since D204; a team may set `required`).
+ * A stored value that cannot be read resolves to `required`, the conservative side.
+ */
+export function grantRejectNeedsReason(ctx: WorkspaceContext): boolean {
+  try {
+    return getSetting<string>(ctx, REJECT_REASON_SETTING) !== 'optional';
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * D196 (critic L1): thrown by an approval's commit mark, or inside a rejection's own transaction (item 9),
+ * when the owner's grant was revoked meanwhile.
+ */
+class DecisionGrantRevokedMeanwhile extends Error {
+  constructor(actionId: string) {
+    super(`the owner's grant for agent decisions was revoked while drafted action ${actionId} was being decided; nothing of the decision committed`);
+    this.name = 'DecisionGrantRevokedMeanwhile';
+  }
+}
+
+/**
  * Whether a pending row may still be approved (or answered as the replay target): its pin reads what
  * the person approved, or (D165) what its own committed act left. One fallback, for a row that crashed
  * under a build from before the commit mark (critic finding 3): the verb's own completed memo under
@@ -508,7 +594,21 @@ export interface ResolveDraftedActionInput {
    * queue's rejected list and in the trace beside the drafting call, so the next session reads it.
    */
   reason?: unknown;
+  /**
+   * Approve only, an agent seat only (D209): the owner's own words that approved this Vorschlag, verbatim
+   * (`quote`), and when they were said (`saidAt`, an ISO date-time). Honoured only while the owner's setting
+   * `agent.approve_on_owner_word` is on; recorded on the row's history and the audit chain.
+   */
+  ownerWord?: unknown;
 }
+
+/**
+ * D196 / D209: what lets a governed agent seat approve: the owner's standing grant, or the owner's word on
+ * this one Vorschlag under the owner's-word setting.
+ */
+type DecisionAuthority =
+  | { kind: 'grant'; grant: AgentDecisionGrant }
+  | { kind: 'owner_word'; grant: OwnerWordGrant; word: OwnerWord };
 
 /**
  * The outcome codes of an act that may have left the building without the book knowing (D165 follow-up
@@ -556,7 +656,60 @@ function approveOnce(ctx: WorkspaceContext, invoke: ActionInvoker, input: Resolv
   // agent seat's, enforced on the ACTOR (the `setAgentDial` shape), so it holds even for an embedder
   // whose context bypasses A24's step-0 denial of `manage_agent_dial`. Before the row is read, so the
   // seat learns nothing about the queue either.
-  if (isGovernedSeat(ctx.store, ctx.actor)) return err('cannot_self_approve', { actionId, reason: 'governed_seat' });
+  // D196: UNLESS the owner granted it (`agent.decide_proposals` = `decide`, live, `decisionGrant.ts`). The
+  // grant never carries the standing dial grant (`allowFuture`): a dial row is the human act that decides
+  // what drafts, and `writeDialLevel` would refuse the seat anyway.
+  const governed = isGovernedSeat(ctx.store, ctx.actor);
+  // D209: the owner's word on THIS Vorschlag, for an agent seat only. A person approves under their own
+  // authority, so words carried by a person's call would be a record of nothing: refused, never ignored.
+  let word: OwnerWord | null = null;
+  if (carriesOwnerWord(input)) {
+    if (!governed) return err('invalid_input', { actionId, field: 'ownerWord', reason: 'a person approves under their own authority; ownerWord is for an agent seat' });
+    const parsed = parseOwnerWord(input.ownerWord, ctx.clock.now());
+    if (!parsed.ok) return err('invalid_input', { actionId, field: parsed.field, reason: parsed.reason });
+    word = parsed.word;
+  }
+  // A call that carries the owner's word rides only the owner's-word setting, never the standing grant, so the
+  // record always says which one it was. The standing grant is read here and AGAIN inside every transaction that
+  // commits the decision (D196 critic L1). THE OWNER'S WORD IS NOT (D209 critic HIGH-1): it is a decision taken
+  // when this call starts, like a person's click, and it reaches outbound acts (a sent invoice, a transmitted
+  // payment) whose transport leaves before the act's last transaction; rolling that transaction back over a
+  // revoke made the books say "never sent" about a mail that left. A revoke stops every LATER call.
+  const readAuthority = (): DecisionAuthority | null => {
+    if (!governed) return null;
+    if (word !== null) {
+      const g = ownerWordGrantFor(ctx, 'approve_drafted_action', input);
+      return g === null ? null : { kind: 'owner_word', grant: g, word };
+    }
+    const g = agentDecisionGrantFor(ctx, 'approve_drafted_action');
+    return g === null ? null : { kind: 'grant', grant: g };
+  };
+  const authority = readAuthority();
+  // The refusal when the authority was withdrawn while the act ran (D196 critic L1; D209 the same for the setting).
+  const revoked = (extra: Record<string, unknown> = {}): Result =>
+    err('permission_denied', {
+      capability: 'manage_agent_dial',
+      actionId,
+      reason: word !== null ? 'owner_word_revoked' : 'grant_revoked',
+      ...extra,
+      ownerCanGrant: word !== null ? ownerWordHint() : ownerCanGrantHint('approve_drafted_action'),
+    });
+  if (governed && authority === null) {
+    // D209 critic r2 L2: a RETRY (this call already passed these checks; another process then moved the row) answers
+    // from the row as it is now, never with a refusal that reads as if nothing ran.
+    if (retried) {
+      const now = loadAction(ctx, actionId);
+      if (now?.status === 'executed') return now.result_json !== null ? (JSON.parse(now.result_json) as Result) : ok({ actionId, status: 'executed' });
+      if (now?.status === 'rejected') return err('already_rejected', { actionId });
+      if (now?.status === 'stale') return staleRefusal(now);
+    }
+    if (word !== null) return err('permission_denied', { capability: 'manage_agent_dial', actionId, reason: 'owner_word_off', ownerCanGrant: ownerWordHint() });
+    return err('cannot_self_approve', { actionId, reason: 'governed_seat', ownerCanGrant: ownerCanGrantHint('approve_drafted_action') });
+  }
+  const grant = authority?.kind === 'grant' ? authority.grant : null;
+  if (authority !== null && input.allowFuture === true) {
+    return err('cannot_self_grant', { actionId, field: 'allowFuture', reason: 'an agent approving for the owner never sets a dial level' });
+  }
 
   const row = loadAction(ctx, actionId);
   if (row === undefined) return err('not_found', { actionId });
@@ -569,9 +722,42 @@ function approveOnce(ctx: WorkspaceContext, invoke: ActionInvoker, input: Resolv
   if (row.status === 'rejected') return err('already_rejected', { actionId });
   if (row.status === 'stale') return staleRefusal(row);
 
+  // D209 (critic MEDIUM-3): the owner's words approve a Vorschlag that existed, or was about to be drafted, when
+  // they were written: never earlier than `agent.owner_word_before_draft_minutes` before the draft, so one old
+  // quote can never be replayed onto every later Vorschlag as a standing grant the owner never gave.
+  if (word !== null && Date.parse(word.saidAt) < Date.parse(row.created_at) - ownerWordBeforeDraftMs(ctx)) {
+    return err('invalid_input', { actionId, field: 'ownerWord.saidAt', reason: 'before the Vorschlag was drafted', draftedAt: row.created_at, setting: 'agent.owner_word_before_draft_minutes' });
+  }
+
+  // D202 point 5 (I2): a PERSON-ONLY Vorschlag (a protected setting the agent proposed) is approved by a
+  // person, with one click, and by nothing else: never by a governed seat, whatever grant it holds, checked
+  // here before the grant's own exclusions so no widening of `GRANT_APPROVABLE_TOOLS` can reach it. And never
+  // with `allowFuture`: a protected setting has no "künftig automatisch".
+  if (isPersonOnlySettingsRow(row)) {
+    if (governed) return err('cannot_self_approve', { actionId, reason: 'person_only', ownerCanGrant: null });
+    if (input.allowFuture === true) {
+      return err('invalid_input', { actionId, field: 'allowFuture', reason: 'person_only: a protected setting is approved one change at a time' });
+    }
+  }
+
   // The agent can never self-approve: a second, independent actor must review before the irreversible
   // step (§6b Fixed). Enforced on the ACTOR, beside the capability gate at the boundary.
-  if (row.actor === ctx.actor) return err('cannot_self_approve', { actionId });
+  // D196: the owner's live grant IS that second actor's decision, taken in advance and recorded on the row.
+  // D209: so is the owner's word on this one Vorschlag, recorded on the row with the words themselves.
+  if (row.actor === ctx.actor && authority === null) return err('cannot_self_approve', { actionId });
+  // D196 (owner answers after critic H1/P1/P2): the grant never approves a standing power, a strong default or
+  // TILL's own offer; those wait for a person.
+  if (grant !== null) {
+    const excluded = grantExclusionFor('approve', row);
+    if (excluded !== null) return outsideGrant(actionId, row, excluded);
+  }
+  // D209 amendment (owner, 18.11.2026, after a security review: TILL cannot verify a quote the agent supplies):
+  // filing the VAT return, plugins and sharing with someone outside (`agent.owner_word_excluded`) always wait for
+  // a person's click, tested against every family the stored call can draft under; no readable family fails closed.
+  if (authority?.kind === 'owner_word') {
+    const excluded = ownerWordExclusionFor(ctx, row, ownerWordExcludedFamilies(ctx));
+    if (excluded !== null) return outsideOwnerWord(actionId, row, excluded);
+  }
 
   let payload: Record<string, unknown>;
   try {
@@ -616,6 +802,7 @@ function approveOnce(ctx: WorkspaceContext, invoke: ActionInvoker, input: Resolv
   // business rows (`bank_sync` imports a waiting statement, then answers `channel_unreachable`). What a
   // refusal writes about ITSELF runs under `SqliteStore.withoutCommitMark` and leaves no mark, so a
   // refusal that wrote only that stays rejectable, and the next approval faces the pin like any other.
+  let authorityInTx: DecisionAuthority | null = null;
   const outcome = ctx.store.withCommitMark(
     (ran) => {
       let left: string | null = null;
@@ -645,6 +832,17 @@ function approveOnce(ctx: WorkspaceContext, invoke: ActionInvoker, input: Resolv
             .prepare("UPDATE agent_action SET committed_pin = ? WHERE workspace_id = ? AND id = ? AND status IN ('pending', 'executed')")
             .run(left, ctx.workspaceId, actionId);
       if (stamped.changes === 0) throw new DraftedActionResolvedMeanwhile(actionId);
+      // D196 (critic L1): an approval under the owner's grant re-reads the grant INSIDE the act's own
+      // transaction, under its write lock: a revoke another process committed after the checks above rolls
+      // the act back, so nothing commits over a grant already withdrawn.
+      // D209: the owner's-word setting the same way.
+      if (authority?.kind === 'grant' && ran) {
+        const live = readAuthority();
+        if (live === null) throw new DecisionGrantRevokedMeanwhile(actionId);
+        // D196 item 9 (confirming critic N2): the history names the LAST grant read inside the act's own
+        // transactions, never the one read before the act.
+        authorityInTx = live;
+      }
     },
     // D177 (critic D177-C6): marked as being approved, so the line decision it makes resolves the line's
     // OTHER pending Vorschläge and never this one (`approving.ts`).
@@ -660,19 +858,52 @@ function approveOnce(ctx: WorkspaceContext, invoke: ActionInvoker, input: Resolv
   // rejectable.
   const unknownOutcome = !outcome.ok && UNKNOWN_OUTCOME_CODES.has(outcome.error) && row.committed_at !== null;
   if (!outcome.ok && !unknownOutcome) {
+    // D196 (critic L1): the grant was revoked while the replay ran, and the act rolled back.
+    if (authority?.kind === 'grant' && readAuthority() === null) {
+      // Code critic L2: the verb's own refusal rides along, so a failure that was not the revoke stays visible.
+      return revoked({ replayRefusal: outcome.error });
+    }
     // A row another process resolved while this replay ran (the mark refused, rolling the act's
     // transaction back): answer from the row, never with the error the refusal surfaced as.
     if (retried === false && loadAction(ctx, actionId)?.status !== 'pending') return approveOnce(ctx, invoke, input, true);
     return outcome;
   }
 
-  const flipped = ctx.store.db
-    .prepare(
-      `UPDATE agent_action
-          SET status = 'executed', result_json = ?, resolved_at = ?, resolved_by = ?
-        WHERE workspace_id = ? AND id = ? AND status = 'pending'`,
-    )
-    .run(JSON.stringify(outcome), ctx.clock.now(), ctx.actor, ctx.workspaceId, actionId);
+  // D196 (critic L2): the status flip and the grant's history entry commit together, so an agent-executed
+  // row never reads as a person's decision after a crash between them.
+  let flipped: { changes: number };
+  try {
+    flipped = ctx.store.tx(() => {
+      // D196 item 9 (confirming critic N2): an act that committed no transaction (a spent key replays its
+      // memo) never read the grant inside one, so the flip's own transaction reads it, under its write lock,
+      // and a revoke committed meanwhile leaves the row pending (`grant_revoked`): nothing commits over a
+      // revoke, the flip included.
+      // D209: the owner's word records the authority read when the call started (see above), never a re-read.
+      let recorded: DecisionAuthority | null = authority?.kind === 'owner_word' ? authority : (authorityInTx as DecisionAuthority | null);
+      if (authority !== null && recorded === null) {
+        recorded = readAuthority();
+        if (recorded === null) throw new DecisionGrantRevokedMeanwhile(actionId);
+      }
+      const done = ctx.store.db
+        .prepare(
+          `UPDATE agent_action
+              SET status = 'executed', result_json = ?, resolved_at = ?, resolved_by = ?
+            WHERE workspace_id = ? AND id = ? AND status = 'pending'`,
+        )
+        .run(JSON.stringify(outcome), ctx.clock.now(), ctx.actor, ctx.workspaceId, actionId);
+      // D196: a decision the agent took under the owner's grant says so on the row, with the grant it rode.
+      // D209: an approval on the owner's word records the words, the moment and the setting, and stamps the
+      // A03 chain, in the same transaction as the flip.
+      if (done.changes > 0 && recorded !== null) {
+        if (recorded.kind === 'grant') recordDecisionUnderGrant(ctx, actionId, 'approved', recorded.grant);
+        else recordDecisionOnOwnerWord(ctx, actionId, recorded.grant, recorded.word);
+      }
+      return done;
+    });
+  } catch (e) {
+    if (e instanceof DecisionGrantRevokedMeanwhile) return revoked();
+    throw e;
+  }
   // Resolved by another process in the meantime (an act that wrote nothing cannot have been stopped by
   // the mark): answer from the row as it is, never claim this approval executed it.
   if (flipped.changes === 0) {
@@ -699,7 +930,12 @@ function approveOnce(ctx: WorkspaceContext, invoke: ActionInvoker, input: Resolv
   if (unknownOutcome) {
     return ok<ApprovedWithUnknownOutcome>({ actionId, status: 'executed', result: outcome, outcomeUnknown: true, outcomeCode: outcome.error });
   }
-  return ok({ actionId, status: 'executed', result: outcome, ...(granted !== undefined ? { granted } : {}) });
+  // D209: the answer of an approval on the owner's word names the words it recorded and the way back of the act
+  // it ran (the verbs that undo or correct it, D159), so the agent can tell the owner both.
+  const onWord = authority?.kind === 'owner_word'
+    ? { decidedOnOwnerWord: { quote: authority.word.quote, saidAt: authority.word.saidAt }, wayBack: [...(WAY_BACK[row.action_tool] ?? [])] }
+    : {};
+  return ok({ actionId, status: 'executed', result: outcome, ...(granted !== undefined ? { granted } : {}), ...onWord });
 }
 
 /**
@@ -723,10 +959,25 @@ export function rejectDraftedAction(ctx: WorkspaceContext, input: ResolveDrafted
   }
   const reason = trimmed.length > 0 ? trimmed : null;
 
+  // D196: a governed seat reaches here only through the boundary's grant check; the engine asks again,
+  // so an embedder that bypasses A24 still needs the owner's live grant (the approve path's shape).
+  const governed = isGovernedSeat(ctx.store, ctx.actor);
+  const grant = governed ? agentDecisionGrantFor(ctx, 'reject_drafted_action') : null;
+  if (governed && grant === null) {
+    return err('permission_denied', { capability: 'manage_agent_dial', actionId, reason: 'governed_seat', ownerCanGrant: ownerCanGrantHint('reject_drafted_action') });
+  }
+
   const row = loadAction(ctx, actionId);
   if (row === undefined) return err('not_found', { actionId });
   if (row.status === 'rejected') {
-    return ok({ actionId, status: 'rejected', ...(row.reject_reason !== null ? { reason: row.reject_reason } : {}) });
+    // Batch reject (paper critic L1): the answer SAYS this call rejected nothing, so a batch (or an agent)
+    // never reports another actor's earlier rejection, with that actor's reason, as its own.
+    return ok({ actionId, status: 'rejected', alreadyRejected: true, ...(row.reject_reason !== null ? { reason: row.reject_reason } : {}) });
+  }
+  // D196 (owner answer after critic P2): TILL's own offers to the person stay the person's to answer.
+  if (grant !== null && row.status === 'pending') {
+    const excluded = grantExclusionFor('reject', row);
+    if (excluded !== null) return outsideGrant(actionId, row, excluded);
   }
   if (row.status === 'executed') return err('already_executed', { actionId });
   if (row.status === 'stale') return staleRefusal(row);
@@ -738,22 +989,104 @@ export function rejectDraftedAction(ctx: WorkspaceContext, input: ResolveDrafted
   if (row.committed_at !== null) {
     return err('already_executed', { actionId, committedAt: row.committed_at, reason: 'committed_before_crash' });
   }
+  // D196 item 9 (`agent.reject_reason`; D204 made the default `optional`): under `required` a rejection the
+  // agent takes under the owner's grant names why, because the reason is what the person reads on every row. Checked in
+  // the single verb (never only in the batch, paper critic M1) and after the row's own answers above, so
+  // those keep their meaning. A person's rejection never needs one.
+  if (grant !== null && reason === null && grantRejectNeedsReason(ctx)) {
+    return err('invalid_input', { field: 'reason', reason: 'reason_required', actionId, setting: REJECT_REASON_SETTING });
+  }
 
   // Compare-and-set on the mark (D165 follow-up, the security review's TOCTOU): under D12 another
   // process's approval may commit this row's act between the read above and this write. Its mark then
   // stands, this write changes nothing, and the answer comes from the row as it is now. (The other
   // order is the mark's: a row rejected first rolls the act's transaction back.)
-  const rejected = ctx.store.db
-    .prepare(
-      `UPDATE agent_action
-          SET status = 'rejected', resolved_at = ?, resolved_by = ?, reject_reason = ?
-        WHERE workspace_id = ? AND id = ? AND status = 'pending' AND committed_at IS NULL`,
-    )
-    .run(ctx.clock.now(), ctx.actor, reason, ctx.workspaceId, actionId);
+  // D196 (critic L2): the rejection and the grant's history entry commit together.
+  let rejected: { changes: number };
+  try {
+    rejected = ctx.store.tx(() => {
+      // D196 item 9 (batch reject, the approve path's critic L1 guarantee): a decision under the grant re-reads
+      // the grant INSIDE this transaction, under its write lock (BEGIN IMMEDIATE), so a revoke another process
+      // committed after the checks above writes nothing here; and the history names the grant read HERE, so a
+      // revoke and a re-grant in between never leave a withdrawn grant on the row (paper critic L2b).
+      const live = grant === null ? null : agentDecisionGrantFor(ctx, 'reject_drafted_action');
+      if (grant !== null && live === null) throw new DecisionGrantRevokedMeanwhile(actionId);
+      const done = ctx.store.db
+        .prepare(
+          `UPDATE agent_action
+              SET status = 'rejected', resolved_at = ?, resolved_by = ?, reject_reason = ?
+            WHERE workspace_id = ? AND id = ? AND status = 'pending' AND committed_at IS NULL`,
+        )
+        .run(ctx.clock.now(), ctx.actor, reason, ctx.workspaceId, actionId);
+      if (done.changes > 0 && live !== null) recordDecisionUnderGrant(ctx, actionId, 'rejected', live);
+      return done;
+    });
+  } catch (e) {
+    // A thrown marker, never `changes 0`: the re-entry would answer `governed_seat` (paper critic L2a).
+    if (e instanceof DecisionGrantRevokedMeanwhile) {
+      return err('permission_denied', { capability: 'manage_agent_dial', actionId, reason: 'grant_revoked', ownerCanGrant: ownerCanGrantHint('reject_drafted_action') });
+    }
+    throw e;
+  }
   // A row only leaves `pending`, and a mark is never cleared, so one re-read settles the answer.
   if (rejected.changes === 0) return rejectDraftedAction(ctx, input);
   // The trace's backlink, on the reject path too: no object was created (entity_ref stays null), but
   // WHO resolved the draft and WHEN is what the conversation renders beside the drafting call.
   backfillDraftingCall(ctx, actionId, undefined);
   return ok({ actionId, status: 'rejected', ...(reason !== null ? { reason } : {}) });
+}
+
+/**
+ * D196: the row's record of a decision the agent took under the owner's grant: one history entry naming the
+ * decision, the agent, the grantor and the moment of the grant, so every face (the Vorschläge list, the
+ * trace beside the drafting call) shows it apart from a person's decision. `resolved_by` stays the agent.
+ */
+function recordDecisionUnderGrant(ctx: WorkspaceContext, actionId: string, decision: 'approved' | 'rejected', grant: AgentDecisionGrant): void {
+  appendDraftHistory(ctx, actionId, {
+    event: 'decided_under_grant',
+    decision,
+    at: ctx.clock.now(),
+    by: ctx.actor,
+    scope: grant.scope,
+    grantedBy: grant.grantedBy,
+    grantedAt: grant.grantedAt,
+  });
+}
+
+/**
+ * D209: the row's record of an approval the agent took on the owner's word: one history entry with the words,
+ * verbatim, when they were said, the agent, and the setting it rode (who switched it on, and when); plus one
+ * A03 chain row, so the Verlauf shows the decision beside every other attributable act. `resolved_by` stays
+ * the agent: the agent ran it, the words say who decided.
+ */
+function recordDecisionOnOwnerWord(ctx: WorkspaceContext, actionId: string, grant: OwnerWordGrant, word: OwnerWord): void {
+  const at = ctx.clock.now();
+  appendDraftHistory(ctx, actionId, {
+    event: 'decided_on_owner_word',
+    decision: 'approved',
+    at,
+    by: ctx.actor,
+    quote: word.quote,
+    saidAt: word.saidAt,
+    grantedBy: grant.grantedBy,
+    grantedAt: grant.grantedAt,
+  });
+  ctx.audit.record({ entityKind: 'agent_action', entityId: actionId, action: 'approve_on_owner_word', actor: ctx.actor, at });
+}
+
+/**
+ * D209: the Verlauf (A03 `get_audit_log`) shows the owner's words beside an `approve_on_owner_word` row: each
+ * such row gains `ownerWord { quote, saidAt }` from the Vorschlag's history (tenant-bound). The chain itself
+ * stores only who, what and when; the words live on the Vorschlag. Any other answer passes through untouched.
+ */
+export function withOwnerWords(ctx: WorkspaceContext, answer: Result): Result {
+  if (!answer.ok || !Array.isArray(answer.rows)) return answer;
+  const historyOf = ctx.store.db.prepare('SELECT history_json FROM agent_action WHERE workspace_id = ? AND id = ?');
+  const rows = (answer.rows as Record<string, unknown>[]).map((r) => {
+    if (r.entityKind !== 'agent_action' || r.action !== 'approve_on_owner_word' || typeof r.entityId !== 'string') return r;
+    const row = historyOf.get(ctx.workspaceId, r.entityId) as { history_json: string | null } | undefined;
+    const entry = draftHistoryOf(row?.history_json ?? null).find((e) => e.event === 'decided_on_owner_word');
+    return entry !== undefined && entry.event === 'decided_on_owner_word' ? { ...r, ownerWord: { quote: entry.quote, saidAt: entry.saidAt } } : r;
+  });
+  return { ...answer, rows };
 }

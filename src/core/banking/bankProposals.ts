@@ -57,6 +57,7 @@ import { readLineFee } from './statementFacts.js';
 import { duplicatePendingIds } from './statementDedupe.js';
 import type { BankLineLeg } from './bankLines.js';
 import { derivedCounterpartyOf } from './derivedCounterparty.js';
+import { methodOn } from '../vat/saldoGenerations.js';
 import type { DerivedCounterpartyKind } from './derivedCounterparty.js';
 
 export const BANK_PROPOSAL_CERTAINTIES = ['sure', 'learned', 'check', 'open'] as const;
@@ -145,7 +146,38 @@ export type BankLineProposal = {
    * amount, under `bank.fx_mode` `propose_split` or `prefill_split`. Absent otherwise (no key).
    */
   feeSplit?: BankFeeSplit;
+  /**
+   * A41.8 (D193): present only when a TRUSTED receipt's VAT picked the leg's code under `belege.vat_from_receipt` =
+   * `propose`: the receipt's rate (0: it states no VAT, so the code was removed), its VAT in the receipt's currency
+   * (null when the receipt states only a rate it gives no figure for), and the code the ladder named when it
+   * differed (else null). Absent otherwise (no key).
+   */
+  vatFromReceipt?: BankVatFromReceipt;
 };
+
+/** A41.8 (D193): why a proposal's MWST code is the receipt's (see `BankLineProposal.vatFromReceipt`). */
+export type BankVatFromReceipt = { rateBp: number; amountMinor: number | null; overrode: string | null };
+
+/** A41.8 (D193): the Swiss rate class a receipt's rate names in its era, or `zero` (the receipt states no VAT). */
+export type ReceiptRateClass = 'normal' | 'reduced' | 'accommodation' | 'zero';
+
+/** A41.8 (D193): what a TRUSTED receipt says about a line's VAT, as the code step reads it. */
+export type ReceiptVatHint = { rateBp: number; rateClass: ReceiptRateClass; amountMinor: number; currency: string };
+
+/**
+ * A41.8 (D193): the receipt reader a caller attaches to a `ProposalContext` (`receiptVat.ts` builds it; this module
+ * never reads a receipt itself).
+ *  - `propose`: `belege.vat_from_receipt` = `propose` (the code step runs); false under `compare_only`.
+ *  - `hintFor`: the line's receipts' ONE trusted rate with their summed VAT, or null (none, untrusted, several rates).
+ *  - `fits`: does the VAT `target` computes on the line compare `match` with the hint (critic r1 F3)?
+ *  - `capsFor`: does the line's receipt VAT beside `target` cap the certainty (critic r1 bulk safety, r2 ruling)?
+ */
+export interface ReceiptVatSource {
+  propose: boolean;
+  hintFor(row: BankTxnRow, detail: BankTxnDetailRow | undefined): ReceiptVatHint | null;
+  fits(row: BankTxnRow, target: BookBankLineTarget, hint: ReceiptVatHint): boolean;
+  capsFor(row: BankTxnRow, detail: BankTxnDetailRow | undefined, target: BankProposalTarget | null): boolean;
+}
 
 /** D178 (A20 §11.5): the values of `bank.fx_mode` (the registry entry is the schema). */
 export const BANK_FX_MODES = ['propose_split', 'prefill_split', 'facts_only', 'transaction_currency'] as const;
@@ -215,6 +247,11 @@ export interface ProposalContext {
   /** D144: the registered model's recorded decisions, or null when no fit model is registered. */
   model: ModelRungContext | null;
   /**
+   * A41.8 (D193): the receipt reader, attached by a caller under `belege.vat_from_receipt` = `propose` (the inbox and
+   * the evidence); absent, the ladder's code stands (autobook, N03 provenance, the review signal, the counts).
+   */
+  receiptVat?: ReceiptVatSource;
+  /**
    * D167: what only the two new rungs read, built on FIRST USE and memoised here (`standardsOf`,
    * `journalOf`, `baseCurrencyOfPc`). A context whose lines are all placed by an earlier rung, and the
    * per-line context `lineNeedsReview` builds on import, never pay for the journal read.
@@ -238,6 +275,8 @@ export interface ProposalContext {
     feeAccountId?: string | null;
     /** D178 point 19: the lines flagged as a possible duplicate and not decided "Kein Duplikat". */
     duplicatePending?: ReadonlySet<string>;
+    /** A41.8 (critic r1 F5): whether the method governing a day is `effektiv`, memoised per day. */
+    effektiv?: Map<string, boolean>;
   };
 }
 
@@ -1239,8 +1278,9 @@ function ownAccountProposal(ctx: WorkspaceContext, pc: ProposalContext, row: Ban
 }
 
 /**
- * Every rung in order; the first that speaks is the proposal. D178 (A20 §11.5): then the fee split of a
- * card payment, under `bank.fx_mode`.
+ * Every rung in order; the first that speaks is the proposal. A41.8 (D193): then, when a receipt reader is
+ * attached, the receipt's MWST code. D178 (A20 §11.5): then the fee split of a card payment, under `bank.fx_mode`
+ * (after the receipt, so the fee leg never takes the receipt's code: it copies the rest leg's).
  */
 export function proposeForLine(
   ctx: WorkspaceContext,
@@ -1248,7 +1288,122 @@ export function proposeForLine(
   row: BankTxnRow,
   detail: BankTxnDetailRow | undefined,
 ): BankLineProposal {
-  return duplicateCap(ctx, pc, row, withFeeSplit(ctx, pc, row, ladderForLine(ctx, pc, row, detail)));
+  const built = withFeeSplit(ctx, pc, row, withReceiptVat(ctx, pc, row, detail, ladderForLine(ctx, pc, row, detail)));
+  return duplicateCap(ctx, pc, row, receiptVatCap(pc, row, detail, built));
+}
+
+/**
+ * A41.8, bulk safety (critic r1, r2 ruling): with a receipt reader attached, a `sure` or `learned` proposal whose
+ * receipt VAT `differs` from what its target books, or cannot be checked for a structural reason (`unread` with
+ * several receipts, a receipt that does not cover the line, another currency; NOT a lone covering receipt that is
+ * merely unconfirmed, `receiptVatCheck`'s `caps`), reads `check`, in both modes of
+ * `belege.vat_from_receipt`, so "Alle sicheren buchen", the bands and the facets never take it unseen. The target
+ * stays; the person sees why in the row.
+ */
+function receiptVatCap(pc: ProposalContext, row: BankTxnRow, detail: BankTxnDetailRow | undefined, p: BankLineProposal): BankLineProposal {
+  if (pc.receiptVat === undefined || row.credit_debit !== 'DBIT') return p;
+  if (p.certainty !== 'sure' && p.certainty !== 'learned') return p;
+  return pc.receiptVat.capsFor(row, detail, p.target) ? { ...p, certainty: 'check' } : p;
+}
+
+/** A41.8: the input-code family of an account, or null when a receipt picks no code for it. */
+type InputFamily = 'M' | 'I';
+
+/** Critic r3 F2: the family of a seed input code (`VST-M`, `VST-M26`, ..., `VST-I38`), or undefined for any other. */
+function inputFamilyOf(code: string | null): InputFamily | undefined {
+  const m = code === null ? null : /^VST-([MI])(?:26|38)?$/.exec(code);
+  return m === null ? undefined : (m[1] as InputFamily);
+}
+
+/**
+ * A41.8 (D193): the Vorsteuer code a receipt's rate class picks for a booking on `accountId`. `undefined`: the receipt
+ * picks nothing there (an account outside the families, a VAT account, a Bankkonto's ledger, a foreign rate class);
+ * `null`: no code (the receipt states no VAT); else the code. The family is the account's: an expense account 4xxx or
+ * an asset 12xx (Vorräte) books Material, Waren und Dienstleistungen (Ziffer 400, `VST-M`); an expense account 5xxx or
+ * 6xxx or an asset 15xx to 17xx (Anlagevermögen) books Investitionen und übriger Betriebsaufwand (Ziffer 405, `VST-I`).
+ * The class picks the variant (D167: the stored rate names the class, the supply date the era). `keepFamily` (critic r3
+ * F2): the family of the input code the ladder already named, kept over the account's. The code must pass
+ * the ladder's own guard (`suggestionTargetUsable`), else `undefined`. §H-TENANT.
+ */
+export function receiptInputCode(ctx: WorkspaceContext, accountId: string, rateClass: ReceiptRateClass, keepFamily?: InputFamily): string | null | undefined {
+  const account = ctx.store.db.prepare('SELECT number, type FROM account WHERE workspace_id = ? AND id = ?').get(ctx.workspaceId, accountId) as
+    | { number: string; type: string }
+    | undefined;
+  if (account === undefined || VAT_ACCOUNT_NUMBERS.includes(account.number)) return undefined;
+  const ledger = ctx.store.db.prepare('SELECT 1 AS x FROM bank_account WHERE workspace_id = ? AND ledger_account_id = ?').get(ctx.workspaceId, accountId);
+  if (ledger !== undefined) return undefined;
+  let family: InputFamily | null = null;
+  if (account.type === 'expense' && /^4\d{3}$/.test(account.number)) family = 'M';
+  else if (account.type === 'expense' && /^[56]\d{3}$/.test(account.number)) family = 'I';
+  else if (account.type === 'asset' && /^12\d{2}$/.test(account.number)) family = 'M';
+  else if (account.type === 'asset' && /^1[5-7]\d{2}$/.test(account.number)) family = 'I';
+  if (family === null) return undefined;
+  // Critic r3 F2: the ladder's own input family (its Ziffer, 400 or 405) is kept; the receipt changes only the rate.
+  if (keepFamily !== undefined) family = keepFamily;
+  if (rateClass === 'zero') return suggestionTargetUsable(ctx, accountId, null) ? null : undefined;
+  const code = `VST-${family}${rateClass === 'reduced' ? '26' : rateClass === 'accommodation' ? '38' : ''}`;
+  return suggestionTargetUsable(ctx, accountId, code) ? code : undefined;
+}
+
+/**
+ * A41.8 (critic r1 F5): is the method governing `day` `effektiv` (`methodOn`, dated, never the workspace row of
+ * today)? Memoised per day. Exported for the autobook verdict, which reads the same rule.
+ */
+export function effektivOn(ctx: WorkspaceContext, day: string, memo?: Map<string, boolean>): boolean {
+  const known = memo?.get(day);
+  if (known !== undefined) return known;
+  const yes = methodOn(ctx, day)?.method === 'effektiv';
+  memo?.set(day, yes);
+  return yes;
+}
+
+function effektivOf(ctx: WorkspaceContext, pc: ProposalContext, row: BankTxnRow): boolean {
+  return effektivOn(ctx, lineBookingDate(row), (pc.lazy.effektiv ??= new Map()));
+}
+
+/** A41.8 (critic r1 F1): the kind of a code in this book (`input`, `reverse_charge`, ...), or null when unknown. */
+function taxCodeKindOf(ctx: WorkspaceContext, code: string): string | null {
+  const r = ctx.store.db.prepare('SELECT kind FROM tax_code WHERE workspace_id = ? AND code = ? ORDER BY active DESC LIMIT 1').get(ctx.workspaceId, code) as
+    | { kind: string }
+    | undefined;
+  return r?.kind ?? null;
+}
+
+/**
+ * A41.8 (D193): THE RECEIPT PICKS THE CODE. With a receipt reader attached under `belege.vat_from_receipt` = `propose`,
+ * an OPEN DEBIT line in the base currency, on a day the `effektiv` method governs, whose proposal is an `accounts`
+ * target with exactly one leg (no transaction-currency leg) takes the code the line's ONE receipt picks (critic r2
+ * ruling: exactly one receipt, its gross covering the line, one trusted rate or a trusted zero: `hintOf`)
+ * (`receiptInputCode`), or no code when it states no VAT, ONLY when:
+ *  - the leg carries no code or an INPUT-kind one (critic r1 F1: a `reverse_charge` or `import` code is never
+ *    touched; a foreign invoice states no Swiss VAT because the recipient owes the Bezugsteuer);
+ *  - the VAT that code computes on the leg compares `match` with the receipt's VAT (critic r1 F3: a 7.7 % receipt on a
+ *    2026 line keeps the ladder's code).
+ * The certainty is unchanged here (`receiptVatCap` caps a line it cannot match); `vatFromReceipt` says why. Anything else is
+ * left exactly as the ladder made it. TILL books the computed VAT (`postEntry`'s recompute): the receipt picks the code.
+ */
+function withReceiptVat(ctx: WorkspaceContext, pc: ProposalContext, row: BankTxnRow, detail: BankTxnDetailRow | undefined, p: BankLineProposal): BankLineProposal {
+  if (pc.receiptVat === undefined || !pc.receiptVat.propose || row.credit_debit !== 'DBIT') return p;
+  if (p.target === null || p.target.kind !== 'accounts' || p.target.legs.length !== 1) return p;
+  const leg = p.target.legs[0]!;
+  if (leg.fx !== undefined || row.currency !== baseCurrencyOfPc(ctx, pc) || !effektivOf(ctx, pc, row)) return p;
+  const old = leg.taxCode ?? null;
+  if (old !== null && taxCodeKindOf(ctx, old) !== 'input') return p;
+  const hint = pc.receiptVat.hintFor(row, detail);
+  if (hint === null) return p;
+  const code = receiptInputCode(ctx, leg.accountId, hint.rateClass, inputFamilyOf(old));
+  if (code === undefined) return p;
+  const next: BankLineLeg = { ...leg };
+  delete next.taxCode;
+  if (code !== null) next.taxCode = code;
+  const target: BookBankLineTarget = { ...p.target, legs: [next] };
+  if (!pc.receiptVat.fits(row, target, hint)) return p;
+  return {
+    ...p,
+    target,
+    vatCode: code,
+    vatFromReceipt: { rateBp: hint.rateBp, amountMinor: hint.amountMinor, overrode: old !== null && old !== code ? old : null },
+  };
 }
 
 /**

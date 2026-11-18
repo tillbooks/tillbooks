@@ -275,8 +275,9 @@
       "action": "Abgelaufene Perioden bereinigen",
       "fromPeriod": "Von Periode",
       "toPeriod": "Bis Periode",
-      "reason": "Begründung",
-      "confirm": "Mit dieser Begründung bereinigen",
+      "reason": "Notiz (freiwillig)",
+      "typeYear": "Zum Bestätigen das Jahr eingeben",
+      "confirm": "Bereinigen",
       "done": "{count} Archiveinträge bereinigt. Der Bereinigungsnachweis bleibt."
     },
     "err": {

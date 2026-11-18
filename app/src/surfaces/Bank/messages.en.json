@@ -50,7 +50,34 @@
         "one": "Ignore {count} line",
         "other": "Ignore {count} lines"
       },
-      "clear": "Clear selection"
+      "clear": "Clear selection",
+      "skipped": "Left as they are: {list}.",
+      "skip": {
+        "target": {
+          "one": "{count} without an account",
+          "other": "{count} without an account"
+        },
+        "incomplete": {
+          "one": "{count} incomplete",
+          "other": "{count} incomplete"
+        },
+        "vorschlag": {
+          "one": "{count} with a pending proposal",
+          "other": "{count} with a pending proposal"
+        },
+        "duplicate": {
+          "one": "{count} possibly a duplicate",
+          "other": "{count} possibly duplicates"
+        },
+        "single": {
+          "one": "{count} one at a time only",
+          "other": "{count} one at a time only"
+        },
+        "right": {
+          "one": "{count} you may not book",
+          "other": "{count} you may not book"
+        }
+      }
     },
     "first": {
       "noAccountTitle": "No bank account yet.",
@@ -138,6 +165,14 @@
       "ignoreTip": "Do not book, with a reason",
       "vatSummary": "VAT, {party}: {vat}",
       "vatSummaryTip": "VAT per position in the details",
+      "vatReceiptDiffers": "Receipt {receipt}, proposed {proposed}",
+      "vatReceiptsSum": "{count} receipts, together {amount}",
+      "vatReceiptsDiffer": "{receipt}, proposed {proposed}",
+      "vatReceiptZero": "without VAT",
+      "vatProposedNone": "without VAT",
+      "vatReceiptUnread": "TILL cannot check the receipt's VAT against this booking: its figures are not confirmed, the line has several receipts, or the receipt does not cover the line or is in another currency. Check it before you book.",
+      "vatFromReceipt": "From the receipt",
+      "vatFromReceiptInstead": "From the receipt, instead of {code}",
       "moreTip": "Rule, receipt, ignore",
       "menu": {
         "ruleSave": "Save as booking rule",
@@ -343,6 +378,7 @@
     "compare": {
       "title": "Bank and books",
       "differenceReason": "Why does the amount differ by {amount}?",
+      "acceptDifference": "Accept the difference of {amount}",
       "differenceReasonHint": "for example bank fees deducted",
       "matchWithDifference": "Match with the difference",
       "bank": "Bank",
@@ -423,9 +459,9 @@
       "bookPrivate": "Book it that way",
       "reasonLegend": "Why?",
       "note": "A note for you or the accountant",
-      "noteRequired": "The reason in your own words",
       "consequence": "The line leaves the list but stays in the bank balance. If its money reaches the books nowhere, the check above shows it as a difference.",
       "commit": "Ignore",
+      "addNote": "Add a note",
       "reason": {
         "booked_elsewhere": {
           "label": "Booked elsewhere",
@@ -463,7 +499,6 @@
         "ignoredByMistake": "Ignored by mistake"
       },
       "note": "Note (optional)",
-      "noteRequired": "The reason in your own words",
       "consequenceBooked": "Reversing posts a counter-entry; the original entry stays in the journal. The line is then to book again.",
       "consequenceSettlement": "Reversing reverses the payment and reopens the invoice. The line is then to book again.",
       "consequenceMatched": "The existing entry stays unchanged; only the link to the line is undone. The line is then to book again.",
@@ -514,6 +549,7 @@
       "bookVat": "Book to {target}, {vat}.",
       "bookUnknown": "Book this line.",
       "ignore": "Ignore: {reason}.",
+      "ignorePlain": "Ignore.",
       "reopen": "Reverse and reopen: {reason}",
       "approve": "Approve",
       "reject": "Reject",
@@ -595,7 +631,8 @@
       "formats": {
         "camt": "camt.053",
         "mt940": "MT940",
-        "csv": "CSV"
+        "csv": "CSV",
+        "xlsx": "Excel (xlsx)"
       },
       "csv": {
         "title": "Assign the columns",
@@ -646,7 +683,12 @@
         },
         "preset": {
           "zkb_account_statement": "Recognised: ZKB's CSV account statement. The columns are already mapped. Check them."
-        }
+        },
+        "sheet": "Worksheet",
+        "parsedDate": "Date read",
+        "parsedAmount": "Amount read",
+        "unread": "not read",
+        "separatorMismatch": "Row {row}, column «{column}»: the file writes its amounts with the other decimal separator. Correct the decimal separator."
       },
       "result": {
         "counts": "New: {imported} · Already in the books: {duplicates} · Not read: {refused}",
@@ -674,7 +716,9 @@
           "csv_fill_untied": "A range does not meet the statements. It was imported anyway (setting); the gap stays open.",
           "csv_fill_chain_broken": "In a range the balance does not add up. It was imported anyway (setting).",
           "csv_fill_open_end": "A range ends inside the export. It was imported anyway (setting).",
-          "csv_fill_needs_balance": "Without a balance column a range was imported unchecked (setting)."
+          "csv_fill_needs_balance": "Without a balance column a range was imported unchecked (setting).",
+          "csv_fill_unreadable_row": "A stretch with an unreadable row in the export is imported anyway (setting), unproven.",
+          "csv_fill_boundary_mismatch": "A stretch whose boundary days differ from the books is imported anyway (setting), unproven."
         },
         "refused": {
           "account_mismatch": "the file belongs to another account",
@@ -731,7 +775,12 @@
           "untied": "The balance does not meet the statement: difference {amount}. Nothing of these days goes into the books.",
           "open_end": "The export ends on {date}, inside these days. Export a few more days.",
           "no_balance_column": "Without a balance column TILL does not check these days. Nothing of these days goes into the books.",
-          "not_in_file": "The file does not reach these days."
+          "not_in_file": "The file does not reach these days.",
+          "untiedSum": "The rows of these days differ from the statements before and after by {amount}. Nothing of these days goes into the books.",
+          "open_start": "The export starts inside these days. Export from a day earlier.",
+          "no_neighbour": "Without a balance column TILL needs a statement in the books at both ends. Nothing of these days goes into the books.",
+          "unreadable_row": "Row {row} cannot be read, so the sum of the rows proves nothing. Nothing of these days goes into the books.",
+          "boundary_mismatch": "On {date} the export and the books do not hold the same amounts. Nothing of these days goes into the books."
         },
         "line": "Row {row}",
         "commit": "Import the missing days",
@@ -745,6 +794,9 @@
         "flagged": {
           "one": "1 of them waits for your decision (possible duplicate)",
           "other": "{count} of them wait for your decision (possible duplicate)"
+        },
+        "proof": {
+          "neighbour_sum": "Proven by the sum: the rows add up exactly to what the statements before and after leave open"
         }
       }
     },
@@ -811,7 +863,8 @@
       "selfBookedOpen": "The agent's proposal is still open: reject it under Attention.",
       "vorschlagLeftOpen": "The agent's proposal stays open: someone allowed to decide proposals can close it.",
       "ignoredWhy": "Ignored: {party} ({reason})",
-      "undoShort": "Undo"
+      "undoShort": "Undo",
+      "pickedSkipped": "Skipped: {list}."
     },
     "agent": {
       "question": "How do I book this bank line: {date}, {party}, {amount}?"
@@ -1430,7 +1483,6 @@
         "legs": "Book",
         "ignore": "Do not book",
         "reason": "Reason",
-        "noteMissing": "Add a note for the other reason.",
         "ignoreHint": "A line that is not booked never reaches the books. So TILL only proposes it, and you set each line aside yourself.",
         "noLegs": "This rule has no lines. Split a line and save it with ☆."
       },
@@ -1552,7 +1604,8 @@
       "source": "Source",
       "sourceOf": {
         "csv": "The bank's CSV export",
-        "mt940": "MT940 file"
+        "mt940": "MT940 file",
+        "xlsx": "The bank's Excel export"
       }
     },
     "book": {
@@ -1563,10 +1616,8 @@
         "target": "Pick an account",
         "ask": "{label} missing",
         "restZero": "Rest would be {amount}",
-        "difference": "Reason for the difference missing",
         "rule": "Pick a rule",
         "restZeroShort": "Nothing is left for {account}",
-        "overrideReason": "State a reason for differing from the default.",
         "remainder": "{amount} is left over: choose what happens to it."
       }
     },
@@ -1591,6 +1642,7 @@
       "dockLabel": "Position of the details",
       "dockRight": "Right",
       "dockBottom": "Bottom",
+      "dockBottomBlocked": "Not enough height: the details need more room at the bottom, so they sit on the right.",
       "closeContext": "Details of the bank line",
       "resize": "Size of the details",
       "sizeText": "{size} pixels"
@@ -1826,6 +1878,78 @@
         "beleg_already_captured": "TILL has captured this receipt already. Assign it from the Belegeingang.",
         "unsupported_mime": "This file cannot be captured as a receipt."
       }
+    },
+    "inline": {
+      "presetMeta": "Preset",
+      "noPreset": "No preset, book normally",
+      "ruleMeta": "Rule",
+      "groupPresets": "Preset for turnover",
+      "groupRulesFor": "Rules for {party}",
+      "groupItems": "Assign an open invoice ({count})",
+      "groupMore": "More",
+      "search": "Account, rule or invoice",
+      "textLabel": "Booking text, {party}",
+      "vatInSettlement": "in the settlement",
+      "vatInSettlementTip": "The VAT of the sales is booked by the {name}.",
+      "vatNone": "none",
+      "vatDiffers": "The receipt shows a different VAT.",
+      "menu": {
+        "ignore": "Ignore",
+        "rule": "Save as rule",
+        "link": "Match with an entry",
+        "attach": "Attach receipt",
+        "agent": "Ask the agent"
+      },
+      "moreTip": "Ignore, rule, match, receipt, agent",
+      "original": "Original",
+      "rate": "Rate {rate}",
+      "qr": "QR",
+      "copyRef": "Copy reference",
+      "copyRefLabel": "Copy reference {ref}",
+      "source": {
+        "agent": "Proposed by the agent",
+        "vatFromReceipt": "VAT taken from the receipt",
+        "rule": "Rule {name}"
+      },
+      "vatLeg": "VAT",
+      "legsToggle": "Debit and credit ({count})",
+      "receiptNoVat": "no VAT",
+      "receiptVatRate": "VAT {rate} % · {amount}",
+      "receiptVat": "VAT {amount}",
+      "assignCandidate": "Assign",
+      "attach": "Attach receipt",
+      "readReceipt": "Read receipt",
+      "openReceipt": "View receipt {name}",
+      "presetName": "{system} settlement",
+      "presetNameVia": "{system} settlement via {processor}",
+      "vatWithZiffer": "{name}, box {ziffer}"
+    },
+    "payout": {
+      "title": "Payout from {processor}",
+      "kind": {
+        "sale": "Sale {day}",
+        "refund": "Refund {day}",
+        "processing_fee": "Card fee",
+        "service_fee": "{processor} fees",
+        "third_party_payout": "to third parties",
+        "third_party_payout_reversal": "back from third parties",
+        "reserve": "held by {processor}",
+        "other": "Other"
+      },
+      "kindPlain": {
+        "sale": "Sales",
+        "refund": "Refunds",
+        "processing_fee": "Card fees",
+        "service_fee": "{processor} fees",
+        "third_party_payout": "to third parties",
+        "third_party_payout_reversal": "back from third parties",
+        "reserve": "held by {processor}",
+        "other": "Other"
+      },
+      "many": "{label} ({count})",
+      "withVat": "{label}, VAT {vat}",
+      "thisPayout": "this payout",
+      "held": "stays with {processor}"
     }
   },
   "qrmatch": {
@@ -1848,7 +1972,7 @@
   "help": {
     "Bank": {
       "title": "Bank",
-      "body": "Every line of your bank statements is here, from every account. You decide each one on its own row: book it, settle an open invoice, match it to an existing entry, or ignore it with the ×. Click a line and the details beside it show what will be booked and where the proposal comes from. Above the list stands the difference between bank and books.\n\nThe ☆ saves a booking rule for the counterparty. A booking rule only proposes. Nothing is booked until you click. You can overwrite a computed amount. Attach a receipt with the paperclip or drop it on its line. TILL keeps it for ten years.",
+      "body": "Every line of your bank statements is here. You decide each on its row: book it, settle an open invoice, match it to an existing entry, or ignore it. Click a line to see what will be booked and where the proposal comes from. Above the list stands the difference between bank and books.\n\nUnder More you save a booking rule for the counterparty, attach a receipt or ignore the line. A booking rule only proposes. Nothing is booked until you click. Tick several lines and TILL books each one that is complete and says which stay. You can also drop a receipt on its line. TILL keeps it for ten years.",
       "concepts": [],
       "docsPath": "introduction"
     }
@@ -1914,9 +2038,9 @@
     "warnZkb": "Do not choose «Alle nicht abgeholten Daten». It marks the days as fetched at ZKB, and TILL's automatic fetch may no longer get them.",
     "warnOther": "Do not download the statements as «new, not yet fetched» data. The bank then counts them as fetched, and TILL's automatic fetch may no longer get them.",
     "choose": "Choose files",
-    "drop": "Drop camt.053 files here",
-    "hint": "One or more XML files, also one file holding several days.",
-    "notXml": "That is not an XML file. Download the statements in the camt.053 format.",
+    "drop": "Drop camt.053, CSV or Excel here",
+    "hint": "One or more XML files, or one CSV or Excel export.",
+    "notXml": "TILL cannot read this file. Download camt.053, CSV or Excel (xlsx).",
     "denied": "Only someone who may manage payments can import statements and confirm gaps.",
     "busy": "Importing the statements.",
     "done": "{imported} of {total} statements imported.",
@@ -1955,11 +2079,28 @@
       "gap_not_found": "This gap has been closed in the meantime.",
       "human_only": "A person confirms this, not the agent.",
       "needs_bank_account": "This bank account no longer exists.",
-      "gap_has_waiting_statement": "A statement waiting inside this gap does not follow on: money is missing from the books. It cannot be confirmed: import the missing statements."
+      "gap_has_waiting_statement": "A statement waiting inside this gap does not follow on: money is missing from the books. It cannot be confirmed: import the missing statements.",
+      "xls_unsupported": "TILL cannot read this Excel file. Save it as xlsx (without a password) or as CSV.",
+      "table_too_large": "The file is too large. Export a shorter period.",
+      "table_too_many_rows": "The file has too many rows. Export a shorter period.",
+      "csv_mapping_invalid": "Map the columns for the date and the amount.",
+      "csv_fill_needs_balance": "Map the balance column: TILL checks against it that no row is missing.",
+      "csv_mapping_separator_mismatch": "The file writes its amounts with the other decimal separator. Correct the decimal separator."
     },
     "titleAll": "Statements {ranges} are missing",
     "whyAllChain": "No money is missing: the balances chain exactly.",
-    "titleMany": "Close gaps"
+    "titleMany": "Close gaps",
+    "export": {
+      "title": {
+        "csv": "CSV export",
+        "xlsx": "Excel export"
+      },
+      "days": "{from} to {to}",
+      "notReady": "These days do not go into the books like this.",
+      "busy": "Importing the missing days.",
+      "closed": "The gap is closed: statements {range} are in the books from the export."
+    },
+    "mixed": "Taken: {used}. Not taken: {left}. Drop either the camt.053 files or one export."
   },
   "autobook": {
     "chip": {

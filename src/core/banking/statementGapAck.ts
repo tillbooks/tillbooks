@@ -3,8 +3,8 @@
  * confirmation that nothing is missing, and its withdrawal.
  *
  * THE RULE (owner, 01.10.2026). Only a person, never an agent alone; only when the balances chain;
- * only while the gap is open in the book and no downloaded statement waits inside it; always with a
- * reason. Append-only (`bank_statement_gap_ack`, triggers refuse UPDATE and DELETE); the latest row
+ * only while the gap is open in the book and no downloaded statement waits inside it; a reason is
+ * optional (D204, the row keeps who and when). Append-only (`bank_statement_gap_ack`, triggers refuse UPDATE and DELETE); the latest row
  * decides. Changes no statement and posts nothing; a statement found later still imports by rule 3.
  *
  * A module of its own (critic round 2 LOW 2) so it can read the EBICS channel's waiting statements
@@ -43,7 +43,8 @@ function guardAck(ctx: WorkspaceContext, input: ConfirmStatementGapInput): Resul
   for (const field of ['bankAccountId', 'afterStatementId', 'beforeStatementId', 'idempotencyKey'] as const) {
     if (!nonEmpty(input[field])) return err('invalid_input', { field });
   }
-  if (!nonEmpty(input.reason)) return err('invalid_input', { field: 'reason', reason: 'say why nothing is missing (or why the confirmation is withdrawn)' });
+  // D204: no reason is required; the append-only ack row keeps who and when (and a reason when given).
+  if (input.reason !== undefined && input.reason !== null && typeof input.reason !== 'string') return err('invalid_input', { field: 'reason' });
   // Never an agent alone: an agent seat proposes (A35 drafts the call), a person approves, and the
   // approval runs the verb as that person.
   if (isGovernedSeat(ctx.store, ctx.actor)) {
@@ -86,7 +87,8 @@ function appendAck(
       input.afterStatementId,
       input.beforeStatementId,
       action,
-      (input.reason as string).trim(),
+      // The column is NOT NULL on stored books: no reason is the empty string.
+      typeof input.reason === 'string' ? input.reason.trim() : '',
       gap.differenceMinor,
       ctx.actor,
       now,

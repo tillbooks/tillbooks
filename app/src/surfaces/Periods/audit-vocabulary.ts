@@ -138,6 +138,9 @@ export const AUDIT_ENTITY_KINDS = [
   // A41.3: a receipt assignment (`beleg_assign` / `beleg_consume` / `beleg_release`), and the redacted
   // holder marker a seat without the receipt read right sees in its place (I-E). Neither is a booking.
   'beleg_assignment',
+  // D209: a Vorschlag (drafted agent action). Only an approval on the owner's word stamps the chain: a person's
+  // click is the person's own act, the owner's word is an act the agent records on their behalf.
+  'agent_action',
   'receipt_held',
   // A18 creditor payments. `creditor_bank_profile` is the vendor IBAN A17 never captured (a payment
   // destination, D65 leg f), so every write to it is attributable, the same reasoning A19's
@@ -267,6 +270,9 @@ export const AUDIT_ENTITY_KINDS = [
   // so "who ran this Übernahme, and when" stays legible on the plan itself, and so the AuditPanel
   // renders a word rather than the raw `migration_plan` key.
   'migration_plan',
+  // D204 (A03 §11): a waived migration control and an implementation task's status change name who and when.
+  'migration_control',
+  'implementation_task',
   // M02: the §I sync publish dial. Not a data record and not a ledger effect: a workspace-level egress
   // posture whose enable/disable an owner and an auditor both need to see in the trail.
   'sync',
@@ -292,6 +298,16 @@ export const AUDIT_ENTITY_KINDS = [
   // D185, the settlement socket: a source's booking template stamps `create` and `update`; its own
   // history table holds the old and new template.
   'settlement_template',
+  // D198, the settlement feed: a source (its address, from-date and token locator) stamps `create` and `update`.
+  'settlement_source',
+  // D198 stateless check S5: a person's test answer for a settlement event stamps `create`.
+  'settlement_test_resolution',
+  // D198 owner answer (12.11.2026): a person's override of a settlement event stamps `create`.
+  'settlement_event_override',
+  'settlement_event_inclusion',
+  // A43 §2, the table door: a source's table mapping stamps `create` and `update`, and `confirm_id_change` when
+  // a person confirmed a changed id derivation while events were booked; its own history table holds old and new.
+  'settlement_table_mapping',
 ] as const;
 
 /** Every action the audit log can name. */
@@ -344,6 +360,12 @@ export const AUDIT_ACTIONS = [
   'apply',
   'override',
   'set_auto_apply',
+  // D204: a migration control waived without a mandatory reason; an implementation task's status (set_<status>).
+  'waive',
+  'set_open',
+  'set_done',
+  'set_blocked',
+  'set_not_applicable',
   // A20. `import` stamps the statement fact itself, once per genuinely new camt file (a re-import
   // dedupes and stamps nothing, the same shape `record` on `exchange_rate` uses for a duplicate
   // rate). `confirm` and `book` are the two decisions a DEBIT txn can reach, neither a near miss of
@@ -490,6 +512,19 @@ export const AUDIT_ACTIONS = [
   'beleg_consume',
   'beleg_release',
   'confirm_figures',
+  // A43 §2: `confirm_id_change` is not `confirm` (A20's settlement decision) and not `update` (which the same save
+  // also stamps): a person confirmed that a table mapping derives event ids otherwise than the booked events,
+  // the one act that can let the same rows book again.
+  'confirm_id_change',
+  // D206: a person confirmed that a table export lists whole days (the whole-day mode), and that the first or last
+  // day of a whole-day file is complete (the import lets it in on that answer).
+  'confirm_whole_days',
+  'confirm_edge_day',
+  // D206 (critic r2 M-B): a person's file days took the edge off a first or last day of the imported document.
+  'file_days_inner',
+  // D209: the agent approved a Vorschlag on the owner's word (the words themselves ride on the row, `ownerWord`).
+  // Not `approve`: no person clicked; the owner said so in a message, and the agent recorded and ran it.
+  'approve_on_owner_word',
 ] as const;
 
 export type AuditEntityKind = (typeof AUDIT_ENTITY_KINDS)[number];

@@ -8,7 +8,7 @@
  * Every name and figure is invented for this file.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import { TillClientProvider } from '../../lib/client-context';
@@ -117,25 +117,26 @@ describe('N03: a mined rule in Pendenzen', () => {
     const { container } = renderHub(engine(calls));
     const create = await screen.findByRole('button', { name: 'Regel anlegen' });
     expect(screen.getByText('Regel vorschlagen: Fernmeldewerk Beispiel AG, 3× gleich gebucht')).toBeInTheDocument();
-    expect(container.querySelector('.vorschlag-line-meta--hub')?.textContent).toBe('Seit 01.01.2026: 14 Zeilen, 13 genau so gebucht');
-    expect(screen.queryByRole('button', { name: 'Genehmigen' })).toBeNull();
+    expect(container.querySelector('.pl .pl-account-text')?.textContent).toBe('Seit 01.01.2026: 14 Zeilen, 13 genau so gebucht');
+    expect(screen.queryByRole('button', { name: 'Freigeben' })).toBeNull();
     fireEvent.click(create);
     await waitFor(() => expect(calls.find((c) => c.action === 'approve_drafted_action')?.input).toMatchObject({ actionId: ACTION }));
   });
 
-  it('the ⋯ offers Anpassen (to the bank line with the rule form) and Nicht vorschlagen, never künftig automatisch; Details list the bookings', async () => {
+  it('Nicht vorschlagen is the row\'s reject icon; the details lead to the bank line with the rule form (D207, no ⋯), never künftig automatisch; Details list the bookings', async () => {
     const { container } = renderHub(engine([]));
     await screen.findByRole('button', { name: 'Regel anlegen' });
-    fireEvent.click(screen.getByRole('button', { name: /^Mehr zu: / }));
-    expect(await screen.findByRole('menuitem', { name: 'Nicht vorschlagen' })).toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: /künftig automatisch/ })).toBeNull();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Details' }));
-    await waitFor(() => expect(container.querySelectorAll('.vorschlag-readback-row').length).toBeGreaterThan(0));
-    const rows = [...container.querySelectorAll('.vorschlag-readback-row')].map((r) => [r.querySelector('dt')?.textContent ?? '', r.querySelector('dd')?.textContent ?? '']);
-    expect(rows).toContainEqual(['Gleich gebucht', '28.10.2026, CHF 89.90']);
-    expect(rows).toContainEqual(['Gleich gebucht', '28.09.2026, CHF 89.90']);
-    fireEvent.click(screen.getByRole('button', { name: /^Mehr zu: / }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Anpassen' }));
+    expect(screen.getByRole('button', { name: 'Nicht vorschlagen' })).toHaveAttribute('data-icon', 'reject');
+    // D201: Details open in place from the row's chevron.
+    // D208: a click on the row opens one line: the bookings it was found in, then Öffnen.
+    fireEvent.click(container.querySelector('button.pl-main') as HTMLElement);
+    await waitFor(() => expect(container.querySelector('.pl-readback')).not.toBeNull());
+    const readback = container.querySelector('.pl-readback')?.textContent ?? '';
+    expect(readback).toContain('28.10.2026, CHF 89.90');
+    expect(readback).toContain('28.09.2026, CHF 89.90');
+    expect(screen.queryByRole('button', { name: /^Mehr zu: / })).toBeNull();
+    expect(screen.queryByRole('button', { name: /als Regel speichern/ })).toBeNull();
+    fireEvent.click(within(container.querySelector('.pl-open') as HTMLElement).getByRole('button', { name: 'Öffnen' }));
     expect(await screen.findByTestId('where')).toHaveTextContent('/bank?line=bt_new&rule=save');
   });
 });

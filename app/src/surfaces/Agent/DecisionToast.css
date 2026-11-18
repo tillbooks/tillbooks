@@ -1,0 +1,60 @@
+/* D197: the decision toast floats over the page bottom centre; nothing beneath it moves. */
+.vtoast-region {
+  position: fixed;
+  left: 50%;
+  bottom: var(--t-space-6);
+  z-index: var(--t-z-popover);
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+
+.vtoast {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--t-space-2);
+  max-width: 560px;
+  padding: var(--t-space-1) var(--t-space-1) var(--t-space-1) var(--t-space-3);
+  color: var(--t-text);
+  background: var(--t-bg-elev);
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius-md);
+  box-shadow: var(--t-shadow-overlay);
+  pointer-events: auto;
+  animation: vtoast-in var(--t-motion-reveal) var(--t-ease-out);
+}
+
+.vtoast-glyph {
+  flex: 0 0 auto;
+  color: var(--t-text-dim);
+}
+
+.vtoast[data-tone='success'] .vtoast-glyph {
+  color: var(--t-success);
+}
+
+.vtoast[data-tone='warn'] .vtoast-glyph {
+  color: var(--t-warn);
+}
+
+.vtoast-message {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@keyframes vtoast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vtoast {
+    animation: none;
+  }
+}

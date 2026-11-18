@@ -113,7 +113,7 @@
     "reverseFee": "Mahngebühren stornieren",
     "reverseFeeTitle": "Mahngebühren dieses Laufs stornieren?",
     "reverseFeeBody": "TILL bucht eine Korrekturbuchung, die die Mahngebühren dieses Laufs aufhebt. Die Mahnstufen bleiben, und ein bereits versandter Brief lässt sich nicht zurückholen.",
-    "reverseFeeReason": "Grund",
+    "reverseFeeReason": "Notiz (freiwillig)",
     "reverseFeeCancel": "Abbrechen",
     "reverseFeeConfirm": "Gebühren stornieren",
     "feeReversed": "Die Mahngebühren dieses Laufs sind storniert.",
@@ -124,8 +124,7 @@
     "overrideToggle": "Diesen Mahnlauf anders als eingestellt behandeln",
     "overrideRefreeze": "Noch nicht versandte Briefe",
     "overrideLetterDate": "Datum eines neu ausgestellten Briefs",
-    "overrideReason": "Warum dieser Lauf abweicht",
-    "overrideReasonRequired": "Gib an, warum dieser Lauf von den Einstellungen abweicht.",
+    "overrideReason": "Warum dieser Lauf abweicht (freiwillig)",
     "refreeze": {
       "reissue": "Ohne Gebühr neu ausstellen",
       "hold": "Zurückhalten"

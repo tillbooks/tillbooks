@@ -84,29 +84,26 @@ beforeEach(() => {
 describe('the hub row of a pinned Vorschlag', () => {
   it('shows the figures frozen at the proposal: the key figure on the line, every figure in Details', async () => {
     const { container } = renderHub(canned(summaryOf([issueRow()])));
-    await screen.findByRole('button', { name: 'Genehmigen' });
+    await screen.findByRole('button', { name: 'Freigeben' });
     // D162 point 1 on the face, WITHOUT opening Details: the pinned counterparty, recipient and total.
     expect(container.querySelector('.vorschlag-readback')).toBeNull();
-    expect(container.querySelector('[data-figure="key"]')?.textContent).toBe("CHF 1'081.00 · Muster AG · an buchhaltung@muster.example");
-    // The hub's one order: the essentials, then the date last.
-    expect(container.querySelector('.vorschlag-line-date')?.textContent).toBe('11.10.2026');
+    // D197, the shared row: the signed total in its cell, the pinned counterparty and recipient beside the subject.
+    expect(container.querySelector('.pl-amount')?.textContent).toBe("CHF 1'081.00");
+    expect(container.querySelector('[data-figure="key"]')?.textContent).toBe('Muster AG · an buchhaltung@muster.example');
+    expect(container.querySelector('.pl-date')?.textContent).toBe('11.10.2026');
     // Every pinned figure is one click away, as label and value.
-    // Details open from the ⋯: the title is words, never a button (the fresh-eyes judge, N4 M4).
-    fireEvent.click(screen.getByRole('button', { name: 'Mehr zu: Rechnung ausstellen' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Details' }));
+    // D201: Details open in place from the row's chevron (the title is words, the fresh-eyes judge, N4 M4).
+    fireEvent.click(screen.getByRole('button', { name: /^Rechnung ausstellen/ }));
     // The Details rows render now; the payload and dial reads settle before the assertions.
-    await screen.findByText(/am 11\.10\.2026 von Agent/);
-    const rows = [...container.querySelectorAll('.vorschlag-readback-row')].map((row) => [
-      row.querySelector('dt')?.textContent ?? '',
-      row.querySelector('dd')?.textContent ?? '',
-    ]);
-    expect(rows).toContainEqual(['Netto', "CHF 1'000.00"]);
-    expect(rows).toContainEqual(['Nummer', 'Entwurf, noch ohne Nummer']);
-    expect(rows).toContainEqual(['Gegenpartei', 'Muster AG']);
-    expect(rows).toContainEqual(['Positionen', '2']);
-    expect(rows).toContainEqual(['An', 'buchhaltung@muster.example']);
-    expect(rows).toContainEqual(['MWST', 'CHF 81.00']);
-    expect(rows).toContainEqual(['Total', "CHF 1'081.00"]);
+    // D208: the open line says the values in one line, without labels (their names are the row's own words).
+    const readback = await waitFor(() => {
+      const el = container.querySelector('.pl-readback');
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+    expect(container.querySelector('.pl-open dt, .pl-open label')).toBeNull();
+    expect(readback.textContent ?? '').toContain('Muster AG');
+    expect(readback.textContent ?? '').toContain('buchhaltung@muster.example');
   });
 
   it('a posting Vorschlag names its accounts in words and the total on the line, before any Details', async () => {
@@ -134,8 +131,9 @@ describe('the hub row of a pinned Vorschlag', () => {
       return ok();
     };
     const { container } = renderHub(transport);
-    await screen.findByRole('button', { name: 'Genehmigen' });
-    await waitFor(() => expect(container.querySelector('[data-figure="key"]')?.textContent).toBe('CHF 48.50 · 6500 Verwaltungs- und Bürokosten an 1020 Bankkonto'));
+    await screen.findByRole('button', { name: 'Freigeben' });
+    await waitFor(() => expect(container.querySelector('[data-figure="key"]')?.textContent).toBe('6500 Verwaltungs- und Bürokosten an 1020 Bankkonto'));
+    expect(container.querySelector('.pl-amount')?.textContent).toBe('CHF 48.50');
     expect(container.querySelector('.vorschlag-readback')).toBeNull();
     // D167 polish 11: the tooltip with the full text is there only when the ellipsis cuts it; here it fits.
     const figure = container.querySelector('[data-figure="key"]') as HTMLElement;
@@ -145,19 +143,19 @@ describe('the hub row of a pinned Vorschlag', () => {
   it('a record changed since the proposal: no approve exit, the sentence says why, reject stays', async () => {
     renderHub(canned(summaryOf([issueRow({ changedSinceProposal: true })])));
     // L1 (N4): the row says the short words; the long sentence is the refusal banner's.
-    expect(await screen.findByText('Seit dem Vorschlag geändert')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Genehmigen' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Mehr zu: Rechnung ausstellen' }));
-    await screen.findByRole('menuitem', { name: 'Details' });
-    expect(screen.queryByRole('menuitem', { name: 'Genehmigen und künftig automatisch' })).toBeNull();
-    expect(screen.getByRole('menuitem', { name: 'Ablehnen' })).toBeEnabled();
+    expect(await screen.findByText('Geändert')).toBeInTheDocument();
+    // D197: Freigeben stays in place, disabled, its reason on the tooltip; the way on beside it.
+    expect(screen.getByRole('button', { name: 'Freigeben' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.queryByRole('button', { name: 'Mehr zu: Rechnung ausstellen' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Freigeben und als Regel speichern' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Ablehnen' })).toBeEnabled();
   });
 
   it('a vorschlag_stale refusal renders its own sentence, not the generic one', async () => {
     const stale: RestResponse = { status: 409, body: { ok: false, error: 'vorschlag_stale', actionId: 'act_1', actionTool: 'issue_invoice' } };
     renderHub(canned(summaryOf([issueRow()]), stale));
-    fireEvent.click(await screen.findByRole('button', { name: 'Genehmigen' }));
-    const said = await screen.findByText('Seit dem Vorschlag geändert, nicht mehr genehmigbar');
+    fireEvent.click(await screen.findByRole('button', { name: 'Freigeben' }));
+    const said = await screen.findByText('Seit dem Vorschlag geändert, nicht mehr freizugeben');
     expect(said.closest('.action-feedback')).not.toBeNull();
     expect(screen.queryByText(/Das hat nicht geklappt/)).toBeNull();
   });

@@ -15,7 +15,10 @@
 import { createHash } from 'node:crypto';
 
 export function returnHashOf(payload: Record<string, unknown>): string {
-  const { ok: _ok, ...rest } = payload;
+  // D198 (critic r1 F1): `settlement` is the settlement feed's pre-filing FINDING, not a figure of the return.
+  // It is left out, so its arrival on upgrade moves no bound hash and a pull or a bank line that changes only
+  // the finding never makes a signed-off return read stale.
+  const { ok: _ok, settlement: _settlement, ...rest } = payload;
   return createHash('sha256').update(JSON.stringify(rest)).digest('hex');
 }
 

@@ -153,20 +153,20 @@ export function ebicsActions(h: EbicsActionHelpers): readonly ActionDef[] {
     ctxAction(
       'confirm_statement_gap',
       'write:reversible:human-only',
-      "Confirm that nothing is missing in a statement gap of a Bankkonto (A36 §4.7, D150): the day-end statements afterStatementId and beforeStatementId are neighbours in the books, their numbers skip, and the later one opens exactly on the earlier one's closing balance (difference 0), so the skipped numbers are days without bookings or bookings that cancel out. Human only: a person at the button passes confirmed=true and a reason; an agent seat is refused human_only (propose it to the person instead). Refuses gap_has_waiting_statement when a downloaded statement inside the gap does not chain (it proves money the books do not explain), and gap_not_chained when the balances do not chain (the missing statements carry money that is not in the books: import them, such a gap can never be confirmed) and gap_not_found when the gap was filled or the two statements are not neighbours. Appends one confirmation row and its audit entry; changes no statement and posts nothing. A confirmed gap leaves bank_channel_status statementGaps and the attention hub; a statement found later still imports. Idempotent per key; a gap already confirmed answers alreadyConfirmed.",
+      "Confirm that nothing is missing in a statement gap of a Bankkonto (A36 §4.7, D150): the day-end statements afterStatementId and beforeStatementId are neighbours in the books, their numbers skip, and the later one opens exactly on the earlier one's closing balance (difference 0), so the skipped numbers are days without bookings or bookings that cancel out. Human only: a person at the button passes confirmed=true (D204: a reason optional); an agent seat is refused human_only (propose it to the person instead). Refuses gap_has_waiting_statement when a downloaded statement inside the gap does not chain (it proves money the books do not explain), and gap_not_chained when the balances do not chain (the missing statements carry money that is not in the books: import them, such a gap can never be confirmed) and gap_not_found when the gap was filled or the two statements are not neighbours. Appends one confirmation row and its audit entry; changes no statement and posts nothing. A confirmed gap leaves bank_channel_status statementGaps and the attention hub; a statement found later still imports. Idempotent per key; a gap already confirmed answers alreadyConfirmed.",
       ctxSchema(
         { bankAccountId: STR, afterStatementId: STR, beforeStatementId: STR, reason: STR, confirmed: BOOL, idempotencyKey: STR },
-        ['bankAccountId', 'afterStatementId', 'beforeStatementId', 'reason', 'idempotencyKey'],
+        ['bankAccountId', 'afterStatementId', 'beforeStatementId', 'idempotencyKey'],
       ),
       (ctx, input) => confirmStatementGap(ctx, as(input)),
     ),
     ctxAction(
       'revoke_statement_gap_confirmation',
       'write:reversible:human-only',
-      'Withdraw the confirmation that a statement gap holds nothing (A36 §4.7, D150), so the gap is an attention item again. Human only (confirmed=true, a reason; an agent seat is refused human_only). Appends a withdrawal row beside the confirmation, which stays; a gap that is not confirmed answers notConfirmed without a row, and a gap filled since answers gap_not_found. Changes no statement, posts nothing. Idempotent per key.',
+      'Withdraw the confirmation that a statement gap holds nothing (A36 §4.7, D150), so the gap is an attention item again. Human only (confirmed=true; D204: a reason optional; an agent seat is refused human_only). Appends a withdrawal row beside the confirmation, which stays; a gap that is not confirmed answers notConfirmed without a row, and a gap filled since answers gap_not_found. Changes no statement, posts nothing. Idempotent per key.',
       ctxSchema(
         { bankAccountId: STR, afterStatementId: STR, beforeStatementId: STR, reason: STR, confirmed: BOOL, idempotencyKey: STR },
-        ['bankAccountId', 'afterStatementId', 'beforeStatementId', 'reason', 'idempotencyKey'],
+        ['bankAccountId', 'afterStatementId', 'beforeStatementId', 'idempotencyKey'],
       ),
       (ctx, input) => revokeStatementGapConfirmation(ctx, as(input)),
     ),

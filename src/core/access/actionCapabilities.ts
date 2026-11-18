@@ -954,6 +954,16 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // right.
   import_settlement: 'post',
   set_settlement_template: 'post',
+  // A43 §2: the table mapping decides which cell becomes an amount, a kind and an id, the template's right.
+  set_settlement_table_mapping: 'post',
+  // D198, the settlement feed: the pull posts through import_settlement (`post`); saving a source decides
+  // where money facts come from and stores a credential, the template's right too (and a person only).
+  pull_settlement: 'post',
+  set_settlement_source: 'post',
+  resolve_settlement_event: 'post',
+  // A42: the Umsatz review's answer per event; the review runs the import rolled back, so it asks post too.
+  set_settlement_event_ignored: 'post',
+  settlement_review: 'post',
   // N03 (D183): the miner drafts set_bank_standard Vorschläge (as `system`, approved under `post` like any
   // rule); running it needs the right a rule needs, so a seat that cannot set rules cannot queue them.
   mine_rules: 'post',
@@ -1204,6 +1214,9 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   book_bank_lines: (input) => unionOverItems('book_bank_line', input['items'], 'post'),
   post_entries: (input) => unionOverItems('post_entry', input['items'], 'post'),
   reject_drafted_action: 'manage_agent_dial',
+  // D196 item 9: the batch reject is the single one many times, on the same right; every id is then
+  // re-checked as one `reject_drafted_action` through the transport seam.
+  reject_drafted_actions: 'manage_agent_dial',
   // `agent_prose_delete` erases the conversation record's prose (D90 D-5): governance over the agent
   // surface, so it sits with the dial verbs rather than with the reads it erases beside.
   agent_prose_delete: 'manage_agent_dial',
@@ -2118,6 +2131,17 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   list_bank_standards: 'read_sales',
   // D185: the settlement template names accounts and tax codes, a read of the books' configuration.
   get_settlement_template: 'read_books',
+  // A43 §2: a table read into a settlement document, and the saved table mapping: reads of the books' configuration.
+  settlement_from_table: 'read_books',
+  get_settlement_table_mapping: 'read_books',
+  // D198: the source (never its token) and the payout a bank line is, reads of the books' configuration and facts.
+  get_settlement_source: 'read_books',
+  // A43 section 5: the contract check reads a document and the workspace currency, writes nothing.
+  validate_settlement: 'read_books',
+  // D203: the Umsatz figures from the books and the periods' booking state, pure reads of the ledger and the settlement record.
+  turnover_summary: 'read_books',
+  settlement_periods: 'read_books',
+  settlement_payout_for_bank_line: 'read_books',
   // N03 (D183): a rule's track record and its backtest read the inbox's bookings, as list_bank_standards does.
   bank_rule_stats: 'read_sales',
   backtest_bank_rule: 'read_sales',
@@ -2592,6 +2616,8 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   // (the verb then refuses it `unknown_setting`). The engine asserts the same capability itself.
   settings_list: 'read_master_data',
   settings_get: 'read_master_data',
+  // D202: who changed which setting, how and under which permission: the same reading right.
+  settings_history: 'read_master_data',
   settings_set: (input) => owningCapabilityFor(input.key),
   settings_reset: (input) => owningCapabilityFor(input.key),
 
@@ -2629,6 +2655,9 @@ export const CAPABILITY_FOR_ACTION: Readonly<Record<string, CapabilityRule>> = {
   revoke_rule_autobook: 'post',
   autobook_digest: 'read_sales',
   autopilot_mark_seen: 'read_sales',
+  // O00 (D199): What's new reads and marks the install's notes (a reading preference, `read_master_data`).
+  whats_new: 'read_master_data',
+  whats_new_mark_seen: 'read_master_data',
   set_vorlage_schedule: ['post', 'read_sales'],
   clear_vorlage_schedule: 'post',
   vorlage_schedules: 'read_sales',

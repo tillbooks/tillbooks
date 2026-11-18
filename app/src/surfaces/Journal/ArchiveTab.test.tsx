@@ -186,7 +186,7 @@ describe('the Archiv tab: safeguards and the hard partition', () => {
 
   it('keeps the purge behind the overflow on the periods view, and renders retention_active with the statute', async () => {
     // LOADING-PROOF-EXEMPT: the role=status here is the PURGE RESULT live region, not a loading affordance; the refusal it asserts can only exist after gl_archive_purge really answered.
-    await openArchive({
+    const { calls } = await openArchive({
       gl_archive_query: QUERY_OK,
       gl_archive_periods: {
         status: 200,
@@ -212,21 +212,30 @@ describe('the Archiv tab: safeguards and the hard partition', () => {
     expect(await screen.findByText('March 2019')).toBeInTheDocument();
     expect(screen.queryByText('2019-03')).not.toBeInTheDocument();
 
-    // The purge lives behind the overflow, with a reason field and a confirm.
+    // D204 point 5: the purge lives behind the overflow; no reason, the person types the year to confirm.
     await userEvent.click(screen.getByRole('button', { name: 'Archive period actions' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Purge expired periods' }));
-    const confirm = screen.getByRole('button', { name: 'Purge with this reason' });
+    const confirm = screen.getByRole('button', { name: 'Purge' });
     expect(confirm).toBeDisabled();
+    expect(screen.queryByLabelText('Note (optional)')).toBeNull();
 
     await userEvent.type(screen.getByLabelText('From period'), '2019-01');
     await userEvent.type(screen.getByLabelText('To period'), '2019-12');
-    await userEvent.type(screen.getByLabelText('Reason'), 'Löschbegehren');
-    await userEvent.click(screen.getByRole('button', { name: 'Purge with this reason' }));
+    expect(confirm).toBeDisabled();
+    await userEvent.type(screen.getByLabelText('Type the year to confirm'), '2018');
+    expect(confirm).toBeDisabled();
+    await userEvent.clear(screen.getByLabelText('Type the year to confirm'));
+    await userEvent.type(screen.getByLabelText('Type the year to confirm'), '2019');
+    expect(confirm).toBeEnabled();
+    await userEvent.click(confirm);
 
     // The refusal names the date AND the statutory reference, and says the refusal is on record.
     const status = await screen.findByRole('status');
     expect(status).toHaveTextContent('OR 958f');
     expect(status).toHaveTextContent('the refusal is on record');
+    const purgeCall = calls.find((c) => c.action === 'gl_archive_purge');
+    expect(purgeCall?.input).not.toHaveProperty('reason');
+    expect(purgeCall?.input.confirmed).toBe(true);
   });
 
   it('has no axe violations on the archive face', async () => {

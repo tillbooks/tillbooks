@@ -60,6 +60,7 @@ import { EmptyState, ErrorBanner, NoWorkspaceState, PermissionDenied, useSkeleto
 import { Status, type StatusKind } from '../../components/Status';
 import { formatCalendar } from '../../lib/format';
 import { useSeatLabel } from '../Time/seatLabels';
+import { optionalReason, useAskReason } from '../../lib/useAskReason';
 import './GoodsReceipt.css';
 
 /**
@@ -309,6 +310,8 @@ export function GoodsReceipt() {
 
   const [reverseReason, setReverseReason] = useState('');
   const [rejectReason, setRejectReason] = useState('');
+  // D204: reverse and reject need no reason; the optional note shows only when the workspace asks.
+  const askReason = useAskReason();
 
   // §H-TENANT (critic round 2): a workspace switch does not remount the surface, so nothing chosen,
   // read or drafted in the workspace just left may survive into the next one. Reset during render
@@ -967,8 +970,8 @@ export function GoodsReceipt() {
                       <button
                         type="button"
                         className="btn btn--secondary"
-                        disabled={!canWrite || reverseReason.trim() === ''}
-                        onClick={() => void run('goods_receipt_reverse', { grId: detail.id, reason: reverseReason.trim() })}
+                        disabled={!canWrite}
+                        onClick={() => void run('goods_receipt_reverse', { grId: detail.id, ...(optionalReason(reverseReason) === undefined ? {} : { reason: optionalReason(reverseReason) }) })}
                       >
                         {t('goodsReceipt.reverse')}
                       </button>
@@ -976,7 +979,7 @@ export function GoodsReceipt() {
                   </div>
                 </div>
 
-                {isPosted && (
+                {isPosted && askReason && (
                   <Field label={t('goodsReceipt.form.reverseReason')} size="name">
                     <input id="gr-reverse-reason" className="field" value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} />
                   </Field>
@@ -1024,9 +1027,11 @@ export function GoodsReceipt() {
                 {isPosted && heldLines.length > 0 && (
                   <div className="gr-hold">
                     <h3 className="gr-subtitle">{t('goodsReceipt.holdTitle')}</h3>
-                    <Field label={t('goodsReceipt.form.rejectReason')} size="name">
-                      <input id="gr-reject-reason" className="field" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
-                    </Field>
+                    {askReason && (
+                      <Field label={t('goodsReceipt.form.rejectReason')} size="name">
+                        <input id="gr-reject-reason" className="field" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
+                      </Field>
+                    )}
                     <div className="gr-actions">
                       <button
                         type="button"
@@ -1039,12 +1044,12 @@ export function GoodsReceipt() {
                       <button
                         type="button"
                         className="btn btn--secondary"
-                        disabled={!canWrite || rejectReason.trim() === ''}
+                        disabled={!canWrite}
                         onClick={() =>
                           void run('goods_receipt_reject_lines', {
                             grId: detail.id,
                             lineIds: heldLines.map((l) => l.id),
-                            reason: rejectReason.trim(),
+                            ...(optionalReason(rejectReason) === undefined ? {} : { reason: optionalReason(rejectReason) }),
                           })
                         }
                       >

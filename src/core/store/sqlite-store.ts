@@ -91,6 +91,8 @@ export const INNER_WRITE_COMPOSITES = [
   'migration_discover_source',
   'portal_quote_accept',
   'transition_document',
+  // D198: the feed pull hands the fetched document to `import_settlement` under its own scope.
+  'pull_settlement',
 ] as const;
 export type InnerWriteComposite = (typeof INNER_WRITE_COMPOSITES)[number];
 

@@ -11,9 +11,12 @@
 import { describe, it, expect } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { axe } from 'jest-axe';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import { ThemeProvider, type Theme } from '../app/theme';
-import { SurfaceHeader } from './SurfaceHeader';
+import { I18nProvider } from '../i18n';
+import { SurfaceHeader, backState } from './SurfaceHeader';
 
 function renderHeader(
   props: Partial<React.ComponentProps<typeof SurfaceHeader>> = {},
@@ -148,5 +151,75 @@ describe('SurfaceHeader', () => {
       const { container } = renderHeader();
       expect(container.querySelector('.surface-header')).not.toHaveAttribute('data-stuck');
     });
+  });
+});
+
+/* D201 point 6 and D204: the back slot (fed by the navigation state) and the settings icon. */
+describe('SurfaceHeader: the back chevron and the settings link (D201, D204)', () => {
+  function Probe() {
+    const location = useLocation();
+    return <div data-testid="loc">{location.pathname}</div>;
+  }
+  function renderRouted(
+    props: Partial<React.ComponentProps<typeof SurfaceHeader>>,
+    entry: { pathname: string; state?: unknown },
+  ) {
+    return render(
+      <ThemeProvider initialTheme="light">
+        <I18nProvider>
+          <MemoryRouter initialEntries={[entry]}>
+            <Routes>
+              <Route
+                path="*"
+                element={
+                  <>
+                    <SurfaceHeader title="Bankzeilen" {...props} />
+                    <Probe />
+                  </>
+                }
+              />
+            </Routes>
+          </MemoryRouter>
+        </I18nProvider>
+      </ThemeProvider>,
+    );
+  }
+
+  it('shows no back chevron when the page was not drilled into', () => {
+    renderRouted({}, { pathname: '/bank' });
+    expect(screen.queryByRole('link', { name: /Zurück zu/ })).toBeNull();
+  });
+
+  it('shows the way back named after the origin when location.state.from is set, and goes there', async () => {
+    renderRouted({}, { pathname: '/bank', state: backState('/overview', 'Übersicht') });
+    const back = screen.getByRole('link', { name: 'Zurück zu Übersicht' });
+    expect(back).toHaveTextContent('Übersicht');
+    expect(back).toHaveAttribute('href', '/overview');
+    await userEvent.click(back);
+    expect(screen.getByTestId('loc')).toHaveTextContent('/overview');
+  });
+
+  it('ignores a malformed state, takes an explicit back over the state, and back={false} suppresses it', () => {
+    const { unmount } = renderRouted({}, { pathname: '/bank', state: { from: { path: 'http://x', label: 'X' } } });
+    expect(screen.queryByRole('link', { name: /Zurück zu/ })).toBeNull();
+    unmount();
+    const second = renderRouted({ back: { path: '/area/bank', label: 'Bank' } }, { pathname: '/bank', state: backState('/overview', 'Übersicht') });
+    expect(screen.getByRole('link', { name: 'Zurück zu Bank' })).toHaveAttribute('href', '/area/bank');
+    second.unmount();
+    renderRouted({ back: false }, { pathname: '/bank', state: backState('/overview', 'Übersicht') });
+    expect(screen.queryByRole('link', { name: /Zurück zu/ })).toBeNull();
+  });
+
+  it('renders one settings icon that opens the page settings section', async () => {
+    renderRouted({ settingsHref: '/settings/bank' }, { pathname: '/bank' });
+    const gear = screen.getByRole('button', { name: 'Einstellungen' });
+    expect(gear).toHaveAccessibleDescription('Für diese Seite');
+    await userEvent.click(gear);
+    expect(screen.getByTestId('loc')).toHaveTextContent('/settings/bank');
+  });
+
+  it('has no axe violations with the back chevron and the settings icon', async () => {
+    const { container } = renderRouted({ settingsHref: '/settings/bank' }, { pathname: '/bank', state: backState('/overview', 'Übersicht') });
+    expect(await axe(container)).toHaveNoViolations();
   });
 });

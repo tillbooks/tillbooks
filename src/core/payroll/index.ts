@@ -6,7 +6,6 @@ export {
   wageJournalPost,
   validateSupplementary,
   validateRunKindStatic,
-  runKindReasonRequired,
   NONREGULAR_AUDIT_KIND,
   WAGE_RUN_KINDS,
   isWageRunKind,

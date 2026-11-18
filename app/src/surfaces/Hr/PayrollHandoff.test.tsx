@@ -155,7 +155,7 @@ describe('A34 Lohn tab', () => {
     expect(await screen.findByText(/Gebucht\. Für 2026-07 steht nun mehr als ein Lohnjournal/)).toBeInTheDocument();
   });
 
-  it('D173 supplementary: the toggle asks for a reason, and the post carries supplementary and the reason', async () => {
+  it('D204 supplementary: the toggle needs no reason, and the post carries supplementary without one', async () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     render(tree(base(['hr.read', 'post'], {
       files_upload: ok({ file: { id: 'sf_wage' } }),
@@ -166,14 +166,13 @@ describe('A34 Lohn tab', () => {
     await userEvent.upload(screen.getByLabelText('Lohndatei hochladen'), new File(['x'], 'lohn.csv', { type: 'text/csv' }));
     await userEvent.click(await screen.findByLabelText(/Nachtragsbuchung \(/));
     const postBtn = screen.getByRole('button', { name: 'Buchen' });
-    expect(postBtn).toBeDisabled();
-    await userEvent.type(screen.getByLabelText('Grund der Nachtragsbuchung'), 'Bonus nachgereicht');
     expect(postBtn).toBeEnabled();
+    expect(screen.queryByLabelText('Grund der Nachtragsbuchung')).toBeNull();
     await userEvent.click(postBtn);
     await waitFor(() => {
       const sent = asked.find((a) => a.action === 'wage_journal_post' && a.input.confirm === true);
       expect(sent?.input.supplementary).toBe(true);
-      expect(sent?.input.supplementaryReason).toBe('Bonus nachgereicht');
+      expect(sent?.input).not.toHaveProperty('supplementaryReason');
     });
   });
 
@@ -199,7 +198,7 @@ describe('A34 Lohn tab', () => {
     expect(asked.find((a) => a.action === 'wage_journal_post' && a.input.confirm !== true)?.input.runKind).toBe('bonus');
   });
 
-  it('D173 Q14: a correction run asks for its reason (default setting), the upload waits for it, and both calls carry it', async () => {
+  it('D204: a correction run needs no reason; the upload is ready and both calls carry the run kind only', async () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     render(tree(base(['hr.read', 'post'], {
       files_upload: ok({ file: { id: 'sf_wage' } }),
@@ -207,14 +206,9 @@ describe('A34 Lohn tab', () => {
         input.confirm === true ? ok({ wageJournalPostId: 'wjp_3', postedEntryId: 'je_3', runKind: input.runKind }) : ok({ preview: pvLines }),
     }), asked));
     await openLohn();
-    const picker = await screen.findByRole('combobox', { name: 'Lohnlauf' });
-    await pickRunKind(picker, 'Bonus');
-    expect(screen.queryByLabelText('Grund für diesen Lohnlauf')).toBeNull();
-    expect(screen.getByLabelText('Grund für diesen Lohnlauf (optional)')).toBeInTheDocument();
-    await pickRunKind(picker, 'Korrektur');
-    const reason = screen.getByLabelText('Grund für diesen Lohnlauf');
-    expect(screen.getByLabelText('Lohndatei hochladen')).toBeDisabled();
-    await userEvent.type(reason, 'Falscher Satz im Juni');
+    await pickRunKind(await screen.findByRole('combobox', { name: 'Lohnlauf' }), 'Korrektur');
+    expect(screen.queryByLabelText('Grund für diesen Lohnlauf (optional)')).toBeNull();
+    expect(screen.getByLabelText('Lohndatei hochladen')).toBeEnabled();
     await userEvent.upload(screen.getByLabelText('Lohndatei hochladen'), new File(['x'], 'lohn.csv', { type: 'text/csv' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Buchen' }));
     await waitFor(() => {
@@ -222,22 +216,24 @@ describe('A34 Lohn tab', () => {
       expect(calls).toHaveLength(2);
       for (const c of calls) {
         expect(c.input.runKind).toBe('correction');
-        expect(c.input.runKindReason).toBe('Falscher Satz im Juni');
+        expect(c.input).not.toHaveProperty('runKindReason');
       }
     });
   });
 
-  it('D173 critic r3 LOW: a bonus offers an optional reason under the default, and a given one is sent', async () => {
+  it('D204: with audit.ask_reason = optional a bonus offers the optional note, and a given one is sent', async () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     render(tree(base(['hr.read', 'post'], {
+      settings_get: ok({ setting: { key: 'audit.ask_reason', value: 'optional' } }),
       files_upload: ok({ file: { id: 'sf_wage' } }),
       wage_journal_post: (input) =>
         input.confirm === true ? ok({ wageJournalPostId: 'wjp_4', postedEntryId: 'je_4', runKind: input.runKind }) : ok({ preview: pvLines }),
     }), asked));
     await openLohn();
+    await waitFor(() => expect(asked.some((a) => a.action === 'settings_get')).toBe(true));
     await pickRunKind(await screen.findByRole('combobox', { name: 'Lohnlauf' }), 'Bonus');
     expect(screen.getByLabelText('Lohndatei hochladen')).toBeEnabled();
-    await userEvent.type(screen.getByLabelText('Grund für diesen Lohnlauf (optional)'), 'Jahresbonus');
+    await userEvent.type(await screen.findByLabelText('Grund für diesen Lohnlauf (optional)'), 'Jahresbonus');
     await userEvent.upload(screen.getByLabelText('Lohndatei hochladen'), new File(['x'], 'lohn.csv', { type: 'text/csv' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Buchen' }));
     await waitFor(() => {
@@ -246,25 +242,13 @@ describe('A34 Lohn tab', () => {
     });
   });
 
-  it('D173 Q14: under the setting all, a bonus asks for a reason too', async () => {
-    render(tree(base(['hr.read', 'post'], {
-      settings_get: ok({ setting: { key: 'payroll.nonregular_reason', value: 'all' } }),
-    })));
-    await openLohn();
-    const picker = await screen.findByLabelText('Lohnlauf');
-    await waitFor(async () => {
-      await pickRunKind(picker, 'Bonus');
-      expect(screen.getByLabelText('Grund für diesen Lohnlauf')).toBeInTheDocument();
-    });
-  });
-
-  // D171: a standing posting offers Stornieren behind its row overflow and a confirm with a reason.
+  // D171: a standing posting offers Stornieren behind its row overflow and a confirm (D204: no reason).
   const postingRow = (over: Record<string, unknown> = {}) => ({
     type: 'posting', id: 'wjp_1', actor: 'boss', createdAt: '2026-07-05T08:00:00Z', entryDate: '2026-07-05',
     postedEntryId: 'je_1', reversalEntryId: null, lineCount: 3, ...over,
   });
 
-  it('D171: reverses a standing posting only through the confirm, with the typed reason', async () => {
+  it('D204 D171: reverses a standing posting only through the confirm, with no reason', async () => {
     const asked: Array<{ action: string; input: Record<string, unknown> }> = [];
     let reversed = false;
     render(tree(base(['hr.read', 'post'], {
@@ -279,15 +263,14 @@ describe('A34 Lohn tab', () => {
     expect(dialog).toHaveTextContent('Lohnjournal vom 05.07.2026 stornieren?');
     expect(dialog).toHaveTextContent(/Lohnzahlungen, Meldungen an AHV, BVG und Quellensteuer/);
     const confirm = screen.getByRole('button', { name: 'Lohnjournal stornieren' });
-    expect(confirm).toBeDisabled();
+    expect(confirm).toBeEnabled();
+    expect(screen.queryByLabelText('Grund')).toBeNull();
     expect(asked.some((a) => a.action === 'wage_journal_reverse')).toBe(false);
-
-    await userEvent.type(screen.getByLabelText('Grund'), 'Falsche Lohnperiode');
     await userEvent.click(confirm);
     await waitFor(() => {
       const call = asked.find((a) => a.action === 'wage_journal_reverse');
       expect(call?.input.wageJournalPostId).toBe('wjp_1');
-      expect(call?.input.reason).toBe('Falsche Lohnperiode');
+      expect(call?.input).not.toHaveProperty('reason');
       expect(typeof call?.input.idempotencyKey).toBe('string');
     });
     expect(await screen.findByText('Das Lohnjournal ist storniert.')).toBeInTheDocument();
@@ -304,7 +287,6 @@ describe('A34 Lohn tab', () => {
     await openLohn();
     await userEvent.click(await screen.findByRole('button', { name: 'Aktionen für die Lohnbuchung vom 05.07.2026' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Stornieren' }));
-    await userEvent.type(screen.getByLabelText('Grund'), 'Falsch');
     await userEvent.click(screen.getByRole('button', { name: 'Lohnjournal stornieren' }));
     expect(await screen.findByText(/Öffne zuerst die Bankzeile unter Bank wieder/)).toBeInTheDocument();
   });

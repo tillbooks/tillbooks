@@ -1096,9 +1096,11 @@ export function checklistItemComplete(ctx: WorkspaceContext, input: ChecklistIte
       if (template.severity !== 'warn' || result === null || result.result !== 'fail') {
         return err('check_not_passed', { itemId: item.itemId, validation: template.validation, severity: template.severity ?? null, result });
       }
-      const reason = suppliedRef ?? (typeof evidence.reason === 'string' && evidence.reason.trim().length > 0 ? evidence.reason.trim() : null);
-      if (evidence.kind !== 'signoff' || reason === null) {
-        return err('acknowledge_needs_reason', { itemId: item.itemId, validation: template.validation, expected: 'evidence {kind: "signoff", ref: <reason>}' });
+      // D204: the acknowledgement is the person's act (actor and time on the sign-off row); a reason is
+      // optional and is stored as the sign-off's ref when given, an empty ref otherwise.
+      const reason = suppliedRef ?? (typeof evidence.reason === 'string' && evidence.reason.trim().length > 0 ? evidence.reason.trim() : '');
+      if (evidence.kind !== 'signoff') {
+        return err('evidence_required', { itemId: item.itemId, validation: template.validation, expected: 'evidence {kind: "signoff", ref?: <note>}' });
       }
       const existing = liveSignoffFor(ctx, item.runItemId);
       if (existing !== undefined && existing.hash !== result.hash) voidSignoff(ctx, existing.id, 'hash_changed', now);
@@ -1138,15 +1140,12 @@ export function checklistItemComplete(ctx: WorkspaceContext, input: ChecklistIte
         markDone(ctx, item.runItemId, key, { kind, ref: date, hash: null }, now);
         return ok({ ...(finish() as Record<string, unknown>), signoffId });
       }
-      // gv_attestation (spec §10.1): a date before the statements sign-off is a WARN with a required
-      // reason, never a refusal (a cutover workspace closes a year whose GV already happened); bound
+      // gv_attestation (spec §10.1): a date before the statements sign-off is a WARN, never a refusal (a
+      // cutover workspace closes a year whose GV already happened); D204: its reason is optional. Bound
       // to the anchor like every acknowledgement.
       const statementsItem = view.items.find((i) => i.signoffKind === 'statements_signoff');
       const signedAt = statementsItem?.signoff?.createdAt.slice(0, 10) ?? null;
       const reason = typeof evidence.reason === 'string' && evidence.reason.trim().length > 0 ? evidence.reason.trim() : null;
-      if (signedAt !== null && date < signedAt && reason === null) {
-        return err('acknowledge_needs_reason', { itemId: item.itemId, attestedOn: date, statementsSignedAt: signedAt, expected: 'evidence.reason: why the GV predates the statements sign-off' });
-      }
       const ref = reason === null ? date : `${date}:${reason}`;
       const signoffId = insertSignoff(ctx, run, item.runItemId, kind, ref, memo.anchor.hash, now);
       markDone(ctx, item.runItemId, key, { kind, ref, hash: memo.anchor.hash }, now);
@@ -1196,9 +1195,8 @@ export function checklistItemSkip(ctx: WorkspaceContext, input: ChecklistItemSki
   const key = input.idempotencyKey as string;
   const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, key, 'checklist_item_skip');
   if (replayed !== undefined) return replayed;
-  if (typeof input.reason !== 'string' || input.reason.trim().length === 0) {
-    return err('skip_needs_reason', { itemId: input.itemId });
-  }
+  // D204: "Nicht zutreffend" needs no reason; who and when are kept on the item and in the audit row.
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
   const run = loadRun(ctx, input.runId);
   if (run === undefined) return err('not_found', { runId: input.runId });
   if (run.status === 'abandoned') return err('run_abandoned', { runId: run.id, reason: run.abandon_reason });
@@ -1207,7 +1205,6 @@ export function checklistItemSkip(ctx: WorkspaceContext, input: ChecklistItemSki
   if (item === undefined) return err('not_found', { runId: run.id, itemId: input.itemId });
   if (item.status === 'excluded') return err('item_excluded', { itemId: item.itemId, excludedBy: item.excludedBy });
   if (item.undeletable) return err('undeletable', { itemId: item.itemId });
-  const reason = input.reason.trim();
   if (item.status === 'skipped' && item.skipReason === reason) {
     return ok({ runId: run.id, itemId: item.itemId, alreadySkipped: true, item });
   }
@@ -1297,7 +1294,8 @@ export function checklistAbandon(ctx: WorkspaceContext, input: ChecklistAbandonI
   const key = input.idempotencyKey as string;
   const replayed = ctx.store.recallIdempotent<Result>(ctx.workspaceId, key, 'checklist_abandon');
   if (replayed !== undefined) return replayed;
-  if (typeof input.reason !== 'string' || input.reason.trim().length === 0) return err('invalid_input', { field: 'reason' });
+  // D204: abandoning needs no reason; a given one is kept on the run.
+  const abandonReason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim() : null;
   const run = loadRun(ctx, input.runId);
   if (run === undefined) return err('not_found', { runId: input.runId });
   if (run.status === 'abandoned') return ok({ alreadyAbandoned: true, ...deriveRun(ctx, run) });
@@ -1306,7 +1304,7 @@ export function checklistAbandon(ctx: WorkspaceContext, input: ChecklistAbandonI
     const now = ctx.clock.now();
     ctx.store.db
       .prepare(`UPDATE checklist_run SET status = 'abandoned', abandoned_at = ?, abandoned_by = ?, abandon_reason = ? WHERE id = ? AND workspace_id = ?`)
-      .run(now, ctx.actor, (input.reason as string).trim(), run.id, ctx.workspaceId);
+      .run(now, ctx.actor, abandonReason, run.id, ctx.workspaceId);
     ctx.audit.record({ entityKind: 'checklist_run', entityId: run.id, action: 'cancel', actor: ctx.actor, at: now });
     return ok({ alreadyAbandoned: false, ...deriveRun(ctx, loadRun(ctx, run.id) as RunRow) });
   });

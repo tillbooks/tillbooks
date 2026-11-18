@@ -92,7 +92,14 @@ CREATE TABLE IF NOT EXISTS bank_statement (
   -- (it extended the balance chain: its lines were new) or 'checked' (its lines were matched against the
   -- covered span); NULL for a statement imported before. Its later pages take the same classification.
   -- Listed in ADDITIVE_COLUMNS (store/schema.ts) for a book written before it.
-  coverage              TEXT
+  coverage              TEXT,
+  -- A20 §13.3 (D205): how a gap fill (csvfill:) is proven: 'running_balance' (the export's chain held and its
+  -- balances are stored) or 'neighbour_sum' (the two stored neighbours and the sum of the rows); NULL for any
+  -- other statement, a fill whose proof failed under warn, and a fill written before (read as running_balance).
+  fill_proof            TEXT CHECK (fill_proof IS NULL OR fill_proof IN ('running_balance', 'neighbour_sum')),
+  -- A20 §13.3 (critic round 1, L2): on a gap fill, the signed sum of the entries the insertion skipped as already
+  -- held (an exact repeat, a line absorbed across formats); NULL on any other statement and on a fill from before.
+  fill_held_minor       INTEGER
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS bank_statement_dedupe
@@ -248,6 +255,8 @@ CREATE TABLE IF NOT EXISTS bank_txn_fact (
   fee_currency            TEXT,
   fee_included            INTEGER,
   fee_origin              TEXT,
+  -- A20 §13.1 (D205): 'xlsx' for a line read from an Excel workbook (source stays 'csv'), else NULL.
+  container               TEXT CHECK (container IS NULL OR container IN ('xlsx')),
   created_at              TEXT NOT NULL
 );
 
@@ -329,3 +338,16 @@ CREATE INDEX IF NOT EXISTS bank_txn_movement
 CREATE INDEX IF NOT EXISTS bank_txn_account_booking ON bank_txn (workspace_id, bank_account_id, booking_date);
 ${BANK_INBOX_SCHEMA_SQL}
 ${DUPLICATE_CHOKEPOINT_SQL}`;
+
+/**
+ * A20 §13 (D205): the columns A20 adds to its own tables after their first CREATE, spread into the store's
+ * `ADDITIVE_COLUMNS` as ONE line so a book written before them widens on open (nullable, no data step, no
+ * schema generation: the contact_id precedent). A fresh CREATE above already carries them.
+ */
+export const CAMT_ADDITIVE_COLUMNS: readonly { table: string; column: string; ddl: string }[] = [
+  // §13.1: the container of a line read from an Excel workbook.
+  { table: 'bank_txn_fact', column: 'container', ddl: "container TEXT CHECK (container IS NULL OR container IN ('xlsx'))" },
+  // §13.3: the proof a gap fill was written under.
+  { table: 'bank_statement', column: 'fill_proof', ddl: "fill_proof TEXT CHECK (fill_proof IS NULL OR fill_proof IN ('running_balance', 'neighbour_sum'))" },
+  { table: 'bank_statement', column: 'fill_held_minor', ddl: 'fill_held_minor INTEGER' },
+];

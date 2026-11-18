@@ -28,7 +28,7 @@
           },
           {
             "group": "Formats",
-            "pages": ["formats/till-settlement"]
+            "pages": ["formats/till-settlement", "formats/write-a-connector"]
           },
           {
             "group": "Self-hosting",

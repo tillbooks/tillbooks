@@ -23,6 +23,7 @@ import { settingsSet } from '../../dist/core/settings/settings.js';
 import { readBankTxn, readBankTxnDetail } from '../../dist/core/banking/bankLines.js';
 import { must, world, secondWorkspace, assertClaimInvariantHolds } from './bank-inbox-support.mjs';
 import { receipt, lines } from './a41-beleg-support.mjs';
+import { assertNotApplied } from '../settings/support.mjs';
 
 afterEach(assertClaimInvariantHolds);
 
@@ -166,6 +167,8 @@ test('critic r1 G1 (kept without A41.3): no agent may widen a belege.* setting, 
   must(getAction('set_agent_dial').run({ ...t.deps, actor: 'studio' }, { workspaceId: t.workspaceId, capability: 'customize', level: 'auto', idempotencyKey: 'dial-c' }));
   for (const [key, value] of [['belege.vat_delta_tolerance_rappen', 500], ['belege.match_fx_tolerance_pct', 20], ['belege.match_date_window_days', 60], ['belege.match_mode', 'off']]) {
     const res = handleRest('settings_set', { workspaceId: t.workspaceId, key, value, reason: 'Agent', idempotencyKey: `ag-${key}` }, { ...t.deps, actor: 'agent' }).body;
-    assert.equal(res.error, 'human_only', `${key}: ${JSON.stringify(res)}`);
+    // D202 point 5: the agent only proposes a protected setting (a person approves it), never applies it.
+    assertNotApplied(res, key);
+    assert.equal(t.deps.store.db.prepare('SELECT COUNT(*) AS n FROM workspace_setting WHERE workspace_id = ? AND key = ?').get(t.workspaceId, key).n, 0, key);
   }
 });

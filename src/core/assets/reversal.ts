@@ -23,7 +23,7 @@
  *    money act first). An unlinked disposal keeps the D170 behaviour: there is nothing to check. The
  *    workspace setting `assets.proceeds_check` (D172 registry) decides: `refuse` (default), `warn`
  *    (reverse, naming the standing document in `warnings`) or `off`. Under `refuse`, one differing case
- *    passes `overrideProceedsCheck: true` with a required `overrideReason`, which is written onto the
+ *    passes `overrideProceedsCheck: true` with an optional `overrideReason` (D204), which is written onto the
  *    immutable compensating row and the mirror's text and audited.
  *
  * DATE: today (OR 957a: correct in the open period), the `reverse_entry` convention; a sealed today is
@@ -245,7 +245,7 @@ export interface AssetTransactionReverseInput {
   transactionId?: string;
   reason?: string;
   idempotencyKey?: string;
-  /** D191: take back ONE disposal although its proceeds document stands; needs `overrideReason`. */
+  /** D191: take back ONE disposal although its proceeds document stands (audited; D204: no reason needed). */
   overrideProceedsCheck?: boolean;
   overrideReason?: string;
 }
@@ -329,16 +329,14 @@ export function assetTransactionReverse(ctx: WorkspaceContext, input: AssetTrans
     const v = input[field];
     if (typeof v !== 'string' || v.length === 0) return err('invalid_input', { field });
   }
-  if (typeof input.reason !== 'string' || input.reason.trim().length === 0) return err('reason_required', { field: 'reason' });
-  const reason = input.reason.trim().slice(0, 200);
+  // D204: the reason is optional; a blank one is absent.
+  const reason = typeof input.reason === 'string' && input.reason.trim().length > 0 ? input.reason.trim().slice(0, 200) : null;
   if (input.overrideProceedsCheck !== undefined && typeof input.overrideProceedsCheck !== 'boolean') {
     return err('invalid_input', { field: 'overrideProceedsCheck' });
   }
   const overridden = input.overrideProceedsCheck === true;
-  if (overridden && (typeof input.overrideReason !== 'string' || input.overrideReason.trim().length === 0)) {
-    return err('reason_required', { field: 'overrideReason', hint: 'overriding the proceeds check needs its own reason; it is kept on the correcting row' });
-  }
-  const overrideReason = overridden ? (input.overrideReason as string).trim().slice(0, 200) : null;
+  const overrideReason =
+    overridden && typeof input.overrideReason === 'string' && input.overrideReason.trim().length > 0 ? input.overrideReason.trim().slice(0, 200) : null;
   const assetId = input.assetId as string;
   const transactionId = input.transactionId as string;
 
@@ -388,8 +386,9 @@ export function assetTransactionReverse(ctx: WorkspaceContext, input: AssetTrans
       const blocks = standingNow !== null && proceedsMode === 'refuse';
       if (blocks && !overridden) throw new ReverseAbort(proceedsSettledRefusal(assetId, typed.id, standingNow));
       // An override is recorded only when it bypassed a refusal: one that changed nothing is not an override.
-      const bypassed = blocks ? overrideReason : null;
-      const overrideNote = bypassed !== null ? `; Erlösprüfung übersteuert: ${bypassed}` : '';
+      const bypassed = blocks && overridden;
+      const overrideNote = !bypassed ? '' : overrideReason === null ? '; Erlösprüfung übersteuert' : `; Erlösprüfung übersteuert: ${overrideReason}`;
+      const reasonNote = reason === null ? '' : `: ${reason}`;
       const chain = postingChain(ctx, typed.journal_entry_id);
       const adopted = chain.links % 2 === 1;
       let reversalEntryId: string;
@@ -407,7 +406,7 @@ export function assetTransactionReverse(ctx: WorkspaceContext, input: AssetTrans
           {
             entryId: chain.last,
             date,
-            description: `Storno ${LABEL[typed.type]} Anlage ${asset.number}: ${reason}${overrideNote}`,
+            description: `Storno ${LABEL[typed.type]} Anlage ${asset.number}${reasonNote}${overrideNote}`,
             // One mirror per row and link, whatever key the caller used: the identity is the event.
             idempotencyKey: JSON.stringify(['asset_transaction_reversal', typed.id, chain.last]),
           },
@@ -472,7 +471,7 @@ export function assetTransactionReverse(ctx: WorkspaceContext, input: AssetTrans
           reversalEntryId,
           REVERSAL_SOURCE_DOCUMENT_TYPE,
           typed.id,
-          `Storno ${LABEL[typed.type]}: ${reason}${overrideNote}`,
+          `Storno ${LABEL[typed.type]}${reasonNote}${overrideNote}`,
           now,
           ctx.actor,
           `${typed.id}:reverse`,
@@ -499,8 +498,8 @@ export function assetTransactionReverse(ctx: WorkspaceContext, input: AssetTrans
         }
       }
       ctx.audit.record({ entityKind: 'asset_transaction', entityId: typed.id, action: 'reverse', actor: ctx.actor, at: now });
-      if (bypassed !== null) {
-        // D191: the override is its own audited act; its reason sits on the immutable correcting row.
+      if (bypassed) {
+        // D191: the override is its own audited act; a given reason sits on the immutable correcting row.
         ctx.audit.record({ entityKind: 'asset_transaction', entityId: typed.id, action: 'override_proceeds_check', actor: ctx.actor, at: now });
       }
 
@@ -516,8 +515,8 @@ export function assetTransactionReverse(ctx: WorkspaceContext, input: AssetTrans
         postedEntryId: typed.journal_entry_id,
         adopted,
         reason,
-        proceedsCheckOverridden: bypassed !== null,
-        overrideReason: bypassed,
+        proceedsCheckOverridden: bypassed,
+        overrideReason: bypassed ? overrideReason : null,
         abgrenzungReversed,
         // D191 `warn`: the reverse went ahead although the linked proceeds document stands; name it.
         warnings: standingNow !== null && proceedsMode === 'warn' ? [{ code: 'proceeds_document_stands', ...standingNow }] : [],

@@ -30,7 +30,7 @@ function fixture(seed) {
     assert.ok(action !== undefined, `the registry has ${name}`);
     return action.run(deps, { workspaceId, ...input });
   };
-  return { workspaceId, accId, call };
+  return { workspaceId, accId, call, deps };
 }
 
 /** @param {any[]} entries @param {string} id */
@@ -84,4 +84,22 @@ test('the Studio key shape: lock, unlock, lock again with per-act keys leaves a 
   assert.equal(locks.length, 1, 'the second lock is written');
   assert.equal(locks[0].period, '2026-03');
   assert.equal(locks[0].kind, 'hard');
+});
+
+test('D204 review: an entry is flagged with no reason; the event keeps who and when, the posted rows stand', async () => {
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
+  const { accId, call, deps } = fixture('d204-flag');
+  const entryId = call('post_entry', manualPost(accId, 'pr-1', 5000)).entryId;
+  const lines = () => /** @type {{ n: number }} */ (deps.store.db.prepare('SELECT COUNT(*) AS n FROM journal_line WHERE entry_id = ?').get(entryId)).n;
+  const before = lines();
+  const flagged = call('flag_entry', { entryId, idempotencyKey: 'd204-f' });
+  assert.equal(flagged.ok, true, JSON.stringify(flagged));
+  assert.equal(statusOf(call('review_status', { period: '2026-03' }).entries, entryId), 'flagged', 'what changed');
+  const row = /** @type {{ reviewer: string, created_at: string, comment: string | null }} */ (
+    deps.store.db.prepare("SELECT reviewer, created_at, comment FROM entry_review WHERE entry_id = ? AND kind = 'flag'").get(entryId)
+  );
+  assertWhoWhen(row.reviewer, row.created_at);
+  assert.equal(row.comment, null);
+  assert.equal(lines(), before, 'append-only: the posted entry is untouched');
+  assertPermission('flag_entry');
 });

@@ -180,6 +180,11 @@ export interface ParsedCamtStatement {
  */
 export interface ParsedBankStatement extends Omit<ParsedCamtStatement, 'messageType'> {
   messageType: StatementMessageType;
+  /**
+   * A20 §13.3: present on a gap fill (`csvfill:`) only. The insertion stores its proof (`bank_statement.fill_proof`)
+   * and the signed sum of the entries it skipped as already held (`fill_held_minor`), so `gapFillOf` counts them.
+   */
+  fill?: { proof: 'running_balance' | 'neighbour_sum' | null };
 }
 
 // --- The extraction primitives -------------------------------------------------------------------

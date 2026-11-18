@@ -47,6 +47,7 @@ import { IconButton } from '../../components/IconButton';
 import { EmptyState, ErrorBanner, NoWorkspaceState, Skeleton } from '../../components/states';
 import { useCan, CAP } from '../../lib/capabilities';
 import { EntryDrawer } from '../Journal/EntryDrawer';
+import { SettlementFinding } from './SettlementFinding';
 import { Abstimmung } from './Abstimmung';
 import { FormLineTable, type DrillEntry, type DrillState } from './FormLineTable';
 import { JourneyLine } from './JourneyLine';
@@ -487,6 +488,8 @@ function VatReturnSurface() {
               onInvestigate={() => void toggleZiffer(firstDrillable(view))}
             />
           )}
+
+          {view.settlement !== null && <SettlementFinding finding={view.settlement} currency={currency} />}
 
           {view.empty && (
             <EmptyState title={t('vat.return.empty')} hint={t('vat.return.emptyHint')} action={{ label: t('vat.return.emptyCta'), to: '/journal' }} />

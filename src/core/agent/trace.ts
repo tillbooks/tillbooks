@@ -21,6 +21,8 @@ import type { WorkspaceContext } from '../context.js';
 import type { Result } from '../result.js';
 import { ok, err } from '../result.js';
 import { requireString } from '../ledger/inputGuards.js';
+import { draftHistoryOf } from './draftHistory.js';
+import { traceSafeArgsJson } from './tracePrivacy.js';
 import { SESSION_IDLE_MINUTES, TRACE_RETENTION_MONTHS, TURN_GAP_SECONDS } from './constants.js';
 
 interface SessionRow {
@@ -64,6 +66,29 @@ interface CallRow {
   /** Joined from `agent_action` (F-08, J5.6): where the draft went, and the human's reason if refused. */
   draft_status: string | null;
   reject_reason: string | null;
+  /** D196: the draft's history, read for a decision the agent took under the owner's grant. */
+  history_json: string | null;
+}
+
+/**
+ * D196: the decision the agent took on this draft under the owner's grant (the latest one), or null when a
+ * person decided it (or nobody has). The Studio renders it apart from a person's decision.
+ */
+function decidedUnderGrantOf(raw: string | null): { decision: 'approved' | 'rejected'; by: string; grantedBy: string; grantedAt: string } | null {
+  for (const entry of [...draftHistoryOf(raw)].reverse()) {
+    if (entry.event === 'decided_under_grant') {
+      return { decision: entry.decision, by: entry.by, grantedBy: entry.grantedBy, grantedAt: entry.grantedAt };
+    }
+  }
+  return null;
+}
+
+/** D209: the owner's words the agent approved this draft on (the latest), or null. */
+function decidedOnOwnerWordOf(raw: string | null): { quote: string; saidAt: string; grantedBy: string } | null {
+  for (const entry of [...draftHistoryOf(raw)].reverse()) {
+    if (entry.event === 'decided_on_owner_word') return { quote: entry.quote, saidAt: entry.saidAt, grantedBy: entry.grantedBy };
+  }
+  return null;
 }
 
 /** What the seam hands the recorder for one call. `argsJson` is stored verbatim (Details renders it). */
@@ -214,7 +239,9 @@ export function insertCall(ctx: WorkspaceContext, turnId: string, input: RecordC
     (last.s ?? 0) + 1,
     input.verb,
     input.kind,
-    input.argsJson,
+    // A42 (re-cut after three critic FAILs): the ONE place a call row is written scrubs the payers of a settlement
+    // document from the stored arguments, whatever verb, branch or position they came through (`tracePrivacy.ts`).
+    traceSafeArgsJson(input.argsJson),
     input.mode,
     input.decisionReason,
     input.dialCapability ?? null,
@@ -344,7 +371,7 @@ export function getAgentSession(ctx: WorkspaceContext, input: GetAgentSessionInp
   // agent_action row must be THIS workspace's, never matched on id alone.
   const calls = ctx.store.db
     .prepare(
-      `SELECT c.*, a.status AS draft_status, a.reject_reason
+      `SELECT c.*, a.status AS draft_status, a.reject_reason, a.history_json
          FROM agent_call c JOIN agent_turn t ON t.id = c.turn_id
          LEFT JOIN agent_action a ON a.id = c.agent_action_id AND a.workspace_id = c.workspace_id
         WHERE c.workspace_id = ? AND t.session_id = ? ORDER BY t.seq, c.seq`,
@@ -388,6 +415,8 @@ export function getAgentSession(ctx: WorkspaceContext, input: GetAgentSessionInp
         resolvedAt: c.resolved_at,
         draftStatus: c.draft_status,
         rejectReason: c.reject_reason,
+        decidedUnderGrant: decidedUnderGrantOf(c.history_json),
+        decidedOnOwnerWord: decidedOnOwnerWordOf(c.history_json),
       })),
     })),
   });
@@ -441,8 +470,73 @@ export function agentProseDelete(ctx: WorkspaceContext, input: AgentProseDeleteI
             AND turn_id IN (SELECT id FROM agent_turn WHERE workspace_id = ? AND session_id = ?)`,
       )
       .run(REDACTED_ARGS_JSON, ctx.workspaceId, ...PROSE_BEARING_VERBS, REDACTED_ARGS_JSON, ctx.workspaceId, sessionId);
-    return ok({ sessionId, cleared: Number(texts.changes), redactedCalls: Number(args.changes) });
+    const words = redactOwnerWordsOfSession(ctx, sessionId);
+    return ok({ sessionId, cleared: Number(texts.changes), redactedCalls: Number(args.changes) + words });
   });
+}
+
+/** D209: what an erased owner's quote reads afterwards: a marker, never the words. */
+export const OWNER_WORD_ERASED = '[gelöscht]';
+
+/** The approval verbs whose arguments may carry the owner's words (`ownerWord.quote`, D209). */
+const OWNER_WORD_ARG_VERBS = ['approve_drafted_action', 'approve_drafted_actions'] as const;
+
+/**
+ * D209 (critic MEDIUM-2): the owner's words are prose too. Deleting a session's prose clears the quote from every
+ * approval call of that session (`args_json.ownerWord.quote`) AND from the Vorschlag each call approved
+ * (`decided_on_owner_word.quote` in its history, matched by id and by the same words). What ran stays: the
+ * history event, its moment, `saidAt`, the agent and the grantor. Answers how many rows changed.
+ */
+function redactOwnerWordsOfSession(ctx: WorkspaceContext, sessionId: string): number {
+  const calls = ctx.store.db
+    .prepare(
+      `SELECT id, args_json FROM agent_call
+        WHERE workspace_id = ?
+          AND verb IN (${OWNER_WORD_ARG_VERBS.map(() => '?').join(', ')})
+          AND json_valid(args_json) AND json_type(args_json, '$.ownerWord.quote') = 'text'
+          AND turn_id IN (SELECT id FROM agent_turn WHERE workspace_id = ? AND session_id = ?)`,
+    )
+    .all(ctx.workspaceId, ...OWNER_WORD_ARG_VERBS, ctx.workspaceId, sessionId) as { id: string; args_json: string }[];
+  let changed = 0;
+  for (const call of calls) {
+    let args: Record<string, unknown>;
+    try {
+      args = JSON.parse(call.args_json) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    const word = args.ownerWord as Record<string, unknown>;
+    const quote = typeof word.quote === 'string' ? word.quote.trim() : '';
+    if (quote === OWNER_WORD_ERASED) continue;
+    const ids = [args.actionId, ...(Array.isArray(args.ids) ? args.ids : [])].filter((v): v is string => typeof v === 'string');
+    for (const id of ids) {
+      const row = ctx.store.db.prepare('SELECT history_json FROM agent_action WHERE workspace_id = ? AND id = ?').get(ctx.workspaceId, id) as { history_json: string | null } | undefined;
+      if (row?.history_json == null) continue;
+      let entries: unknown;
+      try {
+        entries = JSON.parse(row.history_json);
+      } catch {
+        continue;
+      }
+      if (!Array.isArray(entries)) continue;
+      let touched = false;
+      for (const e of entries as Record<string, unknown>[]) {
+        if (e !== null && typeof e === 'object' && e.event === 'decided_on_owner_word' && e.quote === quote) {
+          e.quote = OWNER_WORD_ERASED;
+          touched = true;
+        }
+      }
+      if (touched) {
+        ctx.store.db.prepare('UPDATE agent_action SET history_json = ? WHERE workspace_id = ? AND id = ?').run(JSON.stringify(entries), ctx.workspaceId, id);
+        changed += 1;
+      }
+    }
+    ctx.store.db
+      .prepare("UPDATE agent_call SET args_json = json_set(args_json, '$.ownerWord.quote', ?) WHERE workspace_id = ? AND id = ?")
+      .run(OWNER_WORD_ERASED, ctx.workspaceId, call.id);
+    changed += 1;
+  }
+  return changed;
 }
 
 /**
@@ -479,6 +573,41 @@ export function purgeAgentTraceForStrings(ctx: WorkspaceContext, values: readonl
           .run(row.value.split(needle).join('[anonymisiert]'), ctx.workspaceId, row.id);
         redacted += 1;
       }
+    }
+  }
+  // D209: the owner's words on a Vorschlag's history (`decided_on_owner_word.quote`), and the free text of the
+  // other entries (`reason`). JSON-AWARE, never a raw replace over the document: a needle that matches a
+  // structural value (an event name, a decision, an actor) must leave the record as it is, and a name with a
+  // quote or a backslash is stored escaped in the JSON text, so only the parsed strings are compared.
+  const FREE_TEXT_FIELDS = ['quote', 'reason'] as const;
+  const histories = ctx.store.db
+    .prepare('SELECT id, history_json FROM agent_action WHERE workspace_id = ? AND history_json IS NOT NULL')
+    .all(ctx.workspaceId) as { id: string; history_json: string }[];
+  for (const row of histories) {
+    let entries: unknown;
+    try {
+      entries = JSON.parse(row.history_json);
+    } catch {
+      continue;
+    }
+    if (!Array.isArray(entries)) continue;
+    let changed = false;
+    for (const entry of entries as unknown[]) {
+      if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) continue;
+      const e = entry as Record<string, unknown>;
+      for (const field of FREE_TEXT_FIELDS) {
+        const text = e[field];
+        if (typeof text !== 'string') continue;
+        const redactedText = needles.reduce((acc, needle) => acc.split(needle).join('[anonymisiert]'), text);
+        if (redactedText !== text) {
+          e[field] = redactedText;
+          changed = true;
+        }
+      }
+    }
+    if (changed) {
+      ctx.store.db.prepare('UPDATE agent_action SET history_json = ? WHERE workspace_id = ? AND id = ?').run(JSON.stringify(entries), ctx.workspaceId, row.id);
+      redacted += 1;
     }
   }
   return { redacted };

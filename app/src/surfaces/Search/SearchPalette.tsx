@@ -66,6 +66,7 @@ import { MIN_QUERY_LENGTH } from './Search';
 import { matchConcepts } from '../../lib/guidance';
 import { ConceptPanel } from '../../components/ConceptPanel';
 import { useI18n } from '../../i18n';
+import { searchSettings, useSettingsIndex, type SettingsIndexEntry } from '../../lib/settings-index';
 import './Search.css';
 
 const DEBOUNCE_MS = 150;
@@ -81,7 +82,7 @@ const CUSTOMER_PROBE_CAP = 3;
 type OpenByContact = Record<string, { minor: number; currency: string }>;
 const VISIBLE_SECTION_CAP = 4;
 
-type SectionId = 'recent' | 'favourites' | 'nav' | 'actionsHere' | 'actions' | 'records' | 'concepts' | 'ask';
+type SectionId = 'recent' | 'favourites' | 'nav' | 'actionsHere' | 'actions' | 'settings' | 'records' | 'concepts' | 'ask';
 
 /** The daily queues an empty palette offers (K-43): the every-morning surfaces, in rail order. */
 const DAILY_PATHS = ['/overview', '/tasks', '/attention', '/correspondence', '/agent'];
@@ -123,6 +124,7 @@ const SECTION_LABEL: Record<SectionId, string> = {
   nav: 'palette.section.nav',
   actionsHere: 'palette.section.actionsHere',
   actions: 'palette.section.actions',
+  settings: 'palette.section.settings',
   records: 'palette.section.records',
   concepts: 'palette.section.concepts',
   ask: 'palette.askSection',
@@ -144,6 +146,8 @@ export function SearchPalette() {
    * that opened the palette (the "back to the palette trigger" half of §12's focus contract).
    */
   const [conceptOpen, setConceptOpen] = useState<string | null>(null);
+  // D202 point 3: the Einstellungen's own index, read only while the palette is open.
+  const settingsIndex = useSettingsIndex(paletteOpen ? workspaceId : null, locale);
 
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
@@ -313,6 +317,15 @@ export function SearchPalette() {
     [navigate, close, workspaceId],
   );
 
+  /** D202: a setting hit opens its row in place, on its area page. */
+  const openSetting = useCallback(
+    (route: string) => {
+      close();
+      navigate(route);
+    },
+    [navigate, close],
+  );
+
   const showAll = useCallback(() => {
     close();
     // `fromPalette` tells the results page not to re-open the palette it was just reached from (K-04).
@@ -389,8 +402,10 @@ export function SearchPalette() {
         openHit,
         openOpenItems,
         openConcept,
+        settingsIndex,
+        openSetting,
       }),
-    [query, browse, hits, openByContact, location.pathname, workspaceId, locale, t, denialOf, activateNav, activateVerb, openHit, openOpenItems, openConcept],
+    [query, browse, hits, openByContact, location.pathname, workspaceId, locale, t, denialOf, activateNav, activateVerb, openHit, openOpenItems, openConcept, settingsIndex, openSetting],
   );
 
   // The command/record/concept rows, before the ask lane. `nothing` is judged on THESE alone, so the
@@ -703,6 +718,8 @@ interface BuildArgs {
   openHit: (hit: SearchHit) => void;
   openOpenItems: (customerId: string) => void;
   openConcept: (key: string) => void;
+  settingsIndex: readonly SettingsIndexEntry[];
+  openSetting: (route: string) => void;
 }
 
 /**
@@ -711,7 +728,7 @@ interface BuildArgs {
  * Disabled verb rows are sorted last within their section (US-G16.6).
  */
 function buildSections(args: BuildArgs): Section[] {
-  const { query, browse, hits, openByContact, currentPath, workspaceId, locale, t, denialOf, activateNav, activateVerb, openHit, openOpenItems, openConcept } = args;
+  const { query, browse, hits, openByContact, currentPath, workspaceId, locale, t, denialOf, activateNav, activateVerb, openHit, openOpenItems, openConcept, settingsIndex, openSetting } = args;
 
   const navRow = (cmd: NavCommand): Row => ({
     key: `nav:${cmd.path}`,
@@ -775,6 +792,23 @@ function buildSections(args: BuildArgs): Section[] {
 
     const verbMatches = VERB_COMMANDS.map(verbRow).filter((r) => r.score > 0);
     if (verbMatches.length > 0) sections.push({ id: 'actions', labelKey: SECTION_LABEL.actions, rows: order(verbMatches), overflow: 0 });
+
+    // D202 point 3: the settings, from the same index the Einstellungen search reads ("bank" offers the Bank
+    // page above and the bank settings here). A row names the area, the setting and the value in force.
+    const settingHits = searchSettings(settingsIndex, query).filter((h) => h.entry.kind === 'setting');
+    if (settingHits.length > 0) {
+      const settingRows: Row[] = settingHits.map(({ entry, score }) => ({
+        key: `setting:${entry.id}`,
+        label: `${entry.areaLabel} · ${entry.label}: ${entry.current}`,
+        score,
+        runnable: false,
+        kindLabel: t('palette.kind.open'),
+        disabled: false,
+        glyph: <NavIcon name="setup" size={16} />,
+        activate: () => openSetting(entry.route),
+      }));
+      sections.push({ id: 'settings', labelKey: SECTION_LABEL.settings, rows: order(settingRows), overflow: Math.max(0, settingRows.length - SECTION_ROW_CAP) });
+    }
 
     if (workspaceId !== null && hits.length > 0) {
       const recordRows: Row[] = hits.flatMap((hit) => {
@@ -842,7 +876,15 @@ function buildSections(args: BuildArgs): Section[] {
     }
   }
 
-  return sections.slice(0, VISIBLE_SECTION_CAP);
+  if (browse) return sections.slice(0, VISIBLE_SECTION_CAP);
+  // D202 (audit §5): with a query, the four groups shown are the four with the best top score, kept in their
+  // order, so a strong settings hit is never cut behind a weak one of a group listed earlier.
+  return sections
+    .map((section, at) => ({ section, at, top: Math.max(0, ...section.rows.map((r) => r.score)) }))
+    .sort((a, b) => b.top - a.top || a.at - b.at)
+    .slice(0, VISIBLE_SECTION_CAP)
+    .sort((a, b) => a.at - b.at)
+    .map((x) => x.section);
 }
 
 /** The i18n label key for a record hit's kind, falling back to a generic label. */

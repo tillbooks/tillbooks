@@ -30,7 +30,7 @@
  */
 import generated from './command-source.generated.json';
 import exposed from './command-source.exposed.json';
-import { NAV_ITEMS, SURFACE_CATALOG, type NavIconName } from '../app/nav';
+import { NAV_ITEMS, OFF_RAIL, SURFACE_CATALOG, type NavIconName } from '../app/nav';
 
 /** Per-verb metadata, derived from the registry. Mirrors `command-source.generated.json`. */
 export interface VerbMeta {
@@ -112,14 +112,26 @@ export interface VerbCommand {
 
 export type Command = NavCommand | VerbCommand;
 
-/** Every rail destination as a navigation command. */
-export const NAV_COMMANDS: readonly NavCommand[] = NAV_ITEMS.map((item) => ({
-  kind: 'navigate',
-  path: item.path,
-  labelKey: item.labelKey,
-  // A nested rail leaf drops its glyph in the rail; the palette row always shows the surface's own.
-  icon: item.icon ?? SURFACE_CATALOG.find((surface) => surface.path === item.path)?.icon ?? 'overview',
-}));
+/**
+ * Every destination as a navigation command: the rail's leaves in rail order, then the routed pages the
+ * rail leaves out on purpose (D210: Suche, Agent, Aufgaben and the Einstellungen pages sit behind the
+ * palette and the settings gear). The pre-workspace first-run door is no destination inside a workspace.
+ */
+export const NAV_COMMANDS: readonly NavCommand[] = [
+  ...NAV_ITEMS.map((item) => ({
+    kind: 'navigate' as const,
+    path: item.path,
+    labelKey: item.labelKey,
+    // A nested rail leaf drops its glyph in the rail; the palette row always shows the surface's own.
+    icon: item.icon ?? SURFACE_CATALOG.find((surface) => surface.path === item.path)?.icon ?? 'overview',
+  })),
+  ...SURFACE_CATALOG.filter((s) => OFF_RAIL.has(s.navId) && s.navId !== 'first-run').map((s) => ({
+    kind: 'navigate' as const,
+    path: s.path,
+    labelKey: s.labelKey,
+    icon: s.icon,
+  })),
+];
 
 /** The curated verbs the palette exposes by name, joined with their live metadata. */
 export const VERB_COMMANDS: readonly VerbCommand[] = EXPOSED.flatMap((e) => {

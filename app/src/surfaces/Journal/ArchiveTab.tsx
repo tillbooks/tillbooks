@@ -14,11 +14,22 @@
  *     cannot exist even transiently.
  *  5. The comparative label lives on `Reports.tsx` (the column header carries it there).
  *
- * The purge lives behind the OVERFLOW on the periods view, with a reason field and a confirm
- * (canon: forgiveness); it is never a button beside the query. `retention_active` renders the date
+ * The purge lives behind the OVERFLOW on the periods view, confirmed by typing the year being purged
+ * (D204 point 5: no reason; the purge record keeps who and when; an optional note only when the
+ * workspace asks, `audit.ask_reason`); it is never a button beside the query. `retention_active` renders the date
  * AND the statutory reference. Permission-denied renders A24's padlock naming the capability.
  */
 import { useCallback, useEffect, useRef, useState, type SVGProps } from 'react';
+import { optionalReason, useAskReason } from '../../lib/useAskReason';
+
+/** D204 point 5: the year a purge of `from`..`to` (YYYY-MM) is confirmed with; null until both are periods. */
+export function purgeYearOf(from: string, to: string): string | null {
+  const shape = /^\d{4}-\d{2}$/;
+  if (!shape.test(from) || !shape.test(to)) return null;
+  const a = from.slice(0, 4);
+  const b = to.slice(0, 4);
+  return a === b ? a : `${a}-${b}`;
+}
 
 import { useClient } from '../../lib/client-context';
 import { isErr, type Err } from '../../lib/client';
@@ -129,7 +140,10 @@ export function ArchiveTab({ workspaceId }: { workspaceId: string }) {
   const [periods, setPeriods] = useState<ArchivePeriod[] | null>(null);
   const [periodsDenied, setPeriodsDenied] = useState(false);
   const [purgeOpen, setPurgeOpen] = useState(false);
-  const [purgeForm, setPurgeForm] = useState({ from: '', to: '', reason: '' });
+  const [purgeForm, setPurgeForm] = useState({ from: '', to: '', year: '', reason: '' });
+  const askReason = useAskReason();
+  // D204 point 5: the year (or `2012-2013` for a range over two years) the person types to confirm.
+  const purgeYear = purgeYearOf(purgeForm.from, purgeForm.to);
   const [purgeResult, setPurgeResult] = useState<string | null>(null);
   const purgeSeq = useRef(0);
 
@@ -181,7 +195,7 @@ export function ArchiveTab({ workspaceId }: { workspaceId: string }) {
       workspaceId,
       periodFrom: purgeForm.from,
       periodTo: purgeForm.to,
-      reason: purgeForm.reason,
+      ...(optionalReason(purgeForm.reason) === undefined ? {} : { reason: optionalReason(purgeForm.reason) }),
       confirmed: true,
       idempotencyKey: `studio-purge-${workspaceId}-${purgeForm.from}-${purgeForm.to}-${purgeSeq.current}`,
     });
@@ -332,19 +346,32 @@ export function ArchiveTab({ workspaceId }: { workspaceId: string }) {
                           onChange={(e) => setPurgeForm((f) => ({ ...f, to: e.target.value }))}
                         />
                       </label>
+                      {askReason && (
+                        <label className="journal-field">
+                          {t('archive.purge.reason')}
+                          <input
+                            className="field"
+                            type="text"
+                            value={purgeForm.reason}
+                            onChange={(e) => setPurgeForm((f) => ({ ...f, reason: e.target.value }))}
+                          />
+                        </label>
+                      )}
                       <label className="journal-field">
-                        {t('archive.purge.reason')}
+                        {t('archive.purge.typeYear')}
                         <input
                           className="field"
                           type="text"
-                          value={purgeForm.reason}
-                          onChange={(e) => setPurgeForm((f) => ({ ...f, reason: e.target.value }))}
+                          inputMode="numeric"
+                          placeholder={purgeYear ?? 'YYYY'}
+                          value={purgeForm.year}
+                          onChange={(e) => setPurgeForm((f) => ({ ...f, year: e.target.value }))}
                         />
                       </label>
                       <button
                         type="button"
                         className="btn btn--secondary btn--sm"
-                        disabled={purgeForm.from === '' || purgeForm.to === '' || purgeForm.reason === ''}
+                        disabled={purgeYear === null || purgeForm.year.trim() !== purgeYear}
                         onClick={() => void submitPurge()}
                       >
                         {t('archive.purge.confirm')}

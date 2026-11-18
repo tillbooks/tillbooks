@@ -36,6 +36,8 @@ export interface SplitRowsProps {
   withPick: boolean;
   /** The Details panel is open: no MWST and paperclip columns (the MWST picker moves into the account cell). */
   compact?: boolean;
+  /** D195 (v12): the row is the editor: no Sicherheit and no paperclip column, MWST stays. */
+  inline?: boolean;
   openPicker: string | null;
   onOpenPicker: (picker: string | null) => void;
   onChange: (next: SplitDraft) => void;
@@ -43,7 +45,7 @@ export interface SplitRowsProps {
   onCancel: () => void;
 }
 
-export function SplitRows({ line, split, state, lookups, busy, withPick, compact = false, openPicker, onOpenPicker, onChange, onCancel }: SplitRowsProps) {
+export function SplitRows({ line, split, state, lookups, busy, withPick, compact = false, inline = false, openPicker, onOpenPicker, onChange, onCancel }: SplitRowsProps) {
   const t = useT();
   const baseId = useId();
   const party = partyOf(t, line);
@@ -76,7 +78,7 @@ export function SplitRows({ line, split, state, lookups, busy, withPick, compact
   // The cells after Betrag: the paperclip's (unless the panel hides it) and Buchen's, both empty here.
   const afterAmount = (
     <>
-      {!compact && <td className="bank-cell bank-cell--clip" />}
+      {!compact && !inline && <td className="bank-cell bank-cell--clip" />}
       <td className="bank-cell bank-cell--book" />
     </>
   );
@@ -149,7 +151,7 @@ export function SplitRows({ line, split, state, lookups, busy, withPick, compact
               </span>
             </td>
             {!compact && <td className="bank-cell bank-cell--vat">{vatPicker(leg, i)}</td>}
-            {!compact && <td className="bank-cell bank-cell--conf" />}
+            {!compact && !inline && <td className="bank-cell bank-cell--conf" />}
             <td className="bank-cell bank-cell--amount">
               <label className="visually-hidden" htmlFor={amountId}>
                 {t('bankInbox.split.amountOf', { n: i + 1, party })}
@@ -217,7 +219,7 @@ export function SplitRows({ line, split, state, lookups, busy, withPick, compact
             </span>
           </td>
           {!compact && <td className="bank-cell bank-cell--vat" />}
-          {!compact && <td className="bank-cell bank-cell--conf" />}
+          {!compact && !inline && <td className="bank-cell bank-cell--conf" />}
           <td className="bank-cell bank-cell--amount" />
           {afterAmount}
           <td className="bank-cell bank-cell--ignore" />
@@ -260,7 +262,7 @@ export function SplitRows({ line, split, state, lookups, busy, withPick, compact
           </span>
         </td>
         {!compact && <td className="bank-cell bank-cell--vat" />}
-          {!compact && <td className="bank-cell bank-cell--conf" />}
+          {!compact && !inline && <td className="bank-cell bank-cell--conf" />}
         <td className="bank-cell bank-cell--amount">
           <span className="bank-split__rest t-num" data-over={state.rest < 0 ? 'true' : undefined} role="status">
             {restText}

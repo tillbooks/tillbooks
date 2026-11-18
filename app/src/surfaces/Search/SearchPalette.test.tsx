@@ -21,6 +21,8 @@ import { WorkspaceProvider } from '../../app/workspace';
 import { KeyboardProvider } from '../../app/keyboard';
 import { CapabilitiesContext, ALLOW_ALL, type Capabilities } from '../../lib/capabilities';
 import { SearchPalette } from './SearchPalette';
+import { resetSettingsCatalogForTests } from '../../lib/settings-index';
+import { realSettingsListBody } from '../../lib/settings-test-kit';
 
 const ok = (data: Record<string, unknown> = {}): RestResponse => ({ status: 200, body: { ok: true, ...data } });
 
@@ -70,6 +72,7 @@ async function openPalette() {
 
 beforeEach(() => {
   window.localStorage.clear();
+  resetSettingsCatalogForTests();
 });
 
 describe('the command palette', () => {
@@ -462,5 +465,41 @@ describe('round 2: the palette is the one omnibox (K-04, K-28, K-42, K-43)', () 
     expect(screen.getByTestId('location')).toHaveTextContent('/search?q=Muster');
     expect(screen.queryByRole('dialog')).toBeNull();
   });
-});
+  it('D202: "bank" offers the Bank page AND the bank settings, and a setting hit opens its row in place', async () => {
+    const T = (en: string, de: string) => ({ en, 'de-CH': de });
+    const SETTINGS_LIST = ok({
+      unanswered: [],
+      areas: [{ id: 'bank', label: T('Bank', 'Bank'), icon: 'reconciliation', keywords: { en: [], 'de-CH': [] }, pages: [], agentMayChange: false }],
+      settings: [
+        {
+          key: 'bank.fx_mode', value: 'propose_split', default: 'propose_split', overridden: false,
+          schema: { type: 'enum', values: ['propose_split', 'facts_only'] }, owningCapability: 'post', dialCapability: 'post',
+          label: T('x', 'x'), description: T('x', 'x'), humanOnly: false, askFirst: false, answered: true, updatedAt: null, updatedBy: null, section: 'bank',
+          presentation: { subgroup: T('Bank lines', 'Bankzeilen'), label: T('Card payments in a foreign currency', 'Kartenzahlungen in Fremdwährung'), valueLabels: { propose_split: T('Propose a split', 'Aufteilung vorschlagen'), facts_only: T('Facts only', 'Nur Fakten') }, keywords: { en: [], 'de-CH': [] } },
+        },
+      ],
+    });
+    render(tree(transportOf({ settings_list: SETTINGS_LIST })));
+    await openPalette();
+    await userEvent.type(screen.getByRole('combobox'), 'bank');
+    const settings = await screen.findByRole('group', { name: 'Einstellungen' });
+    expect(settings).toHaveTextContent('Bank · Kartenzahlungen in Fremdwährung: Aufteilung vorschlagen');
+    const nav = screen.getByRole('group', { name: 'Navigation' });
+    expect(nav.textContent).toMatch(/Bank/);
+    await userEvent.click(screen.getByRole('option', { name: /Kartenzahlungen in Fremdwährung/ }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/settings/bank?focus=bank.fx_mode');
+  });
 
+  it.each(['genehmigt', 'Wort', 'chat', 'Agent genehmigt auf dein Wort'])(
+    'the owner, 18.11.2026: on the REAL settings_list, "%s" offers "Agent genehmigt auf dein Wort"',
+    async (q) => {
+      render(tree(transportOf({ settings_list: { status: 200, body: realSettingsListBody() } })));
+      await openPalette();
+      await userEvent.type(screen.getByRole('combobox'), q);
+      const settings = await screen.findByRole('group', { name: 'Einstellungen' });
+      await waitFor(() => expect(settings).toHaveTextContent('Agent und Automatik · Agent genehmigt auf dein Wort: Aus'));
+      await userEvent.click(screen.getByRole('option', { name: /Agent und Automatik · Agent genehmigt auf dein Wort/ }));
+      expect(screen.getByTestId('location')).toHaveTextContent('/settings/agent?focus=agent.approve_on_owner_word');
+    },
+  );
+});

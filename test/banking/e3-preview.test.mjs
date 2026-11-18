@@ -88,8 +88,9 @@ test('a contact: the mode, the account and the verdict; a missing Anzahlungen ac
   const anz = must(composeBankLine(t.ctx, { bankTxnId: line, target: { kind: 'contact', contactId: t.customerId, mode: 'anzahlung', overrideReason: 'Vorschuss' } }), 'anzahlung');
   assert.equal(anz.booking.bookable, false);
   assert.equal(anz.booking.blockedBy, 'needs_anzahlung_account');
+  // D204: no reason is never what blocks; the missing account still does.
   const noReason = must(composeBankLine(t.ctx, { bankTxnId: line, target: { kind: 'contact', contactId: t.customerId, mode: 'anzahlung' } }), 'no reason');
-  assert.equal(noReason.booking.blockedBy, 'reason_required');
+  assert.equal(noReason.booking.blockedBy, 'needs_anzahlung_account');
   assert.deepEqual(everything(t), before);
   const booked = must(bookBankLine(t.ctx, { bankTxnId: line, target: { kind: 'contact', contactId: t.customerId }, idempotencyKey: 'c' }), 'book');
   assert.deepEqual(shape(g.booking.entries[0].lines), posted(t, booked.entryId));

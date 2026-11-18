@@ -1020,7 +1020,7 @@ describe('Dunning: a failed run read never leaves the previous card live (critic
 });
 
 // D169: the run's fee undo. It sits under Mehr on an issued or sent run whose fee entry stands, is
-// marked destructive, and runs only after an explicit confirm with a reason; nothing is sent before.
+// marked destructive, and runs only after an explicit confirm (D204: no reason); nothing is sent before.
 describe('Dunning: reversing a run\'s Mahngebühr (D169)', () => {
   const ISSUED_ITEM = { ...ITEM, feeBooked: true, demandedFeeMinor: 2000 };
   const feeRun = (status: string, extra: Record<string, unknown> = {}): Canned => ({
@@ -1031,7 +1031,7 @@ describe('Dunning: reversing a run\'s Mahngebühr (D169)', () => {
   });
   const ALL = [CAP.dun, CAP.send, CAP.post, 'read_sales'];
 
-  it('offers Mahngebühren stornieren under Mehr and calls dunning_fee_reverse only after the confirm with a reason', async () => {
+  it('D204 offers Mahngebühren stornieren under Mehr and calls dunning_fee_reverse after the confirm, with no reason field', async () => {
     const reverse = vi.fn((_input: Record<string, unknown>) => ok({ runId: 'run_1', reversalEntryId: 'je_rev', lettersSent: 0 }));
     renderDunning({ ...feeRun('issued'), dunning_fee_reverse: reverse as unknown as Canned[string] }, { held: ALL });
     const current = await screen.findByTestId('dunning-current');
@@ -1046,15 +1046,15 @@ describe('Dunning: reversing a run\'s Mahngebühr (D169)', () => {
     expect(dialog).not.toHaveTextContent('bleibt, wie er ist, und wird nicht versandt');
     expect(reverse).not.toHaveBeenCalled();
     const confirm = within(dialog).getByRole('button', { name: 'Gebühren stornieren' });
-    expect(confirm).toBeDisabled();
+    expect(confirm).toBeEnabled();
     expect(confirm.className).toContain('btn--danger');
     expect(confirm).not.toHaveAttribute('data-money-commit');
+    expect(within(dialog).queryByLabelText('Notiz (freiwillig)')).toBeNull();
 
-    await userEvent.type(within(dialog).getByLabelText('Grund'), 'Gebühr erlassen');
-    expect(confirm).toBeEnabled();
     await userEvent.click(confirm);
     await waitFor(() => expect(reverse).toHaveBeenCalledTimes(1));
-    expect(reverse.mock.calls[0]?.[0]).toMatchObject({ workspaceId: 'ws_test', runId: 'run_1', reason: 'Gebühr erlassen' });
+    expect(reverse.mock.calls[0]?.[0]).toMatchObject({ workspaceId: 'ws_test', runId: 'run_1' });
+    expect(reverse.mock.calls[0]?.[0]).not.toHaveProperty('reason');
     expect(typeof reverse.mock.calls[0]?.[0]?.['idempotencyKey']).toBe('string');
     expect(await screen.findByText('Die Mahngebühren dieses Laufs sind storniert.')).toBeInTheDocument();
   });
@@ -1097,7 +1097,6 @@ describe('Dunning: reversing a run\'s Mahngebühr (D169)', () => {
     await userEvent.click(within(current).getByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Mahngebühren stornieren' }));
     const dialog = await screen.findByRole('alertdialog');
-    await userEvent.type(within(dialog).getByLabelText('Grund'), 'Falsch');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Gebühren stornieren' }));
     expect(await screen.findByText(/Storniere zuerst die Zahlung/)).toBeInTheDocument();
     cleanup();
@@ -1125,7 +1124,7 @@ describe('Dunning: reversing a run\'s Mahngebühr (D169)', () => {
     expect(dialog).not.toHaveTextContent('ohne die Gebühr neu ausgestellt und kann danach versandt werden');
   });
 
-  it('D174 override: deviating for one run needs its own reason, and the call carries refreeze, letterDate and overrideReason', async () => {
+  it('D204 override: deviating for one run needs no reason, and the call carries refreeze and letterDate only', async () => {
     const reverse = vi.fn((_input: Record<string, unknown>) => ok({ runId: 'run_1', reversalEntryId: 'je_rev', lettersSent: 0 }));
     renderDunning({ ...feeRun('issued'), dunning_fee_reverse: reverse as unknown as Canned[string] }, { held: ALL });
     const current = await screen.findByTestId('dunning-current');
@@ -1133,23 +1132,38 @@ describe('Dunning: reversing a run\'s Mahngebühr (D169)', () => {
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Mahngebühren stornieren' }));
     const dialog = await screen.findByRole('alertdialog');
     const confirm = within(dialog).getByRole('button', { name: 'Gebühren stornieren' });
-    await userEvent.type(within(dialog).getByLabelText('Grund'), 'Gebühr erlassen');
-    expect(confirm).toBeEnabled();
     await userEvent.click(within(dialog).getByLabelText('Diesen Mahnlauf anders als eingestellt behandeln'));
-    expect(confirm).toBeDisabled();
+    expect(confirm).toBeEnabled();
+    expect(within(dialog).queryByLabelText('Warum dieser Lauf abweicht (freiwillig)')).toBeNull();
     await userEvent.click(within(dialog).getByRole('combobox', { name: 'Noch nicht versandte Briefe' }));
     await userEvent.click(await screen.findByRole('option', { name: 'Zurückhalten' }));
     expect(dialog).toHaveTextContent('Ein noch nicht versandter Brief bleibt, wie er ist');
-    await userEvent.type(within(dialog).getByLabelText('Warum dieser Lauf abweicht'), 'Kundin ruft zurück');
-    expect(confirm).toBeEnabled();
     await userEvent.click(confirm);
     await waitFor(() => expect(reverse).toHaveBeenCalledTimes(1));
-    expect(reverse.mock.calls[0]?.[0]).toMatchObject({
-      reason: 'Gebühr erlassen',
-      refreeze: 'hold',
-      letterDate: 'run_date',
-      overrideReason: 'Kundin ruft zurück',
-    });
+    const input = reverse.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(input).toMatchObject({ refreeze: 'hold', letterDate: 'run_date' });
+    expect('reason' in input || 'overrideReason' in input).toBe(false);
+  });
+
+  it('D204 with audit.ask_reason = optional both notes are offered, never block, and travel when written', async () => {
+    const reverse = vi.fn((_input: Record<string, unknown>) => ok({ runId: 'run_1', reversalEntryId: 'je_rev', lettersSent: 0 }));
+    renderDunning(
+      { ...feeRun('issued'), settings_get: ok({ setting: { key: 'audit.ask_reason', value: 'optional' } }), dunning_fee_reverse: reverse as unknown as Canned[string] },
+      { held: ALL },
+    );
+    const current = await screen.findByTestId('dunning-current');
+    await userEvent.click(within(current).getByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Mahngebühren stornieren' }));
+    const dialog = await screen.findByRole('alertdialog');
+    const confirm = within(dialog).getByRole('button', { name: 'Gebühren stornieren' });
+    expect(confirm).toBeEnabled();
+    await userEvent.type(await within(dialog).findByLabelText('Notiz (freiwillig)'), 'Gebühr erlassen');
+    await userEvent.click(within(dialog).getByLabelText('Diesen Mahnlauf anders als eingestellt behandeln'));
+    expect(confirm).toBeEnabled();
+    await userEvent.type(within(dialog).getByLabelText('Warum dieser Lauf abweicht (freiwillig)'), 'Kundin ruft zurück');
+    await userEvent.click(confirm);
+    await waitFor(() => expect(reverse).toHaveBeenCalledTimes(1));
+    expect(reverse.mock.calls[0]?.[0]).toMatchObject({ reason: 'Gebühr erlassen', refreeze: 're-issue', letterDate: 'run_date', overrideReason: 'Kundin ruft zurück' });
   });
 
   it('D174 without an override the call carries no override fields', async () => {
@@ -1159,7 +1173,6 @@ describe('Dunning: reversing a run\'s Mahngebühr (D169)', () => {
     await userEvent.click(within(current).getByRole('button', { name: 'Weitere Aktionen für diesen Mahnlauf' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Mahngebühren stornieren' }));
     const dialog = await screen.findByRole('alertdialog');
-    await userEvent.type(within(dialog).getByLabelText('Grund'), 'Gebühr erlassen');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Gebühren stornieren' }));
     await waitFor(() => expect(reverse).toHaveBeenCalledTimes(1));
     const input = reverse.mock.calls[0]?.[0] as Record<string, unknown>;

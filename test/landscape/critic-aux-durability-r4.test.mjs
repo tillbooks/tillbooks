@@ -12,6 +12,7 @@ import { join } from 'node:path';
 
 import { ensureDbChoice } from '../../dist/api/db-path.js';
 import { SqliteStore } from '../../dist/core/store/sqlite-store.js';
+import { assertNotApplied } from '../settings/support.mjs';
 
 test('[FINDING R4-L1] an adopted book (book.json) truncated to 0 bytes is still treated as present, and the face opens it as a new empty ledger', () => {
   const support = mkdtempSync(join(tmpdir(), 'till-crit-r4-'));
@@ -35,7 +36,7 @@ test('[FINDING R4-L1] an adopted book (book.json) truncated to 0 bytes is still 
   }
 });
 
-test('[HOLDS] mail.mbox_client_guard is human-only through the transport, under customize ask AND auto: an agent seat is refused and nothing is drafted; a person sets it', async () => {
+test('[HOLDS, D202] mail.mbox_client_guard is human-only through the transport, under customize ask AND auto: an agent seat only proposes it, never applies it; a person sets it', async () => {
   const { getAction } = await import('../../dist/api/registry.js');
   const { handleRest } = await import('../../dist/api/rest.js');
   const { fixture } = await import('../api/conformance-contract.mjs');
@@ -48,10 +49,12 @@ test('[HOLDS] mail.mbox_client_guard is human-only through the transport, under 
     const dial = getAction('set_agent_dial').run(person, { workspaceId: fx.workspaceId, capability: 'customize', level, idempotencyKey: `dial-${level}` });
     assert.equal(dial.ok, true, JSON.stringify(dial));
     const set = handleRest('settings_set', { workspaceId: fx.workspaceId, key: KEY, value: 'off', reason: 'Agent', idempotencyKey: `s-${level}` }, agent).body;
-    assert.equal(set.error, 'human_only', `${level}: ${JSON.stringify(set)}`);
+    // D202 point 5 (reverses D183 for proposals): a person-only Vorschlag, under every dial.
+    assertNotApplied(set, `${level} set`);
     const reset = handleRest('settings_reset', { workspaceId: fx.workspaceId, key: KEY, reason: 'Agent', idempotencyKey: `r-${level}` }, agent).body;
-    assert.equal(reset.error, 'human_only', `${level}: ${JSON.stringify(reset)}`);
-    assert.equal(drafts(), 0, `${level}: nothing was drafted for approval`);
+    assertNotApplied(reset, `${level} reset`);
+    assert.ok(drafts() <= 4, `${level}: only person-only Vorschläge were drafted`);
+    assert.equal(fx.deps.store.db.prepare("SELECT COUNT(*) AS n FROM agent_action WHERE workspace_id = ? AND action_tool IN ('settings_set','settings_reset') AND status = 'executed'").get(fx.workspaceId).n, 0);
     assert.equal(getAction('settings_get').run(person, { workspaceId: fx.workspaceId, key: KEY }).setting.value, 'refuse');
   }
   const byPerson = handleRest('settings_set', { workspaceId: fx.workspaceId, key: KEY, value: 'refuse_running', reason: 'lsof fehlt hier', idempotencyKey: 'p1' }, person).body;

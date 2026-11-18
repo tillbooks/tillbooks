@@ -6,10 +6,16 @@ handle `tillbooks` (W23) and all three were confirmed live on 30.07.2026.
 **Every claim here matches the website.** That is the point of the file: a visitor who finds a profile
 before finding the site must meet the same product.
 
-**Updated 30.09.2026 for the public beta, and on 10.10.2026 for the D156 positioning** (the
-agent-first ERP). The live profiles still carry the July text until the owner pastes these fields in.
-<!-- TODO(publish): paste only once tillbooks@1.0.0-beta.1 is on npm and the site says the same. --> The three retired false claims are absent, the
-market claim is the narrow one, and no price for TILL appears anywhere.
+**Updated 30.09.2026 for the public beta, on 10.10.2026 for the D156 positioning** (the agent-first
+ERP), **and on 18.11.2026 for the LinkedIn and X launch** (19.11. to 04.12.2026, the calendar is
+[docs/distribution/linkedin-launch-2026-11.md](../../docs/distribution/linkedin-launch-2026-11.md)).
+Paste the X and LinkedIn fields below before the first launch post on 19.11.2026; the package is on
+npm (`tillbooks@beta`). The retired false claims are absent, no market claim is made, and no price for
+TILL appears anywhere.
+
+**After D8 (02.12.2026).** The EBICS lines live in their own "after D8" variants under X and LinkedIn.
+Paste them only on the day the EBICS connection module is public under MIT and the D8 post goes out;
+until then the variants above them stay.
 
 `test/web/social-copy.test.mjs` parses this file and fails if any field exceeds its platform limit, so
 nothing here can be silently truncated at paste time. The counts in the tables are measured, not
@@ -38,32 +44,43 @@ sits better. Swap it by copying the variant up. Every ground is contrast-checked
 
 ## X, `https://x.com/tillbooks`
 
-Reachable at `https://x.com/settings/profile`. The owner is signed in as `@21Funkyy` alongside
-`@tillbooks` and X's onboarding modal intercepts sidebar clicks, so go to the settings URL directly or
-use a private window.
+Reachable at `https://x.com/settings/profile`. The owner's personal account is also signed in
+alongside `@tillbooks`, and X's onboarding modal intercepts sidebar clicks, so go to the settings URL
+directly or use a private window.
 
 | Field | Value | Count |
 |---|---|---|
 | Name | `TILL` | 4 / 50 |
-| Bio | `The agent-first ERP for Swiss SMEs: sales, purchasing, payments, stock, projects, books and MWST, every function an MCP tool. One local file. Public beta.` | 154 / 160 |
+| Bio | `Free, open-source accounting and ERP for Swiss SMEs. Your agent does the work, you approve. Every function an MCP tool, your books one local file. Public beta.` | 159 / 160 |
 | Location | `Switzerland` | 11 / 30 |
 | Website | `https://tillbooks.ch` | |
 
 The profile already carries `MCP-first open source ERP` as its bio. The line above is longer and says
 what that means, which is the job of a bio somebody reads once.
 
-### First post, to pin
+### Launch post, to pin (from 19.11.2026)
 
-> TILL is the agent-first ERP for Swiss SMEs: sales, purchasing, payments, stock, projects, books and
-> MWST, every function exposed as an MCP tool. Your agent runs it, and the Studio shows you what it
-> did. By default, your agent waits for your OK before it books anything, moves your money, grants
-> access or deletes your data for good. Your books live in one SQLite file on
-> your own machine.
+X Premium is not assumed, so this is a thread of two posts of at most 280 characters each (a link
+counts 23). Pin the first.
+
+> TILL is free, open-source (MIT) accounting and ERP for Swiss SMEs. Every function is an MCP tool,
+> so your agent does the work and the Studio shows you what it did. Your books are one SQLite file on
+> your own machine. Public beta.
 >
-> Public beta: Nomadik GmbH keeps its own books in it. If you switch, run it beside your old system
-> until the figures match. Free and open source under MIT.
+> https://tillbooks.ch/en/start/
+
+> By default, your agent waits for your OK before it books anything, moves your money, grants access
+> or deletes your data for good.
 >
-> https://tillbooks.ch
+> Source, issues and stars: https://github.com/tillbooks/tillbooks
+
+### After D8 (02.12.2026): the bio variant
+
+Paste only on D8, when the EBICS connection module is public under MIT.
+
+| Field | Value | Count |
+|---|---|---|
+| Bio, after D8 | `Free, open-source accounting and ERP for Swiss SMEs. Your agent works, you approve. Every function an MCP tool, bank statements over EBICS. Public beta.` | 152 / 160 |
 
 ---
 
@@ -74,7 +91,7 @@ Website and industry are already set.
 
 | Field | Value | Count |
 |---|---|---|
-| Tagline | `The agent-first ERP for Swiss SMEs. Open source (MIT), local first, every function an MCP tool.` | 95 / 120 |
+| Tagline | `Free, open-source accounting and ERP for Swiss SMEs. Your agent does the work, you approve. MIT, local first.` | 109 / 120 |
 | Website | `https://tillbooks.ch` | |
 | Industry | `Software Development` | |
 | Company size | `1 employee` (already set) | |
@@ -82,7 +99,7 @@ Website and industry are already set.
 
 ### About
 
-Paste as one block. 1'376 of LinkedIn's 2'000 characters.
+Paste as one block. 1'476 of LinkedIn's 2'000 characters.
 
 > TILL (Trusted Independent Ledger Library) is the agent-first ERP for Swiss SMEs: sales,
 > purchasing, payments, stock, projects, books and MWST. It is open source, and you own the file it
@@ -98,17 +115,19 @@ Paste as one block. 1'376 of LinkedIn's 2'000 characters.
 > Swiss from the ground up: QR-Rechnung with the structured-address standard, MWST at 8.1, 3.8 and
 > 2.6 percent and the Abrechnung, Kontenrahmen KMU, and ISO 20022 camt and pain.
 >
-> MIT licensed and free, with no limit on users, companies or bookings. Nomadik GmbH charges only for
-> help with setup and with moving from bexio; a Swiss-hosted version is planned for later.
+> MIT licensed and free, with no limit on users, companies or bookings. Try it in two commands,
+> npm install -g tillbooks@beta and then till up (Node.js 22 or newer, macOS or Linux). Not there yet:
+> Windows, French and Italian.
 >
 > Public beta since September 2026. Nomadik GmbH keeps its own books in TILL. The source is public on
-> GitHub under MIT, and we build in the open.
+> GitHub under MIT, and we build in the open: a star or an issue helps.
 >
 > https://tillbooks.ch
+> https://github.com/tillbooks/tillbooks
 
 ### About, German
 
-Use this one if the audience is Swiss. 1'489 of 2'000 characters.
+Use this one if the audience is Swiss. 1'591 of 2'000 characters.
 
 > TILL (Trusted Independent Ledger Library) ist das ERP für Schweizer KMU, das zuerst für KI-Agenten
 > gebaut ist: Verkauf, Einkauf, Zahlungen, Lager, Projekte, Buchhaltung und MWST. Es ist quelloffen,
@@ -124,14 +143,31 @@ Use this one if the audience is Swiss. 1'489 of 2'000 characters.
 > Von Anfang an schweizerisch: QR-Rechnung mit strukturierter Adresse, MWST zu 8,1, 3,8 und 2,6 Prozent
 > samt Abrechnung, Kontenrahmen KMU sowie ISO 20022 camt und pain.
 >
-> MIT-lizenziert und kostenlos, ohne Grenze bei Benutzern, Firmen oder Buchungen. Die Nomadik GmbH
-> verrechnet nur Hilfe bei der Einrichtung und beim Umzug von bexio; eine in der Schweiz gehostete
-> Variante ist für später geplant.
+> MIT-lizenziert und kostenlos, ohne Grenze bei Benutzern, Firmen oder Buchungen. Ausprobieren mit
+> zwei Befehlen, npm install -g tillbooks@beta und dann till up (Node.js 22 oder neuer, macOS oder
+> Linux). Noch nicht dabei: Windows, Französisch und Italienisch.
 >
 > Seit September 2026 öffentliche Beta. Die Nomadik GmbH führt ihre eigenen Bücher in TILL. Der
-> Quellcode ist unter MIT auf GitHub öffentlich, und wir bauen offen weiter.
+> Quellcode ist unter MIT auf GitHub öffentlich, und wir bauen offen weiter: Ein Stern oder ein Issue
+> hilft.
 >
 > https://tillbooks.ch
+> https://github.com/tillbooks/tillbooks
+
+### After D8 (02.12.2026): the Swiss paragraph, both languages
+
+Paste only on D8, when the EBICS connection module is public under MIT. It replaces the "Swiss from
+the ground up" paragraph of the About above (and its German twin); everything else stays.
+
+> Swiss from the ground up: QR-Rechnung with the structured-address standard, MWST at 8.1, 3.8 and
+> 2.6 percent and the Abrechnung, Kontenrahmen KMU, ISO 20022 camt and pain, and an open-source
+> EBICS 3.0 client that fetches your camt.053 statements over your own EBICS contract with your bank.
+> It only downloads: TILL never sends a payment.
+
+> Von Anfang an schweizerisch: QR-Rechnung mit strukturierter Adresse, MWST zu 8,1, 3,8 und 2,6 Prozent
+> samt Abrechnung, Kontenrahmen KMU, ISO 20022 camt und pain sowie ein quelloffener EBICS-3.0-Client,
+> der deine camt.053-Auszüge über deinen eigenen EBICS-Vertrag mit deiner Bank abholt. Er holt nur ab:
+> TILL sendet nie eine Zahlung.
 
 ---
 
@@ -176,7 +212,7 @@ each is false, so they get named rather than merely omitted.
 | Do not write | Why | Write instead |
 |---|---|---|
 | Any count of TILL's own verbs or tools | The number in the code and the design target are different things and only one is a fact | The composition argument, and QuickBooks' 145 as a fact about QuickBooks (their README, read 28.10.2026) |
-| "TILL opens no socket" | `till serve` binds one on localhost by design, for the Studio and the MCP face | "TILL makes no outbound connection" |
+| "TILL opens no socket", and since beta.6 "TILL makes no outbound connection" | `till serve` binds one on localhost by design, for the Studio and the MCP face; a settlement feed you set up fetches over HTTPS (`settlement.pull_mode`) | "TILL connects out only to what you set up, such as a settlement feed (and from D8 your bank). No telemetry, no call home." |
 | "No German-speaking vendor has shipped an official MCP server", and the narrower "No Swiss or German-speaking SME accounting vendor has shipped an official MCP server" | The vendors that have include SAP SE, and since D181 (28.10.2026) the Swiss Infinity advertises native MCP: both universal negatives are false | A dated fact about a named vendor, from its own publication, or the architecture argument with no market claim at all |
 | Any price for TILL | No paid tier exists | bexio's published prices as a dated fact about bexio, if a comparison is needed |
 | "Free forever" about any future tier | A lifetime pricing promise about a tier that does not exist | "The core is MIT and free" |
@@ -185,7 +221,7 @@ each is false, so they get named rather than merely omitted.
 | "Anything that can't be undone waits for your OK", "Nothing irreversible happens without your OK", "was sich nicht rückgängig machen lässt, wartet auf dein OK", "alles Unwiderrufliche wartet auf dein OK" | Not our claim (D160): the boundary is what a write touches, not whether it can be undone. A task, a note or a draft runs without asking even when it leaves a trace | The consequence claim above, which names what the dial gates by default |
 | "Waits for your OK before it touches your books", "changes who has access", "bevor er deine Buchhaltung anrührt", "Zugriffe ändert" | Drafts, chart-of-accounts and VAT-code edits touch the books and run free; revoking a portal link or disabling a plugin changes access and runs free | The claim above, which names acts: books anything, moves your money, grants access, deletes your data for good |
 | "Waits for your OK before it sends your data out", "bevor er deine Daten verschickt" | An agent may edit a contact's email without asking, and your own automatic sends then go to that address | The claim above, which names booking, moving money, granting access and deleting for good |
-| "Connects to your bank", "automatic bank sync", "open-source EBICS" | The module that connects the EBICS client to a bank is not published yet, so the public release cannot reach a bank | "The EBICS client is built and tested with ZKB's test platform" |
+| "Connects to your bank", "automatic bank sync", "open-source EBICS" (until D8, 02.12.2026) | The module that connects the EBICS client to a bank is not published yet, so the public release cannot reach a bank. From D8 the "after D8" variants apply, and even then "connects to your bank" stays too broad: it downloads statements over your own EBICS contract and sends nothing | "The EBICS client is built and tested with ZKB's test platform"; from D8, "an open-source EBICS 3.0 client that fetches your camt.053 statements over your own EBICS contract" |
 
 Also: no em dashes, sentence case only, and never `effortless`, `seamless`, `supercharge`, `unlock` or
 `revolutionize`. German uses `du`, real umlauts, and never `ß`.

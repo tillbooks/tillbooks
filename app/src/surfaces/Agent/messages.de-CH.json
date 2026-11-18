@@ -2,7 +2,7 @@
   "help": {
     "Agent": {
       "title": "Agent",
-      "body": "Hier liest du, was der Agent getan hat: jedes Gespräch mit jedem Schritt, in Worten.\n\nDer Agent erfasst jeden Schreibvorgang als Vorschlag, statt ihn zu buchen. Du entscheidest ihn in den Pendenzen, eine Zeile pro Vorschlag; die ganze Liste steht auch hier unter Vorschläge. Unter Berechtigungen legst du fest, wie weit jede Art von Handlung als vertraut gilt, von immer fragen bis automatisch ausführen.\n\nDiese Freigabe erteilst nur du: Kein Agent kann sein eigenes Vertrauen erhöhen.",
+      "body": "Hier liest du, was der Agent getan hat: jedes Gespräch mit jedem Schritt, in Worten.\n\nDer Agent erfasst jeden Schreibvorgang als Vorschlag, statt ihn zu buchen. Du entscheidest ihn in den Pendenzen, eine Zeile pro Vorschlag; die ganze Liste steht auch hier unter Vorschläge. Dort wählst du mehrere aus und gibst sie gemeinsam frei oder lehnst sie ab; Ablehnen fragt nichts. Unter Berechtigungen legst du fest, wie weit jede Art von Handlung als vertraut gilt, von immer fragen bis automatisch ausführen.\n\nDiese Freigabe erteilst nur du: Kein Agent kann sein eigenes Vertrauen erhöhen.",
       "concepts": [],
       "docsPath": "introduction"
     }
@@ -75,6 +75,11 @@
       "rejectedWith": "Abgelehnt: {reason}",
       "rejectedNoReason": "Abgelehnt",
       "approved": "Genehmigt",
+      "approvedByAgent": "Vom Agenten genehmigt",
+      "rejectedByAgent": "Vom Agenten abgelehnt",
+      "underGrant": "Freigabe erteilt {grantedBy} am {grantedAt}",
+      "approvedOnWord": "Vom Agenten ausgeführt, im Chat freigegeben",
+      "onWordTitle": "«{quote}», {saidAt}",
       "status": {
         "gelesen": "gelesen",
         "ausgefuehrt": "ausgeführt",
@@ -89,7 +94,7 @@
     "card": {
       "title": "Vorschlag",
       "approve": "Genehmigen",
-      "approveAllow": "Genehmigen und künftig automatisch",
+      "approveAllow": "Freigeben und dem Agenten künftig erlauben",
       "reject": "Ablehnen",
       "rejectConfirm": "Ablehnen? Der Vorschlag ist danach erledigt und muss neu erfasst werden.",
       "rejectYes": "Ja, ablehnen",
@@ -101,7 +106,7 @@
       "provenance": "Vorgeschlagen von {actor} am {date}",
       "needs": "Benötigt: Agent-Freigabe",
       "needsHint": "Zur Mitgliederverwaltung",
-      "executed": "Genehmigt und ausgeführt",
+      "executed": "Freigegeben und ausgeführt",
       "rejected": "Abgelehnt",
       "grantHint": "Die Freigabe gilt künftig für alle Vorschläge dieser Art und bleibt jederzeit widerrufbar.",
       "selfHint": "Der eigene Vorschlag braucht eine zweite Person zur Freigabe.",
@@ -118,12 +123,11 @@
         "vat": "MWST",
         "gross": "Total"
       },
-      "holdersChanged": "Nicht ausgeführt: Der Beleg wurde inzwischen anderswo gebucht. Die Karte zeigt jetzt, wo. Prüf sie und genehmige erneut."
+      "holdersChanged": "Nicht ausgeführt: Der Beleg wurde inzwischen anderswo gebucht. Die Karte zeigt jetzt, wo. Prüf sie und gib erneut frei."
     },
     "line": {
       "more": "Mehr zu: {title}",
       "details": "Details",
-      "hideDetails": "Details ausblenden",
       "detailsOf": "Details: {title}",
       "consequence": "Was das bewirkt",
       "origin": "Vorschlag des Agenten",
@@ -141,8 +145,7 @@
       "period": "{period} ({from} bis {to})",
       "moreRows": "{n} weitere",
       "grantConfirm": "{capability} künftig ohne Nachfrage ausführen? Die Freigabe gilt für alle Vorschläge dieser Art, wird dir zugeschrieben und bleibt jederzeit widerrufbar.",
-      "grantYes": "Genehmigen und erlauben",
-      "grantNo": "Abbrechen",
+      "grantYes": "Freigeben und erlauben",
       "yes": "Ja",
       "no": "Nein",
       "targetKind": {
@@ -171,10 +174,19 @@
         "onto": "auf {account}",
         "many": "{count} Konten",
         "recipient": "an {recipient}"
-      }
+      },
+      "bankLine": "Bankzeile",
+      "booking": "Buchung",
+      "why": "Warum",
+      "who": "Von",
+      "whoValue": "{actor}, {date}",
+      "does": "Bewirkt",
+      "openInBank": "In Bankzeilen öffnen",
+      "viewBeleg": "Beleg ansehen",
+      "automate": "Freigeben und künftig automatisch"
     },
     "queue": {
-      "empty": "Nichts zu genehmigen.",
+      "empty": "Nichts freizugeben.",
       "emptyHint": "Der Agent erfasst Vorschläge, statt direkt zu buchen. Was er darf, steuerst du unter Berechtigungen.",
       "group": {
         "geld": "Geld",
@@ -249,6 +261,7 @@
       "stock": "Lager"
     },
     "verb": {
+      "grant_rule_autobook": "Autopilot für eine Regel einschalten",
       "post_entry": "Buchung erfassen",
       "reverse_entry": "Buchung stornieren",
       "issue_invoice": "Rechnung ausstellen",
@@ -364,6 +377,11 @@
       "set_bank_csv_mapping": "CSV-Spaltenzuordnung speichern",
       "import_settlement": "Abrechnungsdatei buchen",
       "set_settlement_template": "Buchungsvorlage für Abrechnungen speichern",
+      "set_settlement_table_mapping": "Speichern, wie eine Abrechnungstabelle gelesen wird",
+      "pull_settlement": "Abrechnungs-Feed abholen und buchen",
+      "set_settlement_source": "Abrechnungsquelle speichern",
+      "set_settlement_event_ignored": "Abrechnungsereignis ignorieren oder einbeziehen",
+      "resolve_settlement_event": "Abrechnungszahlung als Test markieren oder nicht",
       "resolve_possible_duplicate": "Mögliches Duplikat entscheiden",
       "create_payment_batch": "Zahlungslauf entwerfen",
       "generate_pain001": "Zahlungsdatei erstellen",
@@ -415,7 +433,8 @@
       "portal_quote_accept": "Offerte über Portal-Link annehmen",
       "hausbuch_note_set": "Hausregel speichern",
       "hausbuch_note_archive": "Hausregel archivieren",
-      "set_vorlage_schedule": "Vorlage wiederholen"
+      "set_vorlage_schedule": "Vorlage wiederholen",
+      "settings_set": "Einstellung ändern"
     },
     "field": {
       "amount": "Betrag",
@@ -464,7 +483,12 @@
       "differenceReason": "Grund der Differenz",
       "question": "Frage",
       "year": "Jahr",
-      "method": "Methode"
+      "method": "Methode",
+      "billDate": "Rechnungsdatum",
+      "dueDate": "Fällig am",
+      "expenseAccountId": "Aufwandkonto",
+      "vendorReference": "Referenz des Lieferanten",
+      "value": "Wert"
     },
     "belege": {
       "head": "Belege, die beim Genehmigen angehängt werden ({count})",
@@ -477,6 +501,137 @@
       "open": "Öffnen",
       "thumbAlt": "Beleg {name}",
       "failed": "Der Beleg konnte nicht geöffnet werden."
+    },
+    "vq": {
+      "tab": {
+        "pending": "Offen",
+        "executed": "Freigegeben",
+        "rejected": "Abgelehnt",
+        "stale": "Veraltet"
+      },
+      "statusLabel": "Status",
+      "status": {
+        "executed": "Freigegeben",
+        "rejected": "Abgelehnt",
+        "closed": "Vom System geschlossen",
+        "stale": "Veraltet"
+      },
+      "search": "Vorschläge durchsuchen",
+      "searchPlaceholder": "Suchen",
+      "listLabel": "Vorschläge",
+      "count": "{count} Vorschläge",
+      "facet": {
+        "kind": "Art",
+        "certainty": "Sicherheit",
+        "direction": "Richtung",
+        "beleg": "Beleg",
+        "decidedBy": "Entschieden"
+      },
+      "decidedBy": {
+        "person": "von einer Person",
+        "agent": "vom Agenten, mit Freigabe",
+        "ownerWord": "im Chat freigegeben"
+      },
+      "direction": {
+        "in": "Eingang",
+        "out": "Ausgang"
+      },
+      "beleg": {
+        "with": "Mit Beleg",
+        "without": "Ohne Beleg"
+      },
+      "certainty": {
+        "sure": "Sicher",
+        "learned": "Gelernt",
+        "check": "Prüfen",
+        "open": "Kein Vergleich"
+      },
+      "clearFilters": "Filter zurücksetzen",
+      "filteredEmpty": "Keine Treffer.",
+      "emptyOther": "Keine Vorschläge.",
+      "withBeleg": "mit Beleg",
+      "tickRow": "{subject} auswählen",
+      "selection": "Auswahl",
+      "selected": "{count} ausgewählt",
+      "approveAll": "Freigeben ({count})",
+      "rejectAll": "Ablehnen ({count})",
+      "clearSelection": "Auswahl aufheben",
+      "approve": "Freigeben",
+      "decide": "Entscheiden",
+      "staleReason": "Seit dem Vorschlag geändert: Freigeben würde nichts ausführen",
+      "staleShort": "Seit dem Vorschlag geändert",
+      "back": "Zur Liste",
+      "approveAllow": "Freigeben und dem Agenten künftig erlauben",
+      "grantTitle": "{capability} dem Agenten künftig erlauben?",
+      "grantReach": "Der Agent führt danach jeden Vorschlag der Art «{capability}» ohne Nachfrage aus: diesen, alle {count} offenen dieser Art hier und jeden künftigen. Die Freigabe wird dir zugeschrieben und bleibt unter Berechtigungen widerrufbar.",
+      "ibanChange": "IBAN-Änderung",
+      "ibanOld": "Bisher",
+      "ibanNew": "Neu",
+      "ibanNone": "keine",
+      "ibanWithheld": "nicht sichtbar",
+      "ibanUnknownSupplier": "Lieferant",
+      "ibanConfirmTitle": "IBAN von {supplier} ändern?",
+      "ibanConfirmYes": "IBAN ändern",
+      "settingSubject": "{setting}: {value}",
+      "settingChange": "Einstellung",
+      "settingNow": "Bisher",
+      "settingNew": "Neu",
+      "confirmClose": "Abbrechen",
+      "rejectedWith": "Grund: {reason}",
+      "decidedLabel": "Entschieden",
+      "ownerWordLabel": "Freigabe im Chat",
+      "ownerWordValue": "«{quote}», {saidAt}",
+      "decidedValue": "am {date} {who}",
+      "who": {
+        "studio": "im Studio",
+        "agent": "vom Agenten",
+        "system": "von TILL",
+        "person": "von einer Person",
+        "agentUnderGrant": "vom Agenten, mit deiner Freigabe",
+        "agentOnWord": "vom Agenten, im Chat freigegeben"
+      },
+      "undoReason": "Rückgängig unter Agent > Vorschläge",
+      "toastClose": "Meldung",
+      "toast": {
+        "approved": "Freigegeben: {subject}",
+        "rejected": "Abgelehnt: {subject}",
+        "stale": "Nicht ausgeführt, seit dem Vorschlag geändert: {subject}",
+        "undo": "Rückgängig",
+        "undone": "Wieder offen: {subject}",
+        "batch": {
+          "approved": "{count} freigegeben",
+          "approvedSome": "{ok} freigegeben, {refused} nicht. {subject}: {reason}",
+          "rejected": "{count} abgelehnt",
+          "rejectedSome": "{ok} abgelehnt, {refused} nicht. {subject}: {reason}"
+        }
+      },
+      "ibanRow": "IBAN {old} → {new}",
+      "staleRow": "Geändert",
+      "belege": "Belege",
+      "belegOpen": "Beleg, neues Fenster",
+      "rejectContext": "Gebucht wird nichts",
+      "approveContext": "Führt den Vorschlag aus",
+      "recoveryContext": "Zum Datensatz",
+      "settingValue": {
+        "suggest": "vorschlagen",
+        "book": "buchen",
+        "bulk": "gesammelt",
+        "off": "aus",
+        "on": "ein",
+        "tick": "auswählen",
+        "single": "einzeln",
+        "all_with_confirm": "alle mit Bestätigung",
+        "engine": "automatisch",
+        "refuse": "ablehnen",
+        "warn": "warnen",
+        "reverse": "stornieren",
+        "keep": "behalten",
+        "guthaben": "Guthaben",
+        "anzahlung": "Anzahlung",
+        "ask": "fragen",
+        "auto": "automatisch"
+      },
+      "quoted": "«{text}»"
     }
   }
 }

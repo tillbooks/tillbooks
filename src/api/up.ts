@@ -34,6 +34,7 @@ import type { ChildProcess, SpawnOptions } from 'node:child_process';
 
 import { makeApiDeps } from './mcp.js';
 import { resolveEbicsRuntime, type HostEbicsPorts } from './host-runtime.js';
+import { resolveSettlementFeedPort } from './settlement-feed-host.js';
 import { createBankActivationOffload, createBankSyncOffload, isSharableDbPath } from './bank-sync-offload.js';
 import { reclaimDeadSyncLeases } from '../core/banking/ebics/index.js';
 import type { ApiDeps } from './registry.js';
@@ -60,6 +61,10 @@ import { MEMORY_DB, resolveSupportDir, type AdoptedBookUnavailable } from './db-
 import { setAdoptedBookUnavailable, setDeliveryRuntime, resetDeliveryRuntime } from './runtime-state.js';
 import { createScheduler, resolveTickMs, type Scheduler } from './scheduler.js';
 import { acquireLock, releaseLock, type UpLock } from './up-lock.js';
+import { bookHasEntries } from './releases-actions.js';
+import { seedSeen } from '../core/releases/whatsNew.js';
+import { TILL_PACKAGE_VERSION } from '../core/version.js';
+
 import type { SqliteStore } from '../core/store/sqlite-store.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -588,7 +593,7 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   }
   let dbPath = unavailable === null ? opts.dbPath : MEMORY_DB;
   try {
-    opened = makeApiDeps(dbPath, hostPorts);
+    opened = makeApiDeps(dbPath, hostPorts, { settlementFeed: resolveSettlementFeedPort() });
   } catch (e) {
     if (opts.adoptedBook === undefined || unavailable !== null) {
       releaseLock(supportDir, process.pid);
@@ -597,7 +602,7 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
     unavailable = { path: opts.adoptedBook.path, reason: 'unopenable' };
     dbPath = MEMORY_DB;
     log(`till up: the adopted book could not be opened (${e instanceof Error ? e.message.split('\n')[0] : String(e)}); TILL shows what to do.`);
-    opened = makeApiDeps(dbPath, hostPorts);
+    opened = makeApiDeps(dbPath, hostPorts, { settlementFeed: resolveSettlementFeedPort() });
   }
   if (unavailable !== null) log(`till up: the adopted book is not reachable (${unavailable.reason}): ${unavailable.path}. Nothing is written until it is chosen again or forgotten.`);
   const { store } = opened;
@@ -671,7 +676,11 @@ export async function startUp(opts: UpOptions = {}): Promise<UpResult> {
   // TILL_EXPOSE_LEDGER_UNAUTHENTICATED would let any peer read the roots). Otherwise the grant is absent
   // and `sourcePath` refuses `source_path_local_only`.
   const grant = localFileGrantFor({ served: !local, host, home: opts.homeDir ?? homedir() });
-  const fileDeps: ApiDeps = grant === undefined ? deps : { ...deps, localFiles: grant };
+  const grantedDeps: ApiDeps = grant === undefined ? deps : { ...deps, localFiles: grant };
+  // O00 (D199): the install's support folder, where the What's new marker lives.
+  const fileDeps: ApiDeps = { ...grantedDeps, supportDir };
+  // The What's new baseline is decided once, at the first start that meets this feature (whatsNew.ts).
+  if (unavailable === null) seedSeen(supportDir, TILL_PACKAGE_VERSION, bookHasEntries(fileDeps));
   const studioKeys = openStudioKeyStore(supportDir, { persist: local });
   // D166 layer 2: the paired browsers, whose session tokens seat the person like the key does.
   const studioDevices = openStudioDeviceRegistry(supportDir, {

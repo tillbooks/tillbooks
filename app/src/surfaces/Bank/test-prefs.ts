@@ -19,3 +19,12 @@ export function prefsStore(seed: Record<string, PrefValue> = {}): PrefsStore {
 export function dockedRight(): PrefsStore {
   return prefsStore({ 'bank.detail_position': 'right' });
 }
+
+/**
+ * D195 (v12): the row editor (`inline`) is the default since 12.11.2026. A suite written against the D178 detail
+ * area (the panel beside or under the list, the Sicherheit and paperclip columns) states that layout as the
+ * person's preference: `automatic`, the default it was written under.
+ */
+export function legacyLayout(): PrefsStore {
+  return prefsStore({ 'bank.detail_position': 'automatic' });
+}

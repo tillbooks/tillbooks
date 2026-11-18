@@ -32,9 +32,17 @@ const settle = async (): Promise<void> => {
   });
 };
 
+/** D210: the pencil is a footer or header door only while the section headings are shown (the status
+ *  dot's menu carries "Menü anpassen" otherwise), so the editor tests open it with the headings on. */
+const headedEngine = (): FakePrefsEngine => {
+  const engine = fakePrefsEngine();
+  engine.put(WS, 'nav.section_headers', 'shown');
+  return engine;
+};
+
 async function renderRail(
   path = '/overview',
-  { engine = fakePrefsEngine(), theme = 'light' as Theme }: { engine?: FakePrefsEngine; theme?: Theme } = {},
+  { engine = headedEngine(), theme = 'light' as Theme }: { engine?: FakePrefsEngine; theme?: Theme } = {},
 ) {
   const view = renderWithRail(RAIL, { path, engine, workspaceId: WS, theme });
   await settle();
@@ -62,7 +70,7 @@ const groupHeaders = () =>
     .map((el) => el.textContent);
 
 /** The canonical headed groups except Bank, in order: a stored layout names every group it orders. */
-const OTHER_GROUPS = ['projects', 'master-data', 'sales', 'purchasing', 'accounting', 'reports', 'treuhaender', 'settings'];
+const OTHER_GROUPS = ['sales', 'purchasing', 'accounting', 'master-data', 'projects'];
 
 const storedLayout = (engine: FakePrefsEngine) => engine.get(WS, 'nav.menu_layout') as { groups?: string[]; hidden?: string[]; containers?: Record<string, string[]> } | undefined;
 
@@ -73,14 +81,21 @@ beforeEach(() => {
 });
 
 describe('opening and closing', () => {
+  it('D210: with the headings hidden (the default) no pencil sits in the rail; the status menu carries Menü anpassen', async () => {
+    await renderRail('/overview', { engine: fakePrefsEngine() });
+    expect(screen.queryByRole('button', { name: 'Bearbeiten' })).toBeNull();
+  });
+
   it('the pencil sits on the Menü header above favourites, and in the footer while the menu has no header', async () => {
-    const engine = fakePrefsEngine();
+    const engine = headedEngine();
     const { unmount } = await renderRail('/overview', { engine });
     expect(screen.queryByRole('button', { name: 'Menü' })).toBeNull();
     const footerPencil = screen.getByRole('button', { name: 'Bearbeiten' });
     expect(footerPencil).toHaveClass('rail-customise-entry');
     unmount();
+    // The header carries the pencil only when the section headings are shown (D210: hidden by default).
     engine.put(WS, 'nav.favourites', [{ navId: 'journal' }]);
+    engine.put(WS, 'nav.section_headers', 'shown');
     await renderRail('/overview', { engine });
     const pencils = screen.getAllByRole('button', { name: 'Bearbeiten' });
     expect(pencils).toHaveLength(1);
@@ -132,11 +147,11 @@ describe('reorder, by the Mehr menu and by Alt+Arrow (WCAG 2.5.7)', () => {
   it('moves a group down through its Mehr menu and the engine keeps the order', async () => {
     const { engine } = await renderRail();
     await openEditor();
-    await chooseFromMore('Projekte', 'Nach unten');
+    await chooseFromMore('Bank', 'Nach unten');
     await settle();
-    expect(storedLayout(engine)?.groups?.slice(0, 2)).toEqual(['master-data', 'projects']);
+    expect(storedLayout(engine)?.groups?.slice(0, 2)).toEqual(['sales', 'bank']);
     await userEvent.click(within(editor()).getByRole('button', { name: 'Fertig' }));
-    expect(groupHeaders().slice(0, 2)).toEqual(['Stammdaten', 'Projekte']);
+    expect(groupHeaders().slice(0, 2)).toEqual(['Verkauf', 'Bank']);
   });
 
   it('moves the focused row with Alt+ArrowUp and announces it', async () => {
@@ -147,13 +162,13 @@ describe('reorder, by the Mehr menu and by Alt+Arrow (WCAG 2.5.7)', () => {
     fireEvent.keyDown(box, { key: 'ArrowUp', altKey: true });
     expect(within(region).getByText('Stammdaten nach oben verschoben')).toBeInTheDocument();
     await settle();
-    expect(storedLayout(engine)?.groups?.slice(0, 2)).toEqual(['master-data', 'projects']);
+    expect(storedLayout(engine)?.groups).toEqual(['bank', 'sales', 'purchasing', 'master-data', 'accounting', 'projects']);
   });
 
   it('disables Nach oben on the first row (the ends are fixed)', async () => {
     await renderRail();
     await openEditor();
-    await userEvent.click(within(editor()).getByRole('button', { name: 'Projekte verschieben' }));
+    await userEvent.click(within(editor()).getByRole('button', { name: 'Bank verschieben' }));
     expect(screen.getByRole('menuitem', { name: 'Nach oben' })).toHaveAttribute('aria-disabled', 'true');
   });
 });
@@ -189,22 +204,23 @@ describe('hide and reset', () => {
   });
 
   it('resets to the canonical tree through prefs_reset', async () => {
-    const engine = fakePrefsEngine();
-    engine.put(WS, 'nav.menu_layout', { groups: ['bank', ...OTHER_GROUPS], hidden: ['group:sales'] } as unknown as PrefValue);
+    const engine = headedEngine();
+    engine.put(WS, 'nav.menu_layout', { groups: ['master-data', 'bank', 'sales', 'purchasing', 'accounting', 'projects'], hidden: ['group:sales'] } as unknown as PrefValue);
     await renderRail('/overview', { engine });
-    expect(groupHeaders()[0]).toBe('Bank');
+    expect(groupHeaders()[0]).toBe('Stammdaten');
+    expect(groupHeaders()).not.toContain('Verkauf');
     const region = await openEditor();
     await userEvent.click(within(region).getByRole('button', { name: 'Zurücksetzen' }));
     await settle();
     expect(engine.calls.at(-1)).toEqual({ action: 'prefs_reset', input: { workspaceId: WS, key: 'nav.menu_layout' } });
     expect(engine.get(WS, 'nav.menu_layout')).toBeUndefined();
     await userEvent.click(within(editor()).getByRole('button', { name: 'Fertig' }));
-    expect(groupHeaders()[0]).toBe('Projekte');
+    expect(groupHeaders()[0]).toBe('Bank');
     expect(groupHeaders()).toContain('Verkauf');
   });
 
   it('drops ids the catalog does not know and still shows every page', async () => {
-    const engine = fakePrefsEngine();
+    const engine = headedEngine();
     engine.put(WS, 'nav.menu_layout', {
       groups: ['ghost', 'bank', ...OTHER_GROUPS],
       containers: { bank: ['ghost-page', 'payments'] },
@@ -218,7 +234,7 @@ describe('hide and reset', () => {
   });
 
   it('says so in words when the engine refuses a change, and keeps it for the session', async () => {
-    const engine = fakePrefsEngine();
+    const engine = headedEngine();
     engine.refuseAll('invalid_pref_value');
     await renderRail('/overview', { engine });
     const region = await openEditor();
@@ -232,7 +248,7 @@ describe('hide and reset', () => {
 describe('accessibility (jest-axe, both themes)', () => {
   for (const theme of ['light', 'dark'] as const) {
     it(`has no axe violations with the editor open and a group expanded (${theme})`, async () => {
-      const engine = fakePrefsEngine();
+      const engine = headedEngine();
       engine.put(WS, 'nav.favourites', [{ navId: 'journal' }]);
       const { container } = await renderRail('/journal', { engine, theme });
       const region = await openEditor();

@@ -4,7 +4,7 @@
       "title": "Trust"
     },
     "indicator": {
-      "local": "Local, no connection",
+      "local": "Local",
       "unknown": "Not verified",
       "violated": "A connection was opened"
     },
@@ -148,7 +148,7 @@
       "infoLabel": "What publishing means"
     },
     "location": {
-      "local": "Your books: one single file on this device ({path}). Nothing leaves TILL by itself.",
+      "local": "Your books: one single file on this device ({path}). Nothing from your books leaves TILL by itself.",
       "short": "Your books: {path}",
       "served": "Your books: one file on this instance; export and backup at any time.",
       "unknown": "Data location unknown.",

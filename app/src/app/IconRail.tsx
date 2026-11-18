@@ -12,7 +12,8 @@
  *   - A favourite, or a single destination of the top block, is a `link` icon. Its button navigates on
  *     click; its flyout is a label, a tooltip for the icon.
  *   - A headed group is a `group` icon. Its button opens a flyout listing the group's destinations
- *     (nested parents dissolved into their children in place). Clicking a destination navigates.
+ *     (nested parents dissolved into their children in place), led by the group's overview page
+ *     (D201, "Bereichsübersicht"). Clicking a row navigates.
  *
  * THE ACCESSIBILITY CONTRACT. The flyout is a disclosure, never a modal: a positioned `div` with
  * `role="group"` and an accessible name (the entry label). Every trigger is a real `<button>` with its
@@ -27,7 +28,17 @@ import { useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from '
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useT } from '../i18n';
-import { GROUP_ICON, groupKey, isNavParent, resolveRailActive, type NavGroup, type NavIconName, type NavItem } from './nav';
+import {
+  areaNavIdOf,
+  areaPath,
+  GROUP_ICON,
+  groupKey,
+  isNavParent,
+  resolveRailActive,
+  type NavGroup,
+  type NavIconName,
+  type NavItem,
+} from './nav';
 import { NavIcon } from './nav-icons';
 import { useRail } from './nav-prefs';
 import { attentionBadgeName, useAttentionBadge, type AttentionBadgeState } from './chrome';
@@ -95,6 +106,8 @@ interface EntryLight {
   soft: boolean;
   /** The destination inside a group flyout that carries aria-current. */
   destination: string | null;
+  /** D201: the group's own overview page is open (its flyout row carries aria-current). */
+  areaOpen: boolean;
 }
 
 /** One icon and its flyout. Owns the flyout's viewport position and the focus-return on Escape. */
@@ -198,6 +211,14 @@ function IconEntryRow({
               <p className="rail-flyout-title" aria-hidden="true">
                 {label}
               </p>
+              <button
+                type="button"
+                className="rail-flyout-link"
+                aria-current={light.areaOpen ? 'page' : undefined}
+                onClick={() => onNavigate(areaPath(entry.navId))}
+              >
+                {t('groupOverview.overview')}
+              </button>
               {entry.destinations.map((d) => (
                 <button
                   key={d.navId}
@@ -261,17 +282,27 @@ export function IconRail({ onNavigate, hoverFlyouts = true }: { onNavigate?: () 
     [location.pathname, resolvedFavourites, rail, look.activeRule],
   );
 
+  const openArea = areaNavIdOf(location.pathname);
   const lightFor = (entry: IconEntry, favourite: boolean): EntryLight => {
     if (favourite) {
       const lit = entry.navId === active.favouriteNavId;
-      return { current: lit, pill: lit, soft: false, destination: null };
+      return { current: lit, pill: lit, soft: false, destination: null, areaOpen: false };
     }
     if (entry.kind === 'link') {
       const lit = entry.navId === active.treeNavId;
-      return { current: lit, pill: lit, soft: entry.navId === active.treeSoftNavId, destination: null };
+      return { current: lit, pill: lit, soft: entry.navId === active.treeSoftNavId, destination: null, areaOpen: false };
     }
     const holds = (id: string | null): boolean => id !== null && entry.destinations.some((d) => d.navId === id);
-    return { current: false, pill: holds(active.treeNavId), soft: holds(active.treeSoftNavId), destination: active.treeNavId };
+    // D201: a group's overview, or a nested parent's inside it, is the group's page too.
+    const areaOpen = openArea === entry.navId;
+    const areaInside = openArea !== null && rail.some((g) => g.navId === entry.navId && g.items.some((n) => isNavParent(n) && n.navId === openArea));
+    return {
+      current: false,
+      pill: holds(active.treeNavId) || areaOpen || areaInside,
+      soft: holds(active.treeSoftNavId),
+      destination: active.treeNavId,
+      areaOpen,
+    };
   };
 
   const go = (path: string): void => {

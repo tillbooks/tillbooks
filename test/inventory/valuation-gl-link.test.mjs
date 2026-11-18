@@ -251,7 +251,7 @@ test('J06 §H-TENANT: a run never crosses a workspace', () => {
 
 // --- (e) reverse restores the baseline ----------------------------------------------------------
 
-test('J06 REVERSE restores the baseline; a fresh run posts the same delta again', () => {
+test('D204 J06 REVERSE with no reason restores the baseline; a fresh run posts the same delta again', async () => {
   const { ctx } = freshCtx();
   const itemId = seedItem(ctx);
   const locationId = locationOf(ctx);
@@ -260,13 +260,18 @@ test('J06 REVERSE restores the baseline; a fresh run posts the same delta again'
   must(inventoryValuationPost(ctx, { runId: d1.run.id, idempotencyKey: 'p1' }), 'p1');
   assert.equal(glBalance(ctx, '1200', '2026-03-31'), 18000);
 
-  const rev = must(inventoryValuationReverse(ctx, { runId: d1.run.id, reason: 'Falsche Bewertung', idempotencyKey: 'v1' }), 'reverse');
+  const rev = must(inventoryValuationReverse(ctx, { runId: d1.run.id, idempotencyKey: 'v1' }), 'reverse without a reason');
   assert.equal(rev.run.status, 'reversed');
   assert.notEqual(rev.run.reversingJournalEntryId, null);
+  const { assertWhoWhen, assertPermission } = await import('../support/d204.mjs');
+  const mirror = ctx.store.db.prepare('SELECT created_by, created_at, reverses_entry_id FROM journal_entry WHERE id = ?').get(rev.run.reversingJournalEntryId);
+  assertWhoWhen(mirror.created_by, mirror.created_at);
+  assert.notEqual(mirror.reverses_entry_id, null, 'what: a mirror of the run journal, never an edit');
+  assertPermission('inventory_valuation_reverse');
   assert.equal(glBalance(ctx, '1200', '2026-03-31'), 0, 'GL restored to the prior baseline');
 
   // Idempotent reverse.
-  const rev2 = must(inventoryValuationReverse(ctx, { runId: d1.run.id, reason: 'Falsche Bewertung', idempotencyKey: 'v1' }), 'reverse replay');
+  const rev2 = must(inventoryValuationReverse(ctx, { runId: d1.run.id, idempotencyKey: 'v1' }), 'reverse replay');
   assert.equal(rev2.run.status, 'reversed');
 
   // A fresh run computes the delta against the restored GL and posts it again.

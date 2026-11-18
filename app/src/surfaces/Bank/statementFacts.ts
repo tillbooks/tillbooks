@@ -65,6 +65,8 @@ export interface StudioLineFacts {
   fee: StudioFee | null;
   /** A20 §12: the format the line came in (`csv` for a line filled from a bank CSV export), when stated. */
   source: 'camt053' | 'camt054' | 'mt940' | 'csv' | null;
+  /** A20 §13.1: the line came from an Excel workbook (its `source` stays `csv`). */
+  container: 'xlsx' | null;
 }
 
 function rec(v: unknown): Record<string, unknown> | null {
@@ -116,6 +118,7 @@ export function lineFactsOf(line: BankInboxLine): StudioLineFacts | null {
     additionalInfo: str(raw.additionalInfo),
     entryInfo: str(raw.entryInfo),
     source: raw.source === 'camt053' || raw.source === 'camt054' || raw.source === 'mt940' || raw.source === 'csv' ? raw.source : null,
+    container: raw.container === 'xlsx' ? 'xlsx' : null,
     refs: {
       endToEndId: str(refs?.endToEndId),
       accountServicerRef: str(refs?.accountServicerRef),

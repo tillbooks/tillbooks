@@ -92,7 +92,7 @@ const NOT_A_PREPAYMENT_ACCOUNT: ReadonlySet<string> = new Set([
 
 /**
  * The plan of a `contact` target on this line. Refuses `not_found`, `counterparty_merged`,
- * `contact_archived`, `reason_required`, `needs_anzahlung_account` and `invalid_anzahlung_account`.
+ * `contact_archived`, `needs_anzahlung_account` and `invalid_anzahlung_account` (D204: never `reason_required`).
  */
 export function planContact(
   ctx: WorkspaceContext,
@@ -123,10 +123,9 @@ export function planContact(
   const settingMode = getSetting<ContactBookingMode>(ctx, 'bank.contact_booking_mode');
   const mode = target.mode ?? settingMode;
   const overridden = target.mode !== undefined && target.mode !== settingMode;
+  // D204: a mode other than the setting is its own audited act (`overridden`, the setting it differed
+  // from); a reason is optional and kept when given.
   const reason = typeof target.overrideReason === 'string' ? target.overrideReason.trim() : '';
-  if (overridden && reason.length === 0) {
-    return { error: bankTargetRefusal('reason_required', { field: 'target.overrideReason', settingKey: 'bank.contact_booking_mode', settingMode, mode }) };
-  }
   if (reason.length > MAX_REASON) return { error: err('invalid_input', { field: 'target.overrideReason', maxLength: MAX_REASON }) };
 
   const base = {
@@ -136,7 +135,7 @@ export function planContact(
     mode,
     settingMode,
     overridden,
-    overrideReason: overridden ? reason : null,
+    overrideReason: overridden && reason.length > 0 ? reason : null,
   };
   if (mode === 'guthaben') {
     // A14 books a payment in the base currency: a Guthaben from a Bankkonto in another currency would put

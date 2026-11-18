@@ -156,7 +156,7 @@ describe('GapRepairDialog', () => {
     expect(screen.queryByRole('button', { name: 'Nichts fehlt, bestätigen' })).toBeNull();
   });
 
-  it('a chained gap is confirmed with a reason, as a person (confirmed: true)', async () => {
+  it('D204 a chained gap is confirmed with no reason, as a person (confirmed: true)', async () => {
     let reads = 0;
     const onResolved = vi.fn();
     const { calls } = setup(
@@ -170,12 +170,13 @@ describe('GapRepairDialog', () => {
       { onResolved },
     );
     const button = await screen.findByRole('button', { name: 'Nichts fehlt, bestätigen' });
-    expect(button).toBeDisabled();
-    await userEvent.type(screen.getByLabelText('Grund'), 'Feiertage ohne Buchung');
+    expect(button).toBeEnabled();
+    expect(screen.queryByLabelText('Grund')).toBeNull();
     await userEvent.click(button);
     await waitFor(() => expect(onResolved).toHaveBeenCalledWith('Bestätigt: in der Lücke 183–186 fehlt nichts.'));
     const sent = calls.find((c) => c.action === 'confirm_statement_gap')?.input;
-    expect(sent).toMatchObject({ bankAccountId: 'ba_zkb', afterStatementId: 'bst_182', beforeStatementId: 'bst_187', reason: 'Feiertage ohne Buchung', confirmed: true });
+    expect(sent).toMatchObject({ bankAccountId: 'ba_zkb', afterStatementId: 'bst_182', beforeStatementId: 'bst_187', confirmed: true });
+    expect(sent).not.toHaveProperty('reason');
   });
 
   it('a gap that is gone says so', async () => {

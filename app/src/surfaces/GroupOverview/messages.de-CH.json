@@ -1,0 +1,15 @@
+{
+  "groupOverview": {
+    "search": "In {area} suchen",
+    "searchPlaceholder": "Seite suchen",
+    "overview": "Bereichsübersicht"
+  },
+  "help": {
+    "GroupOverview": {
+      "title": "Bereichsübersicht",
+      "body": "Die Bereichsübersicht zeigt alle Seiten eines Menübereichs als Kacheln. Ein Klick auf eine Kachel öffnet die Seite, und von dort führt dich der Pfeil über dem Titel zurück hierher. Die Suche oben findet eine Seite, sobald du zu tippen beginnst. Welche Seiten ein Bereich zeigt und in welcher Reihenfolge, stellst du unter Menü anpassen ein: Die Übersicht folgt deinem Menü.",
+      "concepts": [],
+      "docsPath": "introduction"
+    }
+  }
+}

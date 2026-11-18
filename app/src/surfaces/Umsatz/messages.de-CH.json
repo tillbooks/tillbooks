@@ -1,0 +1,385 @@
+{
+  "nav": {
+    "umsatz": "Umsatz"
+  },
+  "umsatz": {
+    "title": "Umsatz",
+    "denied": "Abrechnungsereignisse prüfen braucht das Recht zu buchen.",
+    "loadFile": "Datei laden",
+    "loadFileContext": "Eine till-settlement-Datei oder ein CSV- oder XLSX-Export, geprüft vor dem Buchen",
+    "closeFile": "Datei schliessen",
+    "book": "Buchen",
+    "booked": "{count} gebucht",
+    "checkPayouts": "Auszahlungen",
+    "checkVat": "MWST",
+    "check": {
+      "payouts": {
+        "ok": "Jede Auszahlung ist durch die gebuchten Ereignisse erklärt",
+        "differs": "Eine Auszahlung ist durch die gebuchten Ereignisse nicht erklärt",
+        "unknown": "Nicht prüfbar: nicht jede Auszahlung ist durch ihre Ereignisse erklärt",
+        "rest": "Auszahlung vom {day}: {amount} nicht durch das Buch erklärt",
+        "gap": "Auszahlung vom {day}: {amount} nicht durch ihre Ereignisse erklärt",
+        "test": "Auszahlung vom {day}: {amount} aus Testzahlungen, nicht gebucht",
+        "skipped": "Auszahlung vom {day}: {amount} bleiben auf dem Durchlaufkonto (Reserve)",
+        "opening": "Auszahlung vom {day}: {amount} aus der Zeit vor dem Startdatum (Eröffnungssaldo)"
+      },
+      "vat": {
+        "ok": "Die MWST der einbezogenen Ereignisse steht im Buch",
+        "differs": "{count} einbezogene Ereignisse tragen eine andere MWST als das Buch",
+        "unknown": "Kein einbezogenes Ereignis trägt MWST"
+      }
+    },
+    "empty": "Keine Abrechnungsereignisse in dieser Periode",
+    "caption": "Abrechnungsereignisse vom {from} bis {to}",
+    "col": {
+      "day": "Datum",
+      "kind": "Art",
+      "who": "Wer",
+      "amount": "Betrag",
+      "vat": "MWST",
+      "status": "Status",
+      "include": "Einbeziehen",
+      "derivation": "Herleitung"
+    },
+    "kind": {
+      "sale": "Verkauf",
+      "refund": "Rückerstattung",
+      "processing_fee": "Zahlungsgebühr",
+      "service_fee": "Servicegebühr",
+      "third_party_payout": "Weiterleitung",
+      "third_party_payout_reversal": "Weiterleitung zurück",
+      "reserve": "Reserve",
+      "bank_payout": "Auszahlung",
+      "bank_payout_summary": "Auszahlung",
+      "other": "Anderes"
+    },
+    "status": {
+      "booked": "Gebucht",
+      "to_book": "Wird gebucht",
+      "skipped": "Nicht gebucht",
+      "refused": "Abgelehnt",
+      "bookedNote": "Gebucht; der Absender meldet es neu: {note}",
+      "sameAsBooked": "Gleich wie ein schon gebuchtes Ereignis",
+      "sameIdOther": "Gleiche ID, andere Zahlen"
+    },
+    "test": "Testzahlung",
+    "outsidePeriod": "Ausserhalb dieser Periode: gezeigt, damit nichts ungesehen gebucht wird, hier nicht gezählt",
+    "masked": "Zahlende Person verborgen",
+    "include": "Einbeziehen",
+    "refusal": {
+      "settlement_source_missing": "Es ist keine Abrechnungsquelle gespeichert. Lade eine Abrechnungsdatei oder speichere die Quelle unter Bankkonten.",
+      "settlement_template_missing": "Diese Quelle hat noch keine Buchungsvorlage.",
+      "settlement_template_incomplete": "Die Buchungsvorlage ordnet nicht jede Art dieser Datei zu.",
+      "settlement_incomplete": "Der Absender hat dieses Dokument als unvollständig markiert. Hol es oder exportiere es noch einmal.",
+      "source_ambiguous": "Es sind mehrere Abrechnungsquellen gespeichert.",
+      "token_missing": "Der Token dieser Quelle fehlt. Speichere ihn unter Bankkonten.",
+      "feed_unreachable": "Der Abrechnungs-Feed ist nicht erreichbar.",
+      "feed_unauthorized": "Der Feed hat den Token abgelehnt. Speichere den aktuellen unter Bankkonten.",
+      "review_stale": "Seit du geschaut hast, hat sich etwas geändert. Die Periode ist neu gelesen; prüf sie und buche noch einmal.",
+      "event_booked": "Dieses Ereignis ist gebucht. Korrigiere es mit einer Korrekturbuchung.",
+      "handled_outside_active": "Dieses Ereignis ist als ausserhalb des Imports erledigt markiert.",
+      "invalid_settlement": "Die Datei ist kein Abrechnungsdokument.",
+      "unsupported_schema": "Die Datei ist kein till-settlement/v1-Dokument.",
+      "day_mode_unconfirmed": "Diese Datei enthält ganze Tage, die keine bestätigte Zuordnung gelesen hat. Lies die Tabelle neu.",
+      "person_decides": "Das kann nur eine Person bestätigen."
+    },
+    "derivation": {
+      "open": "Herleitung",
+      "close": "Schliessen",
+      "fee": "Plattformgebühr {rate}: {amount}",
+      "feeWaived": "Plattformgebühr erlassen: {reason}",
+      "waiver": {
+        "new_coach_window": "Startfenster für neue Coaches",
+        "override": "Ausnahme",
+        "unknown": "Grund unbekannt",
+        "none": "Grund nicht genannt"
+      },
+      "processing": "Zahlungsgebühr: {amount}",
+      "coach": "An den Coach: {amount}",
+      "vat": "MWST {rate} %",
+      "ok": "Herleitung geht auf",
+      "notOk": "Herleitung geht nicht auf",
+      "yes": "ja",
+      "no": "nein",
+      "field": {
+        "gross": "Brutto",
+        "vat": "MWST",
+        "net": "Netto",
+        "payoutNet": "Netto der Auszahlung",
+        "fee": "Plattformgebühr",
+        "processing": "Zahlungsgebühr",
+        "expected": "An den Coach, erwartet",
+        "selfBill": "Gutschrift des Coaches",
+        "transfer": "Überweisung an den Coach",
+        "adjustment": "Verrechnet",
+        "coachVat": "Coach MWST-pflichtig",
+        "producer": "Prüfung des Absenders",
+        "till": "Prüfung von TILL",
+        "derivedFrom": "Quelle",
+        "sellerRole": "Rolle",
+        "vatRule": "MWST-Regel",
+        "bookingId": "Buchung",
+        "sessionId": "Sitzung",
+        "liveSessionId": "Live-Sitzung",
+        "paymentIntentId": "Payment Intent",
+        "chargeId": "Charge",
+        "transferId": "Transfer",
+        "payoutId": "Auszahlung",
+        "document": "Beleg",
+        "trimmed": "Gekürzt"
+      }
+    },
+    "noId": "Ohne ID",
+    "period": "Periode",
+    "table": {
+      "nameStep": "Quelle benennen",
+      "mappingStep": "Spalten zuordnen",
+      "system": "System",
+      "processor": "Zahlungsanbieter",
+      "next": "Weiter",
+      "none": "Keine",
+      "empty": "Die Tabelle hat keine Zeilen",
+      "events": "{events} Ereignisse aus {rows} Zeilen",
+      "refused": "{count} Zeilen abgelehnt",
+      "refusedRow": "Zeile {row}: {code}",
+      "preview": "Die ersten Zeilen der Tabelle",
+      "kindMap": "Was jeder Typ in der Tabelle ist",
+      "kindOf": "Art von {cell}",
+      "dateFormat": "Datumsformat",
+      "decimal": "Dezimalzeichen",
+      "vatMode": "MWST",
+      "vat": {
+        "from_template": "Aus der Buchungsvorlage",
+        "stated": "Aus der Tabelle",
+        "none": "Keine"
+      },
+      "source": {
+        "saved": "Die gespeicherte Zuordnung dieser Quelle",
+        "profile": "Profil: {label}",
+        "given": "Deine Zuordnung",
+        "guessed": "Aus den Spaltennamen erraten",
+        "pick": "Quelle",
+        "choose": "Quelle wählen"
+      },
+      "field": {
+        "day": "Datum",
+        "amount": "Betrag (brutto)",
+        "id": "ID",
+        "kind": "Typ",
+        "fee": "Gebühr",
+        "documentNumber": "Belegnummer",
+        "counterparty": "Wer",
+        "description": "Text",
+        "currency": "Währung",
+        "vat": "MWST-Betrag",
+        "net": "Nettobetrag",
+        "payoutId": "Auszahlung"
+      },
+      "refusal": {
+        "table_mapping_mismatch": "Die Spalten weichen von der gespeicherten Zuordnung dieser Quelle ab. Prüfe die neue Zuordnung; Weiter speichert sie.",
+        "xls_unsupported": "Das ist eine alte oder verschlüsselte Arbeitsmappe. Speichere sie als xlsx oder CSV.",
+        "table_unreadable": "Die Tabelle lässt sich nicht lesen.",
+        "table_too_large": "Die Tabelle ist zu gross. Exportiere einen kürzeren Zeitraum.",
+        "id_column_missing": "Wähle die ID-Spalte: Deine Einstellungen buchen eine Tabelle nur mit ihr.",
+        "invalid_input": "In der Zuordnung fehlt etwas.",
+        "day_mode_payout_mapped": "Eine Tabelle mit Auszahlungs-ID listet Auszahlungen, keine ganzen Tage. Entferne die Auszahlungs-ID oder wähle ID-Spalten.",
+        "unreadable_day": "Ein Tag in dieser Tabelle lässt sich nicht lesen, darum ist kein Tag sicher ganz. Prüfe das Datumsformat.",
+        "person_decides": "Das kann nur eine Person bestätigen."
+      },
+      "otherFile": "Andere Datei laden",
+      "sameAsBooked": "{count} gleich wie schon gebuchte Ereignisse",
+      "sameAsBookedRow": "Zeile {row}",
+      "warnings": "Was der Tabellenimport bemerkt hat",
+      "newSource": "Neue Quelle",
+      "replace": {
+        "title": "Gespeicherte Zuordnung ersetzen",
+        "risk": "Von dieser Quelle sind {count} Ereignisse gebucht. Liest die neue Zuordnung dieselben Zeilen mit anderen IDs, bucht ein späterer Export sie ein zweites Mal.",
+        "plain": "Diese Quelle hat eine gespeicherte Zuordnung. Die neue ersetzt sie.",
+        "confirm": "Ersetzen",
+        "cancel": "Gespeicherte behalten"
+      },
+      "amountSign": "Vorzeichen des Betrags",
+      "sign": {
+        "as_stated": "Wie in der Tabelle",
+        "by_kind": "Nach der Art"
+      },
+      "feeSign": "Vorzeichen der Gebühr",
+      "fee": {
+        "deducted": "Vom Saldo abgezogen",
+        "signed": "Wie in der Tabelle"
+      },
+      "kindPositive": "Art bei Geldeingang",
+      "kindNegative": "Art bei Geldausgang",
+      "vatFees": "MWST auf Gebühren",
+      "readAs": "Gelesen als",
+      "sameIdOther": "{count} mit der ID eines gebuchten Ereignisses, aber anderen Zahlen",
+      "id": {
+        "label": "ID",
+        "part": "ID-Teil {n}",
+        "missing": "Noch keine ID: Wähle die Spalten, die jede Zeile unterscheiden ({candidates})",
+        "notUnique": "{count} Zeilen dieser Datei teilen eine ID (geprüft wird nur diese Datei)",
+        "unique": "Jede Zeile dieser Datei hat ihre eigene ID (geprüft wird nur diese Datei)",
+        "precision": "Tag in der ID",
+        "precisionOf": {
+          "day": "Der Tag",
+          "second": "Tag und Uhrzeit"
+        },
+        "amountPart": "Die ID enthält einen Betrag: Ein gleicher Verkauf in einer anderen Datei gilt als schon gebucht",
+        "textAsNumber": "Excel hat die ID-Spalte {columns} in eine Zahl verwandelt: Führende Nullen oder lange IDs können vom CSV abweichen"
+      },
+      "otherIds": {
+        "title": "Andere IDs als bei den gebuchten Ereignissen",
+        "risk": "Von dieser Quelle sind {count} Ereignisse mit anders gebildeten IDs gebucht. Liest du die Tabelle so, können dieselben Zeilen ein zweites Mal buchen.",
+        "confirm": "So lesen"
+      },
+      "rowCode": {
+        "id_time_unknown": "Die Uhrzeit fehlt in dieser Datumszelle der Arbeitsmappe: Exportiere die Tabelle als CSV, oder formatiere die Spalte in Excel als Text"
+      },
+      "wholeDays": {
+        "label": "Ohne ID",
+        "no": "ID-Spalten wählen",
+        "yes": "Listet ganze Tage",
+        "hint": "Wähle das nur, wenn der Export immer jede Zeile jedes Tages enthält, den er abdeckt. Ein Tag, der schon im Buch ist, wird nie ein zweites Mal gebucht; ein Tag, der abweicht, wird gezeigt und von Hand gebucht.",
+        "on": "Nach ganzen Tagen gelesen: Jede Zeile wird über ihren Tag erkannt"
+      }
+    },
+    "dayCode": {
+      "day_incomplete": "eine andere Zeile dieses Tages lässt sich nicht lesen",
+      "day_differs": "dieser Tag weicht vom Buch ab",
+      "day_not_over": "dieser Tag ist noch nicht vorbei",
+      "edge_day_excluded": "erster oder letzter Tag der Datei, ausgelassen",
+      "edge_day_unconfirmed": "erster oder letzter Tag der Datei, wartet auf deine Antwort"
+    },
+    "days": {
+      "label": "Tage der Tabelle",
+      "in_books": "{day} schon im Buch",
+      "differs": "{day} weicht ab: gebucht {booked}, Datei {file}",
+      "incomplete": "{day} unvollständig: eine Zeile lässt sich nicht lesen",
+      "not_over": "{day} noch nicht vorbei"
+    },
+    "edge": {
+      "label": "Erster und letzter Tag",
+      "ask": "{day} ist vielleicht abgeschnitten",
+      "near": "{day}: {amounts} ist auch am {neighbour} gebucht, vielleicht dieselbe Zeile",
+      "confirm": "{day} ist vollständig",
+      "context": "Der Export enthält jede Zeile dieses Tages",
+      "confirmed": "{day} vollständig, deine Antwort",
+      "undo": "Rückgängig: {day} ist vielleicht abgeschnitten"
+    },
+    "tabs": "Umsatz-Ansicht",
+    "tab": {
+      "zahlen": "Zahlen",
+      "regeln": "Regeln"
+    },
+    "unit": {
+      "label": "Zeitraum",
+      "month": "Monat",
+      "quarter": "Quartal",
+      "year": "Jahr"
+    },
+    "periodState": {
+      "to_book": "zu buchen",
+      "booked": "gebucht",
+      "empty": "leer"
+    },
+    "events": "Ereignisse",
+    "showAll": "Alle zeigen",
+    "start": {
+      "label": "Umsatz hereinholen",
+      "file": "Datei laden",
+      "connect": "Quelle verbinden"
+    },
+    "bookBar": "Buchen",
+    "bookBarWhat": "{count} Ereignisse: {net} Umsatz, {vat} MWST",
+    "booking": "Bucht",
+    "answeredBy": "{who}, {at}",
+    "figures": {
+      "kpis": "Kennzahlen",
+      "turnover": "Umsatz exkl. MWST",
+      "vat": "MWST aus Abrechnungen",
+      "sales": "Anzahl Verkäufe",
+      "average": "Durchschnittlicher Verkauf",
+      "payouts": "Auszahlungen",
+      "toBook": "Zu buchen",
+      "toBookValue": "{count}",
+      "toBookAmount": "{net} Umsatz, {vat} MWST",
+      "compareLabel": "Vergleich",
+      "compareWord": {
+        "previous_period": "Vorperiode",
+        "previous_year": "Vorjahr"
+      },
+      "same": "gleich wie {word}",
+      "fromZero": "neu gegenüber {word}",
+      "delta": "{sign}{pct} % gegenüber {word} ({value})",
+      "hint": {
+        "turnover": "Summe der Erlöskonten 3xxx ohne MWST, wie sie im Buch stehen.\nMWST-Abrechnung: Ziffer 200, steuerbar Ziffer 299.\nZu Buchendes zählt erst nach dem Buchen.",
+        "vat": "Umsatzsteuer auf 2200 aus den Verkäufen und Rückerstattungen deiner Abrechnungen: Ziffer {lines}.\nMWST auf diesen Verkäufen abzüglich der Vorsteuer auf ihren Gebühren {input} (Ziffer {inLines}): {net}.",
+        "sales": "Verkäufe aus deinen Abrechnungen, die im Buch stehen: gebucht in der Periode und bis zu ihrem Ende nicht storniert.\nRechnungen und Buchungen von Hand zählen zum Umsatz, nicht hier. Eine Rückerstattung mindert den Umsatz.",
+        "average": "Erlös dieser Verkäufe ohne MWST, geteilt durch ihre Anzahl.",
+        "payouts": "Was vom Durchlaufkonto {clearing} aufs Bankkonto ging.\nKein Umsatz: Der Umsatz kommt aus den Verkäufen.",
+        "toBook": "Ereignisse der Periode, die Buchen ins Buch bringt.\nEin Klick zeigt nur sie.",
+        "vatSaldo": "Umsatzsteuer auf 2200 aus den Verkäufen und Rückerstattungen deiner Abrechnungen, so wie sie in Rechnung gestellt ist: Ziffer {lines}.\nMit der Saldosteuersatzmethode ziehst du keine Vorsteuer ab."
+      },
+      "source": {
+        "invoices": "Rechnungen",
+        "other": "Übrige Buchungen"
+      },
+      "noCustomer": "Ohne Angabe",
+      "restCustomers": "{count} weitere",
+      "byMonth": "Nach Monat",
+      "bySource": "Nach Quelle",
+      "byCustomer": "Nach Kunde",
+      "none": "Kein Umsatz",
+      "vatBilled": "MWST in Rechnung gestellt",
+      "fromSettlement": "davon {amount} aus Abrechnungen"
+    },
+    "rules": {
+      "templates": "Buchungsvorlage",
+      "noSource": "Keine Quelle",
+      "editTemplate": "Vorlage bearbeiten",
+      "settings": "Verhalten",
+      "saved": "Gespeichert",
+      "bankRules": "Buchungsregeln der Bank",
+      "openBankRules": "Buchungsregeln",
+      "openBankRulesContext": "Bankeingang, Buchungsregeln",
+      "noBankRule": "Keine Regel für Auszahlungen",
+      "setting": {
+        "review_period": {
+          "label": "Zeitraum beim Öffnen",
+          "quarter": "Quartal",
+          "month": "Monat",
+          "year": "Jahr"
+        },
+        "test_events": {
+          "label": "Testzahlungen",
+          "skip": "Nicht buchen",
+          "book": "Buchen"
+        },
+        "test_fees": {
+          "label": "Gebühren auf Testzahlungen",
+          "book": "Buchen",
+          "skip": "Nicht buchen"
+        },
+        "pull_mode": {
+          "label": "Feed abholen",
+          "manual": "Von Hand",
+          "daily": "Täglich"
+        },
+        "agent_sees_email": {
+          "label": "E-Mail für den Agenten",
+          "masked": "Verborgen",
+          "shown": "Sichtbar"
+        }
+      }
+    },
+    "bookBarOutside": "davon {count} ausserhalb"
+  },
+  "help": {
+    "Umsatz": {
+      "title": "Umsatz",
+      "body": "Umsatz zeigt deinen Umsatz einer Periode aus dem Buch: Umsatz ohne MWST, MWST aus Abrechnungen, Verkäufe, Auszahlungen und was noch zu buchen ist, je gegen die Vorperiode oder das Vorjahr, dazu nach Monat, Quelle und Kunde. Fahr über eine Kennzahl, und du siehst, woher sie kommt. Eine Auszahlung ist nie Umsatz. Darunter stehen die Ereignisse deines Zahlungsanbieters vor dem Buchen: Ignoriere, was nicht ins Buch soll, oder beziehe es wieder ein, ohne Grund; TILL hält fest, wer und wann. Ist etwas zu buchen, erscheint unten die Leiste mit Buchen. Ohne Quelle lädst du eine Datei oder verbindest eine Quelle. Unter Regeln stehen Vorlage, Verhalten und Buchungsregeln der Bank.",
+      "concepts": [],
+      "docsPath": "formats/till-settlement"
+    }
+  }
+}
